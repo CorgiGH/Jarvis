@@ -1,14 +1,22 @@
 package jarvis.web
 
 import io.ktor.http.ContentType
+import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.call
+import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.receive
 import io.ktor.server.request.receiveParameters
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import jarvis.Activity
 import jarvis.CHAT_SYSTEM_PROMPT
 import jarvis.ChatMessage
@@ -38,6 +46,9 @@ internal suspend fun runWeb() {
     println("Jarvis web on http://localhost:$port (Ctrl+C to stop)")
 
     embeddedServer(CIO, port = port, host = "0.0.0.0") {
+        install(ContentNegotiation) {
+            json(Json { ignoreUnknownKeys = true; encodeDefaults = true })
+        }
         routing {
             get("/") {
                 call.respondText(INDEX_HTML, ContentType.Text.Html)
@@ -127,6 +138,76 @@ internal suspend fun runWeb() {
                 )
             }
 
+            post("/api/chat") {
+                val req = call.receive<ApiChatRequest>()
+                val msg = req.msg.trim()
+                if (msg.isEmpty()) {
+                    call.respond(ApiChatResponse("(empty message)", "n/a"))
+                    return@post
+                }
+                val (reply, model) = historyLock.withLock {
+                    history.add(ChatMessage("user", msg))
+                    val sysPrompt = CHAT_SYSTEM_PROMPT + "\n\n# Context\n" + buildChatContext()
+                    val messages = listOf(ChatMessage("system", sysPrompt)) + history
+                    val (text, modelName) = try {
+                        client.complete(messages)
+                    } catch (e: Exception) {
+                        history.removeLast()
+                        return@withLock "[error] ${e.message}" to "n/a"
+                    }
+                    history.add(ChatMessage("assistant", text))
+                    MemoryWiki.append("conversation ($modelName)", "**user:** $msg\n\n**jarvis:** $text")
+                    text to modelName
+                }
+                call.respond(ApiChatResponse(reply, model))
+            }
+
+            post("/api/sub") {
+                val params = call.receiveParameters()
+                val cmd = params["cmd"]?.trim().orEmpty()
+                if (cmd.isEmpty()) {
+                    val list = Subsystems.all.joinToString("\n") { "  ${it.name} - ${it.description}" }
+                    call.respond(ApiSubResponse("Available subsystems:\n$list", "n/a"))
+                    return@post
+                }
+                val tokens = cmd.split(" ", limit = 2)
+                val sub = Subsystems.get(tokens[0]) ?: run {
+                    call.respond(ApiSubResponse("unknown subsystem: ${tokens[0]}", "n/a"))
+                    return@post
+                }
+                val query = tokens.getOrNull(1)?.trim()
+                val activity = Activity.loadEntries()
+                val wiki = MemoryWiki.recent()
+                val output = try {
+                    sub.run(client, SubsystemInput(activity, wiki, query))
+                } catch (e: Exception) {
+                    call.respond(ApiSubResponse("[sub:${sub.name} failed] ${e.message}", "n/a"))
+                    return@post
+                }
+                output.wikiEntry?.let { MemoryWiki.append(it, output.text) }
+                val modelTag = output.wikiEntry?.let { Regex("""\(([^)]+)\)""").find(it)?.groupValues?.getOrNull(1) } ?: "unknown"
+                call.respond(ApiSubResponse(output.text, modelTag))
+            }
+
+            get("/apk") {
+                val apkPath = java.nio.file.Path.of(
+                    "android/build/outputs/apk/debug/android-debug.apk"
+                ).toAbsolutePath()
+                if (!apkPath.toFile().exists()) {
+                    call.respondText(
+                        "APK not built yet. From the project root run: gradle :android:assembleDebug",
+                        ContentType.Text.Plain,
+                    )
+                    return@get
+                }
+                val bytes = apkPath.toFile().readBytes()
+                call.response.headers.append(
+                    "Content-Disposition",
+                    "attachment; filename=jarvis.apk",
+                )
+                call.respondBytes(bytes, ContentType("application", "vnd.android.package-archive"))
+            }
+
             get("/wiki") {
                 call.respondText(
                     "<!doctype html><meta charset=utf-8><pre style='font-family:monospace;background:#1e1e1e;color:#d4d4d4;padding:1em'>${escape(MemoryWiki.readAll())}</pre>",
@@ -143,6 +224,15 @@ internal suspend fun runWeb() {
         }
     }.start(wait = true)
 }
+
+@Serializable
+private data class ApiChatRequest(val msg: String)
+
+@Serializable
+private data class ApiChatResponse(val reply: String, val model: String)
+
+@Serializable
+private data class ApiSubResponse(val text: String, val model: String)
 
 private fun escape(s: String): String = s
     .replace("&", "&amp;")
@@ -206,6 +296,7 @@ private val INDEX_HTML = """
   <div class="links">
     <a href="/wiki" target="_blank">wiki</a>
     <a href="/activity" target="_blank">activity (7d)</a>
+    <a href="/apk">apk</a>
   </div>
   <div id="chat"></div>
 
