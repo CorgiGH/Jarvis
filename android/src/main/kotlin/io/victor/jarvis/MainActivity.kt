@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
 fun JarvisApp() {
     val context = LocalContext.current
     var backendUrl by remember { mutableStateOf("http://192.168.1.10:8080") }
+    var authToken by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
     val turns = remember { mutableStateListOf<Turn>() }
     var sending by remember { mutableStateOf(false) }
@@ -104,12 +105,16 @@ fun JarvisApp() {
 
     LaunchedEffect(Unit) {
         backendUrl = Prefs.loadBackendUrl(context, default = backendUrl)
+        authToken = Prefs.loadAuthToken(context, default = authToken)
         ttsOn = Prefs.loadTtsOn(context, default = ttsOn)
         prefsLoaded = true
     }
 
     LaunchedEffect(backendUrl, prefsLoaded) {
         if (prefsLoaded) Prefs.saveBackendUrl(context, backendUrl)
+    }
+    LaunchedEffect(authToken, prefsLoaded) {
+        if (prefsLoaded) Prefs.saveAuthToken(context, authToken)
     }
     LaunchedEffect(ttsOn, prefsLoaded) {
         if (prefsLoaded) Prefs.saveTtsOn(context, ttsOn)
@@ -174,6 +179,13 @@ fun JarvisApp() {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            OutlinedTextField(
+                value = authToken,
+                onValueChange = { authToken = it },
+                label = { Text("auth token (JARVIS_AUTH_TOKEN)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             LazyColumn(
                 state = listState,
@@ -221,10 +233,10 @@ fun JarvisApp() {
                         scope.launch {
                             val out = try {
                                 if (toSend.startsWith("/sub ")) {
-                                    val r = client.runSub(backendUrl, toSend.removePrefix("/sub ").trim())
+                                    val r = client.runSub(backendUrl, toSend.removePrefix("/sub ").trim(), authToken)
                                     Turn("assistant", r.text, r.model)
                                 } else {
-                                    val r = client.chat(backendUrl, toSend)
+                                    val r = client.chat(backendUrl, toSend, authToken)
                                     Turn("assistant", r.reply, r.model)
                                 }
                             } catch (e: Exception) {

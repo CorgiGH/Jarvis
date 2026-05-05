@@ -26,6 +26,8 @@ dependencies {
     implementation("io.ktor:ktor-server-core:$ktorVersion")
     implementation("io.ktor:ktor-server-cio:$ktorVersion")
     implementation("io.ktor:ktor-server-content-negotiation:$ktorVersion")
+    implementation("io.ktor:ktor-server-auth:$ktorVersion")
+    implementation("io.ktor:ktor-server-sessions:$ktorVersion")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

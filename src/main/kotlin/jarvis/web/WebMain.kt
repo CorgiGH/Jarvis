@@ -1,16 +1,21 @@
 package jarvis.web
 
 import io.ktor.http.ContentType
+import io.ktor.http.Cookie
+import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.request.path
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveParameters
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
+import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -32,25 +37,85 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.system.exitProcess
 
 private const val DEFAULT_PORT = 8080
+private const val AUTH_COOKIE = "jarvis_auth"
+private const val COOKIE_MAX_AGE_SECONDS = 30 * 24 * 3600 // 30 days
 
 internal suspend fun runWeb() {
-    val apiKey = resolveOpenRouterKey() ?: run {
-        System.err.println("ERROR: OPENROUTER_API_KEY not set. Copy .env.example to .env and set the key.")
+    val authToken = System.getenv("JARVIS_AUTH_TOKEN")?.trim().orEmpty()
+    if (authToken.isEmpty()) {
+        System.err.println(
+            "ERROR: JARVIS_AUTH_TOKEN not set. Generate a strong random string (e.g. " +
+                "'openssl rand -hex 32' or any 32+ random chars), put it in your .env or env, then re-run.",
+        )
         exitProcess(1)
     }
 
+    val apiKey = resolveOpenRouterKey()  // optional now; only required if JARVIS_LLM=openrouter
     val port = System.getenv("JARVIS_PORT")?.toIntOrNull() ?: DEFAULT_PORT
     val client: Llm = LlmFactory.create(apiKey)
     val history = mutableListOf<ChatMessage>()
     val historyLock = Mutex()
 
     println("Jarvis web on http://localhost:$port (Ctrl+C to stop)")
+    println("Auth required. First visit: http://localhost:$port/login")
 
     embeddedServer(CIO, port = port, host = "0.0.0.0") {
         install(ContentNegotiation) {
             json(Json { ignoreUnknownKeys = true; encodeDefaults = true })
         }
+
+        intercept(ApplicationCallPipeline.Plugins) {
+            val path = call.request.path()
+            if (path == "/login" || path == "/healthz") return@intercept
+
+            val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
+            val cookieToken = call.request.cookies[AUTH_COOKIE]
+            if (header == authToken || cookieToken == authToken) return@intercept
+
+            if (path.startsWith("/api/") || path == "/apk") {
+                call.respondText(
+                    "401 missing or invalid auth token",
+                    ContentType.Text.Plain,
+                    HttpStatusCode.Unauthorized,
+                )
+            } else {
+                call.respondRedirect("/login")
+            }
+            finish()
+        }
+
         routing {
+            get("/healthz") {
+                call.respondText("ok", ContentType.Text.Plain)
+            }
+
+            get("/login") {
+                call.respondText(LOGIN_HTML, ContentType.Text.Html)
+            }
+
+            post("/login") {
+                val params = call.receiveParameters()
+                val provided = params["token"]?.trim().orEmpty()
+                if (provided == authToken) {
+                    call.response.cookies.append(
+                        Cookie(
+                            name = AUTH_COOKIE,
+                            value = authToken,
+                            path = "/",
+                            maxAge = COOKIE_MAX_AGE_SECONDS,
+                            httpOnly = true,
+                        ),
+                    )
+                    call.respondRedirect("/")
+                } else {
+                    call.respondText(
+                        LOGIN_HTML.replace("<!--ERR-->", "<p style='color:#bf616a'>invalid token</p>"),
+                        ContentType.Text.Html,
+                        HttpStatusCode.Unauthorized,
+                    )
+                }
+            }
+
             get("/") {
                 call.respondText(INDEX_HTML, ContentType.Text.Html)
             }
@@ -76,10 +141,7 @@ internal suspend fun runWeb() {
                     MemoryWiki.append("conversation ($modelName)", "**user:** $msg\n\n**jarvis:** $text")
                     text to modelName
                 }
-                call.respondText(
-                    turnHtml(msg, reply, model),
-                    ContentType.Text.Html,
-                )
+                call.respondText(turnHtml(msg, reply, model), ContentType.Text.Html)
             }
 
             post("/reflect") {
@@ -186,13 +248,15 @@ internal suspend fun runWeb() {
                     return@post
                 }
                 output.wikiEntry?.let { MemoryWiki.append(it, output.text) }
-                val modelTag = output.wikiEntry?.let { Regex("""\(([^)]+)\)""").find(it)?.groupValues?.getOrNull(1) } ?: "unknown"
+                val modelTag = output.wikiEntry?.let {
+                    Regex("""\(([^)]+)\)""").find(it)?.groupValues?.getOrNull(1)
+                } ?: "unknown"
                 call.respond(ApiSubResponse(output.text, modelTag))
             }
 
             get("/apk") {
                 val apkPath = java.nio.file.Path.of(
-                    "android/build/outputs/apk/debug/android-debug.apk"
+                    "android/build/outputs/apk/debug/android-debug.apk",
                 ).toAbsolutePath()
                 if (!apkPath.toFile().exists()) {
                     call.respondText(
@@ -246,6 +310,32 @@ private fun turnHtml(userMsg: String, reply: String, model: String): String = ""
     |<div class="turn user">${escape(userMsg)}</div>
     |<div class="turn jarvis"><div class="meta">${escape(model)}</div>${escape(reply).replace("\n", "<br>")}</div>
 """.trimMargin()
+
+private val LOGIN_HTML = """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jarvis · login</title>
+  <style>
+    body { font-family: ui-monospace, monospace; max-width: 360px; margin: 4em auto; padding: 1em; background: #14161a; color: #d8dee9; }
+    h1 { font-size: 1.1em; opacity: 0.7; }
+    input { width: 100%; box-sizing: border-box; background: #1c2026; color: #d8dee9; border: 1px solid #3b4252; padding: 0.5em; border-radius: 4px; font-family: inherit; }
+    button { margin-top: 0.5em; background: #5e81ac; color: #eceff4; border: 0; padding: 0.5em 1em; cursor: pointer; border-radius: 4px; font-family: inherit; }
+  </style>
+</head>
+<body>
+  <h1>jarvis · enter token</h1>
+  <!--ERR-->
+  <form method="post" action="/login">
+    <input type="password" name="token" placeholder="JARVIS_AUTH_TOKEN" autofocus required>
+    <button type="submit">unlock</button>
+  </form>
+  <p style="opacity:0.5;font-size:0.8em">cookie set after success; valid 30 days.</p>
+</body>
+</html>
+""".trimIndent()
 
 private val INDEX_HTML = """
 <!DOCTYPE html>

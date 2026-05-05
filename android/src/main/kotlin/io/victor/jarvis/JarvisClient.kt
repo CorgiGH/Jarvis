@@ -6,6 +6,7 @@ import io.ktor.client.engine.android.Android
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.forms.submitForm
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -37,9 +38,12 @@ class JarvisClient {
         }
     }
 
-    suspend fun chat(baseUrl: String, msg: String): ChatReply {
+    suspend fun chat(baseUrl: String, msg: String, authToken: String): ChatReply {
         val resp = client.post("$baseUrl/api/chat") {
             contentType(ContentType.Application.Json)
+            if (authToken.isNotBlank()) {
+                header("Authorization", "Bearer $authToken")
+            }
             setBody(ChatRequest(msg))
         }
         if (!resp.status.isSuccess()) {
@@ -48,11 +52,15 @@ class JarvisClient {
         return resp.body()
     }
 
-    suspend fun runSub(baseUrl: String, cmd: String): SubReply {
+    suspend fun runSub(baseUrl: String, cmd: String, authToken: String): SubReply {
         val resp = client.submitForm(
             url = "$baseUrl/api/sub",
             formParameters = parameters { append("cmd", cmd) },
-        )
+        ) {
+            if (authToken.isNotBlank()) {
+                header("Authorization", "Bearer $authToken")
+            }
+        }
         if (!resp.status.isSuccess()) {
             return SubReply("[server ${resp.status.value}] ${resp.bodyAsText().take(300)}", "n/a")
         }
