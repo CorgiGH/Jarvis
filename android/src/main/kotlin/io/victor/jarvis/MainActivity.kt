@@ -1,8 +1,12 @@
 package io.victor.jarvis
 
+import android.app.Activity
 import android.os.Bundle
+import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,8 +20,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -27,6 +37,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -37,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -78,13 +90,32 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JarvisApp() {
+    val context = LocalContext.current
     var backendUrl by remember { mutableStateOf("http://192.168.1.10:8080") }
     var msg by remember { mutableStateOf("") }
     val turns = remember { mutableStateListOf<Turn>() }
     var sending by remember { mutableStateOf(false) }
+    var ttsOn by remember { mutableStateOf(true) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val client = remember { JarvisClient() }
+    val tts = remember { VoiceTts(context) }
+
+    DisposableEffect(Unit) {
+        onDispose { tts.shutdown() }
+    }
+
+    val sttLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val first = matches?.firstOrNull()?.trim().orEmpty()
+            if (first.isNotEmpty()) {
+                msg = if (msg.isBlank()) first else "$msg $first"
+            }
+        }
+    }
 
     LaunchedEffect(turns.size) {
         if (turns.isNotEmpty()) listState.animateScrollToItem(turns.size - 1)
@@ -94,6 +125,18 @@ fun JarvisApp() {
         topBar = {
             TopAppBar(
                 title = { Text("jarvis", fontFamily = FontFamily.Monospace) },
+                actions = {
+                    IconButton(onClick = {
+                        ttsOn = !ttsOn
+                        if (!ttsOn) tts.stop()
+                    }) {
+                        Icon(
+                            imageVector = if (ttsOn) Icons.Filled.VolumeUp else Icons.Filled.VolumeOff,
+                            contentDescription = if (ttsOn) "tts on" else "tts off",
+                            tint = FgMain,
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Bg,
                     titleContentColor = FgMain,
@@ -135,6 +178,16 @@ fun JarvisApp() {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                IconButton(
+                    onClick = { sttLauncher.launch(sttIntent()) },
+                    enabled = !sending,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Mic,
+                        contentDescription = "voice input",
+                        tint = if (sending) FgMeta else UserAccent,
+                    )
+                }
                 OutlinedTextField(
                     value = msg,
                     onValueChange = { msg = it },
@@ -165,6 +218,9 @@ fun JarvisApp() {
                             }
                             turns += out
                             sending = false
+                            if (ttsOn && out.role == "assistant") {
+                                tts.speak(out.content)
+                            }
                         }
                     },
                     enabled = !sending && msg.isNotBlank(),
