@@ -1,5 +1,7 @@
 package jarvis
 
+import jarvis.subsystem.SubsystemInput
+import jarvis.subsystem.Subsystems
 import kotlin.system.exitProcess
 
 private const val SYSTEM_PROMPT = """You are Jarvis, a personal life-OS assistant for the user.
@@ -44,7 +46,7 @@ internal suspend fun runChat() {
 
     LlmClient(apiKey).use { client ->
         val history = mutableListOf<ChatMessage>()
-        println("Jarvis online (chain head: ${Config.FALLBACK_CHAIN.first()}). Commands: exit, /save <note>, /ctx")
+        println("Jarvis online (chain head: ${Config.FALLBACK_CHAIN.first()}). Commands: exit, /save <note>, /ctx, /subs, /sub <name> [query]")
 
         while (true) {
             print("you> ")
@@ -61,6 +63,37 @@ internal suspend fun runChat() {
             }
             if (msg == "/ctx") {
                 println(buildContext())
+                continue
+            }
+            if (msg == "/subs") {
+                println("Available subsystems:")
+                Subsystems.all.forEach { println("  ${it.name.padEnd(10)} - ${it.description}") }
+                continue
+            }
+            if (msg.startsWith("/sub ") || msg == "/sub") {
+                val raw = msg.removePrefix("/sub").trim()
+                if (raw.isEmpty()) {
+                    Subsystems.all.forEach { println("  ${it.name.padEnd(10)} - ${it.description}") }
+                    continue
+                }
+                val tokens = raw.split(" ", limit = 2)
+                val subName = tokens[0]
+                val subQuery = tokens.getOrNull(1)?.trim()
+                val sub = Subsystems.get(subName) ?: run {
+                    println("(unknown subsystem: $subName; try /subs)")
+                    null
+                }
+                if (sub != null) {
+                    val activity = Activity.loadEntries()
+                    val wiki = MemoryWiki.recent()
+                    try {
+                        val output = sub.run(client, SubsystemInput(activity, wiki, subQuery))
+                        println("[${sub.name}]> ${output.text}\n")
+                        output.wikiEntry?.let { MemoryWiki.append(it, output.text) }
+                    } catch (e: Exception) {
+                        println("[sub:${sub.name}] failed: ${e.message}")
+                    }
+                }
                 continue
             }
 

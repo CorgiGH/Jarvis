@@ -3,22 +3,23 @@ package jarvis
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
-private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect]
+private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs]
 
-  chat              Start interactive chat REPL (default).
-  logger            Run always-on activity logger (5-min interval).
-  logger --once     Capture a single activity snapshot and exit.
-  reflect           Run the daily reflection job (Phase 3, stub).
+  chat                       Start interactive chat REPL (default).
+  logger                     Always-on activity logger (5-min interval).
+  logger --once              Single capture, exit.
+  reflect                    Daily reflection over last 24h.
+  sub <name> [query...]      Run a named subsystem (judgment | dots | teach).
+  subs                       List available subsystems.
 """
 
 fun main(args: Array<String>) {
     when (args.firstOrNull()) {
         null, "chat" -> runBlocking { runChat() }
-        "logger" -> {
-            val once = args.getOrNull(1) == "--once"
-            runLogger(once)
-        }
+        "logger" -> runLogger(once = args.getOrNull(1) == "--once")
         "reflect" -> runBlocking { runReflect() }
+        "sub" -> runBlocking { runSub(args.drop(1).toList()) }
+        "subs" -> runBlocking { runSub(emptyList()) }
         "-h", "--help", "help" -> println(USAGE)
         else -> {
             System.err.println("Unknown subcommand: ${args.firstOrNull()}")
