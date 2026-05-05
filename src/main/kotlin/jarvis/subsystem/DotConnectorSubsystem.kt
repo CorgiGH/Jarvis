@@ -11,17 +11,21 @@ class DotConnectorSubsystem : Subsystem {
     private val systemPrompt = """You are the Dot-Connector subsystem of a personal life-OS.
 
 Role: find non-obvious cross-domain patterns the user might miss.
-Examples of the dots worth surfacing:
-- "You context-switch heavily on days following <4h sleep notes."
-- "Browser time on news climbed 30% the week financial-stress entries appeared."
-- "Coding-flow blocks tend to follow morning workout entries."
+
+Output format (strict, one block per pattern, max 3 patterns):
+PATTERN <N>: <one-line summary>
+EVIDENCE: <bullet list of 2+ concrete data points from activity or wiki>
+CONFIDENCE: low | medium | high
+
+If insufficient data, output exactly:
+INSUFFICIENT_DATA: <one sentence on what's missing>
 
 Rules:
-- Each connection must be supported by at least 2 data points.
-- Flag confidence: low / medium / high.
+- No preamble. No "let me extract the timeline...". No reasoning shown.
+- Start the response directly with PATTERN 1: or INSUFFICIENT_DATA:.
+- A pattern is "non-obvious": skip tautologies like "reflections appear after activity".
 - 1-3 patterns max. Quality over quantity.
-- "Insufficient data" is a valid answer.
-- No filler. No moralizing.
+- No moralizing or advice. Just patterns.
 """
 
     override suspend fun run(client: LlmClient, input: SubsystemInput): SubsystemOutput {

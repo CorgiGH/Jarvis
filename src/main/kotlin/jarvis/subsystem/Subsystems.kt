@@ -6,6 +6,8 @@ object Subsystems {
             JudgmentSubsystem(),
             DotConnectorSubsystem(),
             TeachingSubsystem(),
+            TimingSubsystem(),
+            ContextModelSubsystem(),
             CoderSubsystem(),
         )
     }
