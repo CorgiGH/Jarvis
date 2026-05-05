@@ -1,6 +1,5 @@
 package jarvis
 
-import io.github.cdimascio.dotenv.dotenv
 import kotlin.system.exitProcess
 
 private const val SYSTEM_PROMPT = """You are Jarvis, a personal life-OS assistant for the user.
@@ -37,21 +36,8 @@ private fun buildContext(): String {
     """.trimMargin()
 }
 
-private fun resolveApiKey(): String? {
-    System.getenv("OPENROUTER_API_KEY")?.takeIf { it.isNotBlank() }?.let { return it }
-    return try {
-        val env = dotenv {
-            ignoreIfMissing = true
-            ignoreIfMalformed = true
-        }
-        env["OPENROUTER_API_KEY"]?.takeIf { it.isNotBlank() }
-    } catch (_: Exception) {
-        null
-    }
-}
-
 internal suspend fun runChat() {
-    val apiKey = resolveApiKey() ?: run {
+    val apiKey = resolveOpenRouterKey() ?: run {
         System.err.println("ERROR: OPENROUTER_API_KEY not set. Copy .env.example to .env and set the key.")
         exitProcess(1)
     }
