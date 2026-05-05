@@ -1,98 +1,29 @@
 package jarvis
 
-import io.github.cdimascio.dotenv.dotenv
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
-private const val SYSTEM_PROMPT = """You are Jarvis, a personal life-OS assistant for the user.
+private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect]
 
-You have access to:
-- The user's recent activity log (active window snapshots, captured every 5 minutes)
-- A markdown memory wiki holding past notes, daily reflections, and prior conversations
+  chat              Start interactive chat REPL (default).
+  logger            Run always-on activity logger (5-min interval).
+  logger --once     Capture a single activity snapshot and exit.
+  reflect           Run the daily reflection job (Phase 3, stub).
+"""
 
-Your charter:
-- Honest, not flattering. Tell uncomfortable truths when warranted. Refuse sycophancy.
-- Distinguish "needs encouragement" from "needs reality check" — pick correctly.
-- Ask better questions when the question matters more than an answer.
-- Stay quiet when nothing needs surfacing. Don't manufacture engagement.
-- Connect dots across domains (sleep -> focus, financial stress -> relationships, etc.).
-- Don't moralize repeatedly about the same thing. Say it once, clearly, then move on.
-- Preserve user agency. You inform; you do not decide for the user.
-- Respect second-order effects. Short-term mood is not long-term wellbeing.
-
-Style:
-- Tight responses. No filler. No corporate hedging.
-- Match the moment: coach, friend, mirror, or silent - whichever fits.
-- Code/commits/security topics: write normally and precisely."""
-
-
-private fun buildContext(): String {
-    val activity = Activity.loadRecent()
-    val wiki = MemoryWiki.recent().ifEmpty { "(empty)" }
-    return """
-        |# Recent activity (last ${Config.ACTIVITY_LOOKBACK_HOURS}h)
-        |$activity
-        |
-        |# Memory wiki (recent ${Config.WIKI_RECENT_ENTRIES} entries)
-        |$wiki
-    """.trimMargin()
-}
-
-private fun resolveApiKey(): String? {
-    System.getenv("OPENROUTER_API_KEY")?.takeIf { it.isNotBlank() }?.let { return it }
-    return try {
-        val env = dotenv {
-            ignoreIfMissing = true
-            ignoreIfMalformed = true
+fun main(args: Array<String>) {
+    when (args.firstOrNull()) {
+        null, "chat" -> runBlocking { runChat() }
+        "logger" -> {
+            val once = args.getOrNull(1) == "--once"
+            runLogger(once)
         }
-        env["OPENROUTER_API_KEY"]?.takeIf { it.isNotBlank() }
-    } catch (_: Exception) {
-        null
-    }
-}
-
-fun main() = runBlocking {
-    val apiKey = resolveApiKey() ?: run {
-        System.err.println("ERROR: OPENROUTER_API_KEY not set. Copy .env.example to .env and set the key.")
-        exitProcess(1)
-    }
-
-    LlmClient(apiKey).use { client ->
-        val history = mutableListOf<ChatMessage>()
-        println("Jarvis online (chain head: ${Config.FALLBACK_CHAIN.first()}). Commands: exit, /save <note>, /ctx")
-
-        while (true) {
-            print("you> ")
-            val msg = readlnOrNull()?.trim() ?: break
-            if (msg.isEmpty()) continue
-            if (msg in setOf("exit", "quit", "/exit")) break
-            if (msg.startsWith("/save ")) {
-                val note = msg.removePrefix("/save ").trim()
-                if (note.isNotEmpty()) {
-                    MemoryWiki.append("user note", note)
-                    println("(saved to wiki)")
-                }
-                continue
-            }
-            if (msg == "/ctx") {
-                println(buildContext())
-                continue
-            }
-
-            history += ChatMessage("user", msg)
-            val sysPrompt = SYSTEM_PROMPT + "\n\n# Context\n" + buildContext()
-            val messages = listOf(ChatMessage("system", sysPrompt)) + history
-
-            val (reply, model) = try {
-                client.complete(messages)
-            } catch (e: Exception) {
-                println("[error] ${e.message}")
-                history.removeLast()
-                continue
-            }
-            println("jarvis> $reply\n")
-            history += ChatMessage("assistant", reply)
-            MemoryWiki.append("conversation ($model)", "**user:** $msg\n\n**jarvis:** $reply")
+        "reflect" -> runBlocking { runReflect() }
+        "-h", "--help", "help" -> println(USAGE)
+        else -> {
+            System.err.println("Unknown subcommand: ${args.firstOrNull()}")
+            System.err.println(USAGE)
+            exitProcess(2)
         }
     }
 }
