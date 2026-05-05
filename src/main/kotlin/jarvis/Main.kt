@@ -4,7 +4,7 @@ import jarvis.web.runWeb
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
-private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web]
+private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web | reindex]
 
   chat                       Start interactive chat REPL (default).
   logger                     Always-on activity logger (5-min interval).
@@ -12,7 +12,8 @@ private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | s
   reflect                    Daily reflection over last 24h.
   sub <name> [query...]      Run a named subsystem.
   subs                       List available subsystems.
-  web                        Start Ktor web server (HTMX UI on :8080 by default; JARVIS_PORT overrides).
+  web                        Start Ktor web server (HTMX UI on :8080 by default).
+  reindex                    Embed any wiki entries not yet in the vector store.
 """
 
 fun main(args: Array<String>) {
@@ -23,6 +24,7 @@ fun main(args: Array<String>) {
         "sub" -> runBlocking { runSub(args.drop(1).toList()) }
         "subs" -> runBlocking { runSub(emptyList()) }
         "web" -> runBlocking { runWeb() }
+        "reindex" -> runBlocking { runReindex() }
         "-h", "--help", "help" -> println(USAGE)
         else -> {
             System.err.println("Unknown subcommand: ${args.firstOrNull()}")

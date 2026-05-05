@@ -1,5 +1,8 @@
 package jarvis
 
+import jarvis.embeddings.EmbeddingsClient
+import jarvis.embeddings.StoredEmbedding
+import jarvis.embeddings.VectorStore
 import jarvis.subsystem.SubsystemInput
 import jarvis.subsystem.Subsystems
 import kotlin.system.exitProcess
@@ -12,8 +15,9 @@ internal suspend fun runChat() {
     }
 
     LlmClient(apiKey).use { client ->
+        val embeddings = EmbeddingsClient(apiKey)
         val history = mutableListOf<ChatMessage>()
-        println("Jarvis online (chain head: ${Config.FALLBACK_CHAIN.first()}). Commands: exit, /save <note>, /ctx, /subs, /sub <name> [query]")
+        println("Jarvis online (chain head: ${Config.FALLBACK_CHAIN.first()}, semantic store: ${VectorStore.all().size} entries). Commands: exit, /save <note>, /ctx, /subs, /sub <name> [query]")
 
         while (true) {
             print("you> ")
@@ -65,7 +69,12 @@ internal suspend fun runChat() {
             }
 
             history += ChatMessage("user", msg)
-            val sysPrompt = CHAT_SYSTEM_PROMPT + "\n\n# Context\n" + buildChatContext()
+            val queryEmb: FloatArray? = try {
+                embeddings.embed(msg)
+            } catch (_: Exception) {
+                null
+            }
+            val sysPrompt = CHAT_SYSTEM_PROMPT + "\n\n# Context\n" + buildChatContextWithSemantic(queryEmb)
             val messages = listOf(ChatMessage("system", sysPrompt)) + history
 
             val (reply, model) = try {
@@ -77,7 +86,17 @@ internal suspend fun runChat() {
             }
             println("jarvis> $reply\n")
             history += ChatMessage("assistant", reply)
-            MemoryWiki.append("conversation ($model)", "**user:** $msg\n\n**jarvis:** $reply")
+            val sectionTitle = "conversation ($model)"
+            val sectionContent = "**user:** $msg\n\n**jarvis:** $reply"
+            MemoryWiki.append(sectionTitle, sectionContent)
+            // Best-effort: also embed and store so this turn is searchable next time.
+            try {
+                val joined = "## $sectionTitle\n\n$sectionContent"
+                val emb = embeddings.embed(joined)
+                VectorStore.add(StoredEmbedding(id = "$sectionTitle | ${msg.take(60)}", text = joined, embedding = emb))
+            } catch (_: Exception) {
+                // ignore: chat keeps working without semantic store
+            }
         }
     }
 }

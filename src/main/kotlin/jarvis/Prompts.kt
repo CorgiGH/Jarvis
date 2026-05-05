@@ -32,3 +32,21 @@ internal fun buildChatContext(): String {
         |$wiki
     """.trimMargin()
 }
+
+/** Same as buildChatContext, but appends semantically related wiki entries
+ *  retrieved from VectorStore using the supplied query embedding.
+ *  Falls back gracefully (just calls buildChatContext) if the store is empty. */
+internal fun buildChatContextWithSemantic(
+    queryEmbedding: FloatArray?,
+    semanticK: Int = 5,
+): String {
+    val base = buildChatContext()
+    if (queryEmbedding == null) return base
+    val matches = jarvis.embeddings.VectorStore.search(queryEmbedding, k = semanticK, minScore = 0.2f)
+    if (matches.isEmpty()) return base
+    val rendered = matches.joinToString("\n\n") { (entry, score) ->
+        "[similarity=${"%.3f".format(score)}]\n${entry.text.trim()}"
+    }
+    return base + "\n\n# Semantically related wiki entries\n" + rendered
+}
+

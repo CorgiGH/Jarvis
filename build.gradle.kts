@@ -104,3 +104,16 @@ tasks.register<JavaExec>("runWeb") {
         "-Dstderr.encoding=UTF-8",
     )
 }
+
+tasks.register<JavaExec>("runReindex") {
+    group = "application"
+    description = "Embed any wiki entries not yet in the vector store."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("jarvis.MainKt")
+    args = listOf("reindex")
+    jvmArgs = listOf(
+        "-Dfile.encoding=UTF-8",
+        "-Dstdout.encoding=UTF-8",
+        "-Dstderr.encoding=UTF-8",
+    )
+}
