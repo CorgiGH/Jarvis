@@ -96,10 +96,24 @@ fun JarvisApp() {
     val turns = remember { mutableStateListOf<Turn>() }
     var sending by remember { mutableStateOf(false) }
     var ttsOn by remember { mutableStateOf(true) }
+    var prefsLoaded by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val client = remember { JarvisClient() }
     val tts = remember { VoiceTts(context) }
+
+    LaunchedEffect(Unit) {
+        backendUrl = Prefs.loadBackendUrl(context, default = backendUrl)
+        ttsOn = Prefs.loadTtsOn(context, default = ttsOn)
+        prefsLoaded = true
+    }
+
+    LaunchedEffect(backendUrl, prefsLoaded) {
+        if (prefsLoaded) Prefs.saveBackendUrl(context, backendUrl)
+    }
+    LaunchedEffect(ttsOn, prefsLoaded) {
+        if (prefsLoaded) Prefs.saveTtsOn(context, ttsOn)
+    }
 
     DisposableEffect(Unit) {
         onDispose { tts.shutdown() }
