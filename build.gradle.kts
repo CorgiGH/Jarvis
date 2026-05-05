@@ -18,6 +18,10 @@ dependencies {
     implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
 
+    implementation("io.ktor:ktor-server-core:$ktorVersion")
+    implementation("io.ktor:ktor-server-cio:$ktorVersion")
+    implementation("io.ktor:ktor-server-content-negotiation:$ktorVersion")
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
@@ -81,6 +85,19 @@ tasks.register<JavaExec>("runReflect") {
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("jarvis.MainKt")
     args = listOf("reflect")
+    jvmArgs = listOf(
+        "-Dfile.encoding=UTF-8",
+        "-Dstdout.encoding=UTF-8",
+        "-Dstderr.encoding=UTF-8",
+    )
+}
+
+tasks.register<JavaExec>("runWeb") {
+    group = "application"
+    description = "Run the Jarvis web server (HTMX UI on http://localhost:8080)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("jarvis.MainKt")
+    args = listOf("web")
     jvmArgs = listOf(
         "-Dfile.encoding=UTF-8",
         "-Dstdout.encoding=UTF-8",
