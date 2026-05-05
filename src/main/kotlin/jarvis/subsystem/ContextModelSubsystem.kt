@@ -1,7 +1,7 @@
 package jarvis.subsystem
 
 import jarvis.ChatMessage
-import jarvis.LlmClient
+import jarvis.Llm
 
 class ContextModelSubsystem : Subsystem {
     override val name = "ctx-model"
@@ -30,7 +30,7 @@ Rules:
 - This output is consumed by other subsystems; keep it parseable.
 """
 
-    override suspend fun run(client: LlmClient, input: SubsystemInput): SubsystemOutput {
+    override suspend fun run(client: Llm, input: SubsystemInput): SubsystemOutput {
         val ctx = """
 # Recent activity
 ${formatActivity(input.activity)}

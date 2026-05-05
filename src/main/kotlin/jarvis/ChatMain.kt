@@ -14,7 +14,7 @@ internal suspend fun runChat() {
         exitProcess(1)
     }
 
-    LlmClient(apiKey).use { client ->
+    LlmFactory.create(apiKey).use { client ->
         val embeddings = EmbeddingsClient(apiKey)
         val history = mutableListOf<ChatMessage>()
         println("Jarvis online (chain head: ${Config.FALLBACK_CHAIN.first()}, semantic store: ${VectorStore.all().size} entries). Commands: exit, /save <note>, /ctx, /subs, /sub <name> [query]")

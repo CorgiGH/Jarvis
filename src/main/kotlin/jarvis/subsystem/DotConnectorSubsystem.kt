@@ -1,7 +1,7 @@
 package jarvis.subsystem
 
 import jarvis.ChatMessage
-import jarvis.LlmClient
+import jarvis.Llm
 
 class DotConnectorSubsystem : Subsystem {
     override val name = "dots"
@@ -28,7 +28,7 @@ Rules:
 - No moralizing or advice. Just patterns.
 """
 
-    override suspend fun run(client: LlmClient, input: SubsystemInput): SubsystemOutput {
+    override suspend fun run(client: Llm, input: SubsystemInput): SubsystemOutput {
         val ctx = """
 Find non-obvious patterns connecting activity and wiki entries.
 

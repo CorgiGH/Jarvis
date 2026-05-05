@@ -27,7 +27,7 @@ internal suspend fun runSub(args: List<String>) {
     val activity = Activity.loadEntries()
     val wiki = MemoryWiki.recent()
 
-    LlmClient(apiKey).use { client ->
+    LlmFactory.create(apiKey).use { client ->
         val output = try {
             sub.run(client, SubsystemInput(activity, wiki, query))
         } catch (e: Exception) {

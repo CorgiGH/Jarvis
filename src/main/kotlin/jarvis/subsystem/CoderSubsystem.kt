@@ -1,7 +1,7 @@
 package jarvis.subsystem
 
 import jarvis.ChatMessage
-import jarvis.LlmClient
+import jarvis.Llm
 import jarvis.tool.ToolRegistry
 
 class CoderSubsystem : Subsystem {
@@ -38,7 +38,7 @@ Rules:
 - If the task is unclear, ask one clarifying question instead of calling a tool.
 """
 
-    override suspend fun run(client: LlmClient, input: SubsystemInput): SubsystemOutput {
+    override suspend fun run(client: Llm, input: SubsystemInput): SubsystemOutput {
         val task = input.userQuery
             ?: return SubsystemOutput(
                 "Coder needs a task. Usage: /sub coder <task> (chat) or 'sub coder <task>' (CLI).",

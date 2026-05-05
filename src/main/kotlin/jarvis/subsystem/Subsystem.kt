@@ -1,7 +1,7 @@
 package jarvis.subsystem
 
 import jarvis.ActivityEntry
-import jarvis.LlmClient
+import jarvis.Llm
 
 /** A pluggable life-OS subsystem invoked by chat /sub or CLI 'sub <name>'. */
 interface Subsystem {
@@ -11,7 +11,7 @@ interface Subsystem {
     /** One-line description shown by /subs. */
     val description: String
 
-    suspend fun run(client: LlmClient, input: SubsystemInput): SubsystemOutput
+    suspend fun run(client: Llm, input: SubsystemInput): SubsystemOutput
 }
 
 data class SubsystemInput(

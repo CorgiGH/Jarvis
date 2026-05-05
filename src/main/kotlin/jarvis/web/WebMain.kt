@@ -20,7 +20,8 @@ import kotlinx.serialization.json.Json
 import jarvis.Activity
 import jarvis.CHAT_SYSTEM_PROMPT
 import jarvis.ChatMessage
-import jarvis.LlmClient
+import jarvis.Llm
+import jarvis.LlmFactory
 import jarvis.MemoryWiki
 import jarvis.buildChatContext
 import jarvis.resolveOpenRouterKey
@@ -39,7 +40,7 @@ internal suspend fun runWeb() {
     }
 
     val port = System.getenv("JARVIS_PORT")?.toIntOrNull() ?: DEFAULT_PORT
-    val client = LlmClient(apiKey)
+    val client: Llm = LlmFactory.create(apiKey)
     val history = mutableListOf<ChatMessage>()
     val historyLock = Mutex()
 

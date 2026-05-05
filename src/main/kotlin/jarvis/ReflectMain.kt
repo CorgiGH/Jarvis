@@ -30,7 +30,7 @@ internal suspend fun runReflect() {
         "[${e.ts}] ${e.process ?: "?"}: ${e.title ?: ""}"
     }
 
-    LlmClient(apiKey).use { client ->
+    LlmFactory.create(apiKey).use { client ->
         val (reply, model) = try {
             client.complete(
                 messages = listOf(ChatMessage("user", REFLECTION_PROMPT + logText)),

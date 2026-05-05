@@ -1,7 +1,7 @@
 package jarvis.subsystem
 
 import jarvis.ChatMessage
-import jarvis.LlmClient
+import jarvis.Llm
 
 class TeachingSubsystem : Subsystem {
     override val name = "teach"
@@ -32,7 +32,7 @@ Rules:
 - One question per run.
 """
 
-    override suspend fun run(client: LlmClient, input: SubsystemInput): SubsystemOutput {
+    override suspend fun run(client: Llm, input: SubsystemInput): SubsystemOutput {
         val ctx = """
 Pick a stale topic from the wiki and pose a single question.
 

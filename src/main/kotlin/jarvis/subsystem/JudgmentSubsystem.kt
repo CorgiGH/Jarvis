@@ -1,7 +1,7 @@
 package jarvis.subsystem
 
 import jarvis.ChatMessage
-import jarvis.LlmClient
+import jarvis.Llm
 
 class JudgmentSubsystem : Subsystem {
     override val name = "judgment"
@@ -29,7 +29,7 @@ Rules:
 - If claim aligns with data, say so plainly. Don't manufacture criticism.
 """
 
-    override suspend fun run(client: LlmClient, input: SubsystemInput): SubsystemOutput {
+    override suspend fun run(client: Llm, input: SubsystemInput): SubsystemOutput {
         val q = input.userQuery
             ?: return SubsystemOutput(
                 "Judgment subsystem needs a user claim to evaluate. Try: /sub judgment <claim> (chat) or 'sub judgment <claim>' (CLI).",

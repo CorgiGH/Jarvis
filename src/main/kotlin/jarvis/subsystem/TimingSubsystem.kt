@@ -1,7 +1,7 @@
 package jarvis.subsystem
 
 import jarvis.ChatMessage
-import jarvis.LlmClient
+import jarvis.Llm
 
 class TimingSubsystem : Subsystem {
     override val name = "timing"
@@ -30,7 +30,7 @@ Rules:
 - Cite the specific signal driving the call.
 """
 
-    override suspend fun run(client: LlmClient, input: SubsystemInput): SubsystemOutput {
+    override suspend fun run(client: Llm, input: SubsystemInput): SubsystemOutput {
         val candidate = input.userQuery
             ?: return SubsystemOutput(
                 "Timing subsystem needs a candidate intervention. Usage: /sub timing \"<candidate>\".",
