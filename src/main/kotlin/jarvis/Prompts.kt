@@ -23,13 +23,17 @@ Style:
 
 internal fun buildChatContext(): String {
     val activity = Activity.loadRecent()
-    val wiki = MemoryWiki.recent().ifEmpty { "(empty)" }
+    val recentTurns = Conversations.recent().ifEmpty { null }
+    val convoBlock = recentTurns?.joinToString("\n") { e ->
+        val tag = e.role.padEnd(9)
+        "[${e.ts}] $tag ${e.content.replace("\n", " ").take(400)}"
+    } ?: "(empty)"
     return """
         |# Recent activity (last ${Config.ACTIVITY_LOOKBACK_HOURS}h)
         |$activity
         |
-        |# Memory wiki (recent ${Config.WIKI_RECENT_ENTRIES} entries)
-        |$wiki
+        |# Recent conversations (last ${Config.CONVERSATION_RECENT_N} turns)
+        |$convoBlock
     """.trimMargin()
 }
 

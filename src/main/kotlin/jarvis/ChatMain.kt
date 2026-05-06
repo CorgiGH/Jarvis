@@ -70,7 +70,8 @@ internal suspend fun runChat() {
             val queryEmb: FloatArray? = if (embeddings != null) {
                 try { embeddings.embed(msg) } catch (_: Exception) { null }
             } else null
-            val sysPrompt = CHAT_SYSTEM_PROMPT + "\n\n# Context\n" + buildChatContextWithSemantic(queryEmb)
+            val sysPrompt = CHAT_SYSTEM_PROMPT + CoreMemory.preamble() +
+                "\n\n# Context\n" + buildChatContextWithSemantic(queryEmb)
             val messages = listOf(ChatMessage("system", sysPrompt)) + history
 
             val (reply, model) = try {
@@ -82,6 +83,21 @@ internal suspend fun runChat() {
             }
             println("jarvis> $reply\n")
             history += ChatMessage("assistant", reply)
+
+            // Dual-write per council 1778104395: Conversations is the new primary
+            // chat recency source; wiki.md kept for the existing embedding pipeline
+            // and /wiki page until conversations.jsonl has soaked 7 live days.
+            val nowTs = java.time.Instant.now().toString()
+            val turnId = java.util.UUID.randomUUID().toString().take(8)
+            Conversations.append(
+                ConversationEntry(role = "user", content = msg, ts = nowTs,
+                                  msgId = "$turnId-u"),
+            )
+            Conversations.append(
+                ConversationEntry(role = "assistant", content = reply, ts = nowTs,
+                                  model = model, msgId = "$turnId-a"),
+            )
+
             val sectionTitle = "conversation ($model)"
             val sectionContent = "**user:** $msg\n\n**jarvis:** $reply"
             MemoryWiki.append(sectionTitle, sectionContent)

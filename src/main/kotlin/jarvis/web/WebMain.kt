@@ -26,6 +26,9 @@ import jarvis.Activity
 import jarvis.ActivityEntry
 import jarvis.CHAT_SYSTEM_PROMPT
 import jarvis.ChatMessage
+import jarvis.ConversationEntry
+import jarvis.Conversations
+import jarvis.CoreMemory
 import jarvis.Llm
 import jarvis.LlmFactory
 import jarvis.MemoryWiki
@@ -130,7 +133,8 @@ internal suspend fun runWeb() {
                 }
                 val (reply, model) = historyLock.withLock {
                     history.add(ChatMessage("user", msg))
-                    val sysPrompt = CHAT_SYSTEM_PROMPT + "\n\n# Context\n" + buildChatContext()
+                    val sysPrompt = CHAT_SYSTEM_PROMPT + CoreMemory.preamble() +
+                        "\n\n# Context\n" + buildChatContext()
                     val messages = listOf(ChatMessage("system", sysPrompt)) + history
                     val (text, modelName) = try {
                         client.complete(messages)
@@ -139,7 +143,7 @@ internal suspend fun runWeb() {
                         return@withLock "[error] ${e.message}" to "n/a"
                     }
                     history.add(ChatMessage("assistant", text))
-                    MemoryWiki.append("conversation ($modelName)", "**user:** $msg\n\n**jarvis:** $text")
+                    appendChatTurn(msg, text, modelName)
                     text to modelName
                 }
                 call.respondText(turnHtml(msg, reply, model), ContentType.Text.Html)
@@ -211,7 +215,8 @@ internal suspend fun runWeb() {
                 }
                 val (reply, model) = historyLock.withLock {
                     history.add(ChatMessage("user", msg))
-                    val sysPrompt = CHAT_SYSTEM_PROMPT + "\n\n# Context\n" + buildChatContext()
+                    val sysPrompt = CHAT_SYSTEM_PROMPT + CoreMemory.preamble() +
+                        "\n\n# Context\n" + buildChatContext()
                     val messages = listOf(ChatMessage("system", sysPrompt)) + history
                     val (text, modelName) = try {
                         client.complete(messages)
@@ -220,7 +225,7 @@ internal suspend fun runWeb() {
                         return@withLock "[error] ${e.message}" to "n/a"
                     }
                     history.add(ChatMessage("assistant", text))
-                    MemoryWiki.append("conversation ($modelName)", "**user:** $msg\n\n**jarvis:** $text")
+                    appendChatTurn(msg, text, modelName)
                     text to modelName
                 }
                 call.respond(ApiChatResponse(reply, model))
@@ -308,6 +313,28 @@ internal suspend fun runWeb() {
             }
         }
     }.start(wait = true)
+}
+
+/**
+ * Dual-write per council 1778104395: Conversations is the new chat recency
+ * source; wiki.md kept for the existing embedding pipeline + /wiki page until
+ * conversations.jsonl has soaked 7 live days, then the wiki write drops.
+ */
+private fun appendChatTurn(userMsg: String, assistantReply: String, model: String) {
+    val nowTs = java.time.Instant.now().toString()
+    val turnId = java.util.UUID.randomUUID().toString().take(8)
+    Conversations.append(
+        ConversationEntry(role = "user", content = userMsg, ts = nowTs,
+                          msgId = "$turnId-u"),
+    )
+    Conversations.append(
+        ConversationEntry(role = "assistant", content = assistantReply, ts = nowTs,
+                          model = model, msgId = "$turnId-a"),
+    )
+    MemoryWiki.append(
+        "conversation ($model)",
+        "**user:** $userMsg\n\n**jarvis:** $assistantReply",
+    )
 }
 
 @Serializable
