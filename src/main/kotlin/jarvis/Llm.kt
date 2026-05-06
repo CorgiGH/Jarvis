@@ -23,21 +23,22 @@ interface Llm : AutoCloseable {
 object LlmFactory {
     /** Pick provider based on JARVIS_LLM env var. Defaults to claude-max so
      *  the 20x Max plan covers chat without hitting OpenRouter rate limits or
-     *  spending API credits.
+     *  spending API credits. Use copilot as a placeholder until claude login
+     *  lands on the box.
      *
-     *  Pass the OPENROUTER_API_KEY (or ANTHROPIC_API_KEY) only when the
-     *  selected provider needs it; ClaudeMaxLlm ignores [apiKey]. */
+     *  Pass the ANTHROPIC_API_KEY only when JARVIS_LLM=anthropic; the
+     *  subprocess providers (claude-max, copilot) ignore [apiKey]. */
     fun create(apiKey: String? = null): Llm {
         val provider = (System.getenv("JARVIS_LLM") ?: "claude-max").lowercase()
         return when (provider) {
             "claude-max", "claude", "max" -> ClaudeMaxLlm()
-            "openrouter", "or" -> OpenRouterLlm(
-                apiKey ?: error("JARVIS_LLM=openrouter requires OPENROUTER_API_KEY"),
-            )
+            "copilot", "gh-copilot", "github-copilot" -> CopilotLlm()
             "anthropic", "anthropic-api" -> AnthropicLlm(
                 apiKey ?: error("JARVIS_LLM=anthropic requires ANTHROPIC_API_KEY"),
             )
-            else -> error("Unknown JARVIS_LLM: $provider. Use claude-max | openrouter | anthropic.")
+            else -> error(
+                "Unknown JARVIS_LLM: $provider. Use claude-max | copilot | anthropic.",
+            )
         }
     }
 }

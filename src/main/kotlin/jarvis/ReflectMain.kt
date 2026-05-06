@@ -16,10 +16,7 @@ Activity log:
 """
 
 internal suspend fun runReflect() {
-    val apiKey = resolveOpenRouterKey() ?: run {
-        System.err.println("ERROR: OPENROUTER_API_KEY not set. Copy .env.example to .env and set the key.")
-        exitProcess(1)
-    }
+    val apiKey = resolveOpenRouterKey()  // optional; LlmFactory may not need it (claude-max / copilot)
 
     val entries = Activity.loadEntries(hours = 24L)
     if (entries.isEmpty()) {

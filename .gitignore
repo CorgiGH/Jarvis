@@ -7,3 +7,5 @@ build/
 out/
 .kotlin/
 local.properties
+tools/AUTH_TOKEN.txt
+tools/vps.env

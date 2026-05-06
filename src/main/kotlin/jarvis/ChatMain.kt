@@ -9,15 +9,13 @@ import kotlin.system.exitProcess
 
 
 internal suspend fun runChat() {
-    val apiKey = resolveOpenRouterKey() ?: run {
-        System.err.println("ERROR: OPENROUTER_API_KEY not set. Copy .env.example to .env and set the key.")
-        exitProcess(1)
-    }
+    val apiKey = resolveOpenRouterKey()  // optional now; only required for openrouter chat or any embeddings
+    val embeddings: EmbeddingsClient? = apiKey?.let { EmbeddingsClient(it) }
 
     LlmFactory.create(apiKey).use { client ->
-        val embeddings = EmbeddingsClient(apiKey)
         val history = mutableListOf<ChatMessage>()
-        println("Jarvis online (chain head: ${Config.FALLBACK_CHAIN.first()}, semantic store: ${VectorStore.all().size} entries). Commands: exit, /save <note>, /ctx, /subs, /sub <name> [query]")
+        val storeNote = if (embeddings != null) "${VectorStore.all().size} entries" else "disabled (no OPENROUTER_API_KEY)"
+        println("Jarvis online (provider: ${System.getenv("JARVIS_LLM") ?: "claude-max"}, semantic store: $storeNote). Commands: exit, /save <note>, /ctx, /subs, /sub <name> [query]")
 
         while (true) {
             print("you> ")
@@ -69,11 +67,9 @@ internal suspend fun runChat() {
             }
 
             history += ChatMessage("user", msg)
-            val queryEmb: FloatArray? = try {
-                embeddings.embed(msg)
-            } catch (_: Exception) {
-                null
-            }
+            val queryEmb: FloatArray? = if (embeddings != null) {
+                try { embeddings.embed(msg) } catch (_: Exception) { null }
+            } else null
             val sysPrompt = CHAT_SYSTEM_PROMPT + "\n\n# Context\n" + buildChatContextWithSemantic(queryEmb)
             val messages = listOf(ChatMessage("system", sysPrompt)) + history
 
@@ -90,12 +86,14 @@ internal suspend fun runChat() {
             val sectionContent = "**user:** $msg\n\n**jarvis:** $reply"
             MemoryWiki.append(sectionTitle, sectionContent)
             // Best-effort: also embed and store so this turn is searchable next time.
-            try {
-                val joined = "## $sectionTitle\n\n$sectionContent"
-                val emb = embeddings.embed(joined)
-                VectorStore.add(StoredEmbedding(id = "$sectionTitle | ${msg.take(60)}", text = joined, embedding = emb))
-            } catch (_: Exception) {
-                // ignore: chat keeps working without semantic store
+            if (embeddings != null) {
+                try {
+                    val joined = "## $sectionTitle\n\n$sectionContent"
+                    val emb = embeddings.embed(joined)
+                    VectorStore.add(StoredEmbedding(id = "$sectionTitle | ${msg.take(60)}", text = joined, embedding = emb))
+                } catch (_: Exception) {
+                    // ignore: chat keeps working without semantic store
+                }
             }
         }
     }

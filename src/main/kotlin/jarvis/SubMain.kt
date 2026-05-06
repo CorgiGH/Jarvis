@@ -19,10 +19,7 @@ internal suspend fun runSub(args: List<String>) {
     }
     val query = if (args.size > 1) args.drop(1).joinToString(" ") else null
 
-    val apiKey = resolveOpenRouterKey() ?: run {
-        System.err.println("ERROR: OPENROUTER_API_KEY not set.")
-        exitProcess(1)
-    }
+    val apiKey = resolveOpenRouterKey()  // optional with claude-max / copilot providers
 
     val activity = Activity.loadEntries()
     val wiki = MemoryWiki.recent()
