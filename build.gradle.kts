@@ -124,3 +124,18 @@ tasks.register<JavaExec>("runReindex") {
         "-Dstderr.encoding=UTF-8",
     )
 }
+
+tasks.register<JavaExec>("migrateWiki") {
+    group = "application"
+    description = "One-shot CLI: walk wiki.md 'conversation (model)' sections " +
+        "and emit ConversationEntry rows to conversations.jsonl. STOP THE " +
+        "SERVER FIRST. Pass --dry-run to write a .preview file without mutating real state."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("jarvis.WikiToJsonlMigratorKt")
+    args = (project.findProperty("migrateArgs") as String?)?.split(" ")?.filter { it.isNotEmpty() } ?: listOf()
+    jvmArgs = listOf(
+        "-Dfile.encoding=UTF-8",
+        "-Dstdout.encoding=UTF-8",
+        "-Dstderr.encoding=UTF-8",
+    )
+}
