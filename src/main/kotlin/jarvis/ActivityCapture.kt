@@ -7,11 +7,8 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.nio.file.Files
-import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.time.Instant
-import kotlin.io.path.createDirectories
 
 /** Captures the currently-active window and either posts the entry to a
  *  remote jarvis backend (when JARVIS_BACKEND_URL + JARVIS_AUTH_TOKEN are
@@ -89,14 +86,6 @@ object ActivityCapture {
     }
 
     private fun appendLocal(entry: ActivityEntry) {
-        Config.stateDir.createDirectories()
-        val line = json.encodeToString(ActivityEntry.serializer(), entry) + "\n"
-        Files.writeString(
-            Config.activityFile,
-            line,
-            Charsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.APPEND,
-        )
+        Activity.append(entry)
     }
 }

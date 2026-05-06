@@ -2,9 +2,13 @@ package jarvis
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.time.Instant
 import kotlin.io.path.bufferedReader
+import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 
 @Serializable
@@ -16,7 +20,31 @@ data class ActivityEntry(
 )
 
 object Activity {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    /** Process-wide lock guarding every activity.jsonl append. Council 1778078829 HIGH +
+     *  1778102666 elevation: /api/activity (server) and the PC logger fallback both
+     *  hit Files.writeString(APPEND) and could interleave bytes mid-line, breaking
+     *  the line-delimited JSON contract. */
+    private val LOCK = Any()
+
+    fun append(entry: ActivityEntry) {
+        appendTo(Config.activityFile, entry)
+    }
+
+    fun appendTo(file: Path, entry: ActivityEntry) {
+        val line = json.encodeToString(ActivityEntry.serializer(), entry) + "\n"
+        synchronized(LOCK) {
+            file.parent?.createDirectories()
+            Files.writeString(
+                file,
+                line,
+                Charsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND,
+            )
+        }
+    }
 
     fun loadEntries(hours: Long = Config.ACTIVITY_LOOKBACK_HOURS): List<ActivityEntry> {
         if (!Config.activityFile.exists()) return emptyList()

@@ -26,7 +26,6 @@ import jarvis.Activity
 import jarvis.ActivityEntry
 import jarvis.CHAT_SYSTEM_PROMPT
 import jarvis.ChatMessage
-import jarvis.Config
 import jarvis.Llm
 import jarvis.LlmFactory
 import jarvis.MemoryWiki
@@ -34,9 +33,6 @@ import jarvis.buildChatContext
 import jarvis.resolveOpenRouterKey
 import jarvis.subsystem.SubsystemInput
 import jarvis.subsystem.Subsystems
-import java.nio.file.Files
-import java.nio.file.StandardOpenOption
-import kotlin.io.path.createDirectories
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.system.exitProcess
@@ -232,16 +228,7 @@ internal suspend fun runWeb() {
 
             post("/api/activity") {
                 val entry = call.receive<ActivityEntry>()
-                Config.stateDir.createDirectories()
-                val line = kotlinx.serialization.json.Json
-                    .encodeToString(ActivityEntry.serializer(), entry) + "\n"
-                Files.writeString(
-                    Config.activityFile,
-                    line,
-                    Charsets.UTF_8,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND,
-                )
+                Activity.append(entry)
                 call.respond(io.ktor.http.HttpStatusCode.NoContent)
             }
 

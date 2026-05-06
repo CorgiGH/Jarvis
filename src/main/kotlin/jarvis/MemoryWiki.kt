@@ -1,6 +1,7 @@
 package jarvis
 
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.time.Instant
 import java.time.ZoneOffset
@@ -14,17 +15,30 @@ object MemoryWiki {
         .ofPattern("yyyy-MM-dd HH:mm 'UTC'")
         .withZone(ZoneOffset.UTC)
 
+    /** Process-wide lock guarding every wiki append. Council 1778078829 HIGH +
+     *  1778102666 elevation: without this, concurrent POSTs to /api/chat,
+     *  /api/sub, /api/wiki and the in-handler MemoryWiki.append from /chat all
+     *  hit Files.writeString(APPEND) on the same wiki.md and can interleave
+     *  bytes mid-section, silently corrupting the ^## split. */
+    private val LOCK = Any()
+
     fun append(section: String, content: String) {
-        Config.stateDir.createDirectories()
+        appendTo(Config.wikiFile, section, content)
+    }
+
+    fun appendTo(file: Path, section: String, content: String) {
         val ts = tsFormat.format(Instant.now())
         val block = "\n## [$ts] $section\n\n${content.trim()}\n"
-        Files.writeString(
-            Config.wikiFile,
-            block,
-            Charsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.APPEND,
-        )
+        synchronized(LOCK) {
+            file.parent?.createDirectories()
+            Files.writeString(
+                file,
+                block,
+                Charsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND,
+            )
+        }
     }
 
     fun readAll(): String {
