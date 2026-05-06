@@ -31,8 +31,10 @@ Restart point for next session.
 - **State dir:** `/opt/jarvis/data/` — `wiki.md` (13 lines, two real
   conversation entries), `activity.jsonl` (live; growing every 5 min
   from the PC logger), `archival/` (316 .md / 3.2 MB; isolated from
-  chat retrieval), `wiki.md.bak.1778090717` (7.3 MB pre-revert backup,
-  safe to delete after 24-72 hr if chat looks fine).
+  chat retrieval), `wiki.md.bak.1778090717` (7.3 MB pre-revert backup;
+  **DO NOT DELETE** until Step B mutex commit lands AND a regression
+  test confirms N concurrent /api/wiki POSTs do not corrupt the
+  `^## ` boundary; "looks fine" does not detect byte interleaving).
 - **PC logger:** running via Startup-folder VBS shortcut. POSTs to
   `https://corgflix.duckdns.org/api/activity` every 5 min. Falls back
   to local `~/.life-os/activity.jsonl` if VPS unreachable. `.env` at
@@ -85,6 +87,20 @@ Locked at session end:
 
 ## Step B (next session) — Letta/Khoj-style storage split
 
+> **BLOCKER — DO BEFORE ANY OTHER STEP B WORK:** add a process-wide
+> write-mutex around every appender for `wiki.md` and `activity.jsonl`
+> *before* migrating either file. Council 1778078829 rated this **HIGH**;
+> council 1778102666 confirmed and elevated it. Right now four endpoints
+> (`POST /api/chat`, `/api/sub`, `/api/wiki`, plus `MemoryWiki.append` from
+> the chat handler) all hit `Files.writeString(..., APPEND)` on `wiki.md`
+> with no lock; `/api/activity` does the same on `activity.jsonl`.
+> Concurrent POSTs can interleave bytes mid-section and silently corrupt
+> the `^## ` regex split — recovery would require restoring from
+> `wiki.md.bak.1778090717`, which is the ONLY surviving copy of the
+> pre-revert content. Do NOT touch the schema (move conversations out,
+> ingest archival, etc.) until the mutex commit is in and a smoke test
+> confirms N concurrent POSTs do not corrupt the section boundary.
+
 The actual fix the council prescribed. Outline so resume is concrete:
 
 1. **`conversations.jsonl`** at `${JARVIS_DATA_DIR}/conversations.jsonl`
@@ -127,9 +143,14 @@ The actual fix the council prescribed. Outline so resume is concrete:
 
 ### Open design choices for next session
 
-- **FTS5 vs embeddings:** start with FTS5 (no $ cost, no API
-  dependency, immediate). Add embeddings later as a second retrieval
-  arm if FTS recall is poor.
+- **FTS5 vs embeddings (DEFERRED to Step B kickoff, not pre-decided):**
+  FTS5 is the leading candidate — zero $ cost, no API dependency,
+  works on 316 files in-process via SQLite — but the actual call should
+  be made fresh next session against the council-1778102666 ADR
+  separation rule (Status:Proposed ≠ Decision). Embeddings remain a
+  viable alternative; ~$0.20 to embed the corpus and a second arm can
+  layer over FTS5 anyway. Do NOT lock in FTS5 just because this note
+  recommends it.
 - **conversations.jsonl size cap:** 1000 entries seems fine for v1;
   reflection gets to skim the tail when it summarizes.
 - **core_memory.md seed:** import the relevant fields from
@@ -162,10 +183,18 @@ The actual fix the council prescribed. Outline so resume is concrete:
 
 ## Quick resume checklist
 
+> **Meta-cue:** memory's 2026-05-04 priority lock (PS HW 2026-05-21,
+> finals June 1-21) is real. If study work is not done, Step B waits.
+> The 2026-05-04 council verdict explicitly named meta-planning sessions
+> as a sidetrack vector, and council 1778102666 flagged the wrap-ritual
+> itself as a potential instance. Honor the lock unless explicitly
+> rescinded.
+
 ```powershell
 # verify state
 $VPS = "root@46.247.109.91"
-ssh $VPS "systemctl is-active jarvis; wc -l /opt/jarvis/data/wiki.md; ls /opt/jarvis/data/archival; tail -3 /opt/jarvis/data/activity.jsonl"
+ssh $VPS "systemctl is-active jarvis; wc -l /opt/jarvis/data/wiki.md; wc -l /opt/jarvis/data/activity.jsonl; ls /opt/jarvis/data/archival; ls -la /opt/jarvis/data/wiki.md.bak.* 2>/dev/null"
 curl.exe -s https://corgflix.duckdns.org/healthz   # expect: ok
 git -C C:\Users\User\jarvis-kotlin log --oneline -10
+git -C C:\Users\User\jarvis-kotlin log --oneline 2eabcfd..HEAD | wc -l   # day-2 commit count, self-correcting
 ```
