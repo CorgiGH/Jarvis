@@ -79,10 +79,11 @@ ensure_certbot() {
 
 ensure_app_tree() {
     mkdir -p "$APP_DIR"
-    mkdir -p "$APP_DIR/data"        # equivalent of ~/.life-os
+    mkdir -p "$APP_DIR/data"        # JARVIS_DATA_DIR (activity.jsonl + wiki.md + embeddings.json)
     touch /var/log/jarvis.log
     chown -R "$APP_USER:$APP_USER" "$APP_DIR" /var/log/jarvis.log
-    echo "[ok] $APP_DIR + /var/log/jarvis.log ready"
+    chmod 700 "$APP_DIR/data"
+    echo "[ok] $APP_DIR + $APP_DIR/data + /var/log/jarvis.log ready"
 }
 
 write_systemd_unit() {
@@ -97,9 +98,12 @@ Type=simple
 User=$APP_USER
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
-# Override the data dir so we do not write under /root/.life-os; keep state
-# alongside the app for backup-ability.
-Environment=HOME=$APP_DIR
+# Keep HOME at the user's default (/root for root) so 'claude login' done
+# interactively writes credentials to /root/.claude — same path the service
+# reads from.
+# Activity log + wiki + embeddings land at $APP_DIR/data via the
+# JARVIS_DATA_DIR env var set in /opt/jarvis/.env. Back up the whole tree:
+#   tar -czf jarvis-backup.tgz /opt/jarvis /root/.claude /root/.config/claude
 ExecStart=$APP_DIR/jarvis-kotlin/bin/jarvis-kotlin web
 Restart=on-failure
 RestartSec=5
@@ -175,6 +179,7 @@ INSTALL COMPLETE. Manual follow-up:
 2. Write $APP_DIR/.env (chmod 600!):
      JARVIS_AUTH_TOKEN=<random 32+ chars>
      JARVIS_LLM=claude-max
+     JARVIS_DATA_DIR=$APP_DIR/data
      OPENROUTER_API_KEY=<for embeddings; optional>
      JARVIS_PORT=$APP_PORT
 

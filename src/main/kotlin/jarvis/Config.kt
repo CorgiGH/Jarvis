@@ -5,7 +5,15 @@ import java.nio.file.Paths
 
 object Config {
     val homeDir: Path = Paths.get(System.getProperty("user.home"))
-    val stateDir: Path = homeDir.resolve(".life-os")
+
+    /** Where activity log, wiki, and embeddings live. Override with
+     *  JARVIS_DATA_DIR env var (used on the VPS so state lands under
+     *  /opt/jarvis/data instead of /root/.life-os). Defaults to
+     *  ~/.life-os to match the original layout on the user's PC. */
+    val stateDir: Path = run {
+        val override = System.getenv("JARVIS_DATA_DIR")?.trim().orEmpty()
+        if (override.isNotEmpty()) Paths.get(override) else homeDir.resolve(".life-os")
+    }
     val activityFile: Path = stateDir.resolve("activity.jsonl")
     val wikiFile: Path = stateDir.resolve("wiki.md")
 
