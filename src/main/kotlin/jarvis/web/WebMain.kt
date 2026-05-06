@@ -245,6 +245,19 @@ internal suspend fun runWeb() {
                 call.respond(io.ktor.http.HttpStatusCode.NoContent)
             }
 
+            post("/api/wiki") {
+                val req = call.receive<ApiWikiRequest>()
+                if (req.section.isBlank() || req.content.isBlank()) {
+                    call.respond(
+                        io.ktor.http.HttpStatusCode.BadRequest,
+                        "section + content required",
+                    )
+                    return@post
+                }
+                MemoryWiki.append(req.section, req.content)
+                call.respond(io.ktor.http.HttpStatusCode.NoContent)
+            }
+
             post("/api/sub") {
                 val params = call.receiveParameters()
                 val cmd = params["cmd"]?.trim().orEmpty()
@@ -318,6 +331,9 @@ private data class ApiChatResponse(val reply: String, val model: String)
 
 @Serializable
 private data class ApiSubResponse(val text: String, val model: String)
+
+@Serializable
+private data class ApiWikiRequest(val section: String, val content: String)
 
 private fun escape(s: String): String = s
     .replace("&", "&amp;")
