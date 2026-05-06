@@ -16,6 +16,8 @@ object Config {
     }
     val activityFile: Path = stateDir.resolve("activity.jsonl")
     val wikiFile: Path = stateDir.resolve("wiki.md")
+    val conversationsFile: Path = stateDir.resolve("conversations.jsonl")
+    val coreMemoryFile: Path = stateDir.resolve("core_memory.md")
 
     /** OpenRouter is no longer used for chat (the copilot / claude-max
      *  subprocess providers replaced it), but EmbeddingsClient still hits
@@ -27,4 +29,5 @@ object Config {
     const val ACTIVITY_LOOKBACK_HOURS = 24L
     const val WIKI_RECENT_ENTRIES = 30
     const val ACTIVITY_LINE_CAP = 200
+    const val CONVERSATION_RECENT_N = 30
 }
