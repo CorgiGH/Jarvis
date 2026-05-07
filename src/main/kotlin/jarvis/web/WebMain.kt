@@ -242,6 +242,38 @@ internal suspend fun runWeb() {
                 call.respond(ApiChatResponse(reply, model))
             }
 
+            // Phase 3.1 (council 1778184643): polling endpoint for the Android
+            // APK. Read-only — `since` is an ISO-8601 instant; we return rows
+            // strictly newer than that, oldest-first, capped at `limit`. PII
+            // scanner mirrors the buildChatContext fix: any signal whose
+            // snippet trips identifier-shape regex is dropped (with WARN) so
+            // a phone notification can never leak matricol/email/phone.
+            get("/api/signals") {
+                val sinceParam = call.request.queryParameters["since"].orEmpty().trim()
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull()
+                    ?.coerceIn(1, 50) ?: 10
+                val sinceInstant = if (sinceParam.isEmpty()) null else
+                    runCatching { java.time.Instant.parse(sinceParam) }.getOrNull()
+                val all = jarvis.Signals.readAll()
+                val filtered = all.asSequence()
+                    .filter { sinceInstant == null ||
+                        runCatching { java.time.Instant.parse(it.ts) }.getOrNull()
+                            ?.let { ts -> ts > sinceInstant } ?: false }
+                    .filter { sig ->
+                        val findings = jarvis.CoreMemory.scanTextForPii(sig.snippet)
+                        if (findings.isNotEmpty()) {
+                            System.err.println(
+                                "[/api/signals] WARN dropping ${sig.id} containing " +
+                                    "${findings.joinToString(",") { it.kind }}",
+                            )
+                            false
+                        } else true
+                    }
+                    .take(limit)
+                    .toList()
+                call.respond(ApiSignalsResponse(filtered))
+            }
+
             post("/api/activity") {
                 val entry = call.receive<ActivityEntry>()
                 Activity.append(entry)
@@ -372,6 +404,9 @@ private data class ApiSubResponse(val text: String, val model: String)
 
 @Serializable
 private data class ApiWikiRequest(val section: String, val content: String)
+
+@Serializable
+private data class ApiSignalsResponse(val signals: List<jarvis.ProactiveSignal>)
 
 private fun escape(s: String): String = s
     .replace("&", "&amp;")

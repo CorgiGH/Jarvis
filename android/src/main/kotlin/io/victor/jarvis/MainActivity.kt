@@ -1,9 +1,13 @@
 package io.victor.jarvis
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -114,7 +118,17 @@ fun JarvisApp() {
         if (prefsLoaded) Prefs.saveBackendUrl(context, backendUrl)
     }
     LaunchedEffect(authToken, prefsLoaded) {
-        if (prefsLoaded) Prefs.saveAuthToken(context, authToken)
+        if (prefsLoaded) {
+            Prefs.saveAuthToken(context, authToken)
+            // Phase 3.1: enqueue the periodic poll only when we have a token;
+            // cancel when the user clears it. KEEP-policy on the worker means
+            // we don't churn the schedule on recompose.
+            if (authToken.isNotBlank()) {
+                SignalWorker.enqueue(context)
+            } else {
+                SignalWorker.cancel(context)
+            }
+        }
     }
     LaunchedEffect(ttsOn, prefsLoaded) {
         if (prefsLoaded) Prefs.saveTtsOn(context, ttsOn)
@@ -133,6 +147,20 @@ fun JarvisApp() {
             if (first.isNotEmpty()) {
                 msg = if (msg.isBlank()) first else "$msg $first"
             }
+        }
+    }
+
+    // Phase 3.1: ask for POST_NOTIFICATIONS once on Android 13+. Silent on
+    // older versions; SignalWorker no-ops gracefully if the user denies.
+    val notifPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { /* result unused — Worker handles missing-perm by skipping notify */ }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 

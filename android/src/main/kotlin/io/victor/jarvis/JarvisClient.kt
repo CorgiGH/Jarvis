@@ -6,6 +6,7 @@ import io.ktor.client.engine.android.Android
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.forms.submitForm
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -26,6 +27,25 @@ data class ChatReply(val reply: String, val model: String)
 
 @Serializable
 data class SubReply(val text: String, val model: String)
+
+/** Phase 3.1 — wire format mirroring server-side jarvis.ProactiveSignal. */
+@Serializable
+data class Signal(
+    val id: String,
+    val ts: String,
+    val kind: String,
+    val importance: Float,
+    val sourceTs: String,
+    val snippet: String,
+    val rationale: String,
+    val status: String = "emitted",
+    val v: Int = 1,
+)
+
+@Serializable
+data class SignalsReply(val signals: List<Signal>)
+
+class JarvisAuthException(message: String) : Exception(message)
 
 class JarvisClient {
     private val client = HttpClient(Android) {
@@ -65,6 +85,37 @@ class JarvisClient {
             return SubReply("[server ${resp.status.value}] ${resp.bodyAsText().take(300)}", "n/a")
         }
         return resp.body()
+    }
+
+    /** Phase 3.1 — pull new signals server-side of [since] (ISO-8601). Empty
+     *  [since] returns the most-recent [limit] signals. Throws
+     *  [JarvisAuthException] on 401/403 so the caller can surface a re-auth
+     *  notification + back off; throws plain Exception on other server errors. */
+    suspend fun fetchSignals(
+        baseUrl: String,
+        since: String,
+        authToken: String,
+        limit: Int = 10,
+    ): List<Signal> {
+        val url = buildString {
+            append("$baseUrl/api/signals?limit=$limit")
+            if (since.isNotBlank()) {
+                append("&since=")
+                append(java.net.URLEncoder.encode(since, "UTF-8"))
+            }
+        }
+        val resp = client.get(url) {
+            if (authToken.isNotBlank()) {
+                header("Authorization", "Bearer $authToken")
+            }
+        }
+        if (resp.status.value == 401 || resp.status.value == 403) {
+            throw JarvisAuthException("auth rejected: ${resp.status.value}")
+        }
+        if (!resp.status.isSuccess()) {
+            error("server ${resp.status.value}: ${resp.bodyAsText().take(200)}")
+        }
+        return resp.body<SignalsReply>().signals
     }
 
     fun close() = client.close()

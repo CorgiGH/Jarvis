@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Phase 3.1 (council 1778184643): WorkManager polls /api/signals
+         and posts a system Notification per new ProactiveSignal. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Required so the system speech recognizer picker dialog can find a STT
          service on Android 11+ scoped package visibility. -->

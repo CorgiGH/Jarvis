@@ -13,6 +13,9 @@ object PrefKeys {
     val BackendUrl = stringPreferencesKey("backend_url")
     val AuthToken = stringPreferencesKey("auth_token")
     val TtsOn = booleanPreferencesKey("tts_on")
+    /** Phase 3.1: ISO-8601 ts of last signal the user has been notified about.
+     *  Functions as the client-side ack — server's /api/signals is read-only. */
+    val LastSeenTs = stringPreferencesKey("last_seen_ts")
 }
 
 object Prefs {
@@ -35,5 +38,12 @@ object Prefs {
 
     suspend fun saveTtsOn(context: Context, value: Boolean) {
         context.prefsStore.edit { it[PrefKeys.TtsOn] = value }
+    }
+
+    suspend fun loadLastSeenTs(context: Context, default: String): String =
+        context.prefsStore.data.first()[PrefKeys.LastSeenTs] ?: default
+
+    suspend fun saveLastSeenTs(context: Context, value: String) {
+        context.prefsStore.edit { it[PrefKeys.LastSeenTs] = value }
     }
 }
