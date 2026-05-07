@@ -228,8 +228,11 @@ internal suspend fun runWeb() {
                 val (reply, model) = historyLock.withLock {
                     val sysPrompt = CHAT_SYSTEM_PROMPT + CoreMemory.preamble() +
                         "\n\n# Context\n" + buildChatContext()
+                    // F7 — context-pressure aware. Drops oldest turns when
+                    // chat array exceeds a char budget so we don't slam the
+                    // provider with a saturated context window.
                     val messages = listOf(ChatMessage("system", sysPrompt)) +
-                        Conversations.recentAsChatMessages() +
+                        Conversations.recentAsChatMessagesWithBudget() +
                         ChatMessage("user", msg)
                     val (text, modelName) = try {
                         ChatTools.runTurn(client, messages)
@@ -277,6 +280,23 @@ internal suspend fun runWeb() {
             // R3 (deep-research recommendation #3 / Mem0 feedback API parity):
             // append-only feedback ledger for ProactiveSignal user actions.
             // Whitelist enforced server-side; bad action → 400.
+            // F4 — cached user-state. /api/state returns the last cached
+            // ctx-model output. Stale cache → trigger background refresh +
+            // return what we have (caller doesn't block).
+            get("/api/state") {
+                val cached = jarvis.StateCache.current()
+                if (jarvis.StateCache.isStale()) {
+                    jarvis.StateCache.maybeRefresh(client)
+                }
+                if (cached == null) {
+                    call.respond(
+                        io.ktor.http.HttpStatusCode.NoContent
+                    )
+                } else {
+                    call.respond(cached)
+                }
+            }
+
             // R6 (deep-research recommendation #6): live focus-session
             // detection. APK polls this every 15 min and surfaces a quiet
             // ongoing notification when active=true.

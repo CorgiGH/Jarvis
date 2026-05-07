@@ -102,7 +102,52 @@ object ChatTools {
         "sub" -> executeSub(call.args, client)
         "calendar" -> executeCalendar(call.args)
         "pin" -> executePin(call.args)
+        "goal_set" -> executeGoalSet(call.args)
+        "goal_progress" -> executeGoalProgress(call.args)
+        "goals" -> executeGoals()
         else -> "(unknown tool: ${call.name})"
+    }
+
+    /** F6 — declare a goal. id is sha256(text + day-bucket) so same-day
+     *  duplicates collapse. */
+    private fun executeGoalSet(text: String): String {
+        val t = text.trim()
+        if (t.isEmpty()) return "(empty goal text)"
+        val capped = if (t.length > 300) t.take(300) + " […truncated]" else t
+        val now = java.time.Instant.now()
+        val id = Goals.computeId(capped, now)
+        Goals.append(GoalEntry(id = id, ts = now.toString(), kind = "set", text = capped))
+        return "(goal set: id=$id, \"${capped.take(60)}\")"
+    }
+
+    /** F6 — progress note. First token of args = goal id, rest = note text. */
+    private fun executeGoalProgress(args: String): String {
+        val tokens = args.trim().split(Regex("\\s+"), limit = 2)
+        if (tokens.size < 2 || tokens[0].isBlank() || tokens[1].isBlank()) {
+            return "(usage: [[goal_progress: <goal-id> <note>]])"
+        }
+        val parent = tokens[0]
+        val note = tokens[1].take(300)
+        val now = java.time.Instant.now()
+        Goals.append(GoalEntry(
+            id = Goals.computeId("progress|$parent", now),
+            ts = now.toString(),
+            kind = "progress",
+            text = note,
+            parentId = parent,
+        ))
+        return "(progress logged on $parent: \"${note.take(60)}\")"
+    }
+
+    /** F6 — list current goals with staleness for the model to surface. */
+    private fun executeGoals(): String {
+        val views = Goals.current()
+        if (views.isEmpty()) return "(no goals set yet — use [[goal_set: <text>]])"
+        return views.joinToString("\n") { v ->
+            val staleTag = if (v.staleDays >= 7) " STALE-${v.staleDays}d" else ""
+            val progress = v.latestProgressText?.let { " — last: \"$it\"" } ?: ""
+            "[${v.id}] ${v.text} (set ${v.ageDays}d ago$staleTag)$progress"
+        }
     }
 
     /** F2 — Letta-style core_memory write tool. Pins to `core_memory.md` so

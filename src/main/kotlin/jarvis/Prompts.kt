@@ -36,6 +36,15 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   replies", "never do X without confirmation"). Capped at 500 chars.
   PII-scanned: pin denied if it contains identifier-shaped tokens.
     [[pin: <text>]]
+- goal_set(text): declare a goal. Returns goal id. Same text on the same
+  day collapses to one row.
+    [[goal_set: ship Phase 6 by 2026-06-15]]
+- goal_progress(<id> <note>): log progress against an existing goal id.
+    [[goal_progress: a1b2c3d4 wired the OAuth flow today]]
+- goals: list current goals + age + staleness flag (≥7d since last
+  progress). Use when answering "what am I working on" or when surfacing
+  things the user might have dropped.
+    [[goals: now]]
 - wiki(query): lexical search over the user's wiki notes (reflections,
   /save notes, prior subsystem outputs, model-pinned memories from the
   remember tool). Different from search (archival corpus) and recall

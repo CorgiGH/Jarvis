@@ -26,11 +26,29 @@ internal suspend fun runReflect() {
     val logText = entries.joinToString("\n") { e ->
         "[${e.ts}] ${e.process ?: "?"}: ${e.title ?: ""}"
     }
+    // F5 — cross-correlator findings: simple heuristic patterns over a wider
+    // window than the 24h activity. Prepended to the prompt so the LLM can
+    // cite them or override them in the reflection.
+    val correlations = try {
+        val widerActivity = Activity.loadEntries(hours = 24L * 7)
+        val sleeps = SleepInference.detect(widerActivity)
+        val signals = Signals.readAll().filter {
+            runCatching { java.time.Instant.parse(it.ts) }.getOrNull()
+                ?.isAfter(java.time.Instant.now().minus(java.time.Duration.ofDays(7))) == true
+        }
+        CrossCorrelator.analyze(widerActivity, signals, sleeps, java.time.Instant.now())
+    } catch (e: Exception) {
+        emptyList()
+    }
+    val correlationText = if (correlations.isEmpty()) "" else
+        "\n\nCross-correlator findings (last 7 days):\n" +
+            correlations.joinToString("\n") { "- ${it.pattern}: ${it.evidence}" } +
+            "\n"
 
     LlmFactory.create(apiKey).use { client ->
         val (reply, model) = try {
             client.complete(
-                messages = listOf(ChatMessage("user", REFLECTION_PROMPT + logText)),
+                messages = listOf(ChatMessage("user", REFLECTION_PROMPT + logText + correlationText)),
                 maxTokens = REFLECTION_MAX_TOKENS,
             )
         } catch (e: Exception) {

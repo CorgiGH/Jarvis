@@ -125,6 +125,37 @@ object Conversations {
     fun recentAsChatMessagesFrom(file: Path, n: Int): List<ChatMessage> =
         recentFrom(file, n).map { ChatMessage(it.role, it.content) }
 
+    /** F7 — token-context-pressure-aware variant. Walks newest→oldest,
+     *  accumulates entries up to [charBudget] characters of content. Drops
+     *  oldest first when budget exhausted. Heuristic char-budget (chars/4 ≈
+     *  tokens). Cap n at [Config.CONVERSATION_RECENT_N] so chronological
+     *  pairing semantics hold. Daily ReflectMain summarizes older context
+     *  separately; this path doesn't do LLM summarization inline. */
+    fun recentAsChatMessagesWithBudget(
+        charBudget: Int = 60_000,
+        maxN: Int = Config.CONVERSATION_RECENT_N,
+    ): List<ChatMessage> = recentAsChatMessagesWithBudgetFrom(
+        Config.conversationsFile, charBudget, maxN,
+    )
+
+    fun recentAsChatMessagesWithBudgetFrom(
+        file: Path,
+        charBudget: Int,
+        maxN: Int,
+    ): List<ChatMessage> {
+        val pool = recentFrom(file, maxN)
+        if (pool.isEmpty()) return emptyList()
+        var used = 0
+        val out = ArrayDeque<ChatMessage>()
+        for (entry in pool.asReversed()) {
+            val len = entry.content.length
+            if (out.isNotEmpty() && used + len > charBudget) break
+            out.addFirst(ChatMessage(entry.role, entry.content))
+            used += len
+        }
+        return out.toList()
+    }
+
     private const val SALIENT_POOL_SIZE = 500
     private const val SALIENT_HALF_LIFE_HOURS = 24.0
     private const val SALIENT_NULL_FALLBACK = 0.4f
