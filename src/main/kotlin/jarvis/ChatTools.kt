@@ -5,6 +5,7 @@ import jarvis.embeddings.VectorStore
 import jarvis.subsystem.SearchSubsystem
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
+import java.time.Instant
 import kotlin.io.path.exists
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.readText
@@ -87,7 +88,25 @@ object ChatTools {
         "search" -> executeSearch(call.args)
         "read" -> executeRead(call.args)
         "recall" -> executeRecall(call.args)
+        "time" -> executeTime()
+        "remember" -> executeRemember(call.args)
         else -> "(unknown tool: ${call.name})"
+    }
+
+    private fun executeTime(): String = Instant.now().toString()
+
+    private fun executeRemember(content: String): String {
+        val text = content.trim()
+        if (text.isEmpty()) return "(empty remember content)"
+        // Cap to keep one append from blowing up wiki.md if model hallucinates
+        // a giant blob; at single-user scale a sane note is well under 4KB.
+        val capped = if (text.length > 4000) text.take(4000) + " […truncated]" else text
+        return try {
+            MemoryWiki.append("user note (model-pinned)", capped)
+            "(remembered: ${capped.take(80)}${if (capped.length > 80) "…" else ""})"
+        } catch (e: Exception) {
+            "(remember failed: ${e.javaClass.simpleName}: ${e.message?.take(160)})"
+        }
     }
 
     private fun executeSearch(query: String): String {

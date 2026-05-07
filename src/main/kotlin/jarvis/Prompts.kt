@@ -21,6 +21,15 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   the user asks "what have we talked about that's like X" or when search
   returned no hits but a related concept might exist.
     [[recall: <query>]]
+- time: current UTC instant in ISO-8601. Use when the user asks the time, or
+  when an answer depends on knowing how stale activity/conversation data is.
+    [[time: now]]
+- remember(text): append a note to the wiki under "user note (model-pinned)".
+  Use sparingly — only for facts the user explicitly asks you to remember,
+  or for a clearly load-bearing insight you'd want surfaced later. Do NOT
+  use for chat replies, summaries the user can re-derive, or anything
+  ephemeral. The note is a permanent write to the user's wiki.
+    [[remember: <text>]]
 
 After your markers, you receive [TOOL_RESULT] messages and write the final
 reply. At most one tool round per turn (so emit all markers you need at
