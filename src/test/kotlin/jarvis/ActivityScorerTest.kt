@@ -67,6 +67,21 @@ class ActivityScorerTest {
     }
 
     @Test
+    fun keywordRegressionDoesNotMatchSubword() {
+        // DM5: "fail" must NOT match inside "failsafe", "bug" must NOT match
+        // inside "debug". CamelCase Exception/Error suffix DOES still match.
+        val nope = ActivityScorer.score(e(0, "code.exe", "failsafe debug routine"), emptyList())
+        val plain = ActivityScorer.score(e(0, "code.exe", "main.kt"), emptyList())
+        assertEquals(plain, nope, "subword false-positives are gone (got $nope vs $plain)")
+        // CamelCase exception must still match.
+        val withExcept = ActivityScorer.score(
+            e(0, "code.exe", "main.kt — IllegalStateException"),
+            emptyList(),
+        )
+        assertTrue(withExcept > plain, "CamelCase Exception suffix still boosts ($withExcept > $plain)")
+    }
+
+    @Test
     fun keywordBonusCappedAt0_2() {
         // Six trigger words in title; bonus must not exceed 0.2.
         val many = ActivityScorer.score(

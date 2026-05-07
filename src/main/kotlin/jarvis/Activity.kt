@@ -35,11 +35,26 @@ object Activity {
         // Phase 1.1: score on the canonical write path so both /api/activity
         // (server) and the local-fallback path get importance populated.
         // Synthetic test data passing through appendTo(path, entry) skips this.
-        val scored = if (entry.importance == null) {
-            val recent = if (Config.activityFile.exists()) loadEntries(hours = 1) else emptyList()
-            entry.copy(importance = ActivityScorer.score(entry, recent))
-        } else entry
-        appendTo(Config.activityFile, scored)
+        //
+        // DM2 fix (post-impl council 1778164815): read prior context + write
+        // happen inside ONE synchronized block. Previously the loadEntries
+        // call sat outside the LOCK so two concurrent writers could each
+        // score against stale state and miss each other's churn signal.
+        synchronized(LOCK) {
+            val scored = if (entry.importance == null) {
+                val recent = if (Config.activityFile.exists()) loadEntries(hours = 1) else emptyList()
+                entry.copy(importance = ActivityScorer.score(entry, recent))
+            } else entry
+            val line = json.encodeToString(ActivityEntry.serializer(), scored) + "\n"
+            Config.activityFile.parent?.createDirectories()
+            Files.writeString(
+                Config.activityFile,
+                line,
+                Charsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND,
+            )
+        }
     }
 
     fun appendTo(file: Path, entry: ActivityEntry) {

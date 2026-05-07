@@ -32,7 +32,13 @@ object Config {
     const val MAX_TOKENS = 2048
     const val ACTIVITY_LOOKBACK_HOURS = 24L
     const val WIKI_RECENT_ENTRIES = 30
-    const val ACTIVITY_LINE_CAP = 200
+    /** DM4 fix: previously 200, which truncated ~17h on a 5-min-cadence
+     *  log. 350 covers a full 24-h window (288 entries at 5-min) + safety
+     *  margin. Still bounded so [[activity: 168]] doesn't blow up the
+     *  prompt budget — a 7-day window would be capped at the most recent
+     *  350 / 5min = ~29h of activity, which is the right behavior at
+     *  single-user scale. */
+    const val ACTIVITY_LINE_CAP = 350
     const val CONVERSATION_RECENT_N = 30
 
     /** Phase 1.3 — number of salient prior turns rendered into the system

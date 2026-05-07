@@ -88,18 +88,25 @@ object ActivityScorer {
         else -> 0.3f
     }
 
-    /** Substring match (case-insensitive) — looser than \b regex so we still hit
-     *  `NullPointerException` inside `NullPointerException`. False-positive risk
-     *  on `debug` matching `bug` is acceptable: debug context is real work too. */
-    private val KEYWORDS = listOf(
-        "error", "exception", "todo", "fixme", "bug",
-        "fail", "crash", "stacktrace", "stack trace", "panic",
+    /** DM5 fix (post-impl council 1778164815): word-boundary regex so "fail"
+     *  no longer hits inside "failsafe"/"failure-mode" and "bug" no longer
+     *  hits inside "debug". CamelCase compound words like
+     *  "NullPointerException" still match because \b sits at the
+     *  letter-letter case-transition boundary in regex flavor used by
+     *  java.util.regex (kotlin.text.Regex) when both characters are word
+     *  characters of the SAME case class — they don't. So we add an
+     *  explicit "exception" suffix-anchored alternation: any word ending
+     *  in `Exception` matches. Same trick for `Error`. */
+    private val KEYWORD_REGEX = Regex(
+        """\b(error|exception|todo|fixme|bug|fail|crash|stacktrace|panic)\b""" +
+            """|stack\s+trace""" +
+            """|[A-Za-z]+(Exception|Error)\b""",
+        RegexOption.IGNORE_CASE,
     )
 
     private fun keywordBonus(title: String?): Float {
         if (title.isNullOrEmpty()) return 0f
-        val lower = title.lowercase()
-        val hits = KEYWORDS.count { lower.contains(it) }
+        val hits = KEYWORD_REGEX.findAll(title).count()
         return (hits * 0.1f).coerceAtMost(0.2f)
     }
 
