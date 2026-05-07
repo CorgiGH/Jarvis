@@ -105,7 +105,19 @@ object ChatTools {
         "goal_set" -> executeGoalSet(call.args)
         "goal_progress" -> executeGoalProgress(call.args)
         "goals" -> executeGoals()
+        "plan" -> executePlan(call.args)
         else -> "(unknown tool: ${call.name})"
+    }
+
+    /** S3 — render today's study plan from Schedule × KnowledgeState × catalog. */
+    private fun executePlan(args: String): String {
+        val now = java.time.Instant.now()
+        val zone = java.time.ZoneId.systemDefault()
+        val schedule = Schedule.load()
+        val stats = KnowledgeState.stats(now)
+        val catalog = ConceptCatalog.all()
+        val items = StudyPlanner.today(schedule, stats, catalog, now, zone)
+        return StudyPlanner.render(items, schedule, now, zone)
     }
 
     /** F6 — declare a goal. id is sha256(text + day-bucket) so same-day

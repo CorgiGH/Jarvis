@@ -329,15 +329,11 @@ internal suspend fun runWeb() {
             post("/api/activity") {
                 val entry = call.receive<ActivityEntry>()
                 Activity.append(entry)
-                // Phase 2.1 (council 1778165183): proactive signal emission
-                // hook. Default-disabled via PROACTIVE_LOOP_ENABLED env so
-                // first deploy doesn't fire LLM calls without explicit user
-                // opt-in. The scored entry from Activity.append (server side
-                // populates importance) is what we hand to the loop. Read
-                // back via loadEntries.lastOrNull is overkill; we know the
-                // last write was this one — re-load just enough to grab the
-                // scored copy.
                 val scored = Activity.loadEntries(hours = 1).lastOrNull() ?: entry
+                // S4 — bump KnowledgeState confidence if active window matches a
+                // catalog concept. Cheap synchronous lookup + append-only write.
+                try { jarvis.ActiveDoc.touchOnActivity(scored) } catch (_: Exception) {}
+                // Phase 2.1 — proactive signal emission hook (default-OFF).
                 ProactiveLoop.consider(scored, client)
                 call.respond(io.ktor.http.HttpStatusCode.NoContent)
             }

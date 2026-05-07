@@ -84,8 +84,14 @@ object ProactiveLoop {
         signalsFile: java.nio.file.Path,
         now: Instant,
     ): String? {
-        // 1. Threshold gate.
-        val imp = entry.importance ?: 0f
+        // S5 — schedule-drift detection runs FIRST, before the normal
+        // importance threshold. Drift during a study/review/lecture/lab
+        // block bumps effective importance to 0.85 so the gate still fires
+        // when the activity itself scored low (browser titles often score
+        // ~0.3 even though they're the load-bearing distraction signal).
+        val schedule = Schedule.load()
+        val drift = ActiveDoc.detectDrift(entry, schedule, now)
+        val imp = if (drift != null) 0.85f else (entry.importance ?: 0f)
         if (imp < IMPORTANCE_THRESHOLD) return null
 
         // 2. Quiet-hours gate.
@@ -103,7 +109,13 @@ object ProactiveLoop {
 
         // 5. Spend the LLM. Wrapped in withTimeout so a hung subprocess
         //    eventually unblocks the loop dispatcher.
-        val rationale = "imp=${"%.2f".format(imp)}, cooldown=elapsed, quiet=no"
+        val rationale = if (drift != null) {
+            "drift: scheduled=${drift.expectedSubject}" +
+                (drift.expectedTopic?.let { "/$it" } ?: "") +
+                ", actual=${drift.actualReason}, cooldown=elapsed"
+        } else {
+            "imp=${"%.2f".format(imp)}, cooldown=elapsed, quiet=no"
+        }
         val ctxModel = ContextModelSubsystem()
         val (snippet, kind, status) = try {
             val out = withTimeout(SUBSYSTEM_TIMEOUT.toMillis()) {

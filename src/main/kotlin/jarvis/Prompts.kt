@@ -45,6 +45,12 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   progress). Use when answering "what am I working on" or when surfacing
   things the user might have dropped.
     [[goals: now]]
+- plan(today): render today's study plan from schedule + knowledge state
+  + concept catalog. Returns scheduled blocks first, then the revision
+  queue (stale concepts past their decay threshold), then catch-up
+  items the user has never touched. Use when the user asks "what should
+  I be doing right now" or for a check-in mid-study-session.
+    [[plan: today]]
 - wiki(query): lexical search over the user's wiki notes (reflections,
   /save notes, prior subsystem outputs, model-pinned memories from the
   remember tool). Different from search (archival corpus) and recall
