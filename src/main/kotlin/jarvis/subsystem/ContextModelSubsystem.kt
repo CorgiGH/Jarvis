@@ -31,9 +31,29 @@ Rules:
 """
 
     override suspend fun run(client: Llm, input: SubsystemInput): SubsystemOutput {
+        // Phase 4.1: derived sleep-window summary fed alongside raw activity.
+        // Cheaper than asking the LLM to infer it from the log every time.
+        val lastSleep = jarvis.SleepInference.lastSleep(input.activity)
+        val sleepLine = lastSleep?.let {
+            "Last sleep window: ${it.startTs} → ${it.endTs} (${"%.1f".format(it.durationHours)}h)"
+        } ?: "No recent sleep window detected in activity log."
+        // Phase 4.3: heuristic stress proxy. Pre-computed so the model doesn't
+        // re-derive it from raw log every turn.
+        val stress = jarvis.StressProxy.current(input.activity, java.time.Instant.now())
+        val stressLine = if (stress.reasons.isEmpty()) {
+            "Stress proxy: ${"%.2f".format(stress.score)} (no notable signals)"
+        } else {
+            "Stress proxy: ${"%.2f".format(stress.score)} — ${stress.reasons.joinToString("; ")}"
+        }
         val ctx = """
 # Recent activity
 ${formatActivity(input.activity)}
+
+# Sleep
+$sleepLine
+
+# Stress
+$stressLine
 
 # Recent conversation
 ${formatRecentChat(input.recentChat)}
