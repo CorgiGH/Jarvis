@@ -74,4 +74,34 @@ class CoreMemoryTest {
     fun scanTextForPiiOnEmptyReturnsEmpty() {
         assertEquals(emptyList(), CoreMemory.scanTextForPii(""))
     }
+
+    @Test
+    fun scanTextForPiiDoesNotMatchIsoDate() {
+        // Regression: pre-fix phone regex matched "2026-05-06" as phone.
+        val findings = CoreMemory.scanTextForPii(
+            "ENERGY: mid basis: sessions across 2026-05-06T21:01 to 2026-05-07T01:56",
+        )
+        assertEquals(emptyList(), findings, "ISO dates must not match phone regex (got $findings)")
+    }
+
+    @Test
+    fun scanTextForPiiDoesNotMatchTimestampAlone() {
+        // Various date/timestamp shapes that would have tripped the old regex.
+        val cases = listOf(
+            "2026-05-06",
+            "2026-05-06T21:01:00Z",
+            "2026-05-06 21:01",
+            "completed at 2026-05-06",
+        )
+        for (c in cases) {
+            val f = CoreMemory.scanTextForPii(c)
+            assertEquals(emptyList(), f, "case \"$c\" should not match (got $f)")
+        }
+    }
+
+    @Test
+    fun scanTextForPiiCatchesParenPhone() {
+        val findings = CoreMemory.scanTextForPii("call (555) 234-5678 today")
+        assertTrue(findings.any { it.kind == "phone" }, "(area) phone shape detected")
+    }
 }

@@ -29,8 +29,13 @@ object CoreMemory {
         "matricol" to Regex("""\b\d{8,15}[A-Z]{3,5}\d{4,8}\b"""),
         // RFC-ish email
         "email" to Regex("""\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"""),
-        // Phone: international or local, 9+ digits with separators
-        "phone" to Regex("""\+?\d[\d\s().-]{8,}\d"""),
+        // Phone: international (+digits) or local form. MUST contain at least
+        // one space, plus-sign, or paren in the middle — pure-dash patterns
+        // like ISO-8601 dates "2026-05-06" would otherwise false-positive
+        // here and silently drop legitimate ctx-model snippets that quote
+        // timestamps. Tightened post-Phase-3.1 smoke that caught
+        // "2026-05-06T21:01" matching as a phone.
+        "phone" to Regex("""(?:\+?\d|\(\d)[\d().-]*[\s+()][\d\s().-]{4,}\d"""),
     )
 
     data class PiiFinding(val kind: String, val match: String)
