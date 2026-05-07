@@ -33,6 +33,7 @@ import jarvis.CoreMemory
 import jarvis.Llm
 import jarvis.LlmFactory
 import jarvis.MemoryWiki
+import jarvis.ProactiveLoop
 import jarvis.buildChatContext
 import jarvis.resolveOpenRouterKey
 import jarvis.subsystem.SubsystemInput
@@ -244,6 +245,16 @@ internal suspend fun runWeb() {
             post("/api/activity") {
                 val entry = call.receive<ActivityEntry>()
                 Activity.append(entry)
+                // Phase 2.1 (council 1778165183): proactive signal emission
+                // hook. Default-disabled via PROACTIVE_LOOP_ENABLED env so
+                // first deploy doesn't fire LLM calls without explicit user
+                // opt-in. The scored entry from Activity.append (server side
+                // populates importance) is what we hand to the loop. Read
+                // back via loadEntries.lastOrNull is overkill; we know the
+                // last write was this one — re-load just enough to grab the
+                // scored copy.
+                val scored = Activity.loadEntries(hours = 1).lastOrNull() ?: entry
+                ProactiveLoop.consider(scored, client)
                 call.respond(io.ktor.http.HttpStatusCode.NoContent)
             }
 
