@@ -69,6 +69,9 @@ object ProactiveLoop {
         if (!isEnabled()) return
         scope.launch {
             considerSync(entry, client, Config.signalsFile, Instant.now())
+            // R1 — after each event-triggered signal write, check if a
+            // higher-order reflection is due. Default-off via separate env.
+            ReflectionLoop.maybeReflect(client)
         }
     }
 

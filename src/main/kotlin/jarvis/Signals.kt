@@ -37,6 +37,9 @@ data class ProactiveSignal(
     val rationale: String,
     val status: String = "emitted",
     val v: Int = 1,
+    /** R1 — for `kind="reflection"` rows, the signal IDs that fed into this
+     *  higher-order summary. Null for first-order (event-triggered) signals. */
+    val parentIds: List<String>? = null,
 )
 
 object Signals {
