@@ -47,6 +47,21 @@ class ChatToolsWriteTest {
     }
 
     @Test
+    fun wikiToolDispatchedThroughExecutor() = runBlocking {
+        var seen: ChatTools.ToolCall? = null
+        ChatTools.runTurnWith(
+            client = llm(listOf("[[wiki: caveman]]", "Found it.")),
+            messages = listOf(ChatMessage("user", "what did i pin about caveman replies?")),
+            executor = { call ->
+                seen = call
+                "## [2026-05-07 13:34 UTC] user note  (hits=2)\nUser preference — caveman replies."
+            },
+        )
+        assertEquals("wiki", seen?.name)
+        assertEquals("caveman", seen?.args)
+    }
+
+    @Test
     fun rememberToolDispatchedThroughExecutorWiring() = runBlocking {
         var observed: ChatTools.ToolCall? = null
         val (reply, _) = ChatTools.runTurnWith(

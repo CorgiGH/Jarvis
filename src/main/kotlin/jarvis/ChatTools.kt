@@ -90,7 +90,36 @@ object ChatTools {
         "recall" -> executeRecall(call.args)
         "time" -> executeTime()
         "remember" -> executeRemember(call.args)
+        "wiki" -> executeWiki(call.args)
         else -> "(unknown tool: ${call.name})"
+    }
+
+    private fun executeWiki(query: String): String {
+        val q = query.trim()
+        if (q.isEmpty()) return "(empty wiki query)"
+        val all = MemoryWiki.readAll()
+        if (all.isEmpty()) return "(wiki is empty)"
+        val needle = q.lowercase()
+        // Section split mirrors MemoryWiki.recent: each section starts with "## ".
+        val sections = all.split(Regex("(?=^## )", RegexOption.MULTILINE))
+            .filter { it.startsWith("## ") }
+        val matches = sections
+            .map { it to it.lowercase().windowed(needle.length, 1)
+                .count { window -> window == needle } }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.second }
+            .take(5)
+        if (matches.isEmpty()) return "(no wiki matches for \"$q\")"
+        return matches.joinToString("\n\n") { (section, hits) ->
+            // Header line + first 6 non-blank lines (≤ ~600 chars total).
+            val header = section.lineSequence().firstOrNull()?.trim() ?: "(unnamed)"
+            val body = section.lineSequence().drop(1)
+                .filter { it.isNotBlank() }
+                .take(6)
+                .joinToString("\n")
+                .take(600)
+            "$header  (hits=$hits)\n$body"
+        }
     }
 
     private fun executeTime(): String = Instant.now().toString()

@@ -30,6 +30,12 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   use for chat replies, summaries the user can re-derive, or anything
   ephemeral. The note is a permanent write to the user's wiki.
     [[remember: <text>]]
+- wiki(query): lexical search over the user's wiki notes (reflections,
+  /save notes, prior subsystem outputs, model-pinned memories from the
+  remember tool). Different from search (archival corpus) and recall
+  (embedding store) — wiki holds the user's own notes that aren't in
+  archival.
+    [[wiki: <query>]]
 
 After your markers, you receive [TOOL_RESULT] messages and write the final
 reply. At most one tool round per turn (so emit all markers you need at
