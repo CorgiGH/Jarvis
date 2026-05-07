@@ -9,6 +9,7 @@ object Subsystems {
             TimingSubsystem(),
             ContextModelSubsystem(),
             CoderSubsystem(),
+            SearchSubsystem(),
         )
     }
 
