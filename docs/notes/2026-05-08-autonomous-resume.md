@@ -111,6 +111,17 @@ curl -s -X POST https://corgflix.duckdns.org/api/chat \
 - Curl 60s timeout fired on the response (Copilot CLI subprocess slow), but turn was already persisted before timeout. Not a real bug — chat works.
 - Next: Phase 1.3 — `Conversations.recentByImportance(n)` blending recency × importance. Roadmap explicitly says **pre-impl council on the API shape**. Convene before writing code.
 
+**2026-05-08 — Phase 1.3 SHIPPED (with pre-impl council).**
+- Council `1778164081` (3 agents — Devil's / Domain / Pragmatist) saved at `.claude/council-cache/council-1778164081.md`. Verdict CONDITIONAL.
+- **Load-bearing finding (Devil's Advocate):** reordering chat-replay messages by importance corrupts user/assistant pairing — the LLM reads them as a script. Salient turns must surface as PLAIN TEXT in the system prompt, not as reordered ChatMessages.
+- Commit `ada922f` — `Phase 1.3: recentByImportance + salient prior turns block`.
+- 10 unit tests green; full suite green.
+- Generative-Agents-style scorer: `score = exp(-ln2/24h * hoursSince) + (importance ?? 0.4)`. Pool capped at 500 rows. Output chronologically re-sorted. Null importance → 0.4 default. `buildChatContext()` appends `# Salient prior turns` plain-text block; `recentAsChatMessages()` chat-array call untouched (regression-guard test included).
+- Deploy ok. Smoke: HTTP 200 from `/api/chat`, turn persisted to `conversations.jsonl` with `importance` scored, server didn't crash on the new system-prompt block.
+- Phase 1 (observe with weights) is now COMPLETE. Activity + Conversation entries both have nullable importance, both heuristic-scored on canonical write paths, salient retrieval surfaced into the system prompt.
+
+**5 commits in this autonomous session — loop-discipline trigger fired.** Post-impl council on the Phase 1 diff is due before starting Phase 2.
+
 ## Outstanding tactical items (small, do anytime)
 
 - 2026-05-09 12:30 UTC: `ssh root@46.247.109.91 "rm -rf /opt/jarvis/jarvis-kotlin-pre-stepb /opt/jarvis/jarvis-kotlin-prev"` if no rollback issues.
