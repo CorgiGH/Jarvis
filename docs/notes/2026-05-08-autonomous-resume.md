@@ -122,6 +122,43 @@ curl -s -X POST https://corgflix.duckdns.org/api/chat \
 
 **5 commits in this autonomous session — loop-discipline trigger fired.** Post-impl council on the Phase 1 diff is due before starting Phase 2.
 
+**2026-05-08 — Post-impl council 1778164815 (Phase 1) + HIGH-A fix SHIPPED.**
+- 3-agent post-impl council on Phase 1 diff. Verdict CONDITIONAL.
+- HIGH-A (Devil's Advocate): salient block in `buildChatContext` was rendering raw conversation content into the system prompt with NO PII scanner. Fixed inline: factored `CoreMemory.scanTextForPii(text)` and gated salient rows on it (drop with WARN, skip-not-redact).
+- Commit `3c96bcb` — `Post-impl council 1778164815: HIGH-A fix + defer-MEDIUM note`.
+- 5 deferred MEDIUMs documented in `docs/notes/2026-05-08-deferred-mediums.md` (O(file) Activity.append read, score-read race outside LOCK, last_accessed_at semantic gap, ACTIVITY_LINE_CAP truncation, keyword substring matching).
+- 40 tests green. Deploy ok. GO Phase 2.
+
+**2026-05-08 — Phase 2.1 SHIPPED (with pre-impl council, default-OFF).**
+- Pre-impl council `1778165183` saved at `.claude/council-cache/council-1778165183.md`. Verdict CONDITIONAL — synthesis: event-triggered (NOT cron), single subsystem (ctx-model only), hardcoded quiet hours during finals, deterministic hash IDs, default-OFF behind `PROACTIVE_LOOP_ENABLED` env so first deploy doesn't fire LLM calls without explicit opt-in.
+- Commit `88df146` — `Phase 2.1: ProactiveLoop event-triggered (default-OFF) per council 1778165183`.
+- 12 unit tests green; full suite 52 cases green.
+- Hook: `WebMain.kt /api/activity` calls `ProactiveLoop.consider` after `Activity.append`. Gates in order: importance ≥ 0.7 → not in 23:00-07:00 Bucharest → 30-min cooldown elapsed (error rows DON'T extend cooldown) → dedup on hash id. Then `withTimeout(60s)` ctx-model on `Dispatchers.IO.limitedParallelism(1)`.
+- Deploy ok. Smoke: high-importance activity POST (importance=0.9) with `PROACTIVE_LOOP_ENABLED` unset → activity row scored, NO signal emitted (default-off worked, signals.jsonl absent).
+
+## Status as of session end (2026-05-08)
+
+**Phase 1: COMPLETE** (1.1 + 1.2 + 1.3) — observe-with-weights live.
+**Phase 2.1: SHIPPED default-OFF** — proactive emitter wired, awaiting user opt-in via `PROACTIVE_LOOP_ENABLED=true` env on VPS.
+
+**Pragmatist's load-bearing observation from council 1778165183:** "Without a Phase 3 push channel, Phase 2.1 is instrumentation. Recommendation: ship 50-LOC event-triggered version this session as dry-run logger; jump to Phase 3 (notification channel) BEFORE expanding the loop." Honored — Phase 2.1 minimal, default-off; Phase 3 (Android FCM / polling) is the next high-value step rather than Phase 2.2 (rate-limit + dedup).
+
+## To enable ProactiveLoop on VPS (user action required)
+
+The loop ships dormant. To activate:
+```bash
+ssh root@46.247.109.91 "echo 'PROACTIVE_LOOP_ENABLED=true' >> /opt/jarvis/.env && systemctl restart jarvis"
+```
+This is on the user's CAN'T list for the autonomous agent (modify /opt/jarvis/.env beyond appending an existing key). User needs to do it themselves or explicitly authorize.
+
+After enabling, observe behavior via `ssh root@46.247.109.91 "tail -f /opt/jarvis/data/signals.jsonl"`. Disable via removing the env line + restart.
+
+## Next session candidates
+
+- **Phase 3.1** (research agent for Android FCM vs polling) — the natural next step per Pragmatist's recommendation.
+- **Phase 2.2** (quiet-hours config + rate limit dedup) — only after Phase 3 lands and we have ack feedback.
+- **Phase 1 follow-ups from `docs/notes/2026-05-08-deferred-mediums.md`** — `last_accessed_at`, score-read race, time-window cap on activity. Pick when convenient.
+
 ## Outstanding tactical items (small, do anytime)
 
 - 2026-05-09 12:30 UTC: `ssh root@46.247.109.91 "rm -rf /opt/jarvis/jarvis-kotlin-pre-stepb /opt/jarvis/jarvis-kotlin-prev"` if no rollback issues.
