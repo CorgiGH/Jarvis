@@ -21,6 +21,10 @@ data class ConversationEntry(
     val v: Int = 1,
     /** Council 1778105576 (D): per-turn ordering when ts ties. user=0, assistant=1. */
     val seq: Int? = null,
+    /** Phase 1.2 — heuristic 0..1 score from [ConversationScorer]. Nullable for
+     *  pre-Phase-1.2 rows; readers tolerate null. NOT a v=2 schema bump:
+     *  unknown-field tolerance + nullable-default keeps v=1 readers happy. */
+    val importance: Float? = null,
 )
 
 /**

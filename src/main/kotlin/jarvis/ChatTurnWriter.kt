@@ -45,12 +45,17 @@ object ChatTurnWriter {
     ) {
         val ts = Instant.now().toString()
         val turnId = UUID.randomUUID().toString().take(8)
+        // Phase 1.2: score both rows at write time. Pure function, no I/O —
+        // safe to invoke under whatever caller lock context.
+        val userImp = ConversationScorer.score(userMsg)
+        val asstImp = ConversationScorer.score(assistantReply)
         Conversations.appendBothTo(
             conversationsFile,
             ConversationEntry(role = "user", content = userMsg, ts = ts,
-                              msgId = "$turnId-u", seq = 0),
+                              msgId = "$turnId-u", seq = 0, importance = userImp),
             ConversationEntry(role = "assistant", content = assistantReply, ts = ts,
-                              model = model, msgId = "$turnId-a", seq = 1),
+                              model = model, msgId = "$turnId-a", seq = 1,
+                              importance = asstImp),
         )
     }
 }
