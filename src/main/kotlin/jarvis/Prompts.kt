@@ -45,12 +45,28 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   progress). Use when answering "what am I working on" or when surfacing
   things the user might have dropped.
     [[goals: now]]
+- assignment_set(<subject>|<title>|<YYYY-MM-DD>): track a homework /
+  project / lab task with a deadline. Returns the assignment id.
+    [[assignment_set: PA|Tema 5 dynamic programming|2026-05-18]]
+- assignment_progress(<id> <note>): log progress on an assignment.
+    [[assignment_progress: a1b2c3d4 finished problems 1-3]]
+- assignment_done(<id>): mark an assignment complete.
+    [[assignment_done: a1b2c3d4]]
+- assignments: list active assignments sorted by due date. Flags
+  OVERDUE / TODAY / due-in-Nd. Use when answering "what's due" or
+  surfacing things the user might miss.
+    [[assignments: now]]
 - plan(today): render today's study plan from schedule + knowledge state
   + concept catalog. Returns scheduled blocks first, then the revision
   queue (stale concepts past their decay threshold), then catch-up
   items the user has never touched. Use when the user asks "what should
   I be doing right now" or for a check-in mid-study-session.
     [[plan: today]]
+- next_block(): one suggestion for the SINGLE most-leverage thing to do
+  RIGHT NOW. Considers schedule, overdue assignments, exam-window
+  pressure, weakest concepts, current stress level. Use when user asks
+  "what should I do now" or to break decision paralysis.
+    [[next_block: now]]
 - wiki(query): lexical search over the user's wiki notes (reflections,
   /save notes, prior subsystem outputs, model-pinned memories from the
   remember tool). Different from search (archival corpus) and recall

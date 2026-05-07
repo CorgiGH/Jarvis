@@ -10,6 +10,7 @@ object Subsystems {
             ContextModelSubsystem(),
             CoderSubsystem(),
             SearchSubsystem(),
+            PracticeSubsystem(),
         )
     }
 

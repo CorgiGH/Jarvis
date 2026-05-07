@@ -106,7 +106,81 @@ object ChatTools {
         "goal_progress" -> executeGoalProgress(call.args)
         "goals" -> executeGoals()
         "plan" -> executePlan(call.args)
+        "next_block" -> executeNextBlock()
+        "assignment_set" -> executeAssignmentSet(call.args)
+        "assignment_progress" -> executeAssignmentProgress(call.args)
+        "assignment_done" -> executeAssignmentDone(call.args)
+        "assignments" -> executeAssignments()
         else -> "(unknown tool: ${call.name})"
+    }
+
+    private fun executeNextBlock(): String {
+        val now = java.time.Instant.now()
+        val zone = java.time.ZoneId.of("Europe/Bucharest")
+        val schedule = Schedule.load()
+        val assignments = Assignments.current(now, zone)
+        val stats = KnowledgeState.stats(now)
+        val catalog = ConceptCatalog.all()
+        val activity = Activity.loadEntries(hours = 1)
+        val stress = StressProxy.current(activity, now, zone)
+        val nb = Allocator.suggest(schedule, assignments, stats, catalog, stress, now, zone)
+        return "${nb.activity.uppercase()} ${nb.subject} — ${nb.target}\n" +
+            "  ${nb.durationMinutes}min until ${nb.endTs.take(16)}\n" +
+            "  why: ${nb.rationale}"
+    }
+
+    /** Assignment set. Args: "<subject>|<title>|<due-YYYY-MM-DD>" */
+    private fun executeAssignmentSet(args: String): String {
+        val parts = args.split("|").map { it.trim() }
+        if (parts.size < 2) return "(usage: [[assignment_set: <subject>|<title>|<due-YYYY-MM-DD>]])"
+        val subject = parts[0]
+        val title = parts[1]
+        val due = parts.getOrNull(2)?.takeIf { it.isNotEmpty() }
+        val id = Assignments.computeId(subject, title, due)
+        Assignments.append(AssignmentEntry(
+            id = id, ts = java.time.Instant.now().toString(), kind = "set",
+            subject = subject, title = title, dueDate = due,
+        ))
+        return "(assignment set: id=$id, $subject/$title due=$due)"
+    }
+
+    private fun executeAssignmentProgress(args: String): String {
+        val tokens = args.trim().split(Regex("\\s+"), limit = 2)
+        if (tokens.size < 2) return "(usage: [[assignment_progress: <id> <note>]])"
+        Assignments.append(AssignmentEntry(
+            id = tokens[0], ts = java.time.Instant.now().toString(),
+            kind = "progress", subject = "?", title = "?",
+            note = tokens[1].take(300),
+        ))
+        return "(progress logged on ${tokens[0]})"
+    }
+
+    private fun executeAssignmentDone(id: String): String {
+        val trim = id.trim()
+        if (trim.isEmpty()) return "(usage: [[assignment_done: <id>]])"
+        Assignments.append(AssignmentEntry(
+            id = trim, ts = java.time.Instant.now().toString(),
+            kind = "done", subject = "?", title = "?",
+        ))
+        return "(marked done: $trim)"
+    }
+
+    private fun executeAssignments(): String {
+        val views = Assignments.current()
+        if (views.isEmpty()) return "(no assignments tracked — [[assignment_set: <subject>|<title>|<YYYY-MM-DD>]])"
+        return views.joinToString("\n") { v ->
+            val dueTag = v.daysToDue?.let { d ->
+                when {
+                    d < 0 -> " OVERDUE-${-d}d"
+                    d == 0L -> " TODAY"
+                    d <= 3 -> " due in ${d}d"
+                    else -> " due ${v.dueDate}"
+                }
+            } ?: ""
+            val statusTag = if (v.status == "done") " ✓" else ""
+            val note = v.latestNote?.let { " — last: \"$it\"" } ?: ""
+            "[${v.id}] ${v.subject}/${v.title}$dueTag$statusTag$note"
+        }
     }
 
     /** S3 — render today's study plan from Schedule × KnowledgeState × catalog. */

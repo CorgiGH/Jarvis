@@ -284,6 +284,22 @@ internal suspend fun runWeb() {
             // since the LLM sometimes hallucinates the response without
             // actually invoking [[plan: today]]). Pure deterministic output
             // from Schedule × KnowledgeState × ConceptCatalog.
+            // Daily allocator — single best next block.
+            get("/api/next_block") {
+                val now = java.time.Instant.now()
+                val zone = java.time.ZoneId.of("Europe/Bucharest")
+                val schedule = jarvis.Schedule.load()
+                val assignments = jarvis.Assignments.current(now, zone)
+                val stats = jarvis.KnowledgeState.stats(now)
+                val catalog = jarvis.ConceptCatalog.all()
+                val activity = jarvis.Activity.loadEntries(hours = 1)
+                val stress = jarvis.StressProxy.current(activity, now, zone)
+                val nb = jarvis.Allocator.suggest(
+                    schedule, assignments, stats, catalog, stress, now, zone,
+                )
+                call.respond(nb)
+            }
+
             get("/api/plan") {
                 val now = java.time.Instant.now()
                 // VPS systemDefault is UTC; user lives in Europe/Bucharest.
