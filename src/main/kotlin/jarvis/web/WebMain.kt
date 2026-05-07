@@ -26,6 +26,7 @@ import jarvis.Activity
 import jarvis.ActivityEntry
 import jarvis.CHAT_SYSTEM_PROMPT
 import jarvis.ChatMessage
+import jarvis.ChatTools
 import jarvis.ChatTurnWriter
 import jarvis.Conversations
 import jarvis.CoreMemory
@@ -141,7 +142,7 @@ internal suspend fun runWeb() {
                         Conversations.recentAsChatMessages() +
                         ChatMessage("user", msg)
                     val (text, modelName) = try {
-                        client.complete(messages)
+                        ChatTools.runTurn(client, messages)
                     } catch (e: Exception) {
                         return@withLock "[error] ${e.message}" to "n/a"
                     }
@@ -230,7 +231,7 @@ internal suspend fun runWeb() {
                         Conversations.recentAsChatMessages() +
                         ChatMessage("user", msg)
                     val (text, modelName) = try {
-                        client.complete(messages)
+                        ChatTools.runTurn(client, messages)
                     } catch (e: Exception) {
                         return@withLock "[error] ${e.message}" to "n/a"
                     }

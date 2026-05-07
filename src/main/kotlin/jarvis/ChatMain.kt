@@ -82,7 +82,7 @@ internal suspend fun runChat() {
                 ChatMessage("user", msg)
 
             val (reply, model) = try {
-                client.complete(messages)
+                ChatTools.runTurn(client, messages)
             } catch (e: Exception) {
                 println("[error] ${e.message}")
                 continue
