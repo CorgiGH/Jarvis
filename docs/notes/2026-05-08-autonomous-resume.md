@@ -153,6 +153,11 @@ This is on the user's CAN'T list for the autonomous agent (modify /opt/jarvis/.e
 
 After enabling, observe behavior via `ssh root@46.247.109.91 "tail -f /opt/jarvis/data/signals.jsonl"`. Disable via removing the env line + restart.
 
+**2026-05-08 (post-session smoke) — loop ENABLED + first signal LANDED.**
+- User ran enable command. Service restarted at 19:58:59 UTC. Triggering activity POST (`code.exe` + "error - debugging exception fix" → imp=0.9) wrote signal `00f1902332a7a153` to `signals.jsonl`. End-to-end pipeline verified live: activity → 4 gates pass → ctx-model fires → snippet+rationale persisted.
+- Signal kind=`ctx_model_summary`, status=`emitted`. ctx-model returned real inference about user's coding sessions ("ENERGY: mid basis: Multiple long terminal sessions and many 'Resume previous coding session' entries…"). System is now actually observing-and-deciding for the first time.
+- Cooldown is now armed for 30 min from 19:59:49 UTC. Next signal earliest 20:29:49 UTC.
+
 ## Next session candidates
 
 - **Phase 3.1** (research agent for Android FCM vs polling) — the natural next step per Pragmatist's recommendation.
