@@ -74,16 +74,30 @@ Style:
 
 /**
  * Activity context block for the system prompt. Conversation history is NOT
- * included here — it goes into the messages array directly via
+ * included here as chat messages — it goes into the messages array directly via
  * Conversations.recentAsChatMessages so the model sees user/assistant turns as
  * proper chat messages (Letta pattern), not as a stringified summary.
+ *
+ * Phase 1.3 (council 1778164081): an importance-weighted "salient prior turns"
+ * block IS rendered here as plain text — that's a different surface from the
+ * chronological chat-array replay and reordering text doesn't break role
+ * pairing the way reordering messages would.
  */
 internal fun buildChatContext(): String {
     val activity = Activity.loadRecent()
-    return """
+    val base = """
         |# Recent activity (last ${Config.ACTIVITY_LOOKBACK_HOURS}h)
         |$activity
     """.trimMargin()
+    val salient = Conversations.recentByImportance()
+    if (salient.isEmpty()) return base
+    val rendered = salient.joinToString("\n") { e ->
+        val imp = e.importance?.let { " [imp=${"%.2f".format(it)}]" } ?: ""
+        val firstLine = e.content.lineSequence().firstOrNull { it.isNotBlank() }
+            ?.take(300).orEmpty()
+        "- [${e.ts}]$imp ${e.role}: $firstLine"
+    }
+    return base + "\n\n# Salient prior turns\n" + rendered
 }
 
 /** Same as buildChatContext, but appends semantically related wiki entries

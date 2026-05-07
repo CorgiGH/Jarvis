@@ -6,9 +6,13 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
+import java.time.Duration
+import java.time.Instant
 import kotlin.io.path.bufferedReader
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
+import kotlin.math.exp
+import kotlin.math.ln
 
 @Serializable
 data class ConversationEntry(
@@ -120,4 +124,64 @@ object Conversations {
 
     fun recentAsChatMessagesFrom(file: Path, n: Int): List<ChatMessage> =
         recentFrom(file, n).map { ChatMessage(it.role, it.content) }
+
+    private const val SALIENT_POOL_SIZE = 500
+    private const val SALIENT_HALF_LIFE_HOURS = 24.0
+    private const val SALIENT_NULL_FALLBACK = 0.4f
+
+    /**
+     * Phase 1.3 (council 1778164081) — importance-weighted variant of [recent].
+     * Returns up to [n] entries scored by Generative-Agents-style recency × importance:
+     *
+     *   score(e) = exp(-λ * hoursSince(e.ts)) + (e.importance ?: nullFallback)
+     *   λ        = ln(2) / halfLifeHours
+     *
+     * Pool capped to last [poolSize] rows so cost stays bounded as the log grows.
+     * Null importance defaults to 0.4 (below-median) so pre-1.2 rows participate
+     * without being skipped or over-weighted.
+     *
+     * Returns ConversationEntry, NOT ChatMessage. The salient view feeds the
+     * SYSTEM PROMPT context block — reordering chat-replay messages by
+     * importance corrupts user/assistant pairing.
+     */
+    fun recentByImportance(
+        n: Int = Config.SALIENT_PRIOR_N,
+        poolSize: Int = SALIENT_POOL_SIZE,
+        halfLifeHours: Double = SALIENT_HALF_LIFE_HOURS,
+        nullFallback: Float = SALIENT_NULL_FALLBACK,
+        now: Instant = Instant.now(),
+    ): List<ConversationEntry> = recentByImportanceFrom(
+        Config.conversationsFile, n, poolSize, halfLifeHours, nullFallback, now,
+    )
+
+    fun recentByImportanceFrom(
+        file: Path,
+        n: Int,
+        poolSize: Int = SALIENT_POOL_SIZE,
+        halfLifeHours: Double = SALIENT_HALF_LIFE_HOURS,
+        nullFallback: Float = SALIENT_NULL_FALLBACK,
+        now: Instant = Instant.now(),
+    ): List<ConversationEntry> {
+        if (n <= 0) return emptyList()
+        val all = readAllFrom(file)
+        if (all.isEmpty()) return emptyList()
+        val candidates = if (all.size > poolSize) all.takeLast(poolSize) else all
+        val lambda = ln(2.0) / halfLifeHours
+        val ranked = candidates.map { entry ->
+            val recency = parseInstantOrNull(entry.ts)?.let { ts ->
+                val hours = Duration.between(ts, now).toMinutes()
+                    .coerceAtLeast(0).toDouble() / 60.0
+                exp(-lambda * hours)
+            } ?: 0.0
+            val imp = (entry.importance ?: nullFallback).toDouble()
+            entry to (recency + imp)
+        }
+        val topN = ranked.sortedByDescending { it.second }.take(n).map { it.first }
+        // Chronological re-sort: LLM reads top-down, so emit in turn order even
+        // though we picked by importance.
+        return topN.sortedWith(compareBy({ it.ts }, { it.seq ?: 0 }))
+    }
+
+    private fun parseInstantOrNull(s: String?): Instant? =
+        if (s.isNullOrEmpty()) null else runCatching { Instant.parse(s) }.getOrNull()
 }

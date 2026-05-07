@@ -31,4 +31,10 @@ object Config {
     const val WIKI_RECENT_ENTRIES = 30
     const val ACTIVITY_LINE_CAP = 200
     const val CONVERSATION_RECENT_N = 30
+
+    /** Phase 1.3 — number of salient prior turns rendered into the system
+     *  prompt by buildChatContext(). Smaller than CONVERSATION_RECENT_N
+     *  because each salient row stays at full content excerpt and the chat
+     *  array already carries the chronological replay. */
+    const val SALIENT_PRIOR_N = 6
 }
