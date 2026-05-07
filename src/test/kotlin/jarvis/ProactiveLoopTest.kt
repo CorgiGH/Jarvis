@@ -112,30 +112,37 @@ class ProactiveLoopTest {
     }
 
     @Test
-    fun quietHoursSuppress(@TempDir tmp: Path) = runBlocking {
+    fun quietHoursDisabledByDefault(@TempDir tmp: Path) = runBlocking {
+        // Council retro 2026-05-08 fix: quiet hours opt-in via env. Tests
+        // run without QUIET_HOURS_START/END set → no suppression. The
+        // 02:33 incident proved hardcoded 23-07 was wrong for THIS user.
         val signalsFile = tmp.resolve("signals.jsonl")
-        // 02:00 UTC = 05:00 Bucharest (UTC+3 in May). Quiet hours.
         val nightUtc = Instant.parse("2026-05-08T02:00:00Z")
         val id = ProactiveLoop.considerSync(
             activity(nightUtc.toString(), 0.95f),
             FakeLlm(), signalsFile, nightUtc,
         )
-        assertNull(id, "5am Bucharest is quiet hours")
-        assertEquals(emptyList(), Signals.readAllFrom(signalsFile))
+        assertNotNull(id, "no quiet env → no suppression even at 5am")
+        assertEquals(1, Signals.readAllFrom(signalsFile).size)
     }
 
     @Test
-    fun isQuietHourBoundaries() {
-        // 23:00 Bucharest → quiet (>=23). 22:59 → not quiet.
-        // Bucharest UTC+3 in May.
+    fun quietHoursWindowMath() {
+        // QuietHours.isActiveWith — wrap-around window 23:00-07:00.
         val quiet23 = Instant.parse("2026-05-08T20:00:00Z") // 23:00 Bucharest
         val notQuiet22 = Instant.parse("2026-05-08T19:59:00Z") // 22:59 Bucharest
         val quiet06 = Instant.parse("2026-05-09T03:30:00Z") // 06:30 Bucharest
         val notQuiet07 = Instant.parse("2026-05-09T04:00:00Z") // 07:00 Bucharest
-        assertTrue(ProactiveLoop.isQuietHour(quiet23), "23:00 Bucharest is quiet")
-        assertTrue(!ProactiveLoop.isQuietHour(notQuiet22), "22:59 Bucharest is NOT quiet")
-        assertTrue(ProactiveLoop.isQuietHour(quiet06), "06:30 Bucharest is quiet")
-        assertTrue(!ProactiveLoop.isQuietHour(notQuiet07), "07:00 Bucharest is NOT quiet")
+        assertTrue(QuietHours.isActiveWith(quiet23, "23:00", "07:00"))
+        assertTrue(!QuietHours.isActiveWith(notQuiet22, "23:00", "07:00"))
+        assertTrue(QuietHours.isActiveWith(quiet06, "23:00", "07:00"))
+        assertTrue(!QuietHours.isActiveWith(notQuiet07, "23:00", "07:00"))
+        // Same-day window 09:00-12:00.
+        val morning10 = Instant.parse("2026-05-08T07:00:00Z") // 10:00 Bucharest
+        assertTrue(QuietHours.isActiveWith(morning10, "09:00", "12:00"))
+        // Empty config → never active.
+        assertTrue(!QuietHours.isActiveWith(quiet23, null, null))
+        assertTrue(!QuietHours.isActiveWith(quiet23, "", ""))
     }
 
     @Test

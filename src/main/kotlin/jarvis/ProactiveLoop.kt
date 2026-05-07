@@ -45,11 +45,8 @@ object ProactiveLoop {
     private val COOLDOWN = Duration.ofMinutes(30)
     private val SUBSYSTEM_TIMEOUT = Duration.ofSeconds(60)
 
-    /** Quiet-hours window. 23:00 inclusive through 07:00 exclusive in Bucharest
-     *  (user's locale during the 2026-05-21..2026-06-28 finals window). */
-    private val QUIET_ZONE = ZoneId.of("Europe/Bucharest")
-    private const val QUIET_START_HOUR = 23
-    private const val QUIET_END_HOUR = 7
+    // Council retro 2026-05-08: quiet hours moved to QuietHours object.
+    // Single source of truth, opt-in via env, default disabled.
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val loopDispatcher = Dispatchers.IO.limitedParallelism(1)
@@ -94,8 +91,8 @@ object ProactiveLoop {
         val imp = if (drift != null) 0.85f else (entry.importance ?: 0f)
         if (imp < IMPORTANCE_THRESHOLD) return null
 
-        // 2. Quiet-hours gate.
-        if (isQuietHour(now)) return null
+        // 2. Quiet-hours gate (now opt-in via env, default disabled).
+        if (QuietHours.isActive(now)) return null
 
         // 3. Cooldown gate.
         if (!Signals.cooldownElapsedFrom(signalsFile, COOLDOWN, now)) return null
@@ -162,11 +159,9 @@ object ProactiveLoop {
         return signalId
     }
 
-    fun isQuietHour(now: Instant, zone: ZoneId = QUIET_ZONE): Boolean {
-        val local = LocalDateTime.ofInstant(now, zone)
-        val h = local.hour
-        return h >= QUIET_START_HOUR || h < QUIET_END_HOUR
-    }
+    /** Kept as facade for tests; delegates to [QuietHours]. */
+    fun isQuietHour(now: Instant, zone: ZoneId = ZoneId.of("Europe/Bucharest")): Boolean =
+        QuietHours.isActive(now)
 
     fun computeSignalId(sourceTs: String, now: Instant): String {
         val bucket = LocalDateTime.ofInstant(now, ZoneId.of("UTC"))

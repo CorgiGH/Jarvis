@@ -286,6 +286,33 @@ internal suspend fun runWeb() {
             // since the LLM sometimes hallucinates the response without
             // actually invoking [[plan: today]]). Pure deterministic output
             // from Schedule × KnowledgeState × ConceptCatalog.
+            // study_now — works without schedule. Picks weakest concept,
+            // suggests 25-min Pomodoro. Council retro 2026-05-08 fix for
+            // "what should I do at 02:33 with empty schedule".
+            get("/api/study_now") {
+                val subject = call.request.queryParameters["subject"]
+                val stats = jarvis.KnowledgeState.stats()
+                val catalog = jarvis.ConceptCatalog.all()
+                val weak = stats
+                    .filter { subject == null || it.subject.equals(subject, true) }
+                    .filter { it.confidence < 0.5f }
+                    .sortedBy { it.confidence }.firstOrNull()
+                val msg = if (weak != null) {
+                    "POMODORO 25min: ${weak.subject} / ${weak.concept} (conf=${"%.2f".format(weak.confidence)}, stale ${weak.staleDays}d)"
+                } else {
+                    val seen = stats.map { it.concept to it.subject }.toSet()
+                    val untouched = catalog
+                        .filter { subject == null || it.subject.equals(subject, true) }
+                        .firstOrNull { (it.name to it.subject) !in seen }
+                    if (untouched != null) {
+                        "POMODORO 25min: ${untouched.subject} / ${untouched.name} (untouched)"
+                    } else {
+                        "(no concepts available — populate concept catalog first)"
+                    }
+                }
+                call.respondText(msg, ContentType.Text.Plain)
+            }
+
             // Daily allocator — single best next block.
             get("/api/next_block") {
                 val now = java.time.Instant.now()

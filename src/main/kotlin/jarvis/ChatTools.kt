@@ -107,11 +107,45 @@ object ChatTools {
         "goals" -> executeGoals()
         "plan" -> executePlan(call.args)
         "next_block" -> executeNextBlock()
+        "study_now" -> executeStudyNow(call.args)
         "assignment_set" -> executeAssignmentSet(call.args)
         "assignment_progress" -> executeAssignmentProgress(call.args)
         "assignment_done" -> executeAssignmentDone(call.args)
         "assignments" -> executeAssignments()
         else -> "(unknown tool: ${call.name})"
+    }
+
+    /** Council retro 2026-05-08: ignore schedule entirely. Pick the
+     *  weakest unmastered concept (optionally subject-filtered) and
+     *  suggest a 25-min Pomodoro block. Works at any hour, regardless
+     *  of quiet hours. The "user is asking → user is awake" answer. */
+    private fun executeStudyNow(args: String): String {
+        val subjectFilter = args.trim().takeIf { it.isNotEmpty() }
+        val stats = KnowledgeState.stats()
+        val catalog = ConceptCatalog.all()
+        // Subject-filtered weak first, then untouched.
+        val weak = stats
+            .filter { subjectFilter == null || it.subject.equals(subjectFilter, true) }
+            .filter { it.confidence < 0.5f }
+            .sortedBy { it.confidence }
+            .firstOrNull()
+        if (weak != null) {
+            return "STUDY_NOW 25-min Pomodoro\n" +
+                "  ${weak.subject} / ${weak.concept}\n" +
+                "  why: confidence=${"%.2f".format(weak.confidence)}, stale ${weak.staleDays}d\n" +
+                "  break in 25 min, then 5-min rest"
+        }
+        val seenKeys = stats.map { it.concept to it.subject }.toSet()
+        val untouched = catalog
+            .filter { subjectFilter == null || it.subject.equals(subjectFilter, true) }
+            .firstOrNull { (it.name to it.subject) !in seenKeys }
+        if (untouched != null) {
+            return "STUDY_NOW 25-min Pomodoro\n" +
+                "  ${untouched.subject} / ${untouched.name}\n" +
+                "  why: never touched\n" +
+                "  break in 25 min, then 5-min rest"
+        }
+        return "(no concepts available — populate concept catalog first)"
     }
 
     private fun executeNextBlock(): String {

@@ -36,8 +36,10 @@ object Allocator {
 
     private const val DEFAULT_BLOCK_MINUTES = 90L
     private const val MIN_BLOCK_MINUTES = 30L
-    private const val SLEEP_START = 23
-    private const val SLEEP_END = 7
+    private const val POMODORO_MINUTES = 25L
+    // Council retro 2026-05-08: removed hardcoded SLEEP_START/SLEEP_END.
+    // Quiet hours moved to QuietHours object, opt-in via env. If user is
+    // calling next_block, they're awake — never override their reality.
 
     fun suggest(
         schedule: ScheduleFile,
@@ -67,27 +69,30 @@ object Allocator {
             )
         }
 
-        // 2. If user is in sleep window, suggest rest.
-        val hour = nowTime.hour
-        if (hour >= SLEEP_START || hour < SLEEP_END) {
+        // 2. Quiet hours (opt-in via env). Only suggests rest when user
+        //    has explicitly set QUIET_HOURS_START / END. NO hardcoded
+        //    sleep window — council retro fix from the 02:33 incident.
+        if (QuietHours.isActive(now)) {
             return NextBlock(
                 startTs = now.toString(),
                 endTs = now.plus(Duration.ofMinutes(DEFAULT_BLOCK_MINUTES)).toString(),
                 subject = "rest",
                 activity = "rest",
                 target = "sleep",
-                rationale = "sleep window — finals catch-up depends on sleep, take rest",
+                rationale = "quiet hours active (${QuietHours.describe()})",
                 durationMinutes = DEFAULT_BLOCK_MINUTES,
             )
         }
 
         // 3. Find next scheduled block today; allocate freely up to it.
+        //    If no further block, treat the rest of the day as free time
+        //    (no implicit "free until 23:00" — user might work till 04:00).
         val todays = Schedule.todaysBlocks(schedule, now, zone)
         val nextBlock = todays.firstOrNull { b ->
             parseTime(b.start)?.let { it > nowTime } == true
         }
         val freeUntilLdt = nextBlock?.let { ldt.toLocalDate().atTime(parseTime(it.start) ?: nowTime) }
-            ?: ldt.toLocalDate().atTime(SLEEP_START, 0)
+            ?: ldt.toLocalDate().plusDays(1).atStartOfDay()
         val freeUntilInstant = freeUntilLdt.atZone(zone).toInstant()
         val freeMinutes = Duration.between(now, freeUntilInstant).toMinutes()
 
