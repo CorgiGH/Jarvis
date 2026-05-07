@@ -1,5 +1,15 @@
 {
   "blocks": [
+    {"date": "2026-05-08", "start": "20:00", "end": "22:00", "kind": "study", "subject": "PA", "topic": "weekend kickoff: catch-up"},
+
+    {"date": "2026-05-09", "start": "10:00", "end": "13:00", "kind": "study", "subject": "SO&RC", "topic": "weekend catch-up"},
+    {"date": "2026-05-09", "start": "14:00", "end": "17:00", "kind": "study", "subject": "ALO", "topic": "weekend catch-up"},
+    {"date": "2026-05-09", "start": "19:00", "end": "21:00", "kind": "study", "subject": "PS", "topic": "weekend catch-up"},
+
+    {"date": "2026-05-10", "start": "10:00", "end": "13:00", "kind": "study", "subject": "POO", "topic": "weekend catch-up"},
+    {"date": "2026-05-10", "start": "14:00", "end": "17:00", "kind": "study", "subject": "PA", "topic": "weekend catch-up"},
+    {"date": "2026-05-10", "start": "19:00", "end": "21:00", "kind": "review", "subject": "ALO", "topic": "review"},
+
     {"date": "2026-05-11", "start": "08:00", "end": "10:00", "kind": "lecture", "subject": "POO", "topic": "Object-Oriented Programming"},
     {"date": "2026-05-11", "start": "12:00", "end": "14:00", "kind": "lecture", "subject": "SO&RC", "topic": "Operating Systems & Computer Networks (track B)"},
     {"date": "2026-05-11", "start": "14:00", "end": "16:00", "kind": "lecture", "subject": "PS", "topic": "Probability & Statistics"},

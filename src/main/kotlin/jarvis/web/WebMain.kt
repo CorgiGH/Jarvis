@@ -286,7 +286,10 @@ internal suspend fun runWeb() {
             // from Schedule × KnowledgeState × ConceptCatalog.
             get("/api/plan") {
                 val now = java.time.Instant.now()
-                val zone = java.time.ZoneId.systemDefault()
+                // VPS systemDefault is UTC; user lives in Europe/Bucharest.
+                // Hardcode the user-locale TZ so dates / hours align with the
+                // schedule.json the user authored from their own clock.
+                val zone = java.time.ZoneId.of("Europe/Bucharest")
                 val schedule = jarvis.Schedule.load()
                 val stats = jarvis.KnowledgeState.stats(now)
                 val catalog = jarvis.ConceptCatalog.all()

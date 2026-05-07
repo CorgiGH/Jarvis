@@ -82,12 +82,27 @@ object StudyPlanner {
         }
 
         // 3. Catch-up: concepts in catalog with zero exposure.
+        // Round-robin across subjects when no exam-window bias applies, so
+        // a single subject doesn't dominate the catch-up list alphabetically.
         val seenConcepts = knowledgeStats.map { it.concept to it.subject }.toSet()
         val unseen = catalog.filter { (it.name to it.subject) !in seenConcepts }
         val catchup = if (examSubject != null) {
-            unseen.filter { it.subject == examSubject }
-                .ifEmpty { unseen }
-        } else unseen
+            unseen.filter { it.subject == examSubject }.ifEmpty { unseen }
+        } else {
+            // Round-robin across subjects.
+            val bySubject = unseen.groupBy { it.subject }
+            val keys = bySubject.keys.toList()
+            val merged = mutableListOf<ConceptCatalog.Concept>()
+            var idx = 0
+            while (merged.size < MAX_CATCHUP_ITEMS && idx < keys.size * 10) {
+                val subj = keys[idx % keys.size]
+                val list = bySubject[subj] ?: continue
+                val taken = merged.count { it.subject == subj }
+                if (taken < list.size) merged += list[taken]
+                idx++
+            }
+            merged
+        }
         for (c in catchup.take(MAX_CATCHUP_ITEMS)) {
             out += PlanItem(
                 kind = "catchup",
