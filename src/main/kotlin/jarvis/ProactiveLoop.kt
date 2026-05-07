@@ -128,19 +128,25 @@ object ProactiveLoop {
             )
         }
 
-        Signals.appendTo(
-            signalsFile,
-            ProactiveSignal(
-                id = signalId,
-                ts = now.toString(),
-                kind = kind,
-                importance = imp,
-                sourceTs = entry.ts,
-                snippet = snippet,
-                rationale = rationale,
-                status = status,
-            ),
+        val signal = ProactiveSignal(
+            id = signalId,
+            ts = now.toString(),
+            kind = kind,
+            importance = imp,
+            sourceTs = entry.ts,
+            snippet = snippet,
+            rationale = rationale,
+            status = status,
         )
+        Signals.appendTo(signalsFile, signal)
+        // Phase 2.3 — fan out to wiki / pin per routing rules.
+        try {
+            SurfaceRouter.apply(signal)
+        } catch (e: Exception) {
+            System.err.println(
+                "[ProactiveLoop] WARN SurfaceRouter.apply failed: ${e.message?.take(160)}",
+            )
+        }
         return signalId
     }
 

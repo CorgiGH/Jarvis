@@ -109,20 +109,27 @@ object ReflectionLoop {
         }
 
         val signalId = computeReflectionId(parentIds, now)
-        Signals.appendTo(
-            signalsFile,
-            ProactiveSignal(
-                id = signalId,
-                ts = now.toString(),
-                kind = kind,
-                importance = (sigma / recent.size).coerceIn(0f, 1f), // mean
-                sourceTs = recent.first().ts,
-                snippet = snippet,
-                rationale = rationale,
-                status = status,
-                parentIds = parentIds,
-            ),
+        val signal = ProactiveSignal(
+            id = signalId,
+            ts = now.toString(),
+            kind = kind,
+            importance = (sigma / recent.size).coerceIn(0f, 1f), // mean
+            sourceTs = recent.first().ts,
+            snippet = snippet,
+            rationale = rationale,
+            status = status,
+            parentIds = parentIds,
         )
+        Signals.appendTo(signalsFile, signal)
+        // Phase 2.3 — fan out to wiki / pin per routing rules. Reflections
+        // route to WIKI + PIN by default (durable, browsable, never push).
+        try {
+            SurfaceRouter.apply(signal)
+        } catch (e: Exception) {
+            System.err.println(
+                "[ReflectionLoop] WARN SurfaceRouter.apply failed: ${e.message?.take(160)}",
+            )
+        }
         return signalId
     }
 
