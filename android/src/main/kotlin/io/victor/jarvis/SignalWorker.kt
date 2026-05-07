@@ -66,7 +66,20 @@ class SignalWorker(
                 // focus is optional surface; never block the signal path.
             }
             if (signals.isEmpty()) return Result.success()
-            signals.forEach { Notifications.postSignal(ctx, it) }
+            // R7 — apply user-configured filters before posting.
+            val muted = Prefs.loadMutedKinds(ctx)
+            val threshold = Prefs.loadImportanceThreshold(ctx)
+            val qStart = Prefs.loadQuietStartHour(ctx)
+            val qEnd = Prefs.loadQuietEndHour(ctx)
+            signals
+                .filter {
+                    SignalFilter.shouldSurface(
+                        it, muted, threshold, qStart, qEnd,
+                    )
+                }
+                .forEach { Notifications.postSignal(ctx, it) }
+            // Advance lastSeenTs to the newest fetched (filtered or not) so
+            // dropped signals don't pile up on the next poll.
             val newest = signals.maxByOrNull { it.ts }?.ts
             if (newest != null) Prefs.saveLastSeenTs(ctx, newest)
             return Result.success()

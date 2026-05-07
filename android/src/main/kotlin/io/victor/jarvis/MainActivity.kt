@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
@@ -168,11 +169,24 @@ fun JarvisApp() {
         if (turns.isNotEmpty()) listState.animateScrollToItem(turns.size - 1)
     }
 
+    var showSettings by remember { mutableStateOf(false) }
+    if (showSettings) {
+        SettingsScreen(onClose = { showSettings = false })
+        return
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("jarvis", fontFamily = FontFamily.Monospace) },
                 actions = {
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "settings",
+                            tint = FgMain,
+                        )
+                    }
                     IconButton(onClick = {
                         ttsOn = !ttsOn
                         if (!ttsOn) tts.stop()
