@@ -93,6 +93,16 @@ curl -s -X POST https://corgflix.duckdns.org/api/chat \
     -d '{"msg":"<test prompt>"}'
 ```
 
+## Session log (this autonomous session)
+
+**2026-05-08 — Phase 1.1 SHIPPED.**
+- Commit `193f836` — `Phase 1.1: ActivityScorer + nullable importance on ActivityEntry`.
+- 14 unit tests green; full suite green.
+- Deploy ok (`bash tools/deploy.sh` → `[deploy] done`, healthcheck `ok`).
+- Smoke: POST synthetic `code.exe` + "NullPointerException" entry → server appended with `"importance":0.8` (0.7 IDE base + 0.1 keyword "exception" hit). Verified by `ssh ... tail -2 /opt/jarvis/data/activity.jsonl`.
+- Pre-deploy rows have no `importance` field — readers tolerate (nullable). New POSTs from PC logger get scored on server side.
+- Next: Phase 1.2 — `ConversationEntry.importance: Float?` + heuristic. Roadmap says council-trigger if lexicon >50 words; v1 lexicon will likely be small enough to ship without convening.
+
 ## Outstanding tactical items (small, do anytime)
 
 - 2026-05-09 12:30 UTC: `ssh root@46.247.109.91 "rm -rf /opt/jarvis/jarvis-kotlin-pre-stepb /opt/jarvis/jarvis-kotlin-prev"` if no rollback issues.
