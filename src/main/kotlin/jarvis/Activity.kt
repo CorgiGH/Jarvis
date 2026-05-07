@@ -17,6 +17,9 @@ data class ActivityEntry(
     val title: String? = null,
     val process: String? = null,
     val pid: Long? = null,
+    /** 0..1 score from [ActivityScorer]. Nullable for pre-Phase-1.1 rows
+     *  and entries arriving from older logger builds. Readers tolerate null. */
+    val importance: Float? = null,
 )
 
 object Activity {
@@ -29,7 +32,14 @@ object Activity {
     private val LOCK = Any()
 
     fun append(entry: ActivityEntry) {
-        appendTo(Config.activityFile, entry)
+        // Phase 1.1: score on the canonical write path so both /api/activity
+        // (server) and the local-fallback path get importance populated.
+        // Synthetic test data passing through appendTo(path, entry) skips this.
+        val scored = if (entry.importance == null) {
+            val recent = if (Config.activityFile.exists()) loadEntries(hours = 1) else emptyList()
+            entry.copy(importance = ActivityScorer.score(entry, recent))
+        } else entry
+        appendTo(Config.activityFile, scored)
     }
 
     fun appendTo(file: Path, entry: ActivityEntry) {
@@ -72,6 +82,9 @@ object Activity {
         if (entries.isEmpty()) return "(no activity in last ${hours}h)"
         return entries
             .takeLast(Config.ACTIVITY_LINE_CAP)
-            .joinToString("\n") { e -> "  [${e.ts}] ${e.process ?: "?"}: ${e.title ?: ""}" }
+            .joinToString("\n") { e ->
+                val imp = e.importance?.let { " [imp=${"%.2f".format(it)}]" } ?: ""
+                "  [${e.ts}]$imp ${e.process ?: "?"}: ${e.title ?: ""}"
+            }
     }
 }
