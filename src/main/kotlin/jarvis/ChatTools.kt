@@ -96,7 +96,40 @@ object ChatTools {
         "activity" -> executeActivity(call.args)
         "stats" -> executeStats()
         "sub" -> executeSub(call.args, client)
+        "calendar" -> executeCalendar(call.args)
         else -> "(unknown tool: ${call.name})"
+    }
+
+    /** R8 — read-only Google Calendar via gcalcli subprocess. Default-OFF
+     *  behind JARVIS_CALENDAR_ENABLED env so the chat tool exists but no-ops
+     *  cleanly until the user runs `gcalcli init` interactively on VPS. */
+    private fun executeCalendar(args: String): String {
+        if (System.getenv("JARVIS_CALENDAR_ENABLED")?.lowercase() !in setOf("1", "true", "yes")) {
+            return "(calendar not configured — see docs/superpowers/specs/2026-05-08-R8-calendar-readonly-design.md)"
+        }
+        val range = args.trim().ifEmpty { "today" }
+        // Whitelist range tokens — anything else passes through to gcalcli's
+        // own argument parser. ProcessBuilder array-mode prevents shell injection.
+        val gcalArgs: List<String> = when (range) {
+            "today" -> listOf("agenda")
+            "tomorrow" -> listOf("agenda", "tomorrow")
+            "week" -> listOf("agenda", "next week")
+            else -> listOf("agenda", range)
+        }
+        return try {
+            val proc = ProcessBuilder(listOf("gcalcli") + gcalArgs)
+                .redirectErrorStream(true)
+                .start()
+            val finished = proc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+            if (!finished) {
+                proc.destroyForcibly()
+                return "(calendar fetch timed out)"
+            }
+            val out = proc.inputStream.bufferedReader().readText().take(2048)
+            if (out.isBlank()) "(no calendar entries for \"$range\")" else out
+        } catch (e: Exception) {
+            "(calendar fetch failed: ${e.javaClass.simpleName})"
+        }
     }
 
     private fun executeActivity(args: String): String {
