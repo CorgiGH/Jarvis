@@ -158,6 +158,22 @@ After enabling, observe behavior via `ssh root@46.247.109.91 "tail -f /opt/jarvi
 - Signal kind=`ctx_model_summary`, status=`emitted`. ctx-model returned real inference about user's coding sessions ("ENERGY: mid basis: Multiple long terminal sessions and many 'Resume previous coding session' entries…"). System is now actually observing-and-deciding for the first time.
 - Cooldown is now armed for 30 min from 19:59:49 UTC. Next signal earliest 20:29:49 UTC.
 
+**2026-05-08 — Phase 3.1 SHIPPED (with research agent + pre-impl council).**
+- Research agent surveyed `android/` — 4-file pure-Compose APK, no FCM / no foreground service / on-demand only. Polling cheapest path; FCM would need Firebase + Google Play Services dependency.
+- Pre-impl council `1778184643` saved at `.claude/council-cache/council-1778184643.md`. Verdict CONDITIONAL — synthesis: `GET /api/signals?since=<iso>&limit=10` (server PII-filtered), Android WorkManager 15-min PeriodicWorkRequest, system Notification with VISIBILITY_PRIVATE (snippet hidden on lockscreen), client `lastSeenTs` in DataStore (no server-side ack endpoint), default-on when authToken non-blank.
+- Commits `e0521af` (Phase 3.1 main impl) + `2adb253` (PII regex fix — ISO dates were false-positive matching as phones, dropped real ctx-model snippets).
+- 5 server-side filter tests + 4 PII regression tests (ISO dates / paren phones). Full suite green.
+- Android APK builds cleanly. `gradle :android:assembleDebug` ok.
+- Smoke: `curl /api/signals?limit=5` returns the existing `00f1902332a7a153` signal post-regex-fix. End-to-end ready for APK install.
+
+## To activate notifications on phone (user action)
+
+1. Pull fresh APK: `https://corgflix.duckdns.org/apk` (browser on phone, or download via PC + sideload).
+2. Install over the existing `io.victor.jarvis` build.
+3. Open app once — POST_NOTIFICATIONS permission prompt appears (Android 13+). Grant.
+4. WorkManager periodic poll auto-enqueues whenever `authToken` is non-blank in the prefs.
+5. Phone should receive 1 notification within 15 min (the queued `00f1902332a7a153` signal). After that, only fresh signals trigger notifications (`lastSeenTs` advances).
+
 ## Next session candidates
 
 - **Phase 3.1** (research agent for Android FCM vs polling) — the natural next step per Pragmatist's recommendation.
