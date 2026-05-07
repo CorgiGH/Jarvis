@@ -26,7 +26,15 @@ internal suspend fun runSub(args: List<String>) {
 
     LlmFactory.create(apiKey).use { client ->
         val output = try {
-            sub.run(client, SubsystemInput(activity, wiki, query))
+            sub.run(
+                client,
+                SubsystemInput(
+                    activity = activity,
+                    wiki = wiki,
+                    recentChat = Conversations.recentAsChatMessages(),
+                    userQuery = query,
+                ),
+            )
         } catch (e: Exception) {
             System.err.println("[sub:${sub.name}] failed: ${e.message}")
             exitProcess(1)

@@ -108,4 +108,12 @@ object Conversations {
         val all = readAllFrom(file)
         return if (all.size <= n) all else all.subList(all.size - n, all.size)
     }
+
+    /** Letta-style: chat history derived from the log on every turn so server
+     *  restart preserves context and the message array does not grow unbounded. */
+    fun recentAsChatMessages(n: Int = Config.CONVERSATION_RECENT_N): List<ChatMessage> =
+        recentAsChatMessagesFrom(Config.conversationsFile, n)
+
+    fun recentAsChatMessagesFrom(file: Path, n: Int): List<ChatMessage> =
+        recentFrom(file, n).map { ChatMessage(it.role, it.content) }
 }

@@ -21,19 +21,17 @@ Style:
 - Match the moment: coach, friend, mirror, or silent - whichever fits.
 - Code/commits/security topics: write normally and precisely."""
 
+/**
+ * Activity context block for the system prompt. Conversation history is NOT
+ * included here — it goes into the messages array directly via
+ * Conversations.recentAsChatMessages so the model sees user/assistant turns as
+ * proper chat messages (Letta pattern), not as a stringified summary.
+ */
 internal fun buildChatContext(): String {
     val activity = Activity.loadRecent()
-    val recentTurns = Conversations.recent().ifEmpty { null }
-    val convoBlock = recentTurns?.joinToString("\n") { e ->
-        val tag = e.role.padEnd(9)
-        "[${e.ts}] $tag ${e.content.replace("\n", " ").take(400)}"
-    } ?: "(empty)"
     return """
         |# Recent activity (last ${Config.ACTIVITY_LOOKBACK_HOURS}h)
         |$activity
-        |
-        |# Recent conversations (last ${Config.CONVERSATION_RECENT_N} turns)
-        |$convoBlock
     """.trimMargin()
 }
 

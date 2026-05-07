@@ -12,7 +12,6 @@ internal suspend fun runChat() {
     val embeddings: EmbeddingsClient? = apiKey?.let { EmbeddingsClient(it) }
 
     LlmFactory.create(apiKey).use { client ->
-        val history = mutableListOf<ChatMessage>()
         val storeNote = if (embeddings != null) "${VectorStore.all().size} entries" else "disabled (no OPENROUTER_API_KEY)"
         println("Jarvis online (provider: ${System.getenv("JARVIS_LLM") ?: "claude-max"}, semantic store: $storeNote). Commands: exit, /save <note>, /ctx, /subs, /sub <name> [query]")
 
@@ -55,7 +54,15 @@ internal suspend fun runChat() {
                     val activity = Activity.loadEntries()
                     val wiki = MemoryWiki.recent()
                     try {
-                        val output = sub.run(client, SubsystemInput(activity, wiki, subQuery))
+                        val output = sub.run(
+                            client,
+                            SubsystemInput(
+                                activity = activity,
+                                wiki = wiki,
+                                recentChat = Conversations.recentAsChatMessages(),
+                                userQuery = subQuery,
+                            ),
+                        )
                         println("[${sub.name}]> ${output.text}\n")
                         output.wikiEntry?.let { MemoryWiki.append(it, output.text) }
                     } catch (e: Exception) {
@@ -65,23 +72,22 @@ internal suspend fun runChat() {
                 continue
             }
 
-            history += ChatMessage("user", msg)
             val queryEmb: FloatArray? = if (embeddings != null) {
                 try { embeddings.embed(msg) } catch (_: Exception) { null }
             } else null
             val sysPrompt = CHAT_SYSTEM_PROMPT + CoreMemory.preamble() +
                 "\n\n# Context\n" + buildChatContextWithSemantic(queryEmb)
-            val messages = listOf(ChatMessage("system", sysPrompt)) + history
+            val messages = listOf(ChatMessage("system", sysPrompt)) +
+                Conversations.recentAsChatMessages() +
+                ChatMessage("user", msg)
 
             val (reply, model) = try {
                 client.complete(messages)
             } catch (e: Exception) {
                 println("[error] ${e.message}")
-                history.removeLast()
                 continue
             }
             println("jarvis> $reply\n")
-            history += ChatMessage("assistant", reply)
 
             // Council 1778105576 (A): single critical-section write via ChatTurnWriter
             // so user+assistant land atomically (no orphan-user-turn under SIGTERM/OOM).

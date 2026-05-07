@@ -27,6 +27,7 @@ import jarvis.ActivityEntry
 import jarvis.CHAT_SYSTEM_PROMPT
 import jarvis.ChatMessage
 import jarvis.ChatTurnWriter
+import jarvis.Conversations
 import jarvis.CoreMemory
 import jarvis.Llm
 import jarvis.LlmFactory
@@ -56,7 +57,10 @@ internal suspend fun runWeb() {
     val apiKey = resolveOpenRouterKey()  // optional now; only required if JARVIS_LLM=openrouter
     val port = System.getenv("JARVIS_PORT")?.toIntOrNull() ?: DEFAULT_PORT
     val client: Llm = LlmFactory.create(apiKey)
-    val history = mutableListOf<ChatMessage>()
+    // Letta-style: chat history is derived from conversations.jsonl on every
+    // turn (Conversations.recentAsChatMessages). The mutex serializes the LLM
+    // call + ChatTurnWriter.append so concurrent /chat requests do not double-
+    // invoke the model and do not race on the JSONL append-and-read.
     val historyLock = Mutex()
 
     println("Jarvis web on http://localhost:$port (Ctrl+C to stop)")
@@ -131,17 +135,16 @@ internal suspend fun runWeb() {
                     return@post
                 }
                 val (reply, model) = historyLock.withLock {
-                    history.add(ChatMessage("user", msg))
                     val sysPrompt = CHAT_SYSTEM_PROMPT + CoreMemory.preamble() +
                         "\n\n# Context\n" + buildChatContext()
-                    val messages = listOf(ChatMessage("system", sysPrompt)) + history
+                    val messages = listOf(ChatMessage("system", sysPrompt)) +
+                        Conversations.recentAsChatMessages() +
+                        ChatMessage("user", msg)
                     val (text, modelName) = try {
                         client.complete(messages)
                     } catch (e: Exception) {
-                        history.removeLast()
                         return@withLock "[error] ${e.message}" to "n/a"
                     }
-                    history.add(ChatMessage("assistant", text))
                     appendChatTurn(msg, text, modelName)
                     text to modelName
                 }
@@ -188,7 +191,15 @@ internal suspend fun runWeb() {
                 val activity = Activity.loadEntries()
                 val wiki = MemoryWiki.recent()
                 val output = try {
-                    sub.run(client, SubsystemInput(activity, wiki, query))
+                    sub.run(
+                        client,
+                        SubsystemInput(
+                            activity = activity,
+                            wiki = wiki,
+                            recentChat = Conversations.recentAsChatMessages(),
+                            userQuery = query,
+                        ),
+                    )
                 } catch (e: Exception) {
                     call.respondText(
                         """<div class="turn jarvis"><b>sub:${sub.name} failed:</b> ${escape(e.message ?: "")}</div>""",
@@ -213,17 +224,16 @@ internal suspend fun runWeb() {
                     return@post
                 }
                 val (reply, model) = historyLock.withLock {
-                    history.add(ChatMessage("user", msg))
                     val sysPrompt = CHAT_SYSTEM_PROMPT + CoreMemory.preamble() +
                         "\n\n# Context\n" + buildChatContext()
-                    val messages = listOf(ChatMessage("system", sysPrompt)) + history
+                    val messages = listOf(ChatMessage("system", sysPrompt)) +
+                        Conversations.recentAsChatMessages() +
+                        ChatMessage("user", msg)
                     val (text, modelName) = try {
                         client.complete(messages)
                     } catch (e: Exception) {
-                        history.removeLast()
                         return@withLock "[error] ${e.message}" to "n/a"
                     }
-                    history.add(ChatMessage("assistant", text))
                     appendChatTurn(msg, text, modelName)
                     text to modelName
                 }
@@ -266,7 +276,15 @@ internal suspend fun runWeb() {
                 val activity = Activity.loadEntries()
                 val wiki = MemoryWiki.recent()
                 val output = try {
-                    sub.run(client, SubsystemInput(activity, wiki, query))
+                    sub.run(
+                        client,
+                        SubsystemInput(
+                            activity = activity,
+                            wiki = wiki,
+                            recentChat = Conversations.recentAsChatMessages(),
+                            userQuery = query,
+                        ),
+                    )
                 } catch (e: Exception) {
                     call.respond(ApiSubResponse("[sub:${sub.name} failed] ${e.message}", "n/a"))
                     return@post
