@@ -20,6 +20,7 @@ object Config {
     val coreMemoryFile: Path = stateDir.resolve("core_memory.md")
     val archivalDir: Path = stateDir.resolve("archival")
     val signalsFile: Path = stateDir.resolve("signals.jsonl")
+    val lastAccessFile: Path = stateDir.resolve("last_access.jsonl")
 
     /** OpenRouter is no longer used for chat (the copilot / claude-max
      *  subprocess providers replaced it), but EmbeddingsClient still hits

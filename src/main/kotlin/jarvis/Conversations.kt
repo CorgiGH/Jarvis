@@ -161,14 +161,27 @@ object Conversations {
         halfLifeHours: Double = SALIENT_HALF_LIFE_HOURS,
         nullFallback: Float = SALIENT_NULL_FALLBACK,
         now: Instant = Instant.now(),
+        accessFile: Path = Config.lastAccessFile,
+        touchOnPick: Boolean = true,
     ): List<ConversationEntry> {
         if (n <= 0) return emptyList()
         val all = readAllFrom(file)
         if (all.isEmpty()) return emptyList()
         val candidates = if (all.size > poolSize) all.takeLast(poolSize) else all
         val lambda = ln(2.0) / halfLifeHours
+        // R2: max(creation_ts, lastAccessedAt). Frequently-recalled rows
+        // stay surfaced; never-touched rows decay from creation as before.
+        val accessMap = ConversationAccess.lastAccessByMsgIdFrom(accessFile)
         val ranked = candidates.map { entry ->
-            val recency = parseInstantOrNull(entry.ts)?.let { ts ->
+            val createdAt = parseInstantOrNull(entry.ts)
+            val lastAccessed = accessMap[entry.msgId]
+            val anchor = when {
+                createdAt == null && lastAccessed == null -> null
+                createdAt == null -> lastAccessed
+                lastAccessed == null -> createdAt
+                else -> if (lastAccessed > createdAt) lastAccessed else createdAt
+            }
+            val recency = anchor?.let { ts ->
                 val hours = Duration.between(ts, now).toMinutes()
                     .coerceAtLeast(0).toDouble() / 60.0
                 exp(-lambda * hours)
@@ -177,6 +190,12 @@ object Conversations {
             entry to (recency + imp)
         }
         val topN = ranked.sortedByDescending { it.second }.take(n).map { it.first }
+        // R2: touch picked rows so the next call sees them as freshly accessed.
+        // Chronological recent() does NOT touch — only the importance-weighted
+        // view counts as "access" per Park et al. semantics.
+        if (touchOnPick && topN.isNotEmpty()) {
+            ConversationAccess.touchTo(accessFile, topN.map { it.msgId }, now)
+        }
         // Chronological re-sort: LLM reads top-down, so emit in turn order even
         // though we picked by importance.
         return topN.sortedWith(compareBy({ it.ts }, { it.seq ?: 0 }))
