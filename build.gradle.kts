@@ -36,6 +36,10 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.14.0")
     implementation("net.java.dev.jna:jna-platform:5.14.0")
 
+    // R5: daily email summary via Gmail SMTP (default-off behind
+    // JARVIS_DAILY_EMAIL env). jakarta.mail handles STARTTLS + auth.
+    implementation("com.sun.mail:jakarta.mail:2.0.1")
+
     testImplementation(kotlin("test"))
 }
 

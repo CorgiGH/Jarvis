@@ -40,5 +40,12 @@ internal suspend fun runReflect() {
         MemoryWiki.append("daily reflection ($model)", reply)
         println("Reflection saved to ~/.life-os/wiki.md (model: $model):\n")
         println(reply)
+        // R5 — best-effort email delivery. Default-off via JARVIS_DAILY_EMAIL.
+        try {
+            val sent = Smtp.sendIfEnabled("jarvis: daily reflection ($model)", reply)
+            if (sent) println("[reflect] also sent via SMTP")
+        } catch (e: Exception) {
+            System.err.println("[reflect] SMTP delivery failed: ${e.message?.take(200)}")
+        }
     }
 }
