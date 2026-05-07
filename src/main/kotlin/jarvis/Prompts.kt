@@ -123,7 +123,29 @@ Style:
  */
 internal fun buildChatContext(): String {
     val activity = Activity.loadRecent()
+    // Inject current local time + day-of-week + scheduled-block-now so the
+    // LLM doesn't have to call [[time]] for context-dependent answers
+    // (e.g. "should I sleep" depends on whether it's 02:00 or 14:00).
+    val zone = java.time.ZoneId.of("Europe/Bucharest")
+    val ldt = java.time.LocalDateTime.ofInstant(java.time.Instant.now(), zone)
+    val day = ldt.dayOfWeek.toString().lowercase().replaceFirstChar { it.titlecase() }
+    val timeBlock = "Now: $day ${ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))} Europe/Bucharest"
+    val schedule = Schedule.load()
+    val current = Schedule.currentBlock(schedule, java.time.Instant.now(), zone)
+    val currentLine = current?.let {
+        "Current scheduled block: ${it.kind} ${it.subject}" + (it.topic?.let { t -> " — $t" } ?: "")
+    } ?: "No current scheduled block."
+    val nextExam = Schedule.nextExam(schedule, java.time.Instant.now(), zone)
+    val examLine = nextExam?.let {
+        val days = Schedule.daysUntilNextExam(schedule, java.time.Instant.now(), zone)
+        "Next exam: ${it.subject} in ${days}d (${it.date})"
+    } ?: ""
     val base = """
+        |# Now
+        |$timeBlock
+        |$currentLine
+        |${examLine.ifEmpty { "" }}
+        |
         |# Recent activity (last ${Config.ACTIVITY_LOOKBACK_HOURS}h)
         |$activity
     """.trimMargin()

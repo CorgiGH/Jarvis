@@ -67,6 +67,8 @@ internal suspend fun runWeb() {
 
     println("Jarvis web on http://localhost:$port (Ctrl+C to stop)")
     println("Auth required. First visit: http://localhost:$port/login")
+    // Scheduled-block reminders. Default-OFF behind REMINDER_LOOP_ENABLED env.
+    jarvis.BlockReminder.start()
 
     embeddedServer(CIO, port = port, host = "0.0.0.0") {
         install(ContentNegotiation) {
