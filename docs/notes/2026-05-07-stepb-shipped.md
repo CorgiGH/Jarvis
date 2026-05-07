@@ -46,22 +46,31 @@ bash tools/deploy.sh           # build+test+installDist+scp+restart+verify
 bash tools/deploy.sh rollback  # swap current ↔ -prev, restart
 ```
 
+## Post-Step-B work (same session, after deploy)
+
+| Commit | What |
+|---|---|
+| `1d7e613` | Letta-style chat history derivation. WebMain `history` mutableList dropped — each turn rebuilds messages from `Conversations.recentAsChatMessages()`. Server restart no longer wipes context (jsonl is source of truth). Wiki dual-write removed from chat path; SubsystemInput gained `recentChat` field; 4 callers updated. |
+| `ccca958` | ContextModel + Judgment + Timing + DotConnector subsystem prompts render the new `# Recent conversation` block. CoderSubsystem + TeachingSubsystem skipped (don't need it). |
+| `c0d0267` | SearchSubsystem (`/sub search <query>`). Pure-Kotlin grep-as-tool over `$JARVIS_DATA_DIR/archival` (316 .md, 3.2 MB). Case-insensitive substring, ranked by occurrence count, top-K with snippet. Council 1778104395 v1.5 stop-gap (FTS5 vs embeddings deferred entirely). NEVER auto-injected; user-invoked only. 8 tests + smoke over real VPS corpus passed. |
+
+End-state verified: smoke chat through `/api/chat` shows model recalling all 4 prior smokes via `Conversations.recentAsChatMessages` (was impossible before — server restarts wiped the in-memory list). `/sub search probabilities` over the 316-file archival corpus returns 3 ranked hits in <1s on VPS.
+
 ## Outstanding follow-ups
 
 1. **48h cleanup** after 2026-05-09 12:30 UTC if no rollback needed:
    ```
    ssh root@46.247.109.91 "rm -rf /opt/jarvis/jarvis-kotlin-pre-stepb /opt/jarvis/jarvis-kotlin-prev"
    ```
-2. **Drop wiki.md write from chat path** — currently dual-write keeps `wiki.md`
-   fed for the `/wiki` HTML page only (chat recency lives in `conversations.jsonl`,
-   embeddings live via `EmbeddingsPipeline`). Subsystems still read `MemoryWiki.recent()`
-   as their context input — rewiring those to read from `Conversations.recent()` is the
-   prerequisite. Bigger refactor than just deleting the wiki.md write.
-3. **core_memory.md on VPS is empty** — by design (council 1778104395 HARD RULE: no
+2. **core_memory.md on VPS is empty** — by design (council 1778104395 HARD RULE: no
    identifiers in pinned context). User can `ssh root@46.247.109.91 "vim /opt/jarvis/data/core_memory.md"`
    to add preferences. Privacy scanner will WARN on identifier-shaped paste.
-4. **Wiki.md.bak.1778090717 retention** — council 1778104395 said keep until
+3. **Wiki.md.bak.1778090717 retention** — council 1778104395 said keep until
    `conversations.jsonl` has 7 live days. Today is day 0. Earliest delete: 2026-05-14.
+4. **buildChatContextWithSemantic still in ChatMain CLI** — uses VectorStore directly;
+   WebMain doesn't. Either delete the variant or wire it into both. Low priority.
+5. **claude-max provider login on VPS** — current provider is `JARVIS_LLM=copilot`.
+   `claude login` interactive needed to bind the Max plan. Not blocking.
 
 ## Quick verify on resume
 
