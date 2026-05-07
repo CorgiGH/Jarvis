@@ -38,10 +38,12 @@ object ReflectionLoop {
     private val loopDispatcher = Dispatchers.IO.limitedParallelism(1)
     private val scope = CoroutineScope(SupervisorJob() + loopDispatcher)
 
-    fun isEnabled(): Boolean =
-        System.getenv("REFLECTION_LOOP_ENABLED")?.lowercase()?.let {
+    fun isEnabled(): Boolean {
+        if (LoopsKillSwitch.loopsDisabled()) return false
+        return System.getenv("REFLECTION_LOOP_ENABLED")?.lowercase()?.let {
             it == "1" || it == "true" || it == "yes"
         } ?: false
+    }
 
     fun maybeReflect(client: Llm) {
         if (!isEnabled()) return

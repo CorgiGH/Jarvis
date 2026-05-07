@@ -28,10 +28,12 @@ object BlockReminder {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun isEnabled(): Boolean =
-        System.getenv("REMINDER_LOOP_ENABLED")?.lowercase()?.let {
+    fun isEnabled(): Boolean {
+        if (LoopsKillSwitch.loopsDisabled()) return false
+        return System.getenv("REMINDER_LOOP_ENABLED")?.lowercase()?.let {
             it == "1" || it == "true" || it == "yes"
         } ?: false
+    }
 
     fun start() {
         if (!isEnabled()) {

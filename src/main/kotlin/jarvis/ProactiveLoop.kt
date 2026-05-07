@@ -52,10 +52,12 @@ object ProactiveLoop {
     private val loopDispatcher = Dispatchers.IO.limitedParallelism(1)
     private val scope = CoroutineScope(SupervisorJob() + loopDispatcher)
 
-    fun isEnabled(): Boolean =
-        System.getenv("PROACTIVE_LOOP_ENABLED")?.lowercase()?.let {
+    fun isEnabled(): Boolean {
+        if (LoopsKillSwitch.loopsDisabled()) return false
+        return System.getenv("PROACTIVE_LOOP_ENABLED")?.lowercase()?.let {
             it == "1" || it == "true" || it == "yes"
         } ?: false
+    }
 
     /**
      * Hook called from /api/activity after [Activity.append] succeeds. Returns

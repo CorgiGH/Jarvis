@@ -43,10 +43,12 @@ object StateCache {
     private val refreshLock = Mutex()
     private val cell = AtomicReference<UserState?>(null)
 
-    fun isEnabled(): Boolean =
-        System.getenv("STATE_CACHE_ENABLED")?.lowercase()?.let {
+    fun isEnabled(): Boolean {
+        if (LoopsKillSwitch.loopsDisabled()) return false
+        return System.getenv("STATE_CACHE_ENABLED")?.lowercase()?.let {
             it == "1" || it == "true" || it == "yes"
         } ?: false
+    }
 
     fun current(now: Instant = Instant.now()): UserState? {
         val s = cell.get() ?: return null
