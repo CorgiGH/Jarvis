@@ -44,11 +44,17 @@ if [[ "${1-}" == "rollback" ]]; then
 fi
 
 # === LOCAL BUILD + SMOKE ===
-echo "[deploy] gradle :test :installDist"
-gradle :test :installDist
+echo "[deploy] gradle :test :installDist :android:assembleDebug"
+gradle :test :installDist :android:assembleDebug
 
 if [[ ! -d "$DIST_LOCAL" ]]; then
     echo "[deploy] FATAL: $DIST_LOCAL missing after installDist"
+    exit 1
+fi
+
+APK_LOCAL="android/build/outputs/apk/debug/android-debug.apk"
+if [[ ! -f "$APK_LOCAL" ]]; then
+    echo "[deploy] FATAL: $APK_LOCAL missing after assembleDebug"
     exit 1
 fi
 
@@ -70,6 +76,12 @@ ssh "$VPS" "
 "
 
 scp -rq "$DIST_LOCAL" "$VPS:/opt/jarvis/"
+
+# scp the APK so /apk endpoint serves the current Phase 3.1 build. Without
+# this the VPS keeps whatever stale APK was built on it locally (caught in
+# 2026-05-08 Phase 3.1 smoke — VPS APK was 2 days old, no WorkManager).
+ssh "$VPS" "mkdir -p /opt/jarvis/android/build/outputs/apk/debug"
+scp -q "$APK_LOCAL" "$VPS:/opt/jarvis/android/build/outputs/apk/debug/android-debug.apk"
 
 ssh "$VPS" "
     systemctl start jarvis &&
