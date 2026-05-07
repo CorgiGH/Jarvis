@@ -26,9 +26,8 @@ object ChatTurnWriter {
 
     fun append(userMsg: String, assistantReply: String, model: String) {
         appendTo(Config.conversationsFile, userMsg, assistantReply, model)
-        // Best-effort wiki write (legacy embedding pipeline, /wiki HTML page).
-        // Failure here does NOT corrupt chat recency; the Conversations write
-        // already landed atomically above.
+        // Best-effort wiki write (legacy /wiki page). Failure here does NOT
+        // corrupt chat recency; the Conversations write already landed atomically.
         try {
             MemoryWiki.append(
                 "conversation ($model)",
@@ -40,6 +39,10 @@ object ChatTurnWriter {
                     "${e.message?.take(160)}); conversations.jsonl already has this turn.",
             )
         }
+        // Council 1778155110 follow-up: feed semantic store from chat turns on
+        // VPS too, not just local CLI. Async + best-effort — chat HTTP response
+        // returns immediately, embed latency does not block /api/chat.
+        EmbeddingsPipeline.indexTurnAsync(userMsg, assistantReply, model)
     }
 
     fun appendTo(

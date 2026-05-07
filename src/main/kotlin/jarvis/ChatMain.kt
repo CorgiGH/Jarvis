@@ -1,7 +1,6 @@
 package jarvis
 
 import jarvis.embeddings.EmbeddingsClient
-import jarvis.embeddings.StoredEmbedding
 import jarvis.embeddings.VectorStore
 import jarvis.subsystem.SubsystemInput
 import jarvis.subsystem.Subsystems
@@ -86,21 +85,11 @@ internal suspend fun runChat() {
 
             // Council 1778105576 (A): single critical-section write via ChatTurnWriter
             // so user+assistant land atomically (no orphan-user-turn under SIGTERM/OOM).
-            // Wiki write is best-effort inside the writer; failure does not corrupt
-            // the chat recency source-of-truth in conversations.jsonl.
+            // Wiki write + semantic-store indexing are best-effort inside the writer;
+            // failure does not corrupt the chat recency source-of-truth in conversations.jsonl.
+            // Council 1778155110 follow-up: ChatTurnWriter now also feeds VectorStore async,
+            // so the inline embed-and-store dance below is gone.
             ChatTurnWriter.append(msg, reply, model)
-            val sectionTitle = "conversation ($model)"
-            val sectionContent = "**user:** $msg\n\n**jarvis:** $reply"
-            // Best-effort: also embed and store so this turn is searchable next time.
-            if (embeddings != null) {
-                try {
-                    val joined = "## $sectionTitle\n\n$sectionContent"
-                    val emb = embeddings.embed(joined)
-                    VectorStore.add(StoredEmbedding(id = "$sectionTitle | ${msg.take(60)}", text = joined, embedding = emb))
-                } catch (_: Exception) {
-                    // ignore: chat keeps working without semantic store
-                }
-            }
         }
     }
 }
