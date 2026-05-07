@@ -42,12 +42,17 @@ object CoreMemory {
         return file.readText(Charsets.UTF_8)
     }
 
-    fun scanForPii(file: Path): List<PiiFinding> {
-        val raw = readFrom(file)
-        if (raw.isEmpty()) return emptyList()
+    fun scanForPii(file: Path): List<PiiFinding> = scanTextForPii(readFrom(file))
+
+    /** Council 1778164081 post-impl HIGH fix: salient block in buildChatContext
+     *  also surfaces conversation content into the system prompt, which means
+     *  PII protection has to apply to ANY text headed to provider APIs, not
+     *  just core_memory.md. Same regex set; pure function on text. */
+    fun scanTextForPii(text: String): List<PiiFinding> {
+        if (text.isEmpty()) return emptyList()
         val out = mutableListOf<PiiFinding>()
         for ((kind, pattern) in PII_PATTERNS) {
-            for (m in pattern.findAll(raw)) {
+            for (m in pattern.findAll(text)) {
                 out += PiiFinding(kind, m.value)
             }
         }

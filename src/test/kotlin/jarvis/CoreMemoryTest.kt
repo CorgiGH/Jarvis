@@ -43,4 +43,35 @@ class CoreMemoryTest {
         val file = tmp.resolve("nope.md")
         assertEquals("", CoreMemory.readFrom(file))
     }
+
+    @Test
+    fun scanTextForPiiCatchesEmail() {
+        val findings = CoreMemory.scanTextForPii("ping me at user@example.org tomorrow")
+        assertEquals(1, findings.size)
+        assertEquals("email", findings[0].kind)
+        assertTrue(findings[0].match.contains("user@example.org"))
+    }
+
+    @Test
+    fun scanTextForPiiCatchesMatricol() {
+        val findings = CoreMemory.scanTextForPii("My matricol is 31091001031ROSL251002")
+        assertTrue(findings.any { it.kind == "matricol" }, "matricol shape detected")
+    }
+
+    @Test
+    fun scanTextForPiiCatchesPhone() {
+        val findings = CoreMemory.scanTextForPii("call +1 555 234 5678 after 3")
+        assertTrue(findings.any { it.kind == "phone" }, "phone shape detected")
+    }
+
+    @Test
+    fun scanTextForPiiOnCleanTextReturnsEmpty() {
+        val findings = CoreMemory.scanTextForPii("just a normal sentence about Kotlin")
+        assertEquals(emptyList(), findings)
+    }
+
+    @Test
+    fun scanTextForPiiOnEmptyReturnsEmpty() {
+        assertEquals(emptyList(), CoreMemory.scanTextForPii(""))
+    }
 }

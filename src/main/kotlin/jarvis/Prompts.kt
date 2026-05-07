@@ -91,7 +91,27 @@ internal fun buildChatContext(): String {
     """.trimMargin()
     val salient = Conversations.recentByImportance()
     if (salient.isEmpty()) return base
-    val rendered = salient.joinToString("\n") { e ->
+    // Council 1778198xxx post-impl HIGH-A fix: salient block is now a path
+    // that ships conversation content to provider APIs in the system prompt.
+    // CoreMemory.scanTextForPii must gate every salient row — drop (with a
+    // loud WARN) any entry whose content contains identifier-shaped tokens.
+    // Conservative drop, not redact: a partially-redacted turn risks
+    // confusing the model more than the missing context.
+    val safe = salient.filter { e ->
+        val findings = CoreMemory.scanTextForPii(e.content)
+        if (findings.isNotEmpty()) {
+            System.err.println(
+                "[buildChatContext] WARN dropping salient turn ${e.msgId} " +
+                    "containing ${findings.joinToString(",") { it.kind }} " +
+                    "(content would have shipped to provider).",
+            )
+            false
+        } else {
+            true
+        }
+    }
+    if (safe.isEmpty()) return base
+    val rendered = safe.joinToString("\n") { e ->
         val imp = e.importance?.let { " [imp=${"%.2f".format(it)}]" } ?: ""
         val firstLine = e.content.lineSequence().firstOrNull { it.isNotBlank() }
             ?.take(300).orEmpty()
