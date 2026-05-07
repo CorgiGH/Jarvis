@@ -240,24 +240,21 @@ object ChatTools {
     private fun executeRecall(query: String): String {
         val q = query.trim()
         if (q.isEmpty()) return "(empty recall query)"
+        // R4 — hybrid retrieval (Mem0 3-pass parity). Semantic pass is gated
+        // on OPENROUTER_API_KEY; if absent the lexical+entity passes carry
+        // alone (graceful degradation, no error).
         val key = resolveOpenRouterKey()
-        if (key.isNullOrBlank()) {
-            return "(recall unavailable: OPENROUTER_API_KEY not set)"
-        }
-        val embedding = try {
-            EmbeddingsClient(key).use { c -> runBlocking { c.embed(q) } }
+        val embedFn: (suspend (String) -> FloatArray)? = if (!key.isNullOrBlank()) {
+            { q2 -> EmbeddingsClient(key).use { c -> c.embed(q2) } }
+        } else null
+        val hits = try {
+            runBlocking { HybridRetriever.search(q, k = 5, semanticEmbed = embedFn) }
         } catch (e: Exception) {
-            return "(recall embed failed: ${e.javaClass.simpleName}: ${e.message?.take(160)})"
+            return "(recall failed: ${e.javaClass.simpleName}: ${e.message?.take(160)})"
         }
-        val hits = VectorStore.search(embedding, k = 5, minScore = 0.2f)
-        if (hits.isEmpty()) return "(no semantic matches for \"$q\")"
-        return hits.joinToString("\n\n") { (entry, score) ->
-            val snippet = entry.text.lineSequence()
-                .filter { it.isNotBlank() }
-                .take(6)
-                .joinToString("\n")
-                .take(800)
-            "[similarity=${"%.3f".format(score)}] ${entry.id}\n$snippet"
+        if (hits.isEmpty()) return "(no matches for \"$q\")"
+        return hits.joinToString("\n\n") { hit ->
+            "[${hit.source} score=${"%.4f".format(hit.score)}] ${hit.id}\n${hit.snippet}"
         }
     }
 }
