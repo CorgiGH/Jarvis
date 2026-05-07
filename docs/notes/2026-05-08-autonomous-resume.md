@@ -180,6 +180,39 @@ After enabling, observe behavior via `ssh root@46.247.109.91 "tail -f /opt/jarvi
 - **Phase 2.2** (quiet-hours config + rate limit dedup) — only after Phase 3 lands and we have ack feedback.
 - **Phase 1 follow-ups from `docs/notes/2026-05-08-deferred-mediums.md`** — `last_accessed_at`, score-read race, time-window cap on activity. Pick when convenient.
 
+---
+
+## 2026-05-08 (later, same autonomous session) — Phase 4+ batch SHIPPED
+
+After deep-research report (`docs/superpowers/research/2026-05-08-personal-ai-life-os-deep-research.md`) generated 8 prioritized recommendations (R1-R8), user requested "do everything but fire a brainstorming session for each." Each got a condensed autonomous brainstorm spec then implementation:
+
+| # | Spec | Commit | Lines | Tests |
+|---|---|---|---|---|
+| R2 | last_accessed_at decay sidecar | `7f21494` | ~80 | 7 |
+| R3 | feedback loop ack/pin/dismiss | `dc93b38` | ~145 | 5 |
+| R5 | daily email summary (SMTP) | `f7fafcd` | ~50 | 1 |
+| R1 | reflection tree (Park §4.2) | `e85f70d` | ~140 | 8 |
+| R4 | hybrid retrieval (RRF) | `ad12935` | ~120 | 9 |
+| R6 | live focus-session ongoing notif | `2bcc04a` | ~120 | 8 |
+| R7 | granular notif controls + history | `380c218` | ~280 | 0 (UI) |
+| R8 | [[calendar]] chat tool | `07ecadf` | ~50 | 0 |
+
+**State after:** ~30 commits this session, 90+ tests green, server + APK deployed. Phase 1+2.1+3.1 + R1-R8 all live.
+
+**Default-OFF behind env flags (user opt-in):**
+- `PROACTIVE_LOOP_ENABLED=true` (already opted in)
+- `REFLECTION_LOOP_ENABLED=true` — turn on to get recursive reflection-tree summaries when Σ importance ≥ 3.0 over 24h
+- `JARVIS_DAILY_EMAIL=true` + SMTP_USER/SMTP_PASS — daily reflection emailed
+- `JARVIS_CALENDAR_ENABLED=true` + `gcalcli init` once — `[[calendar]]` chat tool
+
+**Notes:**
+- R7 settings screen lets user toggle quiet hours / threshold / per-kind mute / browse signal history without env edits.
+- R6 shows ongoing focus-session notification when activity importance sustains ≥0.7 for ≥30min same-process.
+- R3 Pin/Dismiss action buttons appear on every signal notification; feedback writes to `feedback.jsonl` for Phase 5 retraining.
+- R4 `[[recall]]` now hybrid (sem + lex + entity, RRF fused) — graceful degrade without OPENROUTER key.
+- R2 `recentByImportance` decays from max(creation_ts, lastAccessedAt) — frequently-recalled rows stay surfaced.
+- R8 calendar tool ships dormant; user runs `apt install gcalcli && gcalcli init && echo 'JARVIS_CALENDAR_ENABLED=true' >> /opt/jarvis/.env` to activate.
+
 ## Outstanding tactical items (small, do anytime)
 
 - 2026-05-09 12:30 UTC: `ssh root@46.247.109.91 "rm -rf /opt/jarvis/jarvis-kotlin-pre-stepb /opt/jarvis/jarvis-kotlin-prev"` if no rollback issues.
