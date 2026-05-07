@@ -43,9 +43,13 @@ object ChatTools {
     private val TOOL_PATTERN = Regex("""\[\[(\w+):\s*([^\]]+?)\]\]""")
     /** Same shape, used to strip residual markers from the user-visible reply. */
     private val ANY_MARKER_PATTERN = Regex("""\[\[\w+:\s*[^\]]+?\]\]""")
-    /** One follow-up LLM call after a tool execution. Total LLM calls ≤ 2.
-     *  Bounds /api/chat latency on Copilot CLI (~5-15s per call). */
-    private const val MAX_ITERATIONS = 1
+    /** F3 — Letta v1 / ReAct multi-step. Up to 3 tool rounds, total LLM calls
+     *  ≤ 4 (initial + 3 follow-ups). Lets the model chain search → read →
+     *  respond. Worst-case latency on Copilot CLI = ~60s; acceptable for
+     *  research-style turns. Original ceiling of 1 was conservative cost guard;
+     *  the cost vs depth tradeoff favors more depth now that Phase 1-3 is
+     *  shipped + chat is the sole user interactive surface. */
+    private const val MAX_ITERATIONS = 3
 
     /** Cap per-file expansion so a [[read: ...]] of a 5MB doc doesn't blow the
      *  follow-up prompt past the model's context window. */
@@ -97,7 +101,40 @@ object ChatTools {
         "stats" -> executeStats()
         "sub" -> executeSub(call.args, client)
         "calendar" -> executeCalendar(call.args)
+        "pin" -> executePin(call.args)
         else -> "(unknown tool: ${call.name})"
+    }
+
+    /** F2 — Letta-style core_memory write tool. Pins to `core_memory.md` so
+     *  the text is prepended to every future system prompt. Distinct from
+     *  `[[remember]]` which writes to wiki.md (recall-tier). PII-scanned
+     *  before write — drops with WARN if it trips, returns the cleaned
+     *  result. Append-only line per pin. */
+    private fun executePin(content: String): String {
+        val text = content.trim()
+        if (text.isEmpty()) return "(empty pin content)"
+        // Cap aggressive — core_memory is on every future system prompt.
+        val capped = if (text.length > 500) text.take(500) + " […truncated]" else text
+        val findings = CoreMemory.scanTextForPii(capped)
+        if (findings.isNotEmpty()) {
+            return "(pin denied: contains ${findings.joinToString(",") { it.kind }} — " +
+                "core_memory must stay PII-clean per privacy contract)"
+        }
+        return try {
+            val file = Config.coreMemoryFile
+            val line = "\n[model-pin ${java.time.Instant.now()}] $capped\n"
+            file.parent?.let { java.nio.file.Files.createDirectories(it) }
+            java.nio.file.Files.writeString(
+                file,
+                line,
+                Charsets.UTF_8,
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.APPEND,
+            )
+            "(pinned to core_memory: ${capped.take(80)}${if (capped.length > 80) "…" else ""})"
+        } catch (e: Exception) {
+            "(pin failed: ${e.javaClass.simpleName}: ${e.message?.take(160)})"
+        }
     }
 
     /** R8 — read-only Google Calendar via gcalcli subprocess. Default-OFF

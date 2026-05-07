@@ -74,13 +74,15 @@ class ChatToolsTest {
 
     @Test
     fun stripsResidualMarkersFromFinalReply() = runBlocking {
-        // Even if the second-pass model still emits a marker (because it's
-        // confused), the user-facing reply has the marker stripped.
+        // Even on the final pass (after MAX_ITERATIONS=3 rounds of tool use)
+        // any residual marker the model emits is stripped from user reply.
         val (reply, _) = ChatTools.runTurnWith(
             client = llm(
                 listOf(
                     "[[search: x]]",
-                    "Done. [[search: leftover]] all good.",
+                    "[[search: y]]",
+                    "[[search: z]]",
+                    "Done. [[search: leftover]] all good.",  // final pass
                 ),
             ),
             messages = listOf(ChatMessage("user", "go")),
@@ -94,7 +96,8 @@ class ChatToolsTest {
     @Test
     fun stopsAtMaxIterationsEvenIfModelKeepsToolCalling() = runBlocking {
         var calls = 0
-        // Model emits markers on every turn — runtime must cap at MAX_ITERATIONS+1 LLM calls.
+        // Model emits markers on every turn — runtime must cap at
+        // MAX_ITERATIONS+1 LLM calls. With MAX=3, that's 4 calls.
         val (reply, _) = ChatTools.runTurnWith(
             client = object : Llm {
                 override suspend fun complete(
@@ -108,9 +111,28 @@ class ChatToolsTest {
             messages = listOf(ChatMessage("user", "go")),
             executor = { _ -> "(no matches)" },
         )
-        // Cap is MAX_ITERATIONS=1 so total LLM calls = 2 (initial + 1 follow-up).
-        assertEquals(2, calls, "expected exactly 2 LLM calls under cap, got $calls")
+        // F3 — Cap is MAX_ITERATIONS=3 so total LLM calls = 4 (initial + 3 follow-ups).
+        assertEquals(4, calls, "expected exactly 4 LLM calls under cap, got $calls")
         assertTrue("[[search:" !in reply, "final reply marker-stripped")
+    }
+
+    @Test
+    fun chainedSearchThenReadThenRespond() = runBlocking {
+        // F3 — verify the model can chain >1 tool round to land at a useful reply.
+        var seq = 0
+        val (reply, _) = ChatTools.runTurnWith(
+            client = llm(
+                listOf(
+                    "[[search: kotlin]]",            // round 1
+                    "[[read: notes/kotlin.md]]",     // round 2
+                    "Notes say: sealed classes.",    // final
+                ),
+            ),
+            messages = listOf(ChatMessage("user", "kotlin notes?")),
+            executor = { call -> seq++; "tool ${call.name} result $seq" },
+        )
+        assertEquals(2, seq, "two tool calls executed in chain")
+        assertEquals("Notes say: sealed classes.", reply)
     }
 
     @Test
@@ -122,7 +144,9 @@ class ChatToolsTest {
             client = llm(
                 listOf(
                     "[[search: foo]]",                          // round 1: real tool
-                    "all done. [[browse: example.com]] bye.",   // final pass — markers stripped
+                    "[[search: bar]]",                          // round 2
+                    "[[search: baz]]",                          // round 3
+                    "all done. [[browse: example.com]] bye.",   // final — stripped
                 ),
             ),
             messages = listOf(ChatMessage("user", "go")),

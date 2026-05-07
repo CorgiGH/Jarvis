@@ -25,6 +25,10 @@ object ConversationScorer {
 
     fun score(content: String): Float {
         val text = content.lowercase()
+        // F1 — explicit user directive overrides heuristic. "remember:",
+        // "important:", "this matters" etc. land the turn at 1.0 so it
+        // dominates the salient retrieval forever after.
+        if (hasStrongDirective(text)) return 1.0f
         val pin = if (hasPinMarker(text)) 0.3f else 0f
         val emotion = if (hasEmotionWord(text)) 0.2f else 0f
         val strongSignal = pin > 0f || emotion > 0f
@@ -32,6 +36,18 @@ object ConversationScorer {
         val codePenalty = if (!strongSignal && isCodeDominant(content)) 0.05f else 0f
         return (0.4f + pin + emotion - questionPenalty - codePenalty).coerceIn(0f, 1f)
     }
+
+    /** F1 — imperative pin markers that the user uses to ASSERT importance.
+     *  Subset of [PIN_MARKERS]: requires the marker to be at the start of
+     *  the message OR followed by `:`/imperative form, so accidental
+     *  "actually I don't think it's that important" doesn't fire. */
+    private val STRONG_DIRECTIVE_REGEX = Regex(
+        """(?:^|\W)(remember:|important:|key insight|this matters|note to self|don't forget)""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    fun hasStrongDirective(content: String): Boolean =
+        STRONG_DIRECTIVE_REGEX.containsMatchIn(content)
 
     private val PIN_MARKERS = listOf(
         "remember this",

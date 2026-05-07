@@ -31,13 +31,31 @@ class ConversationScorerTest {
     }
 
     @Test
-    fun pinMarkerBeatsQuestionPenalty() {
-        // Both signals present; pin marker dominates so the question penalty
-        // does NOT apply.
+    fun strongDirectiveOverridesToMaxScore() {
+        // F1 — "important:" is a strong directive: turn importance == 1.0
+        // regardless of question / code penalties.
         val s = ConversationScorer.score("important: should I use Result or Either?")
-        // base 0.4 + pin 0.3 = 0.7; question penalty suppressed by strongSignal
+        assertEquals(1.0f, s, absoluteTolerance = 1e-4f,
+            message = "strong directive overrides scorer to 1.0")
+    }
+
+    @Test
+    fun softPinMarkerStillUsesHeuristic() {
+        // "remember this:" is in PIN_MARKERS but NOT in STRONG_DIRECTIVE_REGEX
+        // so it scores via the regular base + pin formula (0.7).
+        val s = ConversationScorer.score("remember this: sealed classes can't be subclassed")
         assertEquals(0.7f, s, absoluteTolerance = 1e-4f,
-            message = "pin should suppress short-question penalty")
+            message = "soft pin marker uses base+pin formula")
+    }
+
+    @Test
+    fun strongDirectiveDetected() {
+        assertTrue(ConversationScorer.hasStrongDirective("important: do X"))
+        assertTrue(ConversationScorer.hasStrongDirective("remember: ship before Friday"))
+        assertTrue(ConversationScorer.hasStrongDirective("don't forget the demo"))
+        assertTrue(ConversationScorer.hasStrongDirective("note to self: cleanup tomorrow"))
+        assertTrue(!ConversationScorer.hasStrongDirective("how do I sort a list"))
+        assertTrue(!ConversationScorer.hasStrongDirective("just a normal question"))
     }
 
     @Test
