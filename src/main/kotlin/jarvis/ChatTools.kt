@@ -3,6 +3,8 @@ package jarvis
 import jarvis.embeddings.EmbeddingsClient
 import jarvis.embeddings.VectorStore
 import jarvis.subsystem.SearchSubsystem
+import jarvis.subsystem.SubsystemInput
+import jarvis.subsystem.Subsystems
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.time.Instant
@@ -52,7 +54,7 @@ object ChatTools {
     data class ToolCall(val name: String, val args: String)
 
     suspend fun runTurn(client: Llm, messages: List<ChatMessage>): Pair<String, String> =
-        runTurnWith(client, messages, ::executeTool)
+        runTurnWith(client, messages) { call -> executeTool(call, client) }
 
     internal suspend fun runTurnWith(
         client: Llm,
@@ -84,14 +86,74 @@ object ChatTools {
             .map { ToolCall(it.groupValues[1].trim(), it.groupValues[2].trim()) }
             .toList()
 
-    private fun executeTool(call: ToolCall): String = when (call.name) {
+    private fun executeTool(call: ToolCall, client: Llm): String = when (call.name) {
         "search" -> executeSearch(call.args)
         "read" -> executeRead(call.args)
         "recall" -> executeRecall(call.args)
         "time" -> executeTime()
         "remember" -> executeRemember(call.args)
         "wiki" -> executeWiki(call.args)
+        "activity" -> executeActivity(call.args)
+        "stats" -> executeStats()
+        "sub" -> executeSub(call.args, client)
         else -> "(unknown tool: ${call.name})"
+    }
+
+    private fun executeActivity(args: String): String {
+        val hours = args.trim().toLongOrNull()?.coerceIn(1, 168)
+            ?: Config.ACTIVITY_LOOKBACK_HOURS
+        return Activity.loadRecent(hours = hours)
+    }
+
+    private fun executeStats(): String {
+        val convCount = Conversations.readAll().size
+        val wikiSections = MemoryWiki.readAll()
+            .split(Regex("(?=^## )", RegexOption.MULTILINE))
+            .count { it.startsWith("## ") }
+        val archivalFiles = if (Config.archivalDir.exists()) {
+            Files.walk(Config.archivalDir).use { stream ->
+                stream.filter { it.isRegularFile() && it.toString().endsWith(".md") }.count()
+            }
+        } else 0
+        val embeddings = VectorStore.all().size
+        val activityEntries = Activity.loadEntries(hours = 24 * 365).size
+        return "conversations.jsonl rows: $convCount\n" +
+            "wiki.md sections: $wikiSections\n" +
+            "archival/ .md files: $archivalFiles\n" +
+            "embeddings entries: $embeddings\n" +
+            "activity.jsonl entries (last year): $activityEntries"
+    }
+
+    private fun executeSub(args: String, client: Llm): String {
+        val tokens = args.trim().split(Regex("\\s+"), limit = 2)
+        if (tokens.isEmpty() || tokens[0].isEmpty()) {
+            return "(empty sub call) — available: " +
+                Subsystems.all.joinToString(", ") { it.name }
+        }
+        val name = tokens[0]
+        val query = tokens.getOrNull(1)
+        val sub = Subsystems.get(name)
+            ?: return "(unknown subsystem: $name) — available: " +
+                Subsystems.all.joinToString(", ") { it.name }
+        // Don't recursively invoke `sub` from within sub (would call ChatTools
+        // which could call sub again). Subsystems use client.complete directly,
+        // not ChatTools.runTurn, so this is already safe — but still cap below.
+        return try {
+            val output = runBlocking {
+                sub.run(
+                    client,
+                    SubsystemInput(
+                        activity = Activity.loadEntries(),
+                        wiki = MemoryWiki.recent(),
+                        recentChat = Conversations.recentAsChatMessages(),
+                        userQuery = query,
+                    ),
+                )
+            }
+            output.text
+        } catch (e: Exception) {
+            "(sub:$name failed: ${e.javaClass.simpleName}: ${e.message?.take(160)})"
+        }
     }
 
     private fun executeWiki(query: String): String {

@@ -36,6 +36,21 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   (embedding store) — wiki holds the user's own notes that aren't in
   archival.
     [[wiki: <query>]]
+- activity(hours): activity log over a custom window (1..168 h). Use when
+  the question depends on a different lookback than the 24-h block already
+  in your system prompt context (e.g., "what was I doing last week").
+    [[activity: 72]]
+- stats: counts of conversations, wiki sections, archival files, embeddings,
+  activity entries. Use when the user asks about scale or growth, or when
+  you want to gauge whether a search is likely to find anything.
+    [[stats: now]]
+- sub(name [query]): invoke a subsystem. Available subsystems: judgment,
+  dots, teaching, timing, ctx-model, coder, search. Each is a slow LLM-
+  backed analysis (adds ~1 LLM call); use only when the question genuinely
+  warrants subsystem-style reasoning. The tool returns the subsystem's full
+  text output; you summarize it.
+    [[sub: judgment I've been productive this week]]
+    [[sub: ctx-model]]
 
 After your markers, you receive [TOOL_RESULT] messages and write the final
 reply. At most one tool round per turn (so emit all markers you need at
