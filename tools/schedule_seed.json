@@ -1,0 +1,56 @@
+{
+  "blocks": [
+    {"date": "2026-05-11", "start": "08:00", "end": "10:00", "kind": "lecture", "subject": "POO", "topic": "Object-Oriented Programming"},
+    {"date": "2026-05-11", "start": "12:00", "end": "14:00", "kind": "lecture", "subject": "SO&RC", "topic": "Operating Systems & Computer Networks (track B)"},
+    {"date": "2026-05-11", "start": "14:00", "end": "16:00", "kind": "lecture", "subject": "PS", "topic": "Probability & Statistics"},
+    {"date": "2026-05-11", "start": "20:00", "end": "22:00", "kind": "study", "subject": "PA", "topic": "catch-up"},
+
+    {"date": "2026-05-12", "start": "10:00", "end": "12:00", "kind": "lecture", "subject": "ALO", "topic": "Linear Algebra & Optimization"},
+    {"date": "2026-05-12", "start": "14:00", "end": "16:00", "kind": "lecture", "subject": "PA", "topic": "Algorithm Design"},
+    {"date": "2026-05-12", "start": "16:00", "end": "18:00", "kind": "lab", "subject": "ALO", "topic": "Lab (even week)"},
+    {"date": "2026-05-12", "start": "18:00", "end": "20:00", "kind": "lab", "subject": "PA", "topic": "Seminar"},
+    {"date": "2026-05-12", "start": "20:30", "end": "22:00", "kind": "study", "subject": "SO&RC", "topic": "catch-up"},
+
+    {"date": "2026-05-13", "start": "08:00", "end": "10:00", "kind": "lab", "subject": "SO&RC", "topic": "Lab (track B)"},
+    {"date": "2026-05-13", "start": "10:00", "end": "12:00", "kind": "lab", "subject": "PS", "topic": "Lab (even week)"},
+    {"date": "2026-05-13", "start": "14:00", "end": "17:00", "kind": "study", "subject": "PA", "topic": "catch-up"},
+    {"date": "2026-05-13", "start": "18:00", "end": "20:00", "kind": "lab", "subject": "POO", "topic": "Lab"},
+    {"date": "2026-05-13", "start": "20:30", "end": "22:00", "kind": "study", "subject": "ALO", "topic": "catch-up"},
+
+    {"date": "2026-05-14", "start": "09:00", "end": "12:00", "kind": "study", "subject": "PS", "topic": "intensive catch-up"},
+    {"date": "2026-05-14", "start": "14:00", "end": "17:00", "kind": "study", "subject": "SO&RC", "topic": "intensive catch-up"},
+    {"date": "2026-05-14", "start": "19:00", "end": "21:00", "kind": "study", "subject": "POO", "topic": "catch-up"},
+
+    {"date": "2026-05-15", "start": "09:00", "end": "12:00", "kind": "study", "subject": "PA", "topic": "intensive catch-up"},
+    {"date": "2026-05-15", "start": "14:00", "end": "17:00", "kind": "study", "subject": "ALO", "topic": "intensive catch-up"},
+    {"date": "2026-05-15", "start": "19:00", "end": "21:00", "kind": "review", "subject": "PS", "topic": "review"},
+
+    {"date": "2026-05-16", "start": "09:00", "end": "12:00", "kind": "review", "subject": "POO", "topic": "review"},
+    {"date": "2026-05-16", "start": "14:00", "end": "17:00", "kind": "review", "subject": "SO&RC", "topic": "review"},
+    {"date": "2026-05-16", "start": "19:00", "end": "21:00", "kind": "review", "subject": "PA", "topic": "review"},
+
+    {"date": "2026-05-17", "start": "09:00", "end": "12:00", "kind": "review", "subject": "ALO", "topic": "review"},
+    {"date": "2026-05-17", "start": "14:00", "end": "17:00", "kind": "review", "subject": "PS", "topic": "review"},
+    {"date": "2026-05-17", "start": "19:00", "end": "21:00", "kind": "review", "subject": "POO", "topic": "light review"},
+
+    {"date": "2026-05-18", "start": "08:00", "end": "10:00", "kind": "lecture", "subject": "POO", "topic": "Object-Oriented Programming"},
+    {"date": "2026-05-18", "start": "12:00", "end": "14:00", "kind": "lecture", "subject": "SO&RC", "topic": "Operating Systems & Computer Networks (track B)"},
+    {"date": "2026-05-18", "start": "14:00", "end": "16:00", "kind": "lecture", "subject": "PS", "topic": "Probability & Statistics"},
+    {"date": "2026-05-18", "start": "20:00", "end": "22:00", "kind": "study", "subject": "PA", "topic": "catch-up"},
+
+    {"date": "2026-05-19", "start": "10:00", "end": "12:00", "kind": "lecture", "subject": "ALO", "topic": "Linear Algebra & Optimization"},
+    {"date": "2026-05-19", "start": "14:00", "end": "16:00", "kind": "lecture", "subject": "PA", "topic": "Algorithm Design"},
+    {"date": "2026-05-19", "start": "16:00", "end": "18:00", "kind": "lab", "subject": "ALO", "topic": "Seminar (odd week)"},
+    {"date": "2026-05-19", "start": "18:00", "end": "20:00", "kind": "lab", "subject": "PA", "topic": "Seminar"},
+    {"date": "2026-05-19", "start": "20:30", "end": "22:00", "kind": "study", "subject": "SO&RC", "topic": "catch-up"},
+
+    {"date": "2026-05-20", "start": "08:00", "end": "10:00", "kind": "lab", "subject": "SO&RC", "topic": "Lab (track B)"},
+    {"date": "2026-05-20", "start": "10:00", "end": "12:00", "kind": "lab", "subject": "PS", "topic": "Seminar (odd week)"},
+    {"date": "2026-05-20", "start": "14:00", "end": "17:00", "kind": "review", "subject": "PA", "topic": "final review"},
+    {"date": "2026-05-20", "start": "18:00", "end": "20:00", "kind": "lab", "subject": "POO", "topic": "Lab"},
+    {"date": "2026-05-20", "start": "20:30", "end": "22:00", "kind": "review", "subject": "ALO", "topic": "final review"},
+
+    {"date": "2026-05-21", "start": "09:00", "end": "12:00", "kind": "review", "subject": "PS", "topic": "final review (finals start)"},
+    {"date": "2026-05-21", "start": "14:00", "end": "17:00", "kind": "review", "subject": "POO", "topic": "final review"}
+  ]
+}

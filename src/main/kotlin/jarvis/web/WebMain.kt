@@ -280,6 +280,21 @@ internal suspend fun runWeb() {
             // R3 (deep-research recommendation #3 / Mem0 feedback API parity):
             // append-only feedback ledger for ProactiveSignal user actions.
             // Whitelist enforced server-side; bad action → 400.
+            // S3 — render today's study plan directly (bypass chat tool path
+            // since the LLM sometimes hallucinates the response without
+            // actually invoking [[plan: today]]). Pure deterministic output
+            // from Schedule × KnowledgeState × ConceptCatalog.
+            get("/api/plan") {
+                val now = java.time.Instant.now()
+                val zone = java.time.ZoneId.systemDefault()
+                val schedule = jarvis.Schedule.load()
+                val stats = jarvis.KnowledgeState.stats(now)
+                val catalog = jarvis.ConceptCatalog.all()
+                val items = jarvis.StudyPlanner.today(schedule, stats, catalog, now, zone)
+                val rendered = jarvis.StudyPlanner.render(items, schedule, now, zone)
+                call.respondText(rendered, ContentType.Text.Plain)
+            }
+
             // F4 — cached user-state. /api/state returns the last cached
             // ctx-model output. Stale cache → trigger background refresh +
             // return what we have (caller doesn't block).
