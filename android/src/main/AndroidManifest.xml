@@ -35,5 +35,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- R3: signal-action receiver for Pin / Dismiss notification buttons. -->
+        <receiver
+            android:name=".SignalActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="io.victor.jarvis.action.SIGNAL_ACK" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

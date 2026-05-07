@@ -45,6 +45,9 @@ data class Signal(
 @Serializable
 data class SignalsReply(val signals: List<Signal>)
 
+@Serializable
+data class AckRequest(val signalId: String, val action: String)
+
 class JarvisAuthException(message: String) : Exception(message)
 
 class JarvisClient {
@@ -85,6 +88,28 @@ class JarvisClient {
             return SubReply("[server ${resp.status.value}] ${resp.bodyAsText().take(300)}", "n/a")
         }
         return resp.body()
+    }
+
+    /** R3 — POST a feedback action for a [signalId]. Best-effort: caller
+     *  swallows network failures silently per spec. */
+    suspend fun ackSignal(
+        baseUrl: String,
+        signalId: String,
+        action: String,
+        authToken: String,
+    ): Boolean {
+        return try {
+            val resp = client.post("$baseUrl/api/signals/ack") {
+                contentType(ContentType.Application.Json)
+                if (authToken.isNotBlank()) {
+                    header("Authorization", "Bearer $authToken")
+                }
+                setBody(AckRequest(signalId, action))
+            }
+            resp.status.isSuccess()
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /** Phase 3.1 — pull new signals server-side of [since] (ISO-8601). Empty

@@ -43,12 +43,15 @@ object Notifications {
         ensureChannel(ctx)
         val title = "jarvis: signal"
         val short = sig.snippet.take(80)
+        val notifId = sig.id.hashCode()
         val openIntent = PendingIntent.getActivity(
             ctx,
             0,
             Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val pinIntent = ackPendingIntent(ctx, sig.id, "pinned", notifId, requestCode = notifId * 2)
+        val dismissIntent = ackPendingIntent(ctx, sig.id, "dismissed", notifId, requestCode = notifId * 2 + 1)
         val notif = NotificationCompat.Builder(ctx, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
@@ -57,14 +60,38 @@ object Notifications {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .setContentIntent(openIntent)
+            // R3 — Pin / Dismiss action buttons
+            .addAction(android.R.drawable.ic_menu_save, "Pin", pinIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", dismissIntent)
             .build()
         try {
-            NotificationManagerCompat.from(ctx).notify(sig.id.hashCode(), notif)
+            NotificationManagerCompat.from(ctx).notify(notifId, notif)
         } catch (_: SecurityException) {
             // POST_NOTIFICATIONS not granted on Android 13+. Silent — UI flow
             // requests permission on first launch; further reminders not our
             // job at the worker layer.
         }
+    }
+
+    private fun ackPendingIntent(
+        ctx: Context,
+        signalId: String,
+        action: String,
+        notifId: Int,
+        requestCode: Int,
+    ): PendingIntent {
+        val intent = Intent(ctx, SignalActionReceiver::class.java).apply {
+            this.action = SignalActionReceiver.ACTION_ACK
+            putExtra(SignalActionReceiver.EXTRA_SIGNAL_ID, signalId)
+            putExtra(SignalActionReceiver.EXTRA_ACTION, action)
+            putExtra(SignalActionReceiver.EXTRA_NOTIF_ID, notifId)
+        }
+        return PendingIntent.getBroadcast(
+            ctx,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
     }
 
     fun postReauth(ctx: Context, baseUrl: String) {

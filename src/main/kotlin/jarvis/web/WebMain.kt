@@ -274,6 +274,29 @@ internal suspend fun runWeb() {
                 call.respond(ApiSignalsResponse(filtered))
             }
 
+            // R3 (deep-research recommendation #3 / Mem0 feedback API parity):
+            // append-only feedback ledger for ProactiveSignal user actions.
+            // Whitelist enforced server-side; bad action → 400.
+            post("/api/signals/ack") {
+                val req = call.receive<ApiAckRequest>()
+                if (req.signalId.isBlank() || req.action !in jarvis.Feedback.ALLOWED_ACTIONS) {
+                    call.respond(
+                        io.ktor.http.HttpStatusCode.BadRequest,
+                        "signalId required + action must be one of " +
+                            jarvis.Feedback.ALLOWED_ACTIONS.joinToString(",")
+                    )
+                    return@post
+                }
+                jarvis.Feedback.append(
+                    jarvis.FeedbackEntry(
+                        signalId = req.signalId,
+                        ts = java.time.Instant.now().toString(),
+                        action = req.action,
+                    )
+                )
+                call.respond(io.ktor.http.HttpStatusCode.NoContent)
+            }
+
             post("/api/activity") {
                 val entry = call.receive<ActivityEntry>()
                 Activity.append(entry)
@@ -407,6 +430,9 @@ private data class ApiWikiRequest(val section: String, val content: String)
 
 @Serializable
 private data class ApiSignalsResponse(val signals: List<jarvis.ProactiveSignal>)
+
+@Serializable
+private data class ApiAckRequest(val signalId: String, val action: String)
 
 private fun escape(s: String): String = s
     .replace("&", "&amp;")
