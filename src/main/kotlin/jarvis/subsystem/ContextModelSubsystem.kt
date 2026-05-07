@@ -35,6 +35,9 @@ Rules:
 # Recent activity
 ${formatActivity(input.activity)}
 
+# Recent conversation
+${formatRecentChat(input.recentChat)}
+
 # Wiki context
 ${input.wiki.ifEmpty { "(empty)" }}
 """.trimIndent()

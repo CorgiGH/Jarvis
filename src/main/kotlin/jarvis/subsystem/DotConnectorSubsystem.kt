@@ -30,10 +30,13 @@ Rules:
 
     override suspend fun run(client: Llm, input: SubsystemInput): SubsystemOutput {
         val ctx = """
-Find non-obvious patterns connecting activity and wiki entries.
+Find non-obvious patterns connecting activity, recent chat, and wiki entries.
 
 # Activity (recent window)
 ${formatActivity(input.activity)}
+
+# Recent conversation
+${formatRecentChat(input.recentChat)}
 
 # Wiki
 ${input.wiki.ifEmpty { "(empty)" }}
