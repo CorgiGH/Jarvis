@@ -1,6 +1,13 @@
 package jarvis
 
+import jarvis.embeddings.EmbeddingsClient
+import jarvis.embeddings.VectorStore
 import jarvis.subsystem.SearchSubsystem
+import kotlinx.coroutines.runBlocking
+import java.nio.file.Files
+import kotlin.io.path.exists
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.readText
 
 /**
  * ReAct-style tool-calling on top of the plain text Llm interface. Lets the
@@ -16,8 +23,10 @@ import jarvis.subsystem.SearchSubsystem
  * - The same marker contract works across every Llm provider (Anthropic,
  *   OpenRouter, Copilot, Claude Max). No provider-specific code.
  *
- * Format the LLM is taught (see CHAT_SYSTEM_PROMPT):
- *   [[search: <query>]]
+ * Tools (see CHAT_SYSTEM_PROMPT for the prompt-side contract):
+ *   [[search: <query>]]   — lexical grep over archival corpus
+ *   [[read: <path>]]      — full content of a file under the archival root
+ *   [[recall: <query>]]   — semantic search over the embedding store
  *
  * Multiple markers in one reply are each executed in order. Their results are
  * concatenated into a single follow-up [TOOL_RESULT] message and the LLM is
@@ -25,13 +34,19 @@ import jarvis.subsystem.SearchSubsystem
  */
 object ChatTools {
 
-    private val TOOL_PATTERN = Regex("""\[\[search:\s*([^\]]+?)\]\]""")
-    /** Broader strip for the final user-visible reply: catches any
-     *  `[[name: args]]` shape so unrecognized tool markers don't leak. */
+    /** Captures any `[[name: args]]` marker so the parser surfaces every tool
+     *  the LLM tries to call (including unknowns, which the executor reports
+     *  as errors back to the LLM). */
+    private val TOOL_PATTERN = Regex("""\[\[(\w+):\s*([^\]]+?)\]\]""")
+    /** Same shape, used to strip residual markers from the user-visible reply. */
     private val ANY_MARKER_PATTERN = Regex("""\[\[\w+:\s*[^\]]+?\]\]""")
     /** One follow-up LLM call after a tool execution. Total LLM calls ≤ 2.
      *  Bounds /api/chat latency on Copilot CLI (~5-15s per call). */
     private const val MAX_ITERATIONS = 1
+
+    /** Cap per-file expansion so a [[read: ...]] of a 5MB doc doesn't blow the
+     *  follow-up prompt past the model's context window. */
+    private const val READ_MAX_BYTES = 32 * 1024
 
     data class ToolCall(val name: String, val args: String)
 
@@ -65,12 +80,18 @@ object ChatTools {
 
     fun parseToolCalls(text: String): List<ToolCall> =
         TOOL_PATTERN.findAll(text)
-            .map { ToolCall("search", it.groupValues[1].trim()) }
+            .map { ToolCall(it.groupValues[1].trim(), it.groupValues[2].trim()) }
             .toList()
 
-    private fun executeTool(call: ToolCall): String {
-        if (call.name != "search") return "(unknown tool: ${call.name})"
-        val q = call.args.trim()
+    private fun executeTool(call: ToolCall): String = when (call.name) {
+        "search" -> executeSearch(call.args)
+        "read" -> executeRead(call.args)
+        "recall" -> executeRecall(call.args)
+        else -> "(unknown tool: ${call.name})"
+    }
+
+    private fun executeSearch(query: String): String {
+        val q = query.trim()
         if (q.isEmpty()) return "(empty search query)"
         val hits = SearchSubsystem.searchIn(Config.archivalDir, q, k = 5)
         if (hits.isEmpty()) return "(no matches for \"$q\")"
@@ -78,6 +99,55 @@ object ChatTools {
             val rel = runCatching { Config.archivalDir.relativize(hit.path).toString() }
                 .getOrElse { hit.path.toString() }
             "$rel (hits=${hit.hits})\n${hit.snippet}"
+        }
+    }
+
+    private fun executeRead(rawPath: String): String {
+        val arg = rawPath.trim()
+        if (arg.isEmpty()) return "(empty read path)"
+        val root = Config.archivalDir.toAbsolutePath().normalize()
+        val resolved = root.resolve(arg).normalize().toAbsolutePath()
+        // Reject path-traversal: resolved file must live under archival root.
+        if (!resolved.startsWith(root)) {
+            return "(read denied: path \"$arg\" escapes archival root)"
+        }
+        if (!resolved.exists()) return "(no such file: $arg)"
+        if (!resolved.isRegularFile()) return "(not a regular file: $arg)"
+        val bytes = try {
+            Files.readAllBytes(resolved)
+        } catch (e: Exception) {
+            return "(read failed: ${e.message?.take(160)})"
+        }
+        val truncated = bytes.size > READ_MAX_BYTES
+        val text = String(
+            if (truncated) bytes.copyOfRange(0, READ_MAX_BYTES) else bytes,
+            Charsets.UTF_8,
+        )
+        val tail = if (truncated) "\n\n[…truncated at $READ_MAX_BYTES bytes of ${bytes.size}…]" else ""
+        return text + tail
+    }
+
+    private fun executeRecall(query: String): String {
+        val q = query.trim()
+        if (q.isEmpty()) return "(empty recall query)"
+        val key = resolveOpenRouterKey()
+        if (key.isNullOrBlank()) {
+            return "(recall unavailable: OPENROUTER_API_KEY not set)"
+        }
+        val embedding = try {
+            EmbeddingsClient(key).use { c -> runBlocking { c.embed(q) } }
+        } catch (e: Exception) {
+            return "(recall embed failed: ${e.javaClass.simpleName}: ${e.message?.take(160)})"
+        }
+        val hits = VectorStore.search(embedding, k = 5, minScore = 0.2f)
+        if (hits.isEmpty()) return "(no semantic matches for \"$q\")"
+        return hits.joinToString("\n\n") { (entry, score) ->
+            val snippet = entry.text.lineSequence()
+                .filter { it.isNotBlank() }
+                .take(6)
+                .joinToString("\n")
+                .take(800)
+            "[similarity=${"%.3f".format(score)}] ${entry.id}\n$snippet"
         }
     }
 }

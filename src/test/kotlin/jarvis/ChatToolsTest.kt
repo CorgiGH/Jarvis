@@ -115,15 +115,24 @@ class ChatToolsTest {
 
     @Test
     fun stripsAnyUnrecognizedMarkerOnFinalReply() = runBlocking {
-        // Model is supposed to use [[search: ...]] but if it emits a marker
-        // shape we don't recognize (e.g., a hallucinated tool), the user
-        // shouldn't see the literal marker.
+        // Model uses search on the first round, then on the FINAL round emits
+        // an unrecognized marker shape. The user shouldn't see the literal
+        // marker even though the parser would flag it as a tool call.
         val (reply, _) = ChatTools.runTurnWith(
-            client = llm(listOf("[[browse: example.com]] no tool used here.")),
+            client = llm(
+                listOf(
+                    "[[search: foo]]",                          // round 1: real tool
+                    "all done. [[browse: example.com]] bye.",   // final pass — markers stripped
+                ),
+            ),
             messages = listOf(ChatMessage("user", "go")),
-            executor = { _ -> error("should not invoke executor") },
+            executor = { call ->
+                if (call.name == "search") "(no matches)"
+                else "(unknown tool: ${call.name})"
+            },
         )
         assertTrue("[[" !in reply, "any marker shape stripped: $reply")
-        assertTrue("no tool used here." in reply)
+        assertTrue("all done." in reply)
+        assertTrue("bye." in reply)
     }
 }
