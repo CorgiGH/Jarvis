@@ -43,6 +43,7 @@ object ConversationAccess {
             }
         }
         synchronized(LOCK) {
+            JsonlRotate.maybeRotate(file)
             file.parent?.createDirectories()
             Files.writeString(
                 file,

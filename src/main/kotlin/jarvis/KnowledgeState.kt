@@ -77,6 +77,7 @@ object KnowledgeState {
         val entry = KnowledgeEntry(concept, subject, ts.toString(), source, weight)
         val line = json.encodeToString(KnowledgeEntry.serializer(), entry) + "\n"
         synchronized(LOCK) {
+            JsonlRotate.maybeRotate(file)
             file.parent?.createDirectories()
             Files.writeString(
                 file,

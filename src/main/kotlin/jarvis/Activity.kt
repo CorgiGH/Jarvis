@@ -46,6 +46,7 @@ object Activity {
                 entry.copy(importance = ActivityScorer.score(entry, recent))
             } else entry
             val line = json.encodeToString(ActivityEntry.serializer(), scored) + "\n"
+            JsonlRotate.maybeRotate(Config.activityFile)
             Config.activityFile.parent?.createDirectories()
             Files.writeString(
                 Config.activityFile,
@@ -60,6 +61,7 @@ object Activity {
     fun appendTo(file: Path, entry: ActivityEntry) {
         val line = json.encodeToString(ActivityEntry.serializer(), entry) + "\n"
         synchronized(LOCK) {
+            JsonlRotate.maybeRotate(file)
             file.parent?.createDirectories()
             Files.writeString(
                 file,

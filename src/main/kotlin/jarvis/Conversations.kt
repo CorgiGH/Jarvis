@@ -52,6 +52,7 @@ object Conversations {
     fun appendTo(file: Path, entry: ConversationEntry) {
         val line = json.encodeToString(ConversationEntry.serializer(), entry) + "\n"
         synchronized(LOCK) {
+            JsonlRotate.maybeRotate(file)
             file.parent?.createDirectories()
             Files.writeString(
                 file,
@@ -69,6 +70,7 @@ object Conversations {
         val payload = json.encodeToString(ConversationEntry.serializer(), first) + "\n" +
             json.encodeToString(ConversationEntry.serializer(), second) + "\n"
         synchronized(LOCK) {
+            JsonlRotate.maybeRotate(file)
             file.parent?.createDirectories()
             Files.writeString(
                 file,

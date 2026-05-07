@@ -53,6 +53,7 @@ object Goals {
     fun appendTo(file: Path, entry: GoalEntry) {
         val line = json.encodeToString(GoalEntry.serializer(), entry) + "\n"
         synchronized(LOCK) {
+            JsonlRotate.maybeRotate(file)
             file.parent?.createDirectories()
             Files.writeString(
                 file,

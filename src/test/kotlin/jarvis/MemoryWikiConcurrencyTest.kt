@@ -49,10 +49,15 @@ class MemoryWikiConcurrencyTest {
         assertTrue(done.await(30, TimeUnit.SECONDS), "all $n appends finished")
         pool.shutdown()
 
-        val text = Files.readString(wiki, Charsets.UTF_8)
+        // JsonlRotate may rotate wiki.md → wiki.md.1 mid-run when size > 5MB.
+        // Concatenate both for the invariant check.
+        val primaryText = Files.readString(wiki, Charsets.UTF_8)
+        val archive = wiki.resolveSibling("${wiki.fileName}.1")
+        val archiveText = if (Files.exists(archive)) Files.readString(archive, Charsets.UTF_8) else ""
+        val text = archiveText + primaryText
         val sections = text.split(Regex("(?=^## )", RegexOption.MULTILINE))
             .filter { it.startsWith("## ") }
-        assertEquals(n, sections.size, "section count after concurrent append")
+        assertEquals(n, sections.size, "section count after concurrent append (primary+archive)")
 
         val seenIndices = mutableSetOf<Int>()
         for (sec in sections) {

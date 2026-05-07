@@ -41,6 +41,7 @@ object Feedback {
     fun appendTo(file: Path, entry: FeedbackEntry) {
         val line = json.encodeToString(FeedbackEntry.serializer(), entry) + "\n"
         synchronized(LOCK) {
+            JsonlRotate.maybeRotate(file)
             file.parent?.createDirectories()
             Files.writeString(
                 file,

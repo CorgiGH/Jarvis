@@ -30,6 +30,7 @@ object MemoryWiki {
         val ts = tsFormat.format(Instant.now())
         val block = "\n## [$ts] $section\n\n${content.trim()}\n"
         synchronized(LOCK) {
+            JsonlRotate.maybeRotate(file, maxBytes = 5L * 1024 * 1024)
             file.parent?.createDirectories()
             Files.writeString(
                 file,

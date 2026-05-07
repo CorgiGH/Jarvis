@@ -53,6 +53,7 @@ object Signals {
     fun appendTo(file: Path, entry: ProactiveSignal) {
         val line = json.encodeToString(ProactiveSignal.serializer(), entry) + "\n"
         synchronized(LOCK) {
+            JsonlRotate.maybeRotate(file)
             file.parent?.createDirectories()
             Files.writeString(
                 file,
