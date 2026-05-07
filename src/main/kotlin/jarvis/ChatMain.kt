@@ -84,23 +84,13 @@ internal suspend fun runChat() {
             println("jarvis> $reply\n")
             history += ChatMessage("assistant", reply)
 
-            // Dual-write per council 1778104395: Conversations is the new primary
-            // chat recency source; wiki.md kept for the existing embedding pipeline
-            // and /wiki page until conversations.jsonl has soaked 7 live days.
-            val nowTs = java.time.Instant.now().toString()
-            val turnId = java.util.UUID.randomUUID().toString().take(8)
-            Conversations.append(
-                ConversationEntry(role = "user", content = msg, ts = nowTs,
-                                  msgId = "$turnId-u"),
-            )
-            Conversations.append(
-                ConversationEntry(role = "assistant", content = reply, ts = nowTs,
-                                  model = model, msgId = "$turnId-a"),
-            )
-
+            // Council 1778105576 (A): single critical-section write via ChatTurnWriter
+            // so user+assistant land atomically (no orphan-user-turn under SIGTERM/OOM).
+            // Wiki write is best-effort inside the writer; failure does not corrupt
+            // the chat recency source-of-truth in conversations.jsonl.
+            ChatTurnWriter.append(msg, reply, model)
             val sectionTitle = "conversation ($model)"
             val sectionContent = "**user:** $msg\n\n**jarvis:** $reply"
-            MemoryWiki.append(sectionTitle, sectionContent)
             // Best-effort: also embed and store so this turn is searchable next time.
             if (embeddings != null) {
                 try {

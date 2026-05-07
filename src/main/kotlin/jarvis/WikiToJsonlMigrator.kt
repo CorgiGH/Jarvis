@@ -57,39 +57,49 @@ object WikiToJsonlMigrator {
             val asstText = ASSISTANT_BLOCK.find(body)?.groupValues?.get(1)?.trim() ?: continue
             val userId = stableMsgId(ts, "user", userText)
             val asstId = stableMsgId(ts, "assistant", asstText)
+            // Council 1778105576 (D): seq 0/1 so future sort-by-(ts,seq) preserves order.
             out += ConversationEntry(role = "user", content = userText, ts = ts,
-                                     model = null, msgId = userId)
+                                     model = null, msgId = userId, seq = 0)
             out += ConversationEntry(role = "assistant", content = asstText, ts = ts,
-                                     model = model, msgId = asstId)
+                                     model = model, msgId = asstId, seq = 1)
         }
         return out
     }
 
     fun runOnce(wikiFile: Path, conversationsFile: Path, dryRun: Boolean): Report {
-        val entries = parse(wikiFile)
-        val conversationsParsed = entries.size / 2
+        val parsed = parse(wikiFile)
+        val conversationsParsed = parsed.size / 2
+
+        // Council 1778105576 (2)/(F): re-runnable per Stripe backfill SOP. Read
+        // existing msg_ids and skip duplicates so re-running migrateWiki after
+        // adding a forgotten section does not double every prior row.
+        val existingIds: Set<String> = Conversations.readAllFrom(conversationsFile).map { it.msgId }.toSet()
+        val toEmit = parsed.filter { it.msgId !in existingIds }
+
         if (dryRun) {
             val preview = conversationsFile.resolveSibling(conversationsFile.fileName.toString() + ".preview")
             preview.parent?.let { Files.createDirectories(it) }
             Files.deleteIfExists(preview)
-            entries.forEach { Conversations.appendTo(preview, it) }
-            return Report(conversationsParsed, entries.size, backupPath = null, previewPath = preview)
+            toEmit.forEach { Conversations.appendTo(preview, it) }
+            return Report(conversationsParsed, toEmit.size, backupPath = null, previewPath = preview)
         }
 
         // Pre-flight backup of wiki.md (always) + existing conversations.jsonl (if any).
         val nowEpoch = System.currentTimeMillis() / 1000
         val wikiBackup = wikiFile.resolveSibling("${wikiFile.fileName}.pre-migrate-$nowEpoch.bak")
         if (wikiFile.exists()) {
-            Files.copy(wikiFile, wikiBackup, StandardCopyOption.COPY_ATTRIBUTES)
+            Files.copy(wikiFile, wikiBackup,
+                       StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
         }
         if (conversationsFile.exists()) {
             val convBackup = conversationsFile.resolveSibling(
                 "${conversationsFile.fileName}.pre-migrate-$nowEpoch.bak",
             )
-            Files.copy(conversationsFile, convBackup, StandardCopyOption.COPY_ATTRIBUTES)
+            Files.copy(conversationsFile, convBackup,
+                       StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING)
         }
-        entries.forEach { Conversations.appendTo(conversationsFile, it) }
-        return Report(conversationsParsed, entries.size, backupPath = wikiBackup, previewPath = null)
+        toEmit.forEach { Conversations.appendTo(conversationsFile, it) }
+        return Report(conversationsParsed, toEmit.size, backupPath = wikiBackup, previewPath = null)
     }
 
     private fun parseWikiTs(raw: String): String? = try {

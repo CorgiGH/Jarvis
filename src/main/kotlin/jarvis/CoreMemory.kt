@@ -18,6 +18,23 @@ import kotlin.io.path.readText
  */
 object CoreMemory {
 
+    /** Council 1778105576 (3) / (E): WARN-loud privacy scanner. Patterns target
+     *  the specific identifier shapes the user actually possesses (matricol +
+     *  email + phone). Scanner runs at preamble() time and emits stderr WARN
+     *  on hit but DOES NOT block — the design contract is "human is responsible
+     *  for what's pinned"; this is the loud-fail tripwire that catches the
+     *  accidental paste before it ships to providers for weeks. */
+    private val PII_PATTERNS = listOf(
+        // UAIC matricol shape: digits + uppercase letters + digits (e.g. 31091001031ROSL251002)
+        "matricol" to Regex("""\b\d{8,15}[A-Z]{3,5}\d{4,8}\b"""),
+        // RFC-ish email
+        "email" to Regex("""\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"""),
+        // Phone: international or local, 9+ digits with separators
+        "phone" to Regex("""\+?\d[\d\s().-]{8,}\d"""),
+    )
+
+    data class PiiFinding(val kind: String, val match: String)
+
     fun read(): String = readFrom(Config.coreMemoryFile)
 
     fun readFrom(file: Path): String {
@@ -25,11 +42,32 @@ object CoreMemory {
         return file.readText(Charsets.UTF_8)
     }
 
+    fun scanForPii(file: Path): List<PiiFinding> {
+        val raw = readFrom(file)
+        if (raw.isEmpty()) return emptyList()
+        val out = mutableListOf<PiiFinding>()
+        for ((kind, pattern) in PII_PATTERNS) {
+            for (m in pattern.findAll(raw)) {
+                out += PiiFinding(kind, m.value)
+            }
+        }
+        return out
+    }
+
     fun preamble(): String = preambleFrom(Config.coreMemoryFile)
 
     fun preambleFrom(file: Path): String {
         val raw = readFrom(file).trim()
         if (raw.isEmpty()) return ""
+        val findings = scanForPii(file)
+        if (findings.isNotEmpty()) {
+            val summary = findings.joinToString(", ") { "${it.kind}=${it.match.take(20)}" }
+            System.err.println(
+                "[CoreMemory] WARN core_memory.md contains identifier-shaped tokens " +
+                    "[$summary]. Every chat turn now ships these to your LLM provider. " +
+                    "Edit ${file} to remove them or accept the leak.",
+            )
+        }
         return "\n\n# Pinned context\n$raw\n"
     }
 }

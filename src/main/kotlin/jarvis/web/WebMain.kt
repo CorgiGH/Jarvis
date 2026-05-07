@@ -26,8 +26,7 @@ import jarvis.Activity
 import jarvis.ActivityEntry
 import jarvis.CHAT_SYSTEM_PROMPT
 import jarvis.ChatMessage
-import jarvis.ConversationEntry
-import jarvis.Conversations
+import jarvis.ChatTurnWriter
 import jarvis.CoreMemory
 import jarvis.Llm
 import jarvis.LlmFactory
@@ -316,25 +315,20 @@ internal suspend fun runWeb() {
 }
 
 /**
- * Dual-write per council 1778104395: Conversations is the new chat recency
- * source; wiki.md kept for the existing embedding pipeline + /wiki page until
- * conversations.jsonl has soaked 7 live days, then the wiki write drops.
+ * Council 1778105576 (A): atomic dual-write delegated to ChatTurnWriter so
+ * user+assistant rows land under one critical section. Avoids orphan-user-turn
+ * under SIGTERM/OOM/ENOSPC. Wiki write is best-effort and does not corrupt
+ * chat recency on failure. Replaces the previous 3-synchronized-block sequence
+ * (Conversations user, Conversations assistant, MemoryWiki) that had no
+ * rollback path between blocks 1 and 2.
+ *
+ * Dual-write to wiki.md is steady-state — NOT a 7-day kill-switch. Council
+ * 1778105576 found WebMain never feeds VectorStore today, so dropping the wiki
+ * write would not change semantic behavior on VPS. Re-evaluate when the
+ * embedding pipeline is intentionally rewired.
  */
 private fun appendChatTurn(userMsg: String, assistantReply: String, model: String) {
-    val nowTs = java.time.Instant.now().toString()
-    val turnId = java.util.UUID.randomUUID().toString().take(8)
-    Conversations.append(
-        ConversationEntry(role = "user", content = userMsg, ts = nowTs,
-                          msgId = "$turnId-u"),
-    )
-    Conversations.append(
-        ConversationEntry(role = "assistant", content = assistantReply, ts = nowTs,
-                          model = model, msgId = "$turnId-a"),
-    )
-    MemoryWiki.append(
-        "conversation ($model)",
-        "**user:** $userMsg\n\n**jarvis:** $assistantReply",
-    )
+    ChatTurnWriter.append(userMsg, assistantReply, model)
 }
 
 @Serializable
