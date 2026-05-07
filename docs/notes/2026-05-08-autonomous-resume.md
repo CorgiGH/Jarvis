@@ -103,6 +103,14 @@ curl -s -X POST https://corgflix.duckdns.org/api/chat \
 - Pre-deploy rows have no `importance` field — readers tolerate (nullable). New POSTs from PC logger get scored on server side.
 - Next: Phase 1.2 — `ConversationEntry.importance: Float?` + heuristic. Roadmap says council-trigger if lexicon >50 words; v1 lexicon will likely be small enough to ship without convening.
 
+**2026-05-08 — Phase 1.2 SHIPPED.**
+- Commit `01c4357` — `Phase 1.2: ConversationScorer + nullable importance on ConversationEntry`.
+- 11 unit tests green; full suite green.
+- Lexicon kept at 24 entries — under the council-trigger threshold of 50.
+- Deploy ok. Smoke: chat turn `"remember this: phase 1.2 importance scoring is live"` → user row `importance=0.70` (pin marker), assistant row `"Ready. What next?"` → `0.30` (short-question penalty). Verified via `ssh ... tail -2 conversations.jsonl`.
+- Curl 60s timeout fired on the response (Copilot CLI subprocess slow), but turn was already persisted before timeout. Not a real bug — chat works.
+- Next: Phase 1.3 — `Conversations.recentByImportance(n)` blending recency × importance. Roadmap explicitly says **pre-impl council on the API shape**. Convene before writing code.
+
 ## Outstanding tactical items (small, do anytime)
 
 - 2026-05-09 12:30 UTC: `ssh root@46.247.109.91 "rm -rf /opt/jarvis/jarvis-kotlin-pre-stepb /opt/jarvis/jarvis-kotlin-prev"` if no rollback issues.
