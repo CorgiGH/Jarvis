@@ -22,7 +22,10 @@ object Notifications {
 
     private const val CHANNEL_ID = "jarvis-signals"
     private const val CHANNEL_NAME = "Jarvis signals"
+    private const val FOCUS_CHANNEL_ID = "jarvis-focus"
+    private const val FOCUS_CHANNEL_NAME = "Focus session"
     const val REAUTH_NOTIFICATION_ID = 0x7AFE_AC1D.toInt()
+    const val FOCUS_NOTIFICATION_ID = 0x70CCC_5ED.toInt()
 
     fun ensureChannel(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
@@ -36,6 +39,55 @@ object Notifications {
                 setShowBadge(true)
             }
             nm.createNotificationChannel(channel)
+        }
+        // R6 — separate quiet channel for focus-session ongoing notification.
+        if (nm.getNotificationChannel(FOCUS_CHANNEL_ID) == null) {
+            val channel = NotificationChannel(
+                FOCUS_CHANNEL_ID,
+                FOCUS_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW,  // no sound, no vibrate
+            ).apply {
+                description = "Glanceable indicator while you're in a focus block."
+                setShowBadge(false)
+            }
+            nm.createNotificationChannel(channel)
+        }
+    }
+
+    /** R6 — quiet ongoing notification for the live focus session. Posted +
+     *  refreshed by SignalWorker; cleared via [clearFocus] when active=false. */
+    fun postFocus(ctx: Context, process: String, title: String?, durationMin: Long) {
+        ensureChannel(ctx)
+        val openIntent = PendingIntent.getActivity(
+            ctx,
+            2,
+            Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val contentText = buildString {
+            append("$process · ${durationMin}m")
+            title?.takeIf { it.isNotBlank() }?.let { append(" · ${it.take(40)}") }
+        }
+        val notif = NotificationCompat.Builder(ctx, FOCUS_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
+            .setContentTitle("🧠 deep work")
+            .setContentText(contentText)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(openIntent)
+            .build()
+        try {
+            NotificationManagerCompat.from(ctx).notify(FOCUS_NOTIFICATION_ID, notif)
+        } catch (_: SecurityException) {
+        }
+    }
+
+    fun clearFocus(ctx: Context) {
+        try {
+            NotificationManagerCompat.from(ctx).cancel(FOCUS_NOTIFICATION_ID)
+        } catch (_: SecurityException) {
         }
     }
 

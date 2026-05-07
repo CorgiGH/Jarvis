@@ -50,6 +50,21 @@ class SignalWorker(
             }
             // Auth was good — clear any stale re-auth banner.
             Notifications.clearReauth(ctx)
+            // R6 — refresh the focus-session ongoing notification each tick.
+            try {
+                val focus = client.fetchFocus(baseUrl, token)
+                if (focus != null) {
+                    if (focus.active && focus.process != null) {
+                        Notifications.postFocus(
+                            ctx, focus.process, focus.title, focus.durationMin,
+                        )
+                    } else {
+                        Notifications.clearFocus(ctx)
+                    }
+                }
+            } catch (_: Exception) {
+                // focus is optional surface; never block the signal path.
+            }
             if (signals.isEmpty()) return Result.success()
             signals.forEach { Notifications.postSignal(ctx, it) }
             val newest = signals.maxByOrNull { it.ts }?.ts

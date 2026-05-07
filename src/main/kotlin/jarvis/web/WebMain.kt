@@ -277,6 +277,15 @@ internal suspend fun runWeb() {
             // R3 (deep-research recommendation #3 / Mem0 feedback API parity):
             // append-only feedback ledger for ProactiveSignal user actions.
             // Whitelist enforced server-side; bad action → 400.
+            // R6 (deep-research recommendation #6): live focus-session
+            // detection. APK polls this every 15 min and surfaces a quiet
+            // ongoing notification when active=true.
+            get("/api/focus") {
+                val activity = jarvis.Activity.loadEntries(hours = 4)
+                val session = jarvis.FocusDetector.current(activity, java.time.Instant.now())
+                call.respond(session)
+            }
+
             post("/api/signals/ack") {
                 val req = call.receive<ApiAckRequest>()
                 if (req.signalId.isBlank() || req.action !in jarvis.Feedback.ALLOWED_ACTIONS) {

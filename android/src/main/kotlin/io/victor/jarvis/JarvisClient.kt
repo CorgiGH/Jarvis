@@ -48,6 +48,15 @@ data class SignalsReply(val signals: List<Signal>)
 @Serializable
 data class AckRequest(val signalId: String, val action: String)
 
+@Serializable
+data class FocusReply(
+    val active: Boolean,
+    val process: String? = null,
+    val title: String? = null,
+    val durationMin: Long = 0,
+    val startedTs: String? = null,
+)
+
 class JarvisAuthException(message: String) : Exception(message)
 
 class JarvisClient {
@@ -141,6 +150,21 @@ class JarvisClient {
             error("server ${resp.status.value}: ${resp.bodyAsText().take(200)}")
         }
         return resp.body<SignalsReply>().signals
+    }
+
+    /** R6 — fetch current focus session for ongoing-notification surface. */
+    suspend fun fetchFocus(baseUrl: String, authToken: String): FocusReply? {
+        return try {
+            val resp = client.get("$baseUrl/api/focus") {
+                if (authToken.isNotBlank()) {
+                    header("Authorization", "Bearer $authToken")
+                }
+            }
+            if (!resp.status.isSuccess()) null
+            else resp.body<FocusReply>()
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun close() = client.close()
