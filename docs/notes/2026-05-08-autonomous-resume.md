@@ -476,3 +476,67 @@ can't push without a server-side trigger.
 - POO sentinels for Lab eval 2 + final exam are NOT in the sync
   extractor — they're 30pt + 30pt opportunities the bot's importance
   signal currently ignores.
+
+---
+
+## 2026-05-09 morning — Telegram MVP forcing-function STAGED
+
+User confirmed gate-zero APK install + Playwright MCP load on session
+open. First commit per opening prompt byte-spec landed:
+
+- `tools/send-daily-push.py` (~210 LOC, stdlib-only, no external deps).
+  Mirrors `Grades.summaryBySubject` (latest-row-wins via
+  sha256(subject|component)[:16], ratio = earned/max, ascending sort)
+  and `Assignments.currentFrom` (set/done kinds, days-to-due ordering,
+  overdue-first). Picks weakest-subject + that subject's nearest-due
+  active assignment. Falls back to a `[[study_now: SUBJECT]]` prompt
+  when subject has no open work.
+- `tools/test_send_daily_push.py` — 15 stdlib-unittest cases covering
+  empty inputs, latest-wins per component, subject ordering, NaN-safe
+  zero-max ratio, weakest selection, action skip-done / overdue-first
+  / no-due-after-dated / none-when-no-match, msg formatting (with
+  action / overdue / no-action fallback / empty grades). All green.
+- `docs/notes/2026-05-09-telegram-mvp-install.md` — 6-step user
+  install guide (BotFather → chat-id → .env append → smoke → cron
+  → next-day verify). Cron line not yet installed; waits on user
+  smoke through phone.
+
+**Dry-run on real VPS data (`JARVIS_PUSH_DRY_RUN=1`):**
+```
+Weakest: POO (3.2/42 = 8%)
+Next: Lab evaluation 2 (30pt, week 14 or 15 approx)
+Due 2026-05-25 (due in 17d).
+```
+Implies seed-assignments-v2.py (or a later commit) already added the
+POO Lab eval 2 row that resume-note earlier flagged as missing — the
+17d-out due date matches end-of-semester. Does NOT yet include POO
+final exam sentinel.
+
+**Why no cron yet:** anti-feature CAN'T list forbids modifying
+`/opt/jarvis/.env` beyond appending an existing key — `TELEGRAM_BOT_TOKEN`
+and `TELEGRAM_CHAT_ID` are new keys the user must obtain. Cron stays
+local until user runs the install doc and confirms the smoke message
+hit their phone.
+
+**Smoke-step-as-feature definition of done:** message visible in
+@BotFather-created bot's chat on user's phone, fired by manual run.
+After that, cron 09:00 daily.
+
+## Next-session continuation — recommended order
+
+1. **Watch for user's Telegram smoke confirmation.** If it lands,
+   install cron line + close out task #4.
+2. **Playwright MCP scrape** of `https://edu.info.uaic.ro/sisteme-de-operare/SO/index.html`
+   with Basic auth `so2026 / i+a=IA`. Save HTML + extracted text to
+   `/opt/jarvis/data/archival/_extras/SO/restricted-content.html` via
+   scp. VPS curl gets 401 (IP allowlist); PC's IP works.
+3. **Tighten `Prompts.kt` CHAT_SYSTEM_PROMPT** — auto-emit
+   `[[plan: today]]` + `[[assignments]]` on time-bound chat queries.
+4. **POO sentinel rows** for Lab eval 2 + final exam in
+   `tools/sync-grades-from-sheets.py` (note: dry-run shows the eval-2
+   row exists in assignments.jsonl, but the grades.jsonl sentinel is
+   missing — adding it surfaces the 30pt component in `[[grades]]`
+   output even when ungraded).
+5. **ALO column-rename detection** in
+   `tools/sync-grades-from-sheets.py` — header-row hash diff →
+   write to `grades-sync-status.json`.
