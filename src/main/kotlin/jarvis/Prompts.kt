@@ -62,6 +62,13 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   items the user has never touched. Use when the user asks "what should
   I be doing right now" or for a check-in mid-study-session.
     [[plan: today]]
+- catchup(<N>?): multi-day plan for the next N days (default 7, max 30).
+  Each day: scheduled blocks + stale review queue + up to 3 new untouched
+  concepts (deduped across days, biased toward subjects with exams in
+  the window). Surfaces "review debt" when the queue exceeds the daily
+  display cap. Use when user asks "what am I behind on" or wants a
+  multi-day study horizon view.
+    [[catchup: 7]]
 - next_block(): one suggestion for the SINGLE most-leverage thing to do
   RIGHT NOW. Considers schedule, overdue assignments, exam-window
   pressure, weakest concepts, current stress level. Use when user asks

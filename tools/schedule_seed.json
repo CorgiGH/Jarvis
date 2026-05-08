@@ -61,6 +61,13 @@
     {"date": "2026-05-20", "start": "20:30", "end": "22:00", "kind": "review", "subject": "ALO", "topic": "final review"},
 
     {"date": "2026-05-21", "start": "09:00", "end": "12:00", "kind": "review", "subject": "PS", "topic": "final review (finals start)"},
-    {"date": "2026-05-21", "start": "14:00", "end": "17:00", "kind": "review", "subject": "POO", "topic": "final review"}
+    {"date": "2026-05-21", "start": "14:00", "end": "17:00", "kind": "review", "subject": "POO", "topic": "final review"},
+
+    {"date": "2026-05-21", "start": "23:59", "end": "23:59", "kind": "exam", "subject": "PS", "topic": "PS HW deadline (no restanță)"},
+    {"date": "2026-06-05", "start": "09:00", "end": "12:00", "kind": "exam", "subject": "ALO", "topic": "placeholder — UPDATE WHEN CONFIRMED"},
+    {"date": "2026-06-08", "start": "09:00", "end": "12:00", "kind": "exam", "subject": "POO", "topic": "placeholder — UPDATE WHEN CONFIRMED"},
+    {"date": "2026-06-12", "start": "09:00", "end": "12:00", "kind": "exam", "subject": "PA", "topic": "placeholder — UPDATE WHEN CONFIRMED"},
+    {"date": "2026-06-15", "start": "09:00", "end": "12:00", "kind": "exam", "subject": "PS", "topic": "placeholder — UPDATE WHEN CONFIRMED"},
+    {"date": "2026-06-19", "start": "09:00", "end": "12:00", "kind": "exam", "subject": "T.RC", "topic": "placeholder — UPDATE WHEN CONFIRMED"}
   ]
 }

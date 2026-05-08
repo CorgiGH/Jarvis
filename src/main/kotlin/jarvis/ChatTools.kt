@@ -106,6 +106,7 @@ object ChatTools {
         "goal_progress" -> executeGoalProgress(call.args)
         "goals" -> executeGoals()
         "plan" -> executePlan(call.args)
+        "catchup" -> executeCatchup(call.args)
         "next_block" -> executeNextBlock()
         "study_now" -> executeStudyNow(call.args)
         "wake" -> executeWake(call.args)
@@ -405,6 +406,24 @@ object ChatTools {
         val catalog = ConceptCatalog.all()
         val items = StudyPlanner.today(schedule, stats, catalog, now, zone)
         return StudyPlanner.render(items, schedule, now, zone)
+    }
+
+    /** Multi-day catch-up planner. `[[catchup: N]]` returns a per-day plan
+     *  for the next N days (default 7, max 30). Backed by
+     *  StudyPlanner.multiDay — schedule blocks + stale review queue
+     *  (uncapped logically, renderer caps at 8/day with reviewDebt
+     *  overflow line) + 3 new untouched concepts/day with cross-day dedup
+     *  and exam-window subject bias. */
+    private fun executeCatchup(args: String): String {
+        val days = args.trim().toIntOrNull()?.coerceIn(1, 30) ?: 7
+        val now = java.time.Instant.now()
+        val zone = java.time.ZoneId.systemDefault()
+        val schedule = Schedule.load()
+        val stats = KnowledgeState.stats(now)
+        val fsrsRows = KnowledgeFsrs.readAllFrom(Config.knowledgeFsrsFile)
+        val catalog = ConceptCatalog.all()
+        val plan = StudyPlanner.multiDay(days, schedule, stats, fsrsRows, catalog, now, zone)
+        return StudyPlanner.renderMultiDay(plan, schedule, now, zone)
     }
 
     /** F6 — declare a goal. id is sha256(text + day-bucket) so same-day

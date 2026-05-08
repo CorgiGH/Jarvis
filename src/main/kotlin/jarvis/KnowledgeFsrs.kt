@@ -59,7 +59,18 @@ object KnowledgeFsrs {
 
     /** Run a graded review. Loads prior state (or initial), calls Fsrs.update,
      *  writes new row, also calls KnowledgeState.touch with weight = grade/4
-     *  so legacy confidence stays consistent for non-FSRS-aware code paths. */
+     *  so legacy confidence stays consistent for non-FSRS-aware code paths.
+     *
+     *  Council 2026-05-08 (rounds 2 + 3, RA): the read-compute-append
+     *  sequence below MUST run under [LOCK] to close the TOCTOU window
+     *  where two concurrent /api/chat calls grading the same concept
+     *  read the same prior state and last-writer wins. Without this,
+     *  one of the two graded reviews silently disappears.
+     *
+     *  KnowledgeState.touchTo is hoisted OUT of the synchronized block
+     *  because it holds its own (independent) lock on knowledge.jsonl;
+     *  nesting is unnecessary and would extend our hot section across
+     *  two file IO operations. */
     fun recordReview(
         concept: String,
         subject: String,
@@ -68,22 +79,24 @@ object KnowledgeFsrs {
         file: Path = Config.knowledgeFsrsFile,
         knowledgeFile: Path = Config.knowledgeFile,
     ): Fsrs.State {
-        val prior = stateFor(concept, subject, file)
-        val priorTs = lastReviewTs(concept, subject, file)
-        val elapsed = priorTs?.let {
-            Duration.between(it, now).toMinutes() / (60.0 * 24.0)
-        } ?: 0.0
-        val newState = if (prior == null) {
-            Fsrs.initial(grade)
-        } else {
-            Fsrs.update(prior, grade, elapsed)
+        val newState = synchronized(LOCK) {
+            val prior = stateFor(concept, subject, file)
+            val priorTs = lastReviewTs(concept, subject, file)
+            val elapsed = priorTs?.let {
+                Duration.between(it, now).toMinutes() / (60.0 * 24.0)
+            } ?: 0.0
+            val computed = if (prior == null) {
+                Fsrs.initial(grade)
+            } else {
+                Fsrs.update(prior, grade, elapsed)
+            }
+            appendTo(file, FsrsRow(
+                concept = concept, subject = subject, ts = now.toString(),
+                difficulty = computed.difficulty, stability = computed.stability,
+                lastReviewDayOffset = computed.lastReviewDayOffset,
+            ))
+            computed
         }
-        appendTo(file, FsrsRow(
-            concept = concept, subject = subject, ts = now.toString(),
-            difficulty = newState.difficulty, stability = newState.stability,
-            lastReviewDayOffset = newState.lastReviewDayOffset,
-        ))
-        // Also bump legacy confidence so /api/plan + StudyPlanner stay aware.
         val weight = grade.coerceIn(1, 4) / 4.0f
         KnowledgeState.touchTo(knowledgeFile, concept, subject, "review", weight, now)
         return newState
