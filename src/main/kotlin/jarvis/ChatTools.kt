@@ -590,8 +590,18 @@ object ChatTools {
             .split(Regex("(?=^## )", RegexOption.MULTILINE))
             .count { it.startsWith("## ") }
         val archivalFiles = if (Config.archivalDir.exists()) {
+            // Council 2026-05-08 round-2 (DE): apply the same path filter
+            // as ConceptCatalog.scan so [[stats]] doesn't show inflated
+            // counts that include _extras/ course-info docs + tests/
+            // exam material. Single source of truth via isCatalogPath.
             Files.walk(Config.archivalDir).use { stream ->
-                stream.filter { it.isRegularFile() && it.toString().endsWith(".md") }.count()
+                stream.filter { p ->
+                    if (!p.isRegularFile() || !p.toString().endsWith(".md")) return@filter false
+                    val rel = runCatching {
+                        Config.archivalDir.relativize(p).toString().replace('\\', '/')
+                    }.getOrElse { return@filter false }
+                    ConceptCatalog.isCatalogPath(rel)
+                }.count()
             }
         } else 0
         val embeddings = VectorStore.all().size

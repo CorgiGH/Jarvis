@@ -31,6 +31,15 @@ STALE = [
     # Replaced by weighted "Seminar test (x10 weight)" 77.5/100 since the
     # ALO final-score formula multiplies the raw seminar score by 10.
     ("ALO", "Seminar test (week 7)"),
+    # Council 2026-05-08 round-2 (Risk Analyst): old extract_ps wrote
+    # 0/20 sentinel rows for empty cells, which keep biasing [[catchup]]
+    # toward PS via latest-row-wins. v3 sync no longer creates these,
+    # but the existing rows from earlier today must be cleaned. After
+    # drop, the latest legitimate value (or no value) wins on read.
+    # Re-runnable — drop is by id, idempotent.
+    ("PS", "Homework total"),
+    ("PS", "Lab activity"),
+    ("PS", "Lab final-week test"),
 ]
 
 

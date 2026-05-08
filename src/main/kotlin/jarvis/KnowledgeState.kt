@@ -173,6 +173,24 @@ object ConceptCatalog {
         val sourcePath: String,
     )
 
+    /** Single source of truth for "is this archival path part of the
+     *  concept catalog?" Used by both [all] (catalog walker) and any
+     *  external caller that needs the same filtering policy — e.g.
+     *  ChatTools.executeStats counting archival markdown files.
+     *
+     *  Filters: skip `tests/` (exam papers, not concepts) and any path
+     *  component starting with `_` (`_extras/` for course-info /
+     *  RAG-grounding chunks, `_curriculum/`, future `_drafts/` etc.).
+     *  Council 2026-05-08 round-2 fix: extract from inline filter so
+     *  the policy lives in one place — otherwise the next ingest dir
+     *  re-pollutes [[stats]] silently. */
+    fun isCatalogPath(rel: String): Boolean {
+        if (rel.contains("tests/") || rel.startsWith("tests/")) return false
+        val components = rel.split('/')
+        if (components.any { it.startsWith("_") }) return false
+        return true
+    }
+
     fun all(root: Path = Config.archivalDir): List<Concept> {
         cached?.let { return it }
         if (!root.exists()) {
@@ -187,15 +205,7 @@ object ConceptCatalog {
                     val rel = runCatching { root.relativize(path).toString() }
                         .getOrElse { path.toString() }
                         .replace('\\', '/')   // Windows path-sep normalization
-                    if (rel.contains("tests/") || rel.startsWith("tests/")) return@forEach
-                    // Council 2026-05-08: skip path components starting with `_`
-                    // so `_extras/` (course-info reference docs, RAG body chunks)
-                    // and other underscore-prefixed dirs don't pollute the
-                    // concept catalog or [[stats]] count. Must filter BOTH
-                    // top-level dir name AND any nested component, since
-                    // ingest scripts may write to nested `_*` paths.
-                    val components = rel.split('/')
-                    if (components.any { it.startsWith("_") }) return@forEach
+                    if (!ConceptCatalog.isCatalogPath(rel)) return@forEach
                     val subject = rel.substringBefore('/').takeIf { it.isNotEmpty() && it != rel }
                         ?: return@forEach
                     val lines = try {
