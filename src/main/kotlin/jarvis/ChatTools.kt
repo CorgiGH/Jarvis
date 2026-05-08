@@ -6,6 +6,11 @@ import jarvis.subsystem.SearchSubsystem
 import jarvis.subsystem.SubsystemInput
 import jarvis.subsystem.Subsystems
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.nio.file.Files
 import java.time.Instant
 import kotlin.io.path.exists
@@ -118,6 +123,7 @@ object ChatTools {
         "assignments" -> executeAssignments()
         "grade_record" -> executeGradeRecord(call.args)
         "grades" -> executeGrades()
+        "grades_sync_status" -> executeGradesSyncStatus()
         else -> "(unknown tool: ${call.name})"
     }
 
@@ -437,6 +443,51 @@ object ChatTools {
         return "(recorded ${entry.subject}/${entry.component} = " +
             "${"%.1f".format(earned)}/${"%.1f".format(max)} (${pct}%)" +
             (note?.let { " — $it" } ?: "") + ")"
+    }
+
+    /** Council 2026-05-08 round-3 (Devil's Advocate): surface the
+     *  hourly grade-sync cron's failure state to chat. Without this,
+     *  matricol-not-found / fetch-error / parse-error states only
+     *  exist in /opt/jarvis/data/grades-sync-status.json — readable
+     *  via [[read]] but not loud enough to catch a silent ledger
+     *  corruption between sessions. */
+    private fun executeGradesSyncStatus(): String {
+        val statusPath = Config.stateDir.resolve("grades-sync-status.json")
+        if (!statusPath.exists()) {
+            return "(no sync-status file yet — cron has not run, or wrote elsewhere)"
+        }
+        val text = try {
+            java.nio.file.Files.readString(statusPath, Charsets.UTF_8)
+        } catch (e: Exception) {
+            return "(failed to read $statusPath: ${e.message?.take(160)})"
+        }
+        val parsed = try {
+            kotlinx.serialization.json.Json
+                .parseToJsonElement(text)
+                .jsonObject
+        } catch (_: Exception) {
+            return "(malformed sync-status JSON; raw: ${text.take(200)})"
+        }
+        val ts = parsed["ts"]?.jsonPrimitive?.contentOrNull ?: "?"
+        val appended = parsed["appended"]?.jsonPrimitive?.intOrNull ?: 0
+        val unchanged = parsed["unchanged"]?.jsonPrimitive?.intOrNull ?: 0
+        val failures = parsed["failures"]?.jsonArray
+            ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+            .orEmpty()
+        val subjects = parsed["subjects_synced"]?.jsonArray
+            ?.mapNotNull { it.jsonPrimitive.contentOrNull }
+            .orEmpty()
+        val sb = StringBuilder()
+        sb.append("Last sync: $ts\n")
+        sb.append("  appended: $appended, unchanged: $unchanged\n")
+        sb.append("  subjects synced: ${subjects.joinToString(", ").ifEmpty { "none" }}\n")
+        if (failures.isNotEmpty()) {
+            sb.append("  ⚠ failures (").append(failures.size).append("):\n")
+            for (f in failures) sb.append("    - ").append(f).append("\n")
+        } else {
+            sb.append("  no failures.")
+        }
+        return sb.toString().trimEnd()
     }
 
     /** List current per-subject grade summary, weakest subjects first

@@ -414,22 +414,58 @@ login-walled UAIC pages (SO/RC restricted, student portal grades).
 | PA | 25.5 | 65 | 39% | Test 1 14.5/35 + attendance 11/30. Test 2 + final not yet recorded |
 | SO+RC | 35.5 | 70 | 50% | Continuous eval locked 24.5/50, Linux quiz 10/10, Lab activity 1/10. AI1202 final exam in June pending |
 
-**User actions still required to fully realize this session's work:**
+**Gate-zero — MUST happen at start of next session:**
 
-1. **Install new APK** from `https://corgflix.duckdns.org/apk` to get the
-   Foreground Service for reliable background notifications. Without
-   this install, Issue 2 from earlier user feedback (notifications only
-   when app open) remains unfixed.
-2. **Restart Claude Code** + `npx playwright install chromium` once on
-   PC, then in a new session ask to scrape SO restricted via Playwright
-   MCP. Browser automation can't run mid-session because MCP tools load
-   at session start.
+1. **Install new APK** from `https://corgflix.duckdns.org/apk`. Council
+   round-2 Risk Analyst flagged this as CRITICAL: until the APK is
+   side-loaded, the Foreground Service shipped in commit 5aad26e is
+   write-only telemetry. Notifications when phone is closed REMAIN
+   broken — every other notification-dependent fix is gated on this.
+   ANY further feature work this session is invalid if APK install
+   doesn't happen first.
+2. **Restart Claude Code session** so Playwright MCP tools load
+   (Playwright MCP added to user-scope `~/.claude.json` via `claude
+   mcp add` this session, `✓ Connected`). Run `npx playwright install
+   chromium` once on PC (~150 MB download).
+
+**Recommended FIRST commit of next session — forcing-function MVP** (per
+council round-3 First Principles):
+
+The session shipped a queryable knowledge surface (pull-mode bot). Per
+FP, what's missing is push-mode: a daily scheduled message that fires
+without the user opening the app, surfacing the worst-ranked subject's
+next concrete action. Concrete <1h MVP:
+
+- Telegram bot via `@BotFather` (5-min token grab from user's phone).
+- Single VPS cron entry running a 20-line Python script at 09:00 daily:
+  - Read `/opt/jarvis/data/grades.jsonl` → compute per-subject ratio.
+  - Read `/opt/jarvis/data/assignments.jsonl` → flag any due-in-≤7-days.
+  - POST to `https://api.telegram.org/bot<TOKEN>/sendMessage` with the
+    weakest-subject's next concrete action.
+- No per-day log, no acknowledgment loop — those come later.
+- Token + chat-id in `/opt/jarvis/.env` (`TELEGRAM_BOT_TOKEN`,
+  `TELEGRAM_CHAT_ID`). User generates the token; bot needs to be
+  added as a contact on user's phone first.
+
+Why this MVP first: every other feature in this session's queue
+(prompt-tighten, POO sentinels, ALO column-rename guard, status JSON
+dispatcher already shipped commit 6b...) is downstream of "is the user
+actually engaging with the bot daily?" — and Foreground Service alone
+can't push without a server-side trigger.
+
+**Remaining user-side scope for next session (after MVP):**
+
 3. Update placeholder finals exam dates in `/opt/jarvis/data/schedule.json`
    when UAIC officially publishes the June 1-21 slots.
-4. Consider tightening `Prompts.kt` CHAT_SYSTEM_PROMPT next session so
-   the LLM auto-emits [[plan: today]] + [[assignments]] when the user
-   asks anything time-bound — current behavior depends on LLM judgment
-   and may miss surfacing the PS HW deadline aggressively enough.
+4. Tighten `Prompts.kt` CHAT_SYSTEM_PROMPT so the LLM auto-emits
+   [[plan: today]] + [[assignments]] when the user asks anything
+   time-bound (current behavior LLM-judgment-dependent, may miss
+   surfacing the PS HW deadline aggressively enough).
+5. Add ALO column-rename detection in `tools/sync-grades-from-sheets.py`
+   — Devil's Advocate round-3 residual concern. Header-row hash
+   compared to expected; mismatch writes a failure to status JSON.
+6. Add POO sentinel rows for Lab eval 2 + final exam (60 of 100 POO max
+   points currently invisible to importance signal).
 
 **Open known limits:**
 - Server-side IP allowlist on `edu.info.uaic.ro/sisteme-de-operare/SO/`

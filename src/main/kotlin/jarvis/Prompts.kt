@@ -71,6 +71,11 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   to gauge which subject needs more attention. Pair with [[catchup]]
   to bias study time toward low-performing subjects.
     [[grades: now]]
+- grades_sync_status: report on the most recent hourly Google Sheets
+  grade-sync run. Surfaces appended/unchanged counts, failures list,
+  subjects synced. Use when user asks "are grades up to date" or
+  to diagnose why a [[grades]] result looks stale.
+    [[grades_sync_status: now]]
 - catchup(<N>?): multi-day plan for the next N days (default 7, max 30).
   Each day: scheduled blocks + stale review queue + up to 3 new untouched
   concepts (deduped across days, biased toward subjects with exams in
