@@ -44,6 +44,7 @@ GRADES_FILE = os.environ.get(
 SHEETS = [
     {
         "subject": "PA",
+        "enabled": True,
         "url": (
             "https://docs.google.com/spreadsheets/d/"
             "1LGPAZG6Vq8lF0IWJt4Hm_dY5NhiYzI2CY6s5Bue3udg/"
@@ -53,6 +54,7 @@ SHEETS = [
     },
     {
         "subject": "PS",
+        "enabled": True,
         "url": (
             "https://docs.google.com/spreadsheets/d/e/"
             "2PACX-1vRjgsXv2H3J3rpg1CsS9MI8uNPxmlkuFgd-"
@@ -63,6 +65,7 @@ SHEETS = [
     },
     {
         "subject": "ALO",
+        "enabled": True,
         "url": (
             "https://docs.google.com/spreadsheets/d/e/"
             "2PACX-1vS585pgoA7uNHsXGAyZ3v--VxfogI0oLQzJ5QeUe0bKhjHq8"
@@ -72,7 +75,11 @@ SHEETS = [
         "matricol_col": 2,
     },
     {
+        # SO+RC SO half is locked — week 8 T.SO test passed, no further
+        # changes possible. Disabled per user 2026-05-08 to skip useless
+        # hourly fetches; flip enabled=True if the prof reopens grading.
         "subject": "SO&RC",
+        "enabled": False,
         "url": (
             "https://docs.google.com/spreadsheets/d/e/"
             "2PACX-1vRxww4HaR8XKngBI-pxtnySdeNu_7t-r5Iy_rQWqkU1XKMAjIYlL"
@@ -82,7 +89,10 @@ SHEETS = [
         "matricol_col": 0,
     },
     {
+        # POO disabled per user — sheet rarely changes; manual
+        # [[grade_record]] for new lab evals is enough.
         "subject": "POO",
+        "enabled": False,
         "url": (
             "https://docs.google.com/spreadsheets/d/e/"
             "2PACX-1vRnSso9BVQiN1cNugEdyruQ8p1PqqHoVPkpzwKibq7rIJe3BQ"
@@ -414,6 +424,9 @@ def main():
     with open(GRADES_FILE, "a", encoding="utf-8") as out:
         for sheet in SHEETS:
             subject = sheet["subject"]
+            if not sheet.get("enabled", True):
+                # Skip disabled sheets entirely — no fetch, no failure log.
+                continue
             try:
                 rows = fetch_csv(sheet["url"])
             except Exception as e:
@@ -469,7 +482,10 @@ def main():
                 "unchanged": skipped_unchanged,
                 "failures": failed,
                 "subjects_synced": [s["subject"] for s in SHEETS
-                                     if not any(f.startswith(s["subject"] + ":") for f in failed)],
+                                     if s.get("enabled", True) and
+                                        not any(f.startswith(s["subject"] + ":") for f in failed)],
+                "subjects_disabled": [s["subject"] for s in SHEETS
+                                     if not s.get("enabled", True)],
             }, sf, ensure_ascii=False, indent=2)
     except Exception:
         pass
