@@ -64,7 +64,12 @@ $history.Dock = [System.Windows.Forms.DockStyle]::Fill
 $history.ReadOnly = $true
 $history.BackColor = [System.Drawing.Color]::FromArgb(20, 20, 24)
 $history.ForeColor = [System.Drawing.Color]::WhiteSmoke
-$history.Font = New-Object System.Drawing.Font("Consolas", 11)
+$history.Font = try {
+    New-Object System.Drawing.Font("Cascadia Mono", 11)
+} catch {
+    try { New-Object System.Drawing.Font("Cascadia Code", 11) }
+    catch { New-Object System.Drawing.Font("Consolas", 11) }
+}
 $history.WordWrap = $true
 $history.DetectUrls = $true
 $history.BorderStyle = [System.Windows.Forms.BorderStyle]::None
@@ -85,7 +90,7 @@ $txtInput.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
 $txtInput.AcceptsReturn = $false
 $txtInput.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 48)
 $txtInput.ForeColor = [System.Drawing.Color]::WhiteSmoke
-$txtInput.Font = New-Object System.Drawing.Font("Consolas", 11)
+$txtInput.Font = New-Object System.Drawing.Font("Cascadia Mono", 11)
 $txtInput.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 
 $sendBtn = New-Object System.Windows.Forms.Button
@@ -124,7 +129,7 @@ function script:Append-Turn($who, $text) {
     $history.SelectionFont = New-Object System.Drawing.Font("Consolas", 11, [System.Drawing.FontStyle]::Bold)
     $history.SelectionColor = $color
     $history.AppendText("[$who]`n")
-    $history.SelectionFont = New-Object System.Drawing.Font("Consolas", 11)
+    $history.SelectionFont = New-Object System.Drawing.Font("Cascadia Mono", 11)
     $history.SelectionColor = [System.Drawing.Color]::WhiteSmoke
     $history.AppendText("$text`n`n")
     $history.SelectionStart = $history.TextLength
