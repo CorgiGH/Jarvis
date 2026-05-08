@@ -49,6 +49,14 @@ data class SignalsReply(val signals: List<Signal>)
 data class AckRequest(val signalId: String, val action: String)
 
 @Serializable
+data class PhoneActivity(
+    val ts: String,
+    val title: String? = null,
+    val process: String? = null,
+    val pid: Long? = null,
+)
+
+@Serializable
 data class FocusReply(
     val active: Boolean,
     val process: String? = null,
@@ -150,6 +158,27 @@ class JarvisClient {
             error("server ${resp.status.value}: ${resp.bodyAsText().take(200)}")
         }
         return resp.body<SignalsReply>().signals
+    }
+
+    /** Phone activity logger — POST a foreground-app sample to /api/activity.
+     *  Mirrors PC ActivityCapture shape so server treats both streams the same. */
+    suspend fun postActivity(
+        baseUrl: String,
+        sample: PhoneActivity,
+        authToken: String,
+    ): Boolean {
+        return try {
+            val resp = client.post("$baseUrl/api/activity") {
+                contentType(ContentType.Application.Json)
+                if (authToken.isNotBlank()) {
+                    header("Authorization", "Bearer $authToken")
+                }
+                setBody(sample)
+            }
+            resp.status.isSuccess()
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /** R6 — fetch current focus session for ongoing-notification surface. */

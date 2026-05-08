@@ -54,14 +54,58 @@ object ActivityScorer {
         "steam.exe", "epicgameslauncher.exe",
     )
 
+    /** Android package mappings — phone activity logger reports
+     *  package name as `process` field. Same scoring contract as PC. */
+    private val ANDROID_SCROLLING_PKGS = setOf(
+        "com.instagram.android",
+        "com.zhiliaoapp.musically",       // TikTok
+        "com.ss.android.ugc.trill",       // TikTok intl
+        "com.twitter.android",
+        "com.x.android",
+        "com.reddit.frontpage",
+        "com.facebook.katana",
+        "com.snapchat.android",
+        "com.google.android.youtube",
+    )
+    private val ANDROID_COMMS_PKGS = setOf(
+        "com.whatsapp",
+        "org.telegram.messenger",
+        "com.discord",
+        "com.slack",
+        "com.microsoft.teams",
+        "com.google.android.gm",          // Gmail
+    )
+    private val ANDROID_ENTERTAINMENT_PKGS = setOf(
+        "com.spotify.music",
+        "com.netflix.mediaclient",
+        "tv.twitch.android.app",
+    )
+    private val ANDROID_PRODUCTIVITY_PKGS = setOf(
+        "com.google.android.apps.docs.editors.docs",
+        "com.google.android.apps.docs",
+        "com.google.android.calendar",
+        "com.google.android.keep",
+        "io.victor.jarvis",                // user looking at jarvis itself
+        "com.google.android.googlequicksearchbox",
+        "org.mozilla.firefox",
+    )
+
     private fun baseScore(process: String?, title: String?): Float {
         val p = process?.lowercase().orEmpty()
         val t = title?.lowercase().orEmpty()
+        // Android packages first — disjoint namespace from PC procs.
+        if (p in ANDROID_SCROLLING_PKGS) return 0.05f
+        if (p in ANDROID_ENTERTAINMENT_PKGS) return 0.1f
+        if (p in ANDROID_COMMS_PKGS) return 0.4f
+        if (p in ANDROID_PRODUCTIVITY_PKGS) return 0.6f
+        // PC processes
         if (p in IDE_PROCS) return 0.7f
         if (p in TERMINAL_PROCS) return 0.7f
         if (p in BROWSER_PROCS) return browserBase(t)
         if (p in COMMS_PROCS) return 0.4f
         if (p in ENTERTAINMENT_PROCS) return 0.1f
+        // Unknown Android packages (no .exe + has dots) — neutral 0.3.
+        // PC unknown procs land here too.
         return 0.3f
     }
 

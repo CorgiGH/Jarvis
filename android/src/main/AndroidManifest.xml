@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -7,6 +8,11 @@
     <!-- Phase 3.1 (council 1778184643): WorkManager polls /api/signals
          and posts a system Notification per new ProactiveSignal. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Phone activity logger — reads which app is foregrounded so server-
+         side drift detection sees phone usage same as PC. Special permission
+         user grants via Settings > Apps > Special access > Usage access. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+                     tools:ignore="ProtectedPermissions" />
 
     <!-- Required so the system speech recognizer picker dialog can find a STT
          service on Android 11+ scoped package visibility. -->

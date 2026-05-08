@@ -126,8 +126,12 @@ fun JarvisApp() {
             // we don't churn the schedule on recompose.
             if (authToken.isNotBlank()) {
                 SignalWorker.enqueue(context)
+                // Enqueue phone activity logger; it self-no-ops if usage
+                // permission is not yet granted, so safe to enqueue early.
+                PhoneActivityWorker.enqueue(context)
             } else {
                 SignalWorker.cancel(context)
+                PhoneActivityWorker.cancel(context)
             }
         }
     }
@@ -228,6 +232,32 @@ fun JarvisApp() {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // Phone activity permission banner — appears only when missing.
+            var hasUsage by remember { mutableStateOf(PhoneActivityWorker.hasUsageAccess(context)) }
+            LaunchedEffect(Unit) {
+                hasUsage = PhoneActivityWorker.hasUsageAccess(context)
+            }
+            if (!hasUsage) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(Color(0xFF3B2222)).padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Phone activity tracking off (drift won't fire on phone)",
+                        color = FgMain,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(onClick = {
+                        val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        try {
+                            context.startActivity(intent)
+                        } catch (_: Exception) { /* device may not have screen */ }
+                    }) { Text("grant") }
+                }
+            }
 
             LazyColumn(
                 state = listState,

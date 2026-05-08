@@ -75,10 +75,19 @@ object ActiveDoc {
         //   - actual concept's subject differs from block.subject, OR
         //   - no concept matched AND title looks like social/scrolling.
         val title = entry.title?.lowercase().orEmpty()
+        val process = entry.process?.lowercase().orEmpty()
         val scrollingHint = listOf(
             "twitter", "x.com", " / x", "reddit", "instagram", "tiktok",
             "youtube", "facebook", "(@",
-        ).any { title.contains(it) }
+        ).any { title.contains(it) } ||
+            // Android packages — phone activity logger reports package name.
+            process in setOf(
+                "com.instagram.android", "com.zhiliaoapp.musically",
+                "com.ss.android.ugc.trill", "com.twitter.android",
+                "com.x.android", "com.reddit.frontpage",
+                "com.facebook.katana", "com.snapchat.android",
+                "com.google.android.youtube",
+            )
         if (concept != null && concept.subject != block.subject) {
             return Drift(
                 expectedSubject = block.subject,
