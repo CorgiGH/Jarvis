@@ -301,28 +301,19 @@ def extract_poo(row: list[str]) -> list[tuple[str, float, float]]:
         return row[i] if i < len(row) else ""
 
     out: list[tuple[str, float, float]] = []
+    # Only the "Lab activity total" rollup (max 10) is recorded.
+    # Per-lab individual scores (Lab 01..07 activity, each max 1) were
+    # double-counted into the subject summary because Lab activity
+    # total IS the sum of those — emitting both made POO max = 10 + 7
+    # instead of 10. User caught the resulting 3.2/102 instead of
+    # 3.2/100 in the first daily push (2026-05-09). Per-lab granularity
+    # is still visible in the source spreadsheet; the bot's grades
+    # roll-up only needs the rollup itself. v3 (2026-05-09): drop
+    # per-lab loop; tools/cleanup-poo-double-counts.py masks the
+    # historical Lab 01/02 rows that already landed in grades.jsonl.
     total = parse_num(g(3))
     if total is not None:
         out.append(("Lab activity total (this gid)", total, 10.0))
-    # Per-lab activity scores. Lab 03 is column 9 (header says "lab3"
-    # not "lab03"). Otherwise lab01 col 5, lab02 col 7, lab03 col 9,
-    # lab04 col 11, lab05 col 12 (no _extra between lab04/05? — verified
-    # by header: lab05 right after lab04 with NO lab04_extra in between).
-    # Actually re-reading header: lab04 | lab05 | lab05_extra | lab06.
-    # So lab04 has no _extra column.
-    lab_cols = {
-        "Lab 01 activity": 5,
-        "Lab 02 activity": 7,
-        "Lab 03 activity": 9,
-        "Lab 04 activity": 11,
-        "Lab 05 activity": 12,
-        "Lab 06 activity": 14,
-        "Lab 07 activity": 16,
-    }
-    for label, col in lab_cols.items():
-        v = parse_num(g(col))
-        if v is not None:
-            out.append((label, v, 1.0))
     return out
 
 
