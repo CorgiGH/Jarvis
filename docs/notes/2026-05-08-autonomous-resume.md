@@ -201,7 +201,7 @@ Single kill switch: `JARVIS_LOOPS_DISABLE=true`
 - 18:00-19:30 POO (wake-fill)
 - 20:00-22:00 PA (weekend kickoff)
 
-### Plus 14 days of pre-filled blocks (5/09 → 5/21) — user can edit
+### Plus 13 days of pre-filled blocks (5/09 → 5/21 inclusive) — user can edit
 
 ### Critical open work (verbatim from honest list)
 1. Phone activity logger: compiled, never device-tested. User must install fresh APK + grant Usage access.

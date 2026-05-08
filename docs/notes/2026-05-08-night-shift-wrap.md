@@ -88,6 +88,6 @@ Integration test harness covering 4 coroutines + rotation + FSRS write path unde
 
 ## Total this session (full day + night)
 
-~55 commits, ~4500 LOC, ~150 tests, deploy.sh runs successful end-to-end.
+47 commits as of session wrap (`git log --oneline 1649864..HEAD | wc -l`), ~150 tests, deploy.sh runs successful end-to-end.
 
 Sleep well.
