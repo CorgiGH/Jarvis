@@ -61,12 +61,43 @@ function Set-LastSeen($ts) {
     Set-Content -Path $LastSeenPath -Value $ts -Encoding utf8
 }
 
+function Get-OpenPathFromSnippet($snippet) {
+    # DriftDirective format: "... OPEN: <path>. Chat: ..."
+    # Parse the path between "OPEN: " and the next ". " or end-of-string.
+    if ($snippet -match 'OPEN:\s*([^\.\n]+(?:\.[a-zA-Z0-9]+)?)') {
+        $rel = $matches[1].Trim().TrimEnd('.')
+        # Resolve to a real file: try archival (where Kotlin emits paths
+        # relative to /opt/jarvis/data/archival), then absolute Desktop
+        # mirror, then the relative path itself.
+        $candidates = @(
+            "C:\Users\User\Desktop\Second brain\$rel",
+            "C:\Users\User\Desktop\SO\$rel",
+            $rel
+        )
+        foreach ($c in $candidates) {
+            if (Test-Path $c) { return (Resolve-Path $c).Path }
+        }
+        return $rel  # return raw — let Process.Start try
+    }
+    return $null
+}
+
+function Get-LessonHintFromSnippet($snippet) {
+    if ($snippet -match '\[\[lesson:\s*([^\]]+)\]\]') {
+        return "[[lesson: $($matches[1].Trim())]]"
+    }
+    return $null
+}
+
 function Show-DriftModal($snippet, $rationale) {
     # Three rapid beeps to wake the user from whatever flow they're in.
     for ($i = 0; $i -lt 3; $i++) {
         [System.Console]::Beep(1500, 250)
         Start-Sleep -Milliseconds 100
     }
+    $openPath = Get-OpenPathFromSnippet $snippet
+    $lessonHint = Get-LessonHintFromSnippet $snippet
+
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "JARVIS DRIFT ALERT"
     $form.BackColor = [System.Drawing.Color]::FromArgb(192, 0, 0)
@@ -74,7 +105,7 @@ function Show-DriftModal($snippet, $rationale) {
     $form.TopMost = $true
     $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
     $form.Width = 900
-    $form.Height = 500
+    $form.Height = 540
     $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
     $form.MinimizeBox = $false
     $form.MaximizeBox = $false
@@ -85,27 +116,69 @@ function Show-DriftModal($snippet, $rationale) {
     $title.Font = New-Object System.Drawing.Font("Segoe UI", 36, [System.Drawing.FontStyle]::Bold)
     $title.Dock = [System.Windows.Forms.DockStyle]::Top
     $title.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-    $title.Height = 90
+    $title.Height = 80
     $form.Controls.Add($title)
 
     $body = New-Object System.Windows.Forms.Label
-    $body.Text = ("$snippet`n`nRATIONALE: $rationale`n`n" +
-                  "(close this window to acknowledge, or hit Alt+Tab back to study)")
+    $body.Text = "$snippet`n`nRATIONALE: $rationale"
     $body.Font = New-Object System.Drawing.Font("Segoe UI", 14)
     $body.Dock = [System.Windows.Forms.DockStyle]::Fill
     $body.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
     $body.Padding = New-Object System.Windows.Forms.Padding(20)
     $form.Controls.Add($body)
 
-    $button = New-Object System.Windows.Forms.Button
-    $button.Text = "I'm getting back to it"
-    $button.Dock = [System.Windows.Forms.DockStyle]::Bottom
-    $button.Height = 60
-    $button.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
-    $button.BackColor = [System.Drawing.Color]::White
-    $button.ForeColor = [System.Drawing.Color]::Black
-    $button.Add_Click({ $form.Close() })
-    $form.Controls.Add($button)
+    # Bottom button row — actionable surfaces. Layout panel for 3 buttons.
+    $buttonPanel = New-Object System.Windows.Forms.TableLayoutPanel
+    $buttonPanel.Dock = [System.Windows.Forms.DockStyle]::Bottom
+    $buttonPanel.Height = 70
+    $buttonPanel.ColumnCount = 3
+    $buttonPanel.RowCount = 1
+    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 33.34)))
+    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 33.33)))
+    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 33.33)))
+
+    $openBtn = New-Object System.Windows.Forms.Button
+    $openBtn.Text = if ($openPath) { "Open: $(Split-Path -Leaf $openPath)" } else { "(no file ref)" }
+    $openBtn.Enabled = ($openPath -ne $null)
+    $openBtn.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $openBtn.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
+    $openBtn.BackColor = [System.Drawing.Color]::White
+    $openBtn.ForeColor = [System.Drawing.Color]::Black
+    $openBtn.Add_Click({
+        if ($openPath) {
+            try { Start-Process -FilePath $openPath -ErrorAction Stop }
+            catch { Write-Log "open failed for $openPath : $_" }
+            $form.Close()
+        }
+    })
+
+    $copyBtn = New-Object System.Windows.Forms.Button
+    $copyBtn.Text = if ($lessonHint) { "Copy: $lessonHint" } else { "(no chat hint)" }
+    $copyBtn.Enabled = ($lessonHint -ne $null)
+    $copyBtn.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $copyBtn.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
+    $copyBtn.BackColor = [System.Drawing.Color]::White
+    $copyBtn.ForeColor = [System.Drawing.Color]::Black
+    $copyBtn.Add_Click({
+        if ($lessonHint) {
+            Set-Clipboard -Value $lessonHint
+            Write-Log "copied lesson hint: $lessonHint"
+            $form.Close()
+        }
+    })
+
+    $closeBtn = New-Object System.Windows.Forms.Button
+    $closeBtn.Text = "I'm getting back"
+    $closeBtn.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $closeBtn.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
+    $closeBtn.BackColor = [System.Drawing.Color]::White
+    $closeBtn.ForeColor = [System.Drawing.Color]::Black
+    $closeBtn.Add_Click({ $form.Close() })
+
+    $buttonPanel.Controls.Add($openBtn, 0, 0)
+    $buttonPanel.Controls.Add($copyBtn, 1, 0)
+    $buttonPanel.Controls.Add($closeBtn, 2, 0)
+    $form.Controls.Add($buttonPanel)
 
     $form.Add_Shown({ $form.Activate() })
     [void]$form.ShowDialog()
@@ -147,9 +220,11 @@ function Poll-And-Fire {
 
 if ($Test) {
     Write-Log "TEST mode: forcing drift modal"
+    # Realistic snippet — same shape DriftDirective.build emits.
     Show-DriftModal `
-        "Off-track example: scheduled PA but you're in Magic Garden / Discord." `
-        "drift: scheduled=PA, actual=browser-game, cooldown=elapsed"
+        ("GET BACK TO PA. NEXT: Tema 5 dynamic programming (2026-05-15 6d). " +
+         "OPEN: Courses/PA/lecture11_ro.pdf. Chat: [[lesson: PA]]") `
+        "drift: scheduled=PA, actual=non-study app (chrome.exe), cooldown=elapsed"
     exit 0
 }
 
