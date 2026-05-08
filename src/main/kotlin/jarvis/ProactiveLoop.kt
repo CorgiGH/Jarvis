@@ -133,8 +133,14 @@ object ProactiveLoop {
         val seenIds = Signals.readAllFrom(signalsFile).map { it.id }.toSet()
         if (signalId in seenIds) return null
 
-        // 5. Spend the LLM. Wrapped in withTimeout so a hung subprocess
-        //    eventually unblocks the loop dispatcher.
+        // 5. Build the signal payload.
+        // 5a. DRIFT path — bypass ctx-model entirely. User feedback
+        //     2026-05-09: vague "off-track" snippet doesn't help; user
+        //     needs a directive ("GET BACK TO PA / NEXT: Tema 5 / OPEN:
+        //     <file>"). Drift detection is deterministic, so an LLM call
+        //     just adds latency + non-determinism. DriftDirective.build
+        //     pulls schedule + assignments + concept catalog directly.
+        // 5b. NORMAL path — spend the LLM via ctx-model with timeout.
         val rationale = if (drift != null) {
             "drift: scheduled=${drift.expectedSubject}" +
                 (drift.expectedTopic?.let { "/$it" } ?: "") +
@@ -142,28 +148,39 @@ object ProactiveLoop {
         } else {
             "imp=${"%.2f".format(imp)}, cooldown=elapsed, quiet=no"
         }
-        val ctxModel = ContextModelSubsystem()
-        val (snippet, kind, status) = try {
-            val out = withTimeout(SUBSYSTEM_TIMEOUT.toMillis()) {
-                ctxModel.run(
-                    client,
-                    SubsystemInput(
-                        activity = Activity.loadEntries(),
-                        wiki = MemoryWiki.recent(),
-                        recentChat = Conversations.recentAsChatMessages(),
-                        userQuery = null,
-                    ),
+        val (snippet, kind, status) = if (drift != null) {
+            try {
+                Triple(DriftDirective.build(drift, now), "drift_alert", "emitted")
+            } catch (e: Exception) {
+                Triple(
+                    "drift detected; directive build failed: ${e.message?.take(120)}",
+                    "drift_alert", "emitted",
                 )
             }
-            Triple(out.text.take(200), "ctx_model_summary", "emitted")
-        } catch (e: TimeoutCancellationException) {
-            Triple("ctx-model timed out after ${SUBSYSTEM_TIMEOUT.seconds}s", "error", "error")
-        } catch (e: Exception) {
-            Triple(
-                "${e.javaClass.simpleName}: ${e.message?.take(160).orEmpty()}",
-                "error",
-                "error",
-            )
+        } else {
+            val ctxModel = ContextModelSubsystem()
+            try {
+                val out = withTimeout(SUBSYSTEM_TIMEOUT.toMillis()) {
+                    ctxModel.run(
+                        client,
+                        SubsystemInput(
+                            activity = Activity.loadEntries(),
+                            wiki = MemoryWiki.recent(),
+                            recentChat = Conversations.recentAsChatMessages(),
+                            userQuery = null,
+                        ),
+                    )
+                }
+                Triple(out.text.take(200), "ctx_model_summary", "emitted")
+            } catch (e: TimeoutCancellationException) {
+                Triple("ctx-model timed out after ${SUBSYSTEM_TIMEOUT.seconds}s", "error", "error")
+            } catch (e: Exception) {
+                Triple(
+                    "${e.javaClass.simpleName}: ${e.message?.take(160).orEmpty()}",
+                    "error",
+                    "error",
+                )
+            }
         }
 
         val signal = ProactiveSignal(
