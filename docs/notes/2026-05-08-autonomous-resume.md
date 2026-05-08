@@ -337,3 +337,105 @@ After deep-research report (`docs/superpowers/research/2026-05-08-personal-ai-li
 - VPS: `JARVIS_LLM=fallback`, .env token aligned with PC, `systemctl is-active jarvis` = `active`.
 - Phone APK: chat round-trip → `tail -1 conversations.jsonl | jq -r .model` returned `claude-max-relay`. Bot live end-to-end.
 - Hourly cron: first run logged `/healthz=200` to `/opt/jarvis/data/relay-health.log`.
+
+## 2026-05-08 night — study-companion buildout (session continuation)
+
+User shifted scope from AGI-harness vision to "make jarvis usable as study
+companion before finals". 5 additional commits landed:
+
+- `c1166c5` Study companion v1: [[catchup: N]] multi-day planner + FSRS
+  TOCTOU race fix + finals schedule placeholders. Council 1778241788 →
+  1778242458 → 1778242916 ruled WRONG APPROACH on initial spec when
+  agents found tools/concepts_real/ already deployed (commit 4091c15)
+  with 276 hand-curated bilingual concepts. Path W' (cleaner subset)
+  shipped instead.
+- `4edacf3` tools/append-exams.py — idempotent finals-row appender for
+  schedule.json, runs via `ssh ... python3 -` pipe.
+- `5aad26e` HW seed + Android Foreground Service. tools/seed-assignments
+  .py registers PS Tema A/B/C/D + ALO Tema 1-5 + POO Lab eval 2 (15
+  rows in /opt/jarvis/data/assignments.jsonl). Android side adds
+  BackgroundPollService.kt (data-sync foreground service) so /api/
+  signals polling fires when phone backgrounded — the existing
+  WorkManager-only path was getting throttled to invisibility on
+  Android 12+. SignalWorker.doWork extracted to top-level
+  signalPollOnce() so service + worker share the same logic.
+- `086ea4f` Course-info + curriculum + schedule reconciliation.
+  Scraped edu.info.uaic.ro pages for ALO/PS/POO/SO/RC/PA + read the
+  BScIA-2025-2028.pdf curriculum. Wrote 7 markdown files to
+  /opt/jarvis/data/archival/_extras/{ALO,PS,POO,SO,PA,_curriculum,
+  _RC_FOLDED}/course-info.md with grading formulas, lab/Tema
+  deadlines, course codes (AI1201-AI1205), ECTS, hours/week split,
+  and form-of-verification (E vs V). Also fixed schedule.json: PS
+  June 15 placeholder REMOVED (PS is V — Verificare, no June exam),
+  T.RC June 19 RENAMED to SO&RC (AI1202 is the combined course).
+- `1a3ec64` Grades ledger + [[grade_record]] / [[grades]] tools.
+  New Grades.kt with append-only /opt/jarvis/data/grades.jsonl
+  schema (id = sha256(subject|component)[:16] for latest-row-wins
+  per component). summaryBySubject() rolls up earned/max sorted by
+  ratio ascending = importance signal for catch-up. ChatTools
+  dispatcher: [[grade_record: SUBJECT/COMPONENT/EARNED/MAX [/NOTE]]]
+  + [[grades]]. tools/seed-grades.py seeds 8 baseline rows from
+  Second brain/.claude/council-cache/council-1777881900.md.
+- `84ccd23` Hourly Google Sheets grade sync + ALO formula-weighted
+  scoring. tools/sync-grades-from-sheets.py pulls 4 published
+  Google Sheets (PA/PS/ALO/POO gradebooks user shared), locates
+  user's row by matricol 31091001031ROSL251002, runs per-subject
+  extractors with verified column layouts, appends to grades.jsonl
+  only when (earned, max) changed. Hourly cron `0 * * * *` on VPS.
+  ALO records seminar test as raw*10 / 100 and written exam as
+  raw*40 / 400 to match the actual `pf = lab + 10*sem + 40*exam`
+  formula — earlier "98%" reading was misleading (only counted
+  graded components); corrected to 24% (197.5/825 vs pass
+  threshold 360/825). Sentinel zero-rows for unrecorded Temas.
+  tools/cleanup-stale-grades.py drops 3 stale rows the initial
+  council-cache seed introduced before sheets took over.
+  tools/dump-grades.py is the human-readable per-subject roll-up.
+
+**Identity persisted:**
+- `~/.claude/projects/C--Users-User/memory/user_uaic_identity.md`
+  records matricol 31091001031ROSL251002 + group IA2/IA12 + AI program.
+- `/opt/jarvis/data/core_memory.md` (always-loaded into chat context)
+  has the same identity + 5 active subjects + PS HW deadline.
+
+**Playwright MCP added (user scope):** `~/.claude.json` mcpServers entry
+`playwright -> npx -y @playwright/mcp@latest`. `claude mcp list` confirms
+`✓ Connected`. Loads next session for browser automation against
+login-walled UAIC pages (SO/RC restricted, student portal grades).
+
+## End-of-session state 2026-05-08
+
+**Per-subject standing (latest grades.jsonl roll-up):**
+
+| Subject | Earned | Max | % | Notes |
+|---------|--------|-----|---|-------|
+| POO | 3.20 | 42 | 7% | Lab eval 1 = 0/30 (week 8 past); Lab eval 2 + final not yet recorded |
+| ALO | 197.5 | 825 | 24% | vs pass 360. Tema 3/4/5 + written exam (400 max) still up |
+| PS | 42.67 | 120 | 35% | HW 0/20, Lab activity 12.67/20, Lab test 0/20, Seminar 30/60. Deadline 2026-05-21 NO restanță |
+| PA | 25.5 | 65 | 39% | Test 1 14.5/35 + attendance 11/30. Test 2 + final not yet recorded |
+| SO+RC | 35.5 | 70 | 50% | Continuous eval locked 24.5/50, Linux quiz 10/10, Lab activity 1/10. AI1202 final exam in June pending |
+
+**User actions still required to fully realize this session's work:**
+
+1. **Install new APK** from `https://corgflix.duckdns.org/apk` to get the
+   Foreground Service for reliable background notifications. Without
+   this install, Issue 2 from earlier user feedback (notifications only
+   when app open) remains unfixed.
+2. **Restart Claude Code** + `npx playwright install chromium` once on
+   PC, then in a new session ask to scrape SO restricted via Playwright
+   MCP. Browser automation can't run mid-session because MCP tools load
+   at session start.
+3. Update placeholder finals exam dates in `/opt/jarvis/data/schedule.json`
+   when UAIC officially publishes the June 1-21 slots.
+4. Consider tightening `Prompts.kt` CHAT_SYSTEM_PROMPT next session so
+   the LLM auto-emits [[plan: today]] + [[assignments]] when the user
+   asks anything time-bound — current behavior depends on LLM judgment
+   and may miss surfacing the PS HW deadline aggressively enough.
+
+**Open known limits:**
+- Server-side IP allowlist on `edu.info.uaic.ro/sisteme-de-operare/SO/`
+  rejected the VPS curl creds (auth header is correct base64 — verified
+  against browser's actual Authorization value). Playwright MCP from
+  PC is the workaround.
+- POO sentinels for Lab eval 2 + final exam are NOT in the sync
+  extractor — they're 30pt + 30pt opportunities the bot's importance
+  signal currently ignores.
