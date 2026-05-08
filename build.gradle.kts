@@ -40,7 +40,16 @@ dependencies {
     // JARVIS_DAILY_EMAIL env). jakarta.mail handles STARTTLS + auth.
     implementation("com.sun.mail:jakarta.mail:2.0.1")
 
+    // Layer A: SQLite + ORM for TutorDb schema + audit log.
+    implementation("org.jetbrains.exposed:exposed-core:0.55.0")
+    implementation("org.jetbrains.exposed:exposed-dao:0.55.0")
+    implementation("org.jetbrains.exposed:exposed-jdbc:0.55.0")
+    implementation("org.jetbrains.exposed:exposed-java-time:0.55.0")
+    implementation("org.xerial:sqlite-jdbc:3.45.3.0")
+
     testImplementation(kotlin("test"))
+    testImplementation("io.ktor:ktor-server-test-host:3.0.1")
+    testImplementation("io.ktor:ktor-client-content-negotiation:3.0.1")
 }
 
 application {
