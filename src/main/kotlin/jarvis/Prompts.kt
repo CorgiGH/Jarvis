@@ -76,6 +76,12 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
 - study_now(<subject?>): instant 25-min Pomodoro on weakest concept,
   ignores schedule entirely. Use when user wants action without setup.
     [[study_now: ALO]]
+- wake(<bedtime=HH:MM?>): autofill today's schedule with study blocks
+  from NOW until bedtime (default 23:30). Respects existing fixed
+  blocks (lecture/lab/exam). 90-min focus + 15-min breaks + 30-min
+  meal every 3 blocks. Round-robins subjects. Use this when user
+  wakes up and wants today's plan generated on the fly.
+    [[wake: bedtime=23:30]]
 - wiki(query): lexical search over the user's wiki notes (reflections,
   /save notes, prior subsystem outputs, model-pinned memories from the
   remember tool). Different from search (archival corpus) and recall

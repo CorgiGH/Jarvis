@@ -108,6 +108,7 @@ object ChatTools {
         "plan" -> executePlan(call.args)
         "next_block" -> executeNextBlock()
         "study_now" -> executeStudyNow(call.args)
+        "wake" -> executeWake(call.args)
         "quiz" -> executeQuiz(call.args, client)
         "grade" -> executeGrade(call.args)
         "assignment_set" -> executeAssignmentSet(call.args)
@@ -115,6 +116,111 @@ object ChatTools {
         "assignment_done" -> executeAssignmentDone(call.args)
         "assignments" -> executeAssignments()
         else -> "(unknown tool: ${call.name})"
+    }
+
+    /** Auto-fills today's schedule from NOW until end-of-day with study
+     *  blocks. Anchors on user's actual wake time (call this when you
+     *  wake up). Respects existing fixed blocks (lecture/lab/exam) — only
+     *  fills GAPS. 90-min focus blocks separated by 30-min meal/break
+     *  gaps every ~3 hours. Round-robins subjects with finals proximity
+     *  bias. Writes to schedule.json directly.
+     *
+     *  Args: optional `bedtime=HH:MM` to cap fill before sleep (default
+     *  23:30 since user's actual rhythm runs late). */
+    private fun executeWake(args: String): String {
+        val zone = java.time.ZoneId.of("Europe/Bucharest")
+        val now = java.time.Instant.now()
+        val ldt = java.time.LocalDateTime.ofInstant(now, zone)
+        val today = ldt.toLocalDate()
+        val nowTime = ldt.toLocalTime()
+        // Parse optional bedtime arg.
+        val bedtime = Regex("""bedtime=(\d{2}:\d{2})""").find(args)
+            ?.groupValues?.get(1)
+            ?.let { runCatching { java.time.LocalTime.parse(it) }.getOrNull() }
+            ?: java.time.LocalTime.of(23, 30)
+        if (nowTime >= bedtime) return "(it's already past bedtime — won't fill blocks past $bedtime)"
+
+        val schedule = Schedule.load()
+        // Existing today's blocks become "fixed" — don't overwrite or overlap.
+        val existing = Schedule.todaysBlocks(schedule, now, zone)
+            .mapNotNull { b ->
+                val s = runCatching { java.time.LocalTime.parse(b.start) }.getOrNull()
+                val e = runCatching { java.time.LocalTime.parse(b.end) }.getOrNull()
+                if (s != null && e != null) Triple(s, e, b) else null
+            }
+            .sortedBy { it.first }
+
+        // Subject rotation order — finals proximity bias if exam set,
+        // else even spread. Catalog subjects.
+        val subjects = ConceptCatalog.all().map { it.subject }.distinct().ifEmpty {
+            listOf("PA", "ALO", "PS", "POO", "SO&RC")
+        }
+
+        // Walk forward from now. Free chunk = [cursor, nextFixedStart or bedtime].
+        val newBlocks = mutableListOf<ScheduleBlock>()
+        var cursor = nowTime
+        var subjectIdx = 0
+        var blocksSinceBreak = 0
+        val focusMinutes = 90L
+        val breakMinutes = 15L
+        val mealMinutes = 30L
+        // Round cursor up to next 5-min mark for clean times.
+        cursor = cursor.plusMinutes((5 - cursor.minute % 5).toLong() % 5)
+
+        while (cursor.isBefore(bedtime)) {
+            // Find next fixed block start after cursor.
+            val nextFixed = existing.firstOrNull { it.first.isAfter(cursor) }
+            val chunkEnd = nextFixed?.first ?: bedtime
+            val chunkMinutes = java.time.Duration.between(cursor, chunkEnd).toMinutes()
+            if (chunkMinutes < 30) {
+                // Skip tiny gap — jump to end of next fixed block.
+                if (nextFixed != null) cursor = nextFixed.second else break
+                continue
+            }
+            val blockMinutes = minOf(focusMinutes, chunkMinutes)
+            val blockEnd = cursor.plusMinutes(blockMinutes)
+            val subject = subjects[subjectIdx % subjects.size]
+            newBlocks += ScheduleBlock(
+                date = today.toString(),
+                start = cursor.toString().substring(0, 5),
+                end = blockEnd.toString().substring(0, 5),
+                kind = "study",
+                subject = subject,
+                topic = "wake-fill: catch-up",
+            )
+            subjectIdx++
+            blocksSinceBreak++
+            // Insert break or meal after block.
+            cursor = blockEnd
+            if (cursor.isBefore(bedtime) && nextFixed?.first?.isAfter(cursor) != false) {
+                val gapMins = if (blocksSinceBreak >= 3) {
+                    blocksSinceBreak = 0; mealMinutes
+                } else breakMinutes
+                cursor = cursor.plusMinutes(gapMins)
+                if (cursor.isAfter(bedtime)) break
+            }
+        }
+        if (newBlocks.isEmpty()) return "(no fillable gaps found between now ($nowTime) and bedtime ($bedtime))"
+
+        // Append new blocks to schedule.json.
+        val merged = ScheduleFile(blocks = (schedule.blocks + newBlocks)
+            .sortedWith(compareBy({ it.date }, { it.start })))
+        try {
+            val jsonText = kotlinx.serialization.json.Json {
+                prettyPrint = true; encodeDefaults = true
+            }.encodeToString(ScheduleFile.serializer(), merged)
+            java.nio.file.Files.writeString(
+                Config.scheduleFile, jsonText, Charsets.UTF_8,
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+            )
+        } catch (e: Exception) {
+            return "(wake fill failed: ${e.message?.take(160)})"
+        }
+        return "wake-filled ${newBlocks.size} blocks for $today (now → $bedtime):\n" +
+            newBlocks.joinToString("\n") { b ->
+                "  ${b.start}-${b.end} ${b.subject}"
+            }
     }
 
     /** Cycle 7 — pending quiz state for [[quiz]]/[[grade]] flow. Single-slot
