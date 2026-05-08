@@ -72,6 +72,16 @@ SHEETS = [
         "matricol_col": 2,
     },
     {
+        "subject": "SO&RC",
+        "url": (
+            "https://docs.google.com/spreadsheets/d/e/"
+            "2PACX-1vRxww4HaR8XKngBI-pxtnySdeNu_7t-r5Iy_rQWqkU1XKMAjIYlL"
+            "639iI4pWTXsIbvOxqq_Kzch-WJG/"
+            "pub?output=csv&gid=1890042373"
+        ),
+        "matricol_col": 0,
+    },
+    {
         "subject": "POO",
         "url": (
             "https://docs.google.com/spreadsheets/d/e/"
@@ -317,11 +327,50 @@ def extract_poo(row: list[str]) -> list[tuple[str, float, float]]:
     return out
 
 
+def extract_sorc(row: list[str]) -> list[tuple[str, float, float]]:
+    """SO+RC continuous-eval sheet (gid=1890042373), verified 2026-05-08:
+       0: STUDENT (matricol)
+       1: INSTALARE LINUX  (max 10)
+       2: TEME LAB SO       (max 10 — lab homework points)
+       3: EXAMEN SO         (max 30 — T.SO test, week 8; need ≥12 to pass)
+       4: TOTAL SO          (= sum of cols 1-3, max 50 SO half)
+
+       The 50pt RC half (lab activity + T.RC June exam) is NOT in this
+       sheet — it lives elsewhere (or only as the council-seeded rows
+       from earlier). Recording the 4 SO components here; the existing
+       'Continuous eval (SO half) 24.5/50' lock-row in grades.jsonl
+       remains as a regression-guard rollup but the 3 sub-components
+       below are now the live source of truth.
+    """
+    def g(i):
+        return row[i] if i < len(row) else ""
+
+    out: list[tuple[str, float, float]] = []
+    linux = parse_num(g(1))
+    if linux is not None:
+        out.append(("Linux install (proba #4)", linux, 10.0))
+    teme = parse_num(g(2))
+    if teme is not None:
+        out.append(("Lab homework (TEME LAB SO)", teme, 10.0))
+    examen = parse_num(g(3))
+    if examen is not None:
+        out.append(("T.SO test (week 8)", examen, 30.0))
+    return out
+
+
+EXPECTED_HEADERS["SO&RC"] = {
+    1: "INSTALARE LINUX",
+    2: "TEME LAB SO",
+    3: "EXAMEN SO",
+}
+
+
 EXTRACTORS = {
     "PA": extract_pa,
     "PS": extract_ps,
     "ALO": extract_alo,
     "POO": extract_poo,
+    "SO&RC": extract_sorc,
 }
 
 
