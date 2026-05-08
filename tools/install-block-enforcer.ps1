@@ -16,14 +16,29 @@ if (-not (Test-Path $ScriptPath)) {
     throw "block-enforcer.ps1 not found at $ScriptPath - clone or copy first."
 }
 
-# 1. Stop any existing scheduled-task run + kill any lingering instances.
+# Helper: run a native command, swallow nonzero exit + stderr noise. PS's
+# Stop preference treats schtasks "task not found" stderr as terminating;
+# wrap so first-time install doesn't blow up.
+function Invoke-Quiet([string]$exe, [string[]]$args) {
+    & $exe @args 2>&1 | Out-Null
+    $global:LASTEXITCODE = 0
+}
+
+# 1. Stop any existing scheduled-task run + kill lingering loop processes.
+# Loop runs as either pythonw, wscript, or powershell hosting block-enforcer.
 Write-Host "Stopping existing $TaskName task (if any)..."
-schtasks /End /TN $TaskName 2>$null | Out-Null
+Invoke-Quiet "schtasks" @("/End", "/TN", $TaskName)
 Start-Sleep -Seconds 1
-Get-Process powershell -ErrorAction SilentlyContinue |
-    Where-Object { $_.MainWindowTitle -like "*block-enforcer*" -or
-                   $_.CommandLine -like "*block-enforcer*" } |
-    ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+$loopMatch = '*block-enforcer*'
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object {
+        ($_.Name -in @("wscript.exe", "cscript.exe", "powershell.exe", "pwsh.exe")) -and
+        ($_.CommandLine -like $loopMatch)
+    } |
+    ForEach-Object {
+        Write-Host "Killing existing loop pid $($_.ProcessId): $($_.Name)"
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+    }
 
 # 2. Write the VBS launcher (lets the powershell loop run without a
 #    visible console window - same hiding pattern as start_relay_hidden.vbs).
@@ -36,16 +51,41 @@ Set-Content -Path $VbsPath -Value $vbsContent -Encoding ASCII
 Write-Host "Wrote VBS launcher: $VbsPath"
 
 # 3. Register / replace the scheduled task. Trigger ONLOGON.
-schtasks /Delete /TN $TaskName /F 2>$null | Out-Null
+Invoke-Quiet "schtasks" @("/Delete", "/TN", $TaskName, "/F")
 $action = "wscript.exe"
-$args = """$VbsPath"""
-schtasks /Create /SC ONLOGON /TN $TaskName `
-    /TR "$action $args" /RL LIMITED /F | Out-Null
-Write-Host "Registered scheduled task: $TaskName (ONLOGON)"
+$argStr = """$VbsPath"""
+# Use Register-ScheduledTask cmdlet (creates the task in the current user
+# context without admin rights, unlike schtasks /Create which sometimes
+# refuses on standard accounts).
+$registered = $false
+try {
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+    $taskAction  = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$VbsPath`""
+    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+    $taskSettings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Days 0)
+    $task = New-ScheduledTask -Action $taskAction -Trigger $taskTrigger -Settings $taskSettings
+    Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force | Out-Null
+    Write-Host "Registered scheduled task: $TaskName (auto-start at logon)"
+    $registered = $true
+} catch {
+    Write-Host "Register-ScheduledTask failed: $_"
+    Write-Host "Falling back: launching loop in this session only. Will not auto-start next logon."
+    Start-Process wscript.exe -ArgumentList "`"$VbsPath`""
+    Write-Host "Loop running now. Logs at $env:USERPROFILE\.jarvis-block-enforcer.log"
+    exit 0
+}
 
 # 4. Start it once so the loop is running now.
-schtasks /Run /TN $TaskName | Out-Null
-Write-Host "Started $TaskName."
+try {
+    Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+    Write-Host "Started $TaskName."
+} catch {
+    Write-Host "Start-ScheduledTask failed: $_"
+    Write-Host "Launching loop directly so it's running now."
+    Start-Process wscript.exe -ArgumentList "`"$VbsPath`""
+}
 
 Write-Host ""
 Write-Host "Installed. Verify with:"
