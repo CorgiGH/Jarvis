@@ -526,12 +526,24 @@ After that, cron 09:00 daily.
 
 1. **Watch for user's Telegram smoke confirmation.** If it lands,
    install cron line + close out task #4.
-2. **Playwright MCP scrape** of `https://edu.info.uaic.ro/sisteme-de-operare/SO/index.html`
-   with Basic auth `so2026 / i+a=IA`. Save HTML + extracted text to
-   `/opt/jarvis/data/archival/_extras/SO/restricted-content.html` via
-   scp. VPS curl gets 401 (IP allowlist); PC's IP works.
-3. **Tighten `Prompts.kt` CHAT_SYSTEM_PROMPT** — auto-emit
-   `[[plan: today]]` + `[[assignments]]` on time-bound chat queries.
+2. ~~**Playwright MCP scrape** of SO restricted page~~ — DONE 2026-05-09.
+   Course URL renamed since resume note: was `/sisteme-de-operare/SO/`,
+   now `/operating-systems-and-computer-networks/SO/`. Documented creds
+   `so2026:i+a=IA` valid on new path. Saved HTML + text-extracted .md to
+   `/opt/jarvis/data/archival/_extras/SO/{index,proba_LinuxInstall}.{html,md}`.
+   End-to-end smoked: `[[search: proba_LinuxInstall]]` returns hit, bot
+   summarized SO probă #4 scoring rules accurately.
+3. ~~**Tighten `Prompts.kt` CHAT_SYSTEM_PROMPT`~~ — DONE 2026-05-09. Added
+   "Reflex triggers" block between tools list and the "After your markers"
+   paragraph. Three reflex categories: (a) time-bound query → emit
+   `[[plan: today]]` + `[[assignments: now]]`; (b) catch-up framing →
+   emit `[[grades: now]]` + `[[catchup: 7]]`; (c) explain-X framing →
+   emit `[[search]]` then fall back to `[[recall]]`. Triggers listed
+   verbatim so the LLM doesn't have to interpret intent. Smoked both
+   time-bound + catch-up; reply for "what should i do today?" pulled
+   POO 0/30, Lab eval 17d-out, ALO Tema 2+3 due Sun — none in core_memory.md,
+   so reflex confirmed fired. Catch-up smoke for "how am I doing on grades?"
+   returned all 5 subject ratios + 21 stale PS concepts (from `[[catchup]]`).
 4. **POO sentinel rows** for Lab eval 2 + final exam in
    `tools/sync-grades-from-sheets.py` (note: dry-run shows the eval-2
    row exists in assignments.jsonl, but the grades.jsonl sentinel is
