@@ -10,6 +10,12 @@
 # in lesson mode immediately. User can then type follow-up questions,
 # attempts, [[lesson_check: ...]], etc.
 #
+# Aesthetic: "Midnight Editorial". Deep midnight blue body, cream text,
+# coral->amber gradient stripe down the left edge as a brand signature,
+# serif Constantia display for the title, italic Cascadia Mono for the
+# status caption. Role labels rendered as small-caps marginalia with
+# vertical-bar stripes in role-tinted accent.
+#
 # Usage:
 #   powershell -File tutor-window.ps1 -Subject PS
 #   powershell -File tutor-window.ps1 -Subject PA -Concept "greedy algorithms"
@@ -49,21 +55,28 @@ if (-not $Token) {
     exit 1
 }
 
-# Color palette (GitHub-dark-ish for low-eye-strain reading)
-$colBg       = [System.Drawing.Color]::FromArgb(13, 17, 23)    # body bg
-$colSurface  = [System.Drawing.Color]::FromArgb(22, 27, 34)    # header/footer surfaces
-$colInputBg  = [System.Drawing.Color]::FromArgb(33, 38, 45)    # input box bg
-$colBorder   = [System.Drawing.Color]::FromArgb(48, 54, 61)
-$colText     = [System.Drawing.Color]::FromArgb(201, 209, 217) # body text
-$colMuted    = [System.Drawing.Color]::FromArgb(139, 148, 158) # secondary
-$colAccentYou = [System.Drawing.Color]::FromArgb(88, 166, 255)  # blue, you
-$colAccentBot = [System.Drawing.Color]::FromArgb(126, 231, 135) # green, bot
-$colSendBg   = [System.Drawing.Color]::FromArgb(35, 134, 54)
-$colSendHv   = [System.Drawing.Color]::FromArgb(46, 160, 67)
+# ============================================================================
+# "Midnight Editorial" palette
+# ============================================================================
+$colBg       = [System.Drawing.Color]::FromArgb(15, 15, 26)     # #0F0F1A midnight
+$colSurface  = [System.Drawing.Color]::FromArgb(22, 22, 38)     # #161626 footer/status
+$colInputBg  = [System.Drawing.Color]::FromArgb(28, 28, 46)     # #1C1C2E input
+$colBorder   = [System.Drawing.Color]::FromArgb(48, 48, 75)     # #30304B
+$colText     = [System.Drawing.Color]::FromArgb(245, 240, 232)  # #F5F0E8 cream
+$colTextDim  = [System.Drawing.Color]::FromArgb(195, 190, 182)  # body-dim
+$colMuted    = [System.Drawing.Color]::FromArgb(140, 140, 165)  # caption gray
+$colCoral    = [System.Drawing.Color]::FromArgb(255, 107, 107)  # #FF6B6B you / send
+$colCoralHv  = [System.Drawing.Color]::FromArgb(255, 138, 138)
+$colCoralAct = [System.Drawing.Color]::FromArgb(220, 80, 80)
+$colCoralDim = [System.Drawing.Color]::FromArgb(60, 255, 107, 107)  # alpha for glow
+$colGold     = [System.Drawing.Color]::FromArgb(212, 165, 116)  # #D4A574 jarvis
+$colAmber    = [System.Drawing.Color]::FromArgb(255, 217, 61)   # #FFD93D stripe-bottom
 
+# ============================================================================
 # Form
+# ============================================================================
 $form = New-Object System.Windows.Forms.Form
-$form.Text = if ($Subject) { "Jarvis Tutor - $Subject$(if ($Concept) { " / $Concept" })" } else { "Jarvis Tutor" }
+$form.Text = if ($Subject) { "Jarvis Tutor - $Subject$(if ($Concept) { ' / ' + $Concept })" } else { "Jarvis Tutor" }
 $form.Width = 1100
 $form.Height = 780
 $form.MinimumSize = New-Object System.Drawing.Size(720, 480)
@@ -71,36 +84,113 @@ $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
 $form.BackColor = $colBg
 $form.ForeColor = $colText
 $form.Padding = New-Object System.Windows.Forms.Padding(0)
+$form.DoubleBuffered = $true
 
-# Header bar
+# ----------------------------------------------------------------------------
+# Left vertical accent stripe - coral->amber gradient. Brand signature.
+# ----------------------------------------------------------------------------
+$accentStripe = New-Object System.Windows.Forms.Panel
+$accentStripe.Dock = [System.Windows.Forms.DockStyle]::Left
+$accentStripe.Width = 6
+$accentStripe.Add_Paint({
+    param($s, $e)
+    $rect = New-Object System.Drawing.Rectangle 0, 0, $s.Width, $s.Height
+    $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+        $rect, $script:colCoral, $script:colAmber,
+        [System.Drawing.Drawing2D.LinearGradientMode]::Vertical
+    )
+    $e.Graphics.FillRectangle($brush, $rect)
+    $brush.Dispose()
+})
+
+# ----------------------------------------------------------------------------
+# Header - serif display title + italic subtitle + connected pulse dot
+# ----------------------------------------------------------------------------
 $header = New-Object System.Windows.Forms.Panel
 $header.Dock = [System.Windows.Forms.DockStyle]::Top
-$header.Height = 56
-$header.BackColor = $colSurface
-$header.Padding = New-Object System.Windows.Forms.Padding(20, 8, 20, 8)
+$header.Height = 92
+$header.BackColor = $colBg
+$header.Add_Paint({
+    param($s, $e)
+    # Bottom hairline divider
+    $pen = New-Object System.Drawing.Pen($script:colBorder, 1)
+    $e.Graphics.DrawLine($pen, 36, ($s.Height - 1), ($s.Width - 36), ($s.Height - 1))
+    $pen.Dispose()
+    # Connected pulse dot, right-aligned
+    $e.Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $dotR = 5
+    $dotX = $s.Width - 44
+    $dotY = 38
+    # Outer glow halo
+    $glowBrush = New-Object System.Drawing.SolidBrush($script:colCoralDim)
+    $e.Graphics.FillEllipse($glowBrush, $dotX - 4, $dotY - 4, ($dotR * 2) + 8, ($dotR * 2) + 8)
+    $glowBrush.Dispose()
+    # Solid dot
+    $dotBrush = New-Object System.Drawing.SolidBrush($script:colCoral)
+    $e.Graphics.FillEllipse($dotBrush, $dotX, $dotY, $dotR * 2, $dotR * 2)
+    $dotBrush.Dispose()
+})
 
 $headerTitle = New-Object System.Windows.Forms.Label
-$headerTitle.Dock = [System.Windows.Forms.DockStyle]::Fill
-$headerTitle.Text = if ($Subject) {
-    "Jarvis Tutor  -  $Subject$(if ($Concept) { ' / ' + $Concept })"
-} else {
-    "Jarvis Tutor"
-}
-$headerTitle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 14)
+$headerTitle.Text = "JARVIS"
+$headerTitle.Font = New-Object System.Drawing.Font("Constantia", 26, [System.Drawing.FontStyle]::Bold)
 $headerTitle.ForeColor = $colText
-$headerTitle.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$headerTitle.AutoSize = $false
+$headerTitle.BackColor = [System.Drawing.Color]::Transparent
+$headerTitle.Location = New-Object System.Drawing.Point(36, 18)
+$headerTitle.AutoSize = $true
+
+$headerBullet = New-Object System.Windows.Forms.Label
+$headerBullet.Text = "/"
+$headerBullet.Font = New-Object System.Drawing.Font("Constantia", 18, [System.Drawing.FontStyle]::Italic)
+$headerBullet.ForeColor = $colCoral
+$headerBullet.BackColor = [System.Drawing.Color]::Transparent
+$headerBullet.AutoSize = $true
+
+$headerSub = New-Object System.Windows.Forms.Label
+$headerSub.Text = if ($Subject) {
+    "tutor . $Subject$(if ($Concept) { '  -  ' + $Concept })"
+} else {
+    "tutor"
+}
+$headerSub.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Italic)
+$headerSub.ForeColor = $colMuted
+$headerSub.BackColor = [System.Drawing.Color]::Transparent
+$headerSub.AutoSize = $true
+
+# Right-side "online" caption (monospace, small)
+$headerOnline = New-Object System.Windows.Forms.Label
+$headerOnline.Text = "online"
+$headerOnline.Font = New-Object System.Drawing.Font("Cascadia Mono", 8, [System.Drawing.FontStyle]::Italic)
+$headerOnline.ForeColor = $colMuted
+$headerOnline.BackColor = [System.Drawing.Color]::Transparent
+$headerOnline.AutoSize = $true
 
 $header.Controls.Add($headerTitle)
-$form.Controls.Add($header)
+$header.Controls.Add($headerBullet)
+$header.Controls.Add($headerSub)
+$header.Controls.Add($headerOnline)
 
-# Body wrapper with side padding
+# Position bullet + subtitle right after the title baseline; online caption
+# right-aligned. Recompute on header resize.
+$header.Add_Layout({
+    $script:headerTitle.Refresh()
+    $titleRight = $script:headerTitle.Left + $script:headerTitle.PreferredWidth
+    $script:headerBullet.Left = $titleRight + 14
+    $script:headerBullet.Top  = 38
+    $script:headerSub.Left    = $script:headerBullet.Left + $script:headerBullet.PreferredWidth + 10
+    $script:headerSub.Top     = 44
+    $script:headerOnline.Left = $header.Width - 60 - $script:headerOnline.PreferredWidth
+    $script:headerOnline.Top  = 42
+})
+
+# ----------------------------------------------------------------------------
+# Body wrapper with generous side padding (editorial margins)
+# ----------------------------------------------------------------------------
 $bodyWrap = New-Object System.Windows.Forms.Panel
 $bodyWrap.Dock = [System.Windows.Forms.DockStyle]::Fill
 $bodyWrap.BackColor = $colBg
-$bodyWrap.Padding = New-Object System.Windows.Forms.Padding(20, 12, 20, 0)
+$bodyWrap.Padding = New-Object System.Windows.Forms.Padding(36, 24, 36, 0)
 
-# History (RichTextBox - read-only, scrollable, supports formatting)
 $history = New-Object System.Windows.Forms.RichTextBox
 $history.Dock = [System.Windows.Forms.DockStyle]::Fill
 $history.ReadOnly = $true
@@ -110,30 +200,45 @@ $history.Font = New-Object System.Drawing.Font("Segoe UI", 12)
 $history.WordWrap = $true
 $history.DetectUrls = $true
 $history.BorderStyle = [System.Windows.Forms.BorderStyle]::None
-
 $bodyWrap.Controls.Add($history)
 
-# Footer with input + send button
+# ----------------------------------------------------------------------------
+# Footer - input panel + custom-painted send button
+# ----------------------------------------------------------------------------
 $footer = New-Object System.Windows.Forms.Panel
 $footer.Dock = [System.Windows.Forms.DockStyle]::Bottom
-$footer.Height = 130
-$footer.BackColor = $colSurface
-$footer.Padding = New-Object System.Windows.Forms.Padding(20, 14, 20, 14)
+$footer.Height = 154
+$footer.BackColor = $colBg
+$footer.Padding = New-Object System.Windows.Forms.Padding(36, 16, 36, 14)
+$footer.Add_Paint({
+    param($s, $e)
+    # Top hairline divider matching header
+    $pen = New-Object System.Drawing.Pen($script:colBorder, 1)
+    $e.Graphics.DrawLine($pen, 36, 0, ($s.Width - 36), 0)
+    $pen.Dispose()
+})
 
-# Inner table for input (85%) + send (15%)
-$bottomPanel = New-Object System.Windows.Forms.TableLayoutPanel
-$bottomPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
-$bottomPanel.ColumnCount = 2
-$bottomPanel.RowCount = 1
-$bottomPanel.BackColor = $colSurface
-[void]$bottomPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 80)))
-[void]$bottomPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 20)))
+$inputRow = New-Object System.Windows.Forms.TableLayoutPanel
+$inputRow.Dock = [System.Windows.Forms.DockStyle]::Fill
+$inputRow.ColumnCount = 2
+$inputRow.RowCount = 1
+$inputRow.BackColor = $colBg
+[void]$inputRow.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 100)))
+[void]$inputRow.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Absolute, 156)))
 
+# Input panel with custom border paint
 $txtInputWrap = New-Object System.Windows.Forms.Panel
 $txtInputWrap.Dock = [System.Windows.Forms.DockStyle]::Fill
-$txtInputWrap.BackColor = $colBorder
-$txtInputWrap.Padding = New-Object System.Windows.Forms.Padding(1)
-$txtInputWrap.Margin = New-Object System.Windows.Forms.Padding(0, 0, 12, 0)
+$txtInputWrap.BackColor = $colInputBg
+$txtInputWrap.Margin = New-Object System.Windows.Forms.Padding(0, 0, 16, 0)
+$txtInputWrap.Padding = New-Object System.Windows.Forms.Padding(16, 12, 16, 12)
+$txtInputWrap.Add_Paint({
+    param($s, $e)
+    $rect = New-Object System.Drawing.Rectangle 0, 0, ($s.Width - 1), ($s.Height - 1)
+    $pen = New-Object System.Drawing.Pen($script:colBorder, 1)
+    $e.Graphics.DrawRectangle($pen, $rect)
+    $pen.Dispose()
+})
 
 $txtInput = New-Object System.Windows.Forms.TextBox
 $txtInput.Dock = [System.Windows.Forms.DockStyle]::Fill
@@ -146,46 +251,60 @@ $txtInput.Font = New-Object System.Drawing.Font("Segoe UI", 12)
 $txtInput.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $txtInputWrap.Controls.Add($txtInput)
 
+# Send button - solid coral, white arrow, hover to lighter coral
 $sendBtn = New-Object System.Windows.Forms.Button
-$sendBtn.Text = "Send"
+$sendBtn.Text = "SEND  ->"
 $sendBtn.Dock = [System.Windows.Forms.DockStyle]::Fill
-$sendBtn.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 12)
-$sendBtn.BackColor = $colSendBg
-$sendBtn.ForeColor = [System.Drawing.Color]::White
+$sendBtn.Margin = New-Object System.Windows.Forms.Padding(0)
+$sendBtn.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
+$sendBtn.BackColor = $colCoral
+$sendBtn.ForeColor = $colBg
 $sendBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $sendBtn.FlatAppearance.BorderSize = 0
-$sendBtn.FlatAppearance.MouseOverBackColor = $colSendHv
+$sendBtn.FlatAppearance.MouseOverBackColor = $colCoralHv
+$sendBtn.FlatAppearance.MouseDownBackColor = $colCoralAct
 $sendBtn.Cursor = [System.Windows.Forms.Cursors]::Hand
-$sendBtn.Margin = New-Object System.Windows.Forms.Padding(0)
+$sendBtn.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 
-$bottomPanel.Controls.Add($txtInputWrap, 0, 0)
-$bottomPanel.Controls.Add($sendBtn, 1, 0)
-$footer.Controls.Add($bottomPanel)
+$inputRow.Controls.Add($txtInputWrap, 0, 0)
+$inputRow.Controls.Add($sendBtn, 1, 0)
+$footer.Controls.Add($inputRow)
 
-# Status strip below footer (one-liner, italic muted)
+# ----------------------------------------------------------------------------
+# Status strip - monospace italic, very dim, sits at bottom edge
+# ----------------------------------------------------------------------------
 $status = New-Object System.Windows.Forms.Label
 $status.Dock = [System.Windows.Forms.DockStyle]::Bottom
-$status.Height = 22
-$status.Text = "Ctrl+Enter to send  -  $ApiBase"
-$status.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
+$status.Height = 28
+$status.Text = "  ready  .  ctrl+enter to send  .  $ApiBase"
+$status.Font = New-Object System.Drawing.Font("Cascadia Mono", 8, [System.Drawing.FontStyle]::Italic)
 $status.ForeColor = $colMuted
 $status.BackColor = $colSurface
 $status.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$status.Padding = New-Object System.Windows.Forms.Padding(20, 0, 20, 4)
+$status.Padding = New-Object System.Windows.Forms.Padding(36, 0, 36, 4)
 
-# Order matters for docking: bottom-most first
-$form.Controls.Add($status)
-$form.Controls.Add($footer)
-$form.Controls.Add($bodyWrap)
+# ----------------------------------------------------------------------------
+# Dock order matters - innermost (last added) wins. Add bottom-most first.
+# ----------------------------------------------------------------------------
+$form.Controls.Add($accentStripe)   # Dock=Left, takes leftmost 6px
+$form.Controls.Add($status)         # Dock=Bottom (outermost bottom)
+$form.Controls.Add($footer)         # Dock=Bottom (above status)
+$form.Controls.Add($bodyWrap)       # Dock=Fill (middle)
+$form.Controls.Add($header)         # Dock=Top
 
-# Append helpers - bold labels for "you" / "jarvis", wrapped body.
+# ============================================================================
+# Append helpers - role-tinted small-caps labels with marginalia stripe
+# ============================================================================
 function script:Append-Turn($who, $text) {
-    $headerColor = if ($who -eq "you") { $script:colAccentYou } else { $script:colAccentBot }
-    $label = if ($who -eq "you") { "you" } else { "jarvis" }
+    $headerColor = if ($who -eq "you") { $script:colCoral } else { $script:colGold }
+    $label = if ($who -eq "you") { "YOU" } else { "JARVIS" }
+    $stripe = [char]0x258E  # ▎ left one-quarter block, looks like marginalia bar
     $script:history.SelectionStart = $script:history.TextLength
-    $script:history.SelectionFont = New-Object System.Drawing.Font("Segoe UI Semibold", 11)
+    # Stripe + label in role color, bold serif
+    $script:history.SelectionFont = New-Object System.Drawing.Font("Constantia", 11, [System.Drawing.FontStyle]::Bold)
     $script:history.SelectionColor = $headerColor
-    $script:history.AppendText("$label`n")
+    $script:history.AppendText("$stripe  $label`n")
+    # Body in cream sans
     $script:history.SelectionFont = New-Object System.Drawing.Font("Segoe UI", 12)
     $script:history.SelectionColor = $script:colText
     $script:history.AppendText("$text`n`n")
@@ -194,7 +313,7 @@ function script:Append-Turn($who, $text) {
 }
 
 function script:Reset-UI() {
-    $script:status.Text = "Ctrl+Enter to send  -  $script:ApiBase"
+    $script:status.Text = "  ready  .  ctrl+enter to send  .  $script:ApiBase"
     $script:sendBtn.Enabled = $true
     $script:txtInput.Enabled = $true
     try { $script:txtInput.Focus() } catch {}
@@ -203,7 +322,7 @@ function script:Reset-UI() {
 function script:Send-Turn($msg) {
     if ([string]::IsNullOrWhiteSpace($msg)) { return }
     Append-Turn "you" $msg
-    $script:status.Text = "thinking..."
+    $script:status.Text = "  thinking  .  $script:ApiBase"
     $script:sendBtn.Enabled = $false
     $script:txtInput.Enabled = $false
     $script:txtInput.Clear()
@@ -220,9 +339,9 @@ function script:Send-Turn($msg) {
             $body = @{ msg = $msg } | ConvertTo-Json -Compress
             # Use Invoke-WebRequest + manual UTF-8 decode. Invoke-RestMethod
             # defaults the response decoder to cp1252 when the Content-Type
-            # header lacks an explicit charset, mojibaking Romanian (Î¼, Â·,
-            # â) + math symbols (greek letters, em-dash). Forcing UTF-8 on
-            # the raw byte stream keeps text faithful end-to-end.
+            # header lacks an explicit charset, mojibaking Romanian chars
+            # + math symbols. Forcing UTF-8 on the raw byte stream keeps
+            # text faithful end-to-end.
             $resp = Invoke-WebRequest -Uri "$ApiBase/api/chat" `
                 -Method Post `
                 -Headers @{
@@ -247,9 +366,6 @@ function script:Send-Turn($msg) {
     })
     $async = $ps.BeginInvoke()
 
-    # Persist timer + runspace handles in script scope so they survive
-    # past Send-Turn return + so we can defensively kill them if something
-    # goes wrong.
     if (-not $script:activeTurns) { $script:activeTurns = @() }
     $turn = @{ ps = $ps; rs = $rs; async = $async; timer = $null }
     $timer = New-Object System.Windows.Forms.Timer
@@ -258,7 +374,6 @@ function script:Send-Turn($msg) {
     $script:activeTurns += $turn
 
     $timer.Add_Tick({
-        # Find the turn matching this timer (closure-free for scope safety).
         $myTimer = $this
         $turn = $null
         foreach ($t in $script:activeTurns) {
@@ -319,10 +434,9 @@ $form.Add_Shown({
             "[[lesson: $Subject]]"
         }
         Append-Turn "you" $prefill
-        # Fire send synchronously after first paint.
         $form.BeginInvoke([Action]{ Send-Turn $prefill }) | Out-Null
     } else {
-        Append-Turn "jarvis" "Hi. I am your jarvis tutor. Type a question, paste a problem, or run [[lesson: SUBJECT]] to start a structured walkthrough."
+        Append-Turn "jarvis" "Hi. I'm your jarvis tutor. Type a question, paste a problem, or run [[lesson: SUBJECT]] for a structured walkthrough."
     }
 })
 
