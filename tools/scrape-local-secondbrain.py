@@ -81,12 +81,16 @@ SOURCES: list[tuple[Path, str, str, str | None, int | None, str | None]] = [
     # SO local lectures: ONLY root-level OS-prefixed files. Skip
     # os-study-guide/ + experiment/ (React app + node_modules).
     (SO_LOCAL, "SO", "local_lectures", None, 0, "OS*.pdf"),
+    # Other Desktop study folders found in the second-pass audit.
+    (DESKTOP / "PA", "PA", "local_extras", None, None, None),
+    (DESKTOP / "PS laborator", "PS", "lab4_local", None, None, None),
 ]
 
 # Root-level files in Second brain that aren't under Courses/Labs/HW.
 ROOT_FILES: list[tuple[Path, str, str]] = [
     (SB / "Operating Systems course.pdf", "SO", "local_lectures"),
     (SB / "SO&RC 2026 OVERVIEW (1).pdf", "SO", "local_lectures"),
+    (SB / "PA_Rezultate_Partial (2).pdf", "PA", "local_extras"),
 ]
 
 # File extensions to ingest. Any extension not listed → skip.
