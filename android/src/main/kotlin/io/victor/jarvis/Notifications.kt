@@ -24,6 +24,8 @@ object Notifications {
     private const val CHANNEL_NAME = "Jarvis signals"
     private const val FOCUS_CHANNEL_ID = "jarvis-focus"
     private const val FOCUS_CHANNEL_NAME = "Focus session"
+    private const val DRIFT_CHANNEL_ID = "jarvis-drift"
+    private const val DRIFT_CHANNEL_NAME = "Drift alert (interruptive)"
     const val BACKGROUND_CHANNEL_ID = "jarvis-background"
     private const val BACKGROUND_CHANNEL_NAME = "Background sync"
     const val REAUTH_NOTIFICATION_ID = 0x7AFE_AC1D.toInt()
@@ -73,6 +75,25 @@ object Notifications {
             }
             nm.createNotificationChannel(channel)
         }
+        // 2026-05-09 — interruptive drift channel. User asked for invasive
+        // intervention. IMPORTANCE_HIGH = heads-up popover + default sound +
+        // vibrate, full-screen-intent capable. Channel-level enableLights +
+        // enableVibration so even if signal-level setVibrate is dropped on
+        // some Android variants, the channel still pulses.
+        if (nm.getNotificationChannel(DRIFT_CHANNEL_ID) == null) {
+            val channel = NotificationChannel(
+                DRIFT_CHANNEL_ID,
+                DRIFT_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "Off-track during scheduled study block. Loud."
+                setShowBadge(true)
+                enableLights(true)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 400, 250, 400, 250, 400)
+            }
+            nm.createNotificationChannel(channel)
+        }
     }
 
     /** R6 — quiet ongoing notification for the live focus session. Posted +
@@ -114,7 +135,13 @@ object Notifications {
 
     fun postSignal(ctx: Context, sig: Signal) {
         ensureChannel(ctx)
-        val title = "jarvis: signal"
+        // 2026-05-09 — drift detection: route alert-shaped signals through
+        // the interruptive channel. Server emits these with kind="drift_alert"
+        // OR rationale starting with "drift:" (see ProactiveLoop.considerSync).
+        val isDrift = sig.kind == "drift_alert" ||
+            sig.rationale.orEmpty().startsWith("drift:")
+        val channelId = if (isDrift) DRIFT_CHANNEL_ID else CHANNEL_ID
+        val title = if (isDrift) "🚨 jarvis: OFF TRACK" else "jarvis: signal"
         val short = sig.snippet.take(80)
         val notifId = sig.id.hashCode()
         val openIntent = PendingIntent.getActivity(
@@ -125,20 +152,31 @@ object Notifications {
         )
         val pinIntent = ackPendingIntent(ctx, sig.id, "pinned", notifId, requestCode = notifId * 2)
         val dismissIntent = ackPendingIntent(ctx, sig.id, "dismissed", notifId, requestCode = notifId * 2 + 1)
-        val notif = NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+        val builder = NotificationCompat.Builder(ctx, channelId)
+            .setSmallIcon(
+                if (isDrift) android.R.drawable.stat_notify_error
+                else android.R.drawable.ic_dialog_info,
+            )
             .setContentTitle(title)
             .setContentText(short)
             .setStyle(NotificationCompat.BigTextStyle().bigText(sig.snippet))
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
             .setContentIntent(openIntent)
-            // R3 — Pin / Dismiss action buttons
             .addAction(android.R.drawable.ic_menu_save, "Pin", pinIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", dismissIntent)
-            .build()
+        if (isDrift) {
+            // Heads-up popover, alarm-class importance, repeating vibrate
+            // pattern even on devices that ignore channel-level vibration.
+            builder
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setVibrate(longArrayOf(0, 400, 250, 400, 250, 400))
+                .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_LIGHTS)
+                .setFullScreenIntent(openIntent, true)
+        }
         try {
-            NotificationManagerCompat.from(ctx).notify(notifId, notif)
+            NotificationManagerCompat.from(ctx).notify(notifId, builder.build())
         } catch (_: SecurityException) {
             // POST_NOTIFICATIONS not granted on Android 13+. Silent — UI flow
             // requests permission on first launch; further reminders not our
