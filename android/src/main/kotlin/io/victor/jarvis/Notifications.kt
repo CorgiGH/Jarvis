@@ -24,8 +24,29 @@ object Notifications {
     private const val CHANNEL_NAME = "Jarvis signals"
     private const val FOCUS_CHANNEL_ID = "jarvis-focus"
     private const val FOCUS_CHANNEL_NAME = "Focus session"
+    const val BACKGROUND_CHANNEL_ID = "jarvis-background"
+    private const val BACKGROUND_CHANNEL_NAME = "Background sync"
     const val REAUTH_NOTIFICATION_ID = 0x7AFE_AC1D.toInt()
     const val FOCUS_NOTIFICATION_ID = 0x70CCC_5ED.toInt()
+
+    /** Channel for the foreground-service persistent notification. MIN
+     *  importance keeps it collapsed and silent — Android 14+ requires
+     *  the FG notification to be visible at all, but the user can still
+     *  long-press → "minimize" if they want it out of the way. */
+    fun ensureBackgroundChannel(ctx: Context) {
+        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
+        if (nm.getNotificationChannel(BACKGROUND_CHANNEL_ID) == null) {
+            val channel = NotificationChannel(
+                BACKGROUND_CHANNEL_ID,
+                BACKGROUND_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_MIN,
+            ).apply {
+                description = "Persistent indicator that the background poll loop is active."
+                setShowBadge(false)
+            }
+            nm.createNotificationChannel(channel)
+        }
+    }
 
     fun ensureChannel(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return

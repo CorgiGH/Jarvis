@@ -33,58 +33,9 @@ class SignalWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val ctx = applicationContext
-        val baseUrl = Prefs.loadBackendUrl(ctx, default = "")
-        val token = Prefs.loadAuthToken(ctx, default = "")
-        if (baseUrl.isBlank() || token.isBlank()) return Result.success()
-        val since = Prefs.loadLastSeenTs(ctx, default = "")
-        val client = JarvisClient()
-        try {
-            val signals = try {
-                client.fetchSignals(baseUrl, since, token, limit = 10)
-            } catch (e: JarvisAuthException) {
-                Notifications.postReauth(ctx, baseUrl)
-                return Result.success()
-            } catch (e: Exception) {
-                return Result.retry()
-            }
-            // Auth was good — clear any stale re-auth banner.
-            Notifications.clearReauth(ctx)
-            // R6 — refresh the focus-session ongoing notification each tick.
-            try {
-                val focus = client.fetchFocus(baseUrl, token)
-                if (focus != null) {
-                    if (focus.active && focus.process != null) {
-                        Notifications.postFocus(
-                            ctx, focus.process, focus.title, focus.durationMin,
-                        )
-                    } else {
-                        Notifications.clearFocus(ctx)
-                    }
-                }
-            } catch (_: Exception) {
-                // focus is optional surface; never block the signal path.
-            }
-            if (signals.isEmpty()) return Result.success()
-            // R7 — apply user-configured filters before posting.
-            val muted = Prefs.loadMutedKinds(ctx)
-            val threshold = Prefs.loadImportanceThreshold(ctx)
-            val qStart = Prefs.loadQuietStartHour(ctx)
-            val qEnd = Prefs.loadQuietEndHour(ctx)
-            signals
-                .filter {
-                    SignalFilter.shouldSurface(
-                        it, muted, threshold, qStart, qEnd,
-                    )
-                }
-                .forEach { Notifications.postSignal(ctx, it) }
-            // Advance lastSeenTs to the newest fetched (filtered or not) so
-            // dropped signals don't pile up on the next poll.
-            val newest = signals.maxByOrNull { it.ts }?.ts
-            if (newest != null) Prefs.saveLastSeenTs(ctx, newest)
-            return Result.success()
-        } finally {
-            client.close()
+        return when (signalPollOnce(applicationContext)) {
+            PollOutcome.OK, PollOutcome.NO_CONFIG, PollOutcome.AUTH_FAILED -> Result.success()
+            PollOutcome.RETRY -> Result.retry()
         }
     }
 
@@ -113,5 +64,71 @@ class SignalWorker(
         fun cancel(ctx: Context) {
             WorkManager.getInstance(ctx).cancelUniqueWork(WORK_NAME)
         }
+    }
+}
+
+/**
+ * Outcome of a single poll cycle. Consumed both by [SignalWorker.doWork]
+ * (mapping to WorkManager's success/retry semantics) and by
+ * [BackgroundPollService] (which loops on its own timer and ignores
+ * RETRY since it'll just retry next tick anyway).
+ */
+enum class PollOutcome { OK, NO_CONFIG, AUTH_FAILED, RETRY }
+
+/**
+ * Single poll cycle of /api/signals + /api/focus, surface notifications,
+ * advance lastSeenTs. Extracted from SignalWorker.doWork so the
+ * foreground BackgroundPollService can drive its own 15-min timer
+ * (Android 12+ throttles WorkManager periodic when app is fully
+ * backgrounded; the service keeps the process alive so this loop
+ * actually fires when phone is locked + app closed).
+ */
+suspend fun signalPollOnce(ctx: Context): PollOutcome {
+    val baseUrl = Prefs.loadBackendUrl(ctx, default = "")
+    val token = Prefs.loadAuthToken(ctx, default = "")
+    if (baseUrl.isBlank() || token.isBlank()) return PollOutcome.NO_CONFIG
+    val since = Prefs.loadLastSeenTs(ctx, default = "")
+    val client = JarvisClient()
+    try {
+        val signals = try {
+            client.fetchSignals(baseUrl, since, token, limit = 10)
+        } catch (e: JarvisAuthException) {
+            Notifications.postReauth(ctx, baseUrl)
+            return PollOutcome.AUTH_FAILED
+        } catch (e: Exception) {
+            return PollOutcome.RETRY
+        }
+        Notifications.clearReauth(ctx)
+        try {
+            val focus = client.fetchFocus(baseUrl, token)
+            if (focus != null) {
+                if (focus.active && focus.process != null) {
+                    Notifications.postFocus(
+                        ctx, focus.process, focus.title, focus.durationMin,
+                    )
+                } else {
+                    Notifications.clearFocus(ctx)
+                }
+            }
+        } catch (_: Exception) {
+            // focus is optional surface; never block the signal path.
+        }
+        if (signals.isEmpty()) return PollOutcome.OK
+        val muted = Prefs.loadMutedKinds(ctx)
+        val threshold = Prefs.loadImportanceThreshold(ctx)
+        val qStart = Prefs.loadQuietStartHour(ctx)
+        val qEnd = Prefs.loadQuietEndHour(ctx)
+        signals
+            .filter {
+                SignalFilter.shouldSurface(
+                    it, muted, threshold, qStart, qEnd,
+                )
+            }
+            .forEach { Notifications.postSignal(ctx, it) }
+        val newest = signals.maxByOrNull { it.ts }?.ts
+        if (newest != null) Prefs.saveLastSeenTs(ctx, newest)
+        return PollOutcome.OK
+    } finally {
+        client.close()
     }
 }

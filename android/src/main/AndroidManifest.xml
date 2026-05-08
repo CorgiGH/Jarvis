@@ -13,6 +13,13 @@
          user grants via Settings > Apps > Special access > Usage access. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
                      tools:ignore="ProtectedPermissions" />
+    <!-- 2026-05-08: BackgroundPollService promotes the /api/signals poll to
+         a foreground service so notifications fire reliably when app is
+         closed (Android 12+ throttles WorkManager periodic in fully-
+         backgrounded apps). FOREGROUND_SERVICE_DATA_SYNC is the explicit
+         type-permission Android 14+ requires alongside foregroundServiceType. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!-- Required so the system speech recognizer picker dialog can find a STT
          service on Android 11+ scoped package visibility. -->
@@ -49,5 +56,12 @@
                 <action android:name="io.victor.jarvis.action.SIGNAL_ACK" />
             </intent-filter>
         </receiver>
+        <!-- 2026-05-08: foreground service for reliable background polling
+             when the app is closed. Type "dataSync" matches the periodic
+             /api/signals + /api/focus pull pattern. -->
+        <service
+            android:name=".BackgroundPollService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
     </application>
 </manifest>

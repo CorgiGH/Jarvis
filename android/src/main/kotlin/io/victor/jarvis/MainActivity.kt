@@ -129,9 +129,15 @@ fun JarvisApp() {
                 // Enqueue phone activity logger; it self-no-ops if usage
                 // permission is not yet granted, so safe to enqueue early.
                 PhoneActivityWorker.enqueue(context)
+                // 2026-05-08: foreground service drives the actual /api/
+                // signals poll loop so notifications fire when the app is
+                // fully backgrounded. WorkManager (above) stays as a
+                // belt-and-suspenders fallback if the OS kills the service.
+                BackgroundPollService.start(context)
             } else {
                 SignalWorker.cancel(context)
                 PhoneActivityWorker.cancel(context)
+                BackgroundPollService.stop(context)
             }
         }
     }
