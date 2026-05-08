@@ -103,6 +103,10 @@ def call_claude(prompt, timeout):
     cmd = [CLAUDE_BIN, "--print", "--output-format", "text"]
     if CLAUDE_MODEL:
         cmd += ["--model", CLAUDE_MODEL]
+    # CREATE_NO_WINDOW (0x08000000) suppresses the brief console flash
+    # Windows would otherwise pop when pythonw spawns claude.exe (a
+    # console-subsystem child). Constant is Windows-only; getattr falls
+    # back to 0 on POSIX so this same code runs on Linux unchanged.
     proc = subprocess.run(
         cmd,
         input=prompt,
@@ -110,6 +114,7 @@ def call_claude(prompt, timeout):
         text=True,
         encoding="utf-8",
         timeout=timeout,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     if proc.returncode != 0:
         raise RuntimeError(
