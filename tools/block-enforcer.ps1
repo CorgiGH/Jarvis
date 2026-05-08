@@ -89,6 +89,18 @@ function Get-LessonHintFromSnippet($snippet) {
     return $null
 }
 
+function Get-SubjectFromSnippet($snippet) {
+    # DriftDirective format: "GET BACK TO {SUBJECT}{/topic}? . NEXT: ..."
+    # Pull the subject token after "GET BACK TO " (stops at ' ', '/', '.').
+    if ($snippet -match 'GET BACK TO\s+([A-Z]+)') {
+        return $matches[1].Trim()
+    }
+    if ($snippet -match '\[\[lesson:\s*([A-Z]+)') {
+        return $matches[1].Trim()
+    }
+    return $null
+}
+
 function Show-DriftModal($snippet, $rationale) {
     # Three rapid beeps to wake the user from whatever flow they're in.
     for ($i = 0; $i -lt 3; $i++) {
@@ -97,6 +109,7 @@ function Show-DriftModal($snippet, $rationale) {
     }
     $openPath = Get-OpenPathFromSnippet $snippet
     $lessonHint = Get-LessonHintFromSnippet $snippet
+    $subject = Get-SubjectFromSnippet $snippet
 
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "JARVIS DRIFT ALERT"
@@ -127,15 +140,35 @@ function Show-DriftModal($snippet, $rationale) {
     $body.Padding = New-Object System.Windows.Forms.Padding(20)
     $form.Controls.Add($body)
 
-    # Bottom button row - actionable surfaces. Layout panel for 3 buttons.
+    # Bottom button row - 4 actionable surfaces: TUTOR (primary, opens
+    # in-place chat for the scheduled subject), Open file, Copy hint,
+    # Dismiss. Tutor is the load-bearing one - it actually teaches.
     $buttonPanel = New-Object System.Windows.Forms.TableLayoutPanel
     $buttonPanel.Dock = [System.Windows.Forms.DockStyle]::Bottom
     $buttonPanel.Height = 70
-    $buttonPanel.ColumnCount = 3
+    $buttonPanel.ColumnCount = 4
     $buttonPanel.RowCount = 1
-    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 33.34)))
-    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 33.33)))
-    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 33.33)))
+    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 30)))
+    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
+    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 25)))
+    [void]$buttonPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 20)))
+
+    $tutorBtn = New-Object System.Windows.Forms.Button
+    $tutorBtn.Text = if ($subject) { "Tutor me on $subject" } else { "Tutor me" }
+    $tutorBtn.Enabled = $true
+    $tutorBtn.Dock = [System.Windows.Forms.DockStyle]::Fill
+    $tutorBtn.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+    $tutorBtn.BackColor = [System.Drawing.Color]::FromArgb(60, 130, 200)
+    $tutorBtn.ForeColor = [System.Drawing.Color]::White
+    $tutorBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $tutorBtn.Add_Click({
+        $tutorScript = "C:\Users\User\jarvis-kotlin\tools\tutor-window.ps1"
+        $args = if ($subject) { @("-File", $tutorScript, "-Subject", $subject) }
+                else { @("-File", $tutorScript) }
+        Start-Process powershell.exe -ArgumentList ((@("-NoProfile", "-ExecutionPolicy", "Bypass") + $args))
+        Write-Log "tutor launched for subject=$subject"
+        $form.Close()
+    })
 
     $openBtn = New-Object System.Windows.Forms.Button
     $openBtn.Text = if ($openPath) { "Open: $(Split-Path -Leaf $openPath)" } else { "(no file ref)" }
@@ -175,9 +208,10 @@ function Show-DriftModal($snippet, $rationale) {
     $closeBtn.ForeColor = [System.Drawing.Color]::Black
     $closeBtn.Add_Click({ $form.Close() })
 
-    $buttonPanel.Controls.Add($openBtn, 0, 0)
-    $buttonPanel.Controls.Add($copyBtn, 1, 0)
-    $buttonPanel.Controls.Add($closeBtn, 2, 0)
+    $buttonPanel.Controls.Add($tutorBtn, 0, 0)
+    $buttonPanel.Controls.Add($openBtn,  1, 0)
+    $buttonPanel.Controls.Add($copyBtn,  2, 0)
+    $buttonPanel.Controls.Add($closeBtn, 3, 0)
     $form.Controls.Add($buttonPanel)
 
     $form.Add_Shown({ $form.Activate() })
