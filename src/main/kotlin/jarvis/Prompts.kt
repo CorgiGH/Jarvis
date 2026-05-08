@@ -62,6 +62,15 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   items the user has never touched. Use when the user asks "what should
   I be doing right now" or for a check-in mid-study-session.
     [[plan: today]]
+- grade_record(SUBJECT/COMPONENT/EARNED/MAX [/NOTE]): record a graded
+  result. Slash-separated. Latest row wins per (subject, component) so
+  re-recording corrects. Use when user mentions a grade ("got 14.5/35
+  on PA Test 1").
+    [[grade_record: PA / Test 1 / 14.5 / 35 / midterm]]
+- grades: per-subject grade summary, weakest subjects first. Use this
+  to gauge which subject needs more attention. Pair with [[catchup]]
+  to bias study time toward low-performing subjects.
+    [[grades: now]]
 - catchup(<N>?): multi-day plan for the next N days (default 7, max 30).
   Each day: scheduled blocks + stale review queue + up to 3 new untouched
   concepts (deduped across days, biased toward subjects with exams in

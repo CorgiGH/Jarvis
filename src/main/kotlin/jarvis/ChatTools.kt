@@ -116,6 +116,8 @@ object ChatTools {
         "assignment_progress" -> executeAssignmentProgress(call.args)
         "assignment_done" -> executeAssignmentDone(call.args)
         "assignments" -> executeAssignments()
+        "grade_record" -> executeGradeRecord(call.args)
+        "grades" -> executeGrades()
         else -> "(unknown tool: ${call.name})"
     }
 
@@ -406,6 +408,50 @@ object ChatTools {
         val catalog = ConceptCatalog.all()
         val items = StudyPlanner.today(schedule, stats, catalog, now, zone)
         return StudyPlanner.render(items, schedule, now, zone)
+    }
+
+    /** Record a graded result. Slash-separated args:
+     *  `SUBJECT / COMPONENT / EARNED / MAX [/ NOTE]`. Latest-row-wins
+     *  per (subject, component) so re-recording a corrected grade
+     *  just appends a new row.
+     *
+     *  Example: `[[grade_record: PA / Test 1 / 14.5 / 35 / midterm]]`
+     */
+    private fun executeGradeRecord(args: String): String {
+        val parts = args.split("/").map { it.trim() }
+        if (parts.size < 4) {
+            return "(usage: [[grade_record: SUBJECT / COMPONENT / EARNED / MAX [/ NOTE]]])"
+        }
+        val subject = parts[0]
+        val component = parts[1]
+        if (subject.isEmpty() || component.isEmpty()) {
+            return "(subject and component cannot be empty)"
+        }
+        val earned = parts[2].toDoubleOrNull()
+            ?: return "(invalid earned: ${parts[2]})"
+        val max = parts[3].toDoubleOrNull()
+            ?: return "(invalid max: ${parts[3]})"
+        val note = parts.drop(4).joinToString("/").trim().takeIf { it.isNotEmpty() }
+        val entry = Grades.record(subject, component, earned, max, note)
+        val pct = if (max > 0.0) (earned / max * 100).toInt() else 0
+        return "(recorded ${entry.subject}/${entry.component} = " +
+            "${"%.1f".format(earned)}/${"%.1f".format(max)} (${pct}%)" +
+            (note?.let { " — $it" } ?: "") + ")"
+    }
+
+    /** List current per-subject grade summary, weakest subjects first
+     *  so catch-up logic can use it as an importance signal. */
+    private fun executeGrades(): String {
+        val summary = Grades.summaryBySubject()
+        if (summary.isEmpty()) {
+            return "(no grades recorded yet — use [[grade_record: SUBJECT/COMPONENT/EARNED/MAX]])"
+        }
+        val lines = summary.joinToString("\n") { s ->
+            val pct = if (s.totalMax > 0.0) (s.ratio * 100).toInt() else 0
+            "  ${s.subject}: ${"%.1f".format(s.totalEarned)}/${"%.1f".format(s.totalMax)} " +
+                "(${pct}%, ${s.componentCount} component${if (s.componentCount == 1) "" else "s"})"
+        }
+        return "Grades by subject (weakest first):\n$lines"
     }
 
     /** Multi-day catch-up planner. `[[catchup: N]]` returns a per-day plan
