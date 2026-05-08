@@ -124,6 +124,7 @@ object ChatTools {
         "grade_record" -> executeGradeRecord(call.args)
         "grades" -> executeGrades()
         "grades_sync_status" -> executeGradesSyncStatus()
+        "push_status" -> executePushStatus()
         else -> "(unknown tool: ${call.name})"
     }
 
@@ -486,6 +487,69 @@ object ChatTools {
             for (f in failures) sb.append("    - ").append(f).append("\n")
         } else {
             sb.append("  no failures.")
+        }
+        return sb.toString().trimEnd()
+    }
+
+    /** Reads the last_push_status.json snapshot the daily Telegram cron
+     *  writes after every send-daily-push.py run. Council 1778256562
+     *  Risk Analyst HIGH mitigation: the push pipeline silent-fails
+     *  (token revoke, network blip, .env syntax error all log to a
+     *  file the user never reads). Surfacing the status as a chat tool
+     *  turns silent-fail into a poll-visible flag. */
+    private fun executePushStatus(): String {
+        val statusPath = Config.stateDir.resolve("last_push_status.json")
+        if (!statusPath.exists()) {
+            return "(no push-status file yet — cron has not fired, or wrote elsewhere)"
+        }
+        val text = try {
+            java.nio.file.Files.readString(statusPath, Charsets.UTF_8)
+        } catch (e: Exception) {
+            return "(failed to read $statusPath: ${e.message?.take(160)})"
+        }
+        val parsed = try {
+            kotlinx.serialization.json.Json
+                .parseToJsonElement(text)
+                .jsonObject
+        } catch (_: Exception) {
+            return "(malformed push-status JSON; raw: ${text.take(200)})"
+        }
+        val ts = parsed["ts"]?.jsonPrimitive?.contentOrNull ?: "?"
+        val today = parsed["today"]?.jsonPrimitive?.contentOrNull ?: "?"
+        val dayN = parsed["day_n"]?.jsonPrimitive?.intOrNull ?: 0
+        val httpCode = parsed["http_code"]?.jsonPrimitive?.intOrNull ?: -1
+        val subject = parsed["subject"]?.jsonPrimitive?.contentOrNull
+        val title = parsed["title"]?.jsonPrimitive?.contentOrNull
+        val due = parsed["due_in_days"]?.jsonPrimitive?.intOrNull
+        val err = parsed["error"]?.jsonPrimitive?.contentOrNull
+        val sb = StringBuilder()
+        val healthy = httpCode in 200..299
+        sb.append(if (healthy) "✓ Last push OK\n" else "✗ Last push FAILED\n")
+        sb.append("  Day $dayN ($today), pushed at $ts UTC\n")
+        sb.append("  HTTP $httpCode")
+        if (err != null && err.isNotEmpty()) sb.append(" — $err")
+        sb.append("\n")
+        if (subject != null) {
+            val dueStr = due?.let { d ->
+                when {
+                    d < 0 -> "OVERDUE by ${-d}d"
+                    d == 0 -> "DUE TODAY"
+                    else -> "due in ${d}d"
+                }
+            } ?: "no due date"
+            sb.append("  Surfaced: $subject — ${title ?: "?"} ($dueStr)\n")
+        }
+        // Staleness check — if the last push was more than 26 hours ago
+        // (cron runs daily; tolerate a 2h slip), flag it. This catches
+        // missed runs even when http_code last recorded was 200.
+        val nowMs = java.time.Instant.now().toEpochMilli()
+        val tsMs = runCatching { java.time.Instant.parse(ts).toEpochMilli() }
+            .getOrNull()
+        if (tsMs != null) {
+            val ageH = (nowMs - tsMs) / 3_600_000
+            if (ageH > 26) {
+                sb.append("  ⚠ STALE — last push was ${ageH}h ago (cron runs every 24h)\n")
+            }
         }
         return sb.toString().trimEnd()
     }

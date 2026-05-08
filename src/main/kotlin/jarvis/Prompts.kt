@@ -76,6 +76,14 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   subjects synced. Use when user asks "are grades up to date" or
   to diagnose why a [[grades]] result looks stale.
     [[grades_sync_status: now]]
+- push_status: report on the last daily Telegram push (the 09:00 UTC
+  forcing-function reminder). Surfaces HTTP status, day-stamp,
+  surfaced subject + title + due-in-days, and a staleness flag if
+  the last successful push was >26h ago. Use when user asks "did
+  the daily push fire" / "is the bot still pinging me" / "what was
+  yesterday's reminder", or proactively surface this if the user
+  mentions missing a notification.
+    [[push_status: now]]
 - catchup(<N>?): multi-day plan for the next N days (default 7, max 30).
   Each day: scheduled blocks + stale review queue + up to 3 new untouched
   concepts (deduped across days, biased toward subjects with exams in
