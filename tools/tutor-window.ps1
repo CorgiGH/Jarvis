@@ -78,15 +78,15 @@ $bottomPanel.RowCount = 1
 [void]$bottomPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 85)))
 [void]$bottomPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 15)))
 
-$input = New-Object System.Windows.Forms.TextBox
-$input.Dock = [System.Windows.Forms.DockStyle]::Fill
-$input.Multiline = $true
-$input.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
-$input.AcceptsReturn = $false
-$input.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 48)
-$input.ForeColor = [System.Drawing.Color]::WhiteSmoke
-$input.Font = New-Object System.Drawing.Font("Consolas", 11)
-$input.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$txtInput = New-Object System.Windows.Forms.TextBox
+$txtInput.Dock = [System.Windows.Forms.DockStyle]::Fill
+$txtInput.Multiline = $true
+$txtInput.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
+$txtInput.AcceptsReturn = $false
+$txtInput.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 48)
+$txtInput.ForeColor = [System.Drawing.Color]::WhiteSmoke
+$txtInput.Font = New-Object System.Drawing.Font("Consolas", 11)
+$txtInput.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 
 $sendBtn = New-Object System.Windows.Forms.Button
 $sendBtn.Text = "Send (Ctrl+Enter)"
@@ -96,7 +96,7 @@ $sendBtn.BackColor = [System.Drawing.Color]::FromArgb(60, 130, 200)
 $sendBtn.ForeColor = [System.Drawing.Color]::White
 $sendBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 
-$bottomPanel.Controls.Add($input, 0, 0)
+$bottomPanel.Controls.Add($txtInput, 0, 0)
 $bottomPanel.Controls.Add($sendBtn, 1, 0)
 
 $form.Controls.Add($history)
@@ -114,7 +114,7 @@ $status.Padding = New-Object System.Windows.Forms.Padding(8, 0, 0, 0)
 $form.Controls.Add($status)
 
 # Append helpers - bold labels for "you" / "jarvis", wrapped body.
-function Append-Turn($who, $text) {
+function script:Append-Turn($who, $text) {
     $color = if ($who -eq "you") {
         [System.Drawing.Color]::FromArgb(255, 200, 100)
     } else {
@@ -131,12 +131,12 @@ function Append-Turn($who, $text) {
     $history.ScrollToCaret()
 }
 
-function Send-Turn($msg) {
+function script:Send-Turn($msg) {
     if ([string]::IsNullOrWhiteSpace($msg)) { return }
     Append-Turn "you" $msg
     $status.Text = "thinking..."
     $sendBtn.Enabled = $false
-    $input.Enabled = $false
+    $txtInput.Enabled = $false
     $form.Refresh()
     try {
         $body = @{ msg = $msg } | ConvertTo-Json -Compress
@@ -160,27 +160,31 @@ function Send-Turn($msg) {
     } finally {
         $status.Text = "Connected: $ApiBase"
         $sendBtn.Enabled = $true
-        $input.Enabled = $true
-        $input.Clear()
-        $input.Focus()
+        $txtInput.Enabled = $true
+        $txtInput.Clear()
+        $txtInput.Focus()
     }
 }
 
-$sendBtn.Add_Click({ Send-Turn $input.Text })
+$sendBtn.Add_Click({
+    $msg = $txtInput.Text
+    Write-Log "send button clicked, msg len=$($msg.Length)"
+    Send-Turn $msg
+}.GetNewClosure())
 
 # Ctrl+Enter sends; plain Enter inserts newline (multiline).
-$input.Add_KeyDown({
+$txtInput.Add_KeyDown({
     param($s, $e)
     if ($e.Control -and $e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
-        Send-Turn $input.Text
+        Send-Turn $txtInput.Text
         $e.SuppressKeyPress = $true
     }
-})
+}.GetNewClosure())
 
 # Open with prefill turn if subject given.
 $form.Add_Shown({
     $form.Activate()
-    $input.Focus()
+    $txtInput.Focus()
     if ($Subject) {
         $prefill = if ($Concept) {
             "[[lesson: $Subject/$Concept]]"
