@@ -156,16 +156,29 @@ function script:Send-Turn($msg) {
     [void]$ps.AddScript({
         try {
             $body = @{ msg = $msg } | ConvertTo-Json -Compress
-            $resp = Invoke-RestMethod -Uri "$ApiBase/api/chat" `
+            # Use Invoke-WebRequest + manual UTF-8 decode. Invoke-RestMethod
+            # defaults the response decoder to cp1252 when the Content-Type
+            # header lacks an explicit charset, mojibaking Romanian (Î¼, Â·,
+            # â) + math symbols (greek letters, em-dash). Forcing UTF-8 on
+            # the raw byte stream keeps text faithful end-to-end.
+            $resp = Invoke-WebRequest -Uri "$ApiBase/api/chat" `
                 -Method Post `
                 -Headers @{
                     Authorization = "Bearer $Token"
-                    "Content-Type" = "application/json"
+                    "Content-Type" = "application/json; charset=utf-8"
                 } `
-                -Body $body `
+                -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) `
                 -TimeoutSec 180 `
+                -UseBasicParsing `
                 -ErrorAction Stop
-            return @{ ok = $true; reply = $resp.reply }
+            $bytes = if ($resp.RawContentStream) {
+                $resp.RawContentStream.ToArray()
+            } else {
+                [System.Text.Encoding]::UTF8.GetBytes($resp.Content)
+            }
+            $jsonText = [System.Text.Encoding]::UTF8.GetString($bytes)
+            $obj = $jsonText | ConvertFrom-Json
+            return @{ ok = $true; reply = $obj.reply }
         } catch {
             return @{ ok = $false; err = "$_" }
         }
