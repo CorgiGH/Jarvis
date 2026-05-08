@@ -166,29 +166,34 @@ def extract_ps(row: list[str]) -> list[tuple[str, float, float]]:
        16: Teme laborator, 17: Activitate laborator, 18: Test Laborator,
        19: Statistica total, 20: Grand total, 21: Final.
 
-       v2 sentinel writes: PS components are KNOWN — even when the
-       sheet cell is empty, write a 0-earned row with note "(not yet
-       graded)" so the latest ledger row reflects current state. This
-       lets the bot treat un-graded components as weak subjects (high
-       catch-up priority) instead of inheriting stale wrong values
-       from earlier syncs.
+       v3 (2026-05-08, post session-review council Risk Analyst HIGH):
+       Sentinel-zero on empty cell created a persistent false-low
+       grade — every hourly cron rewrote 0/20 with a fresh ts, biasing
+       [[catchup]] toward PS during the exact deadline window where
+       wrong direction costs the most. Removed sentinel writes; empty
+       cells produce NO row, leaving the latest legitimate value in
+       the ledger to win on read. Trade-off: a brand-new component
+       the user has never been graded on will simply not appear in
+       [[grades]] until it's filled in, vs the bot now seeing a
+       wrongly-confident 0. The latter is worse for finals prep.
     """
     def g(i):
         return row[i] if i < len(row) else ""
 
-    out: list[tuple[str, float, float, str | None]] = []
-
-    def emit(label: str, val: float | None, cap: float):
-        if val is not None:
-            out.append((label, val, cap, None))
-        else:
-            out.append((label, 0.0, cap, "(not yet graded)"))
-
-    emit("Seminar total (six 10pt tests)", parse_num(g(15)), 60.0)
-    emit("Homework total",                 parse_num(g(16)), 20.0)
-    emit("Lab activity",                   parse_num(g(17)), 20.0)
-    emit("Lab final-week test",            parse_num(g(18)), 20.0)
-    return [(label, e, m) for (label, e, m, _) in out]
+    out: list[tuple[str, float, float]] = []
+    sem = parse_num(g(15))
+    if sem is not None:
+        out.append(("Seminar total (six 10pt tests)", sem, 60.0))
+    teme = parse_num(g(16))
+    if teme is not None:
+        out.append(("Homework total", teme, 20.0))
+    activ = parse_num(g(17))
+    if activ is not None:
+        out.append(("Lab activity", activ, 20.0))
+    test_lab = parse_num(g(18))
+    if test_lab is not None:
+        out.append(("Lab final-week test", test_lab, 20.0))
+    return out
 
 
 def extract_pa(row: list[str]) -> list[tuple[str, float, float]]:
@@ -327,6 +332,25 @@ def main():
                 }
                 out.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 appended += 1
+
+    # Council 2026-05-08 review-cycle (DA + RA HIGH): write a per-run
+    # status snapshot so silent failures (matricol-not-found, fetch
+    # error, parse error) become surface-able. The bot's [[search]] +
+    # [[read]] tools can hit this path, and a future ChatTools
+    # dispatcher entry could surface it via [[grades_sync_status]].
+    status_path = os.path.dirname(GRADES_FILE) + "/grades-sync-status.json"
+    try:
+        with open(status_path, "w", encoding="utf-8") as sf:
+            json.dump({
+                "ts": now_iso,
+                "appended": appended,
+                "unchanged": skipped_unchanged,
+                "failures": failed,
+                "subjects_synced": [s["subject"] for s in SHEETS
+                                     if not any(f.startswith(s["subject"] + ":") for f in failed)],
+            }, sf, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
     if quiet and appended == 0 and not failed:
         return

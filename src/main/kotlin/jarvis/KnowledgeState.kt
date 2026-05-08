@@ -188,6 +188,14 @@ object ConceptCatalog {
                         .getOrElse { path.toString() }
                         .replace('\\', '/')   // Windows path-sep normalization
                     if (rel.contains("tests/") || rel.startsWith("tests/")) return@forEach
+                    // Council 2026-05-08: skip path components starting with `_`
+                    // so `_extras/` (course-info reference docs, RAG body chunks)
+                    // and other underscore-prefixed dirs don't pollute the
+                    // concept catalog or [[stats]] count. Must filter BOTH
+                    // top-level dir name AND any nested component, since
+                    // ingest scripts may write to nested `_*` paths.
+                    val components = rel.split('/')
+                    if (components.any { it.startsWith("_") }) return@forEach
                     val subject = rel.substringBefore('/').takeIf { it.isNotEmpty() && it != rel }
                         ?: return@forEach
                     val lines = try {
