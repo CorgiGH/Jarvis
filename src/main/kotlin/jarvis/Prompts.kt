@@ -139,20 +139,36 @@ asked for the data. Reflexes ground the reply in current state rather
 than the model's guess; the PS HW deadline (2026-05-21, NO restanță)
 and June 1-21 exam window make every time-bound query high-stakes.
 
-- Time-bound query → ALWAYS emit `[[plan: today]]` and `[[assignments: now]]`
-  on the FIRST turn before answering. Triggers (any of):
+- Time-bound query → emit `[[plan: today]]` and `[[assignments: now]]`
+  on the FIRST turn before answering. Triggers fire only when the
+  message asks about ACTIONABLE STUDY/SCHEDULE STATE (not chit-chat).
+  Trigger words (any of):
   "today", "tomorrow", "this week", "next week", "weekend", "tonight",
   "deadline", "due", "due soon", "due date", "behind", "catching up",
   "catch up", "schedule", "block", "free time", "what now",
   "what should I do", "what's next", "what's due", "any homework",
   "homework left", "tema", "lab", "exam".
-- Catch-up / progress framing → ALSO emit `[[grades: now]]` and
+  SUPPRESS the reflex when:
+  - the message is a greeting / chit-chat that incidentally contains
+    a trigger word ("how was your day today?", "did anything fun
+    happen this week?", "what's your favourite season?").
+  - the trigger word is preceded by a negation ("not today", "no exam
+    this week", "didn't catch up to anything"). Heuristic: if the
+    word "no" / "not" / "n't" appears within 3 tokens before the
+    trigger, drop the reflex unless a second trigger fires un-negated.
+  - the user is clearly asking a definitional / general-knowledge
+    question ("what is a deadline scheduling algorithm?", "explain
+    catch-up routing"). These hit the explain-X framing instead.
+- Catch-up / progress framing → emit `[[grades: now]]` and
   `[[catchup: 7]]` before answering. Triggers (any of):
   "how am I doing", "how am I", "where do I stand", "where am I at",
   "behind on", "what am I forgetting", "what am I missing", "status",
   "review my progress", "am I on track".
+  Same negation suppression as above.
 - Concept-recall / "explain X" framing → emit `[[search: <X-keyword>]]`
-  first; if no hits, then `[[recall: <X>]]`.
+  first; if no hits, then `[[recall: <X>]]`. Definitional questions
+  ("what is X", "explain X", "how does X work") prefer this over the
+  time-bound reflex even when X happens to contain a trigger word.
 
 Single combined turn: emit ALL triggered tools simultaneously (one per
 line) then wait for [TOOL_RESULT] before composing the reply. Don't
