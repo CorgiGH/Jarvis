@@ -27,17 +27,39 @@ object LlmFactory {
      *  lands on the box.
      *
      *  Pass the ANTHROPIC_API_KEY only when JARVIS_LLM=anthropic; the
-     *  subprocess providers (claude-max, copilot) ignore [apiKey]. */
-    fun create(apiKey: String? = null): Llm {
-        val provider = (System.getenv("JARVIS_LLM") ?: "claude-max").lowercase()
-        return when (provider) {
+     *  subprocess providers (claude-max, copilot) ignore [apiKey].
+     *
+     *  When JARVIS_LLM=fallback, JARVIS_PRIMARY_LLM and JARVIS_FALLBACK_LLM
+     *  pick the two wrapped providers (defaults: relay + copilot). Composite
+     *  nesting is rejected — neither slot may itself be 'fallback'. */
+    fun create(apiKey: String? = null): Llm =
+        createByName(
+            name = (System.getenv("JARVIS_LLM") ?: "claude-max"),
+            apiKey = apiKey,
+            allowComposite = true,
+        )
+
+    private fun createByName(name: String, apiKey: String?, allowComposite: Boolean): Llm {
+        return when (name.lowercase()) {
             "claude-max", "claude", "max" -> ClaudeMaxLlm()
             "copilot", "gh-copilot", "github-copilot" -> CopilotLlm()
             "anthropic", "anthropic-api" -> AnthropicLlm(
                 apiKey ?: error("JARVIS_LLM=anthropic requires ANTHROPIC_API_KEY"),
             )
+            "relay" -> RelayLlm()
+            "fallback" -> {
+                if (!allowComposite) {
+                    error("JARVIS_PRIMARY_LLM / JARVIS_FALLBACK_LLM cannot be 'fallback' — would recurse")
+                }
+                val primaryName = System.getenv("JARVIS_PRIMARY_LLM") ?: "relay"
+                val fallbackName = System.getenv("JARVIS_FALLBACK_LLM") ?: "copilot"
+                FallbackLlm(
+                    primary = createByName(primaryName, apiKey, allowComposite = false),
+                    fallback = createByName(fallbackName, apiKey, allowComposite = false),
+                )
+            }
             else -> error(
-                "Unknown JARVIS_LLM: $provider. Use claude-max | copilot | anthropic.",
+                "Unknown JARVIS_LLM: $name. Use claude-max | copilot | anthropic | relay | fallback.",
             )
         }
     }

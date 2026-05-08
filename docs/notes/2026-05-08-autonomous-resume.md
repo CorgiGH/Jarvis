@@ -281,3 +281,46 @@ After deep-research report (`docs/superpowers/research/2026-05-08-personal-ai-li
 - 2026-05-14: re-evaluate `wiki.md.bak.1778090717` retention.
 - `core_memory.md` on VPS is empty by design — user-curated. Privacy scanner is wired; user can `ssh + vim` to seed.
 - `claude-max` provider login is interactive; flag for user when next opportunity arises.
+
+## 2026-05-08 evening — RelayLlm + FallbackLlm landed
+
+**Trigger:** `JARVIS_LLM=copilot` on VPS hit `copilot -p` exit 402 "You have no quota" (GitHub Copilot premium-request quota exhausted; resets monthly). Bot dead.
+
+**Decision (council 2026-05-08, `council-cache/council-1778233802.md`):** route primary chat through user's PC (residential IP, lower abuse-detection vector than running `claude` on VPS), keep Copilot CLI as fallback for the PC-asleep window. User explicitly accepted Anthropic Consumer Terms §3 risk after reviewing exact ToS quote + Feb 2026 OAuth-token clarification + Jan 2026 active enforcement.
+
+**Files added:**
+- `src/main/kotlin/jarvis/RelayLlm.kt` — JDK `HttpClient`, POST `$JARVIS_RELAY_URL/complete` with bearer auth, 5s connect / 120s read. Throws `IOException` on connect/read failure so FallbackLlm catches.
+- `src/main/kotlin/jarvis/FallbackLlm.kt` — wraps two `Llm`. Tries primary; on any non-Cancellation throwable, tries fallback. Both throw → composite `IllegalStateException` naming both. **Deliberately no TCP probe + 30s cache** (council Pragmatist KEY CONCERN — try-and-fail is sufficient at tens-of-turns/day and avoids cache-poisoning windows).
+- `src/test/kotlin/jarvis/FallbackLlmTest.kt` — 5 cases: primary-OK, primary-IOException-fallback-OK, primary-IllegalStateException-fallback-OK, both-throw-composite, fallback-tag-preserved.
+- `tools/pc-relay-server.py` — Python stdlib `http.server`, bearer-auth, POST `/complete` spawns `claude --print`, GET `/healthz` round-trips a 1-token "ping" (DE KEY CONCERN: TCP-reachable ≠ CLI-healthy). `/healthz` is for daily cron — do NOT call per-request, burns Max quota.
+
+**Files modified:**
+- `src/main/kotlin/jarvis/Llm.kt` — `LlmFactory.create()` now handles `relay` and `fallback` provider names. Composite-nesting guard rejects `JARVIS_PRIMARY_LLM=fallback` / `JARVIS_FALLBACK_LLM=fallback`.
+- `.env.example` — documents `JARVIS_PRIMARY_LLM`, `JARVIS_FALLBACK_LLM`, `JARVIS_RELAY_URL`, `JARVIS_RELAY_TOKEN`, `JARVIS_RELAY_CONNECT_S`, `JARVIS_RELAY_READ_S`.
+
+**User-interactive steps before deploy (all CAN'T-without-user per anti-features):**
+1. Install Tailscale on PC + VPS, log in to both with same account, note PC's tailnet IP (something in `100.x.y.z`).
+2. Disable PC sleep on AC: Settings → System → Power → Screen and sleep → "When plugged in, put my device to sleep after" = Never.
+3. Generate token: PowerShell `-join ((1..64)|%{[char]((48..57)+(97..102)|Get-Random)})` or `openssl rand -hex 32`.
+4. Run on PC: `set JARVIS_RELAY_TOKEN=<token> && python tools/pc-relay-server.py` (or PowerShell `$env:JARVIS_RELAY_TOKEN='<token>'; python tools\pc-relay-server.py`). Optionally pin to startup via Task Scheduler (mirror existing `start_logger_hidden.vbs` pattern).
+5. Edit `/opt/jarvis/.env` on VPS: `JARVIS_LLM=fallback`, `JARVIS_PRIMARY_LLM=relay`, `JARVIS_FALLBACK_LLM=copilot`, `JARVIS_RELAY_URL=http://<pc-tailnet-ip>:9999`, `JARVIS_RELAY_TOKEN=<same token>`.
+6. From local repo: `gradle :installDist && bash tools/deploy.sh`.
+
+**Smoke checklist:**
+- POST `/api/chat` from VPS while PC server up → reply, response includes provider tag `claude-max-relay` (visible in chat history JSON).
+- Stop PC server (Ctrl-C) → POST again → falls through to copilot. Currently still 402'd → composite error like `all LLM providers failed. primary=relay connect refused...; fallback=copilot CLI exit 402: You have no quota` (per RA mitigation d: clear error, NOT a 300s spinner).
+- Restart PC server → POST → primary serves again immediately (no cache to wait on).
+
+**Council mitigations applied (`council-1778233802.md`):**
+- ✓ DROP TCP probe + 30s cache (Pragmatist).
+- ✓ /healthz round-trips actual claude (DE).
+- ✓ Both-down clear error (RA d).
+- ✓ Per-turn provider tag (Prag).
+- ✓ Composite-recursion guard in LlmFactory.
+- ⏳ Deferred: QPS cap + quiet hours for ToS-detection mitigation (RA a). Implement in `pc-relay-server.py` token-bucket if usage patterns get bot-shaped.
+- ⏳ Deferred: "session expired" stderr-pattern detection (RA c). Only matters once Copilot fallback works again post-quota-reset. Add to RelayLlm + ClaudeMaxLlm as fail-fast catch.
+
+**Known limitations:**
+- Until Copilot quota resets, fallback chain still ends in error when PC offline. PC must be on for the bot to be reachable today.
+- `claude --print` cold-start ≈ 1-3s on Windows (Domain Expert flagged subprocess-spawn-per-request). Acceptable at this load; revisit if user-facing latency becomes annoying.
+- ToS exposure is acknowledged and accepted by user. Possible mitigations if patterns ever look bot-shaped: lower QPS cap, add nightly quiet hours in PC server.
