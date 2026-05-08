@@ -562,3 +562,34 @@ After that, cron 09:00 daily.
    on real layout, two leading-blank rows, renames, insertions,
    truncation, garbage rows). Live run on VPS: appended=0,
    unchanged=19, failures=[], all 4 subjects synced clean.
+6. ~~**SO+RC bulk archival scrape**~~ — DONE 2026-05-09. User asked
+   for full inventory after seeing only 2 SO pages on disk. Two
+   parallel agents inventoried (a) `Desktop/SO/` + `Desktop/Second brain/`
+   and (b) the live SO + RC course sites with link-recursion. Then
+   `tools/scrape-so-rc-content.py` fetched + text-extracted everything:
+   170 SO files (115M, 50 PDFs incl. 8 textbooks like Tanenbaum MOS5,
+   Silberschatz OSC10, Kerrisk TLPI1, Stevens APUE3 + 28 lecture variants
+   + 9 ManualID chapters + 3 docs + 30 HTML pages), 48 RC files (7.9M,
+   11 Laboratorul PDFs + 7 HTML pages + 8 local-Desktop rc_lab .md).
+   76s download, ~123 MB binaries + extracted .md alongside via
+   pdftotext (PyPDF2 fallback). 6 failures: password-locked PPT-exported
+   Curs PDFs from RC site (Curs1-3 — same files locked locally too at
+   `Desktop/Second brain/Courses/RC/rc_c{1,2,3}.pdf`). User can ask
+   tutor (Georgiana Calancea) for the owner password to unlock those.
+   Smoke: `[[search]]`-driven query "explain fork+wait syscall" returned
+   TLPI Ch 24/26 page-cited answer — bot reading actual textbook content
+   from archival.
+
+   **Open follow-up:** the SO Google Doc reference at
+   `https://docs.google.com/document/u/0/d/1L70rephVBh9r8_US4khX0_7zSaIxcJJFJq31Nd86NCM/mobilebasic`
+   (linked from `index.html`) was NOT fetched. Likely course-related
+   content (instructor notes / extended explanations). Worth fetching
+   via the Google Drive MCP tool or anonymous-read URL when convenient.
+
+   **Open follow-up:** depth-2 SO subpages not crawled — every
+   `lectures/demo/*/idx_demo.html` has 4-8 `ppt_demoN.html` files;
+   each support-lesson has 3-7 demo HTML pages and a `prg_perf/*.html`
+   page; each `labs/C/lab*` has 2-4 sublab HTML pages. Inventory
+   estimate: ~80 additional HTML pages. Easy depth-2 follow-up if
+   archival queries miss content from those. Skipped this round to
+   keep scope bounded.

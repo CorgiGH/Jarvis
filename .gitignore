@@ -9,3 +9,4 @@ out/
 local.properties
 tools/AUTH_TOKEN.txt
 tools/vps.env
+tmp-so-rc-scrape/
