@@ -160,65 +160,182 @@ def pick_next_action(
     return views[0]
 
 
-def format_message(
-    weakest: dict | None, action: dict | None, today: str
-) -> str:
-    if weakest is None:
-        return "No grades recorded yet — open the app once to seed grades.jsonl."
-    subj = weakest["subject"]
-    pct = round(weakest["ratio"] * 100)
-    earned = weakest["earned"]
-    mx = weakest["max"]
-    head = f"Weakest: {subj} ({earned:g}/{mx:g} = {pct}%)"
-    if action is None:
+# Subjects with NO restanță (failed = no makeup exam = course re-take next year).
+# Council 1778256562 Devil's Advocate flagged this: priority sort must surface
+# no-restanță deadlines BEFORE weakest-subject-by-ratio, otherwise a forcing
+# function pointed at the weakest subject silently misdirects the user away
+# from the actual cliff. PS is the only "V" (Verificare) subject in user's
+# 2026 spring semester per memory user_uaic_finals_2026.md; the rest are "E"
+# (Examen) with restanță in late June.
+NO_RESTANTA_SUBJECTS = {"PS"}
+
+
+def pick_priority_action(
+    assignments: list[dict], summaries: list[dict], today: str
+) -> dict | None:
+    """v2 selector (council 1778256562 fix). Picks the single highest-stakes
+    open assignment across ALL subjects, ordered by:
+      1. has-due-date AND no-restanță (PS Tema A-D rank above all)
+      2. has-due-date AND days-to-due ascending (overdue → due-today → far)
+      3. weakest-subject-by-ratio as tiebreaker among similar due dates
+      4. no-due-date items rank last
+    Returns view dict (with subject, title, dueDate, daysToDue, status,
+    no_restanta) or None when zero active assignments anywhere.
+    """
+    done_ids = {a["id"] for a in assignments if a.get("kind") == "done"}
+    ratio_by_subject = {s["subject"]: s["ratio"] for s in summaries}
+    views: list[dict] = []
+    for a in assignments:
+        if a.get("kind") != "set" or a["id"] in done_ids:
+            continue
+        due = a.get("dueDate")
+        days = _days_to(due, today)
+        subj = a["subject"]
+        if days is None:
+            status = "active"
+        elif days < 0:
+            status = "overdue"
+        elif days <= 3:
+            status = "due-soon"
+        else:
+            status = "active"
+        views.append({
+            "subject": subj,
+            "title": a["title"],
+            "dueDate": due,
+            "daysToDue": days,
+            "status": status,
+            "no_restanta": subj in NO_RESTANTA_SUBJECTS,
+            "ratio": ratio_by_subject.get(subj, 1.0),
+        })
+    if not views:
+        return None
+    # Ordering key — multi-tier tuple, all ascending sort:
+    #  (a) has_due == 0 if days is not None else 1  → dated items first
+    #  (b) -no_restanta_int                          → no-restanță items first
+    #  (c) days                                      → soonest first (overdue negative)
+    #  (d) ratio                                     → weakest first as tiebreaker
+    def key(v: dict):
+        days = v["daysToDue"]
         return (
-            f"{head}\n"
-            f"No open assignments tracked for {subj}. "
-            f"Open the chat: [[study_now: {subj}]] or [[plan: today]]."
+            0 if days is not None else 1,
+            0 if v["no_restanta"] else 1,
+            days if days is not None else 10**9,
+            v["ratio"],
         )
+    views.sort(key=key)
+    return views[0]
+
+
+def format_message(
+    summaries: list[dict], action: dict | None, today: str, day_n: int
+) -> str:
+    """v2 (council 1778256562 fix). Surfaces the priority action AND the
+    full standing line for context — so the user can override the bot's
+    pick if it's wrong without opening the chat. day_n is the day-stamp
+    sequence number (HIGH-A mitigation: missing days become visible)."""
+    standing = (
+        ", ".join(
+            f"{s['subject']} {round(s['ratio'] * 100)}%"
+            for s in summaries[:5]  # weakest-first per summarize_by_subject
+        )
+        if summaries else "no grades yet"
+    )
+    if action is None:
+        head = "No active assignments tracked."
+        return (
+            f"Day {day_n} ({today})\n"
+            f"{head}\n"
+            f"Standing: {standing}.\n"
+            f"Open the chat: [[plan: today]]."
+        )
+    subj = action["subject"]
     title = action["title"]
     due = action["dueDate"] or "no due date"
     days = action["daysToDue"]
-    if action["status"] == "overdue":
-        tag = f"OVERDUE by {abs(days)}d"
-    elif days is None:
+    if days is None:
         tag = "no due date"
+    elif days < 0:
+        tag = f"OVERDUE by {abs(days)}d"
     elif days == 0:
         tag = "DUE TODAY"
     elif days == 1:
         tag = "due tomorrow"
     else:
         tag = f"due in {days}d"
+    cliff_note = " — NO restanță, hard cliff" if action["no_restanta"] else ""
     return (
-        f"{head}\n"
-        f"Next: {title}\n"
-        f"Due {due} ({tag})."
+        f"Day {day_n} ({today})\n"
+        f"PRIORITY: {subj} — {title}\n"
+        f"Due {due} ({tag}){cliff_note}.\n"
+        f"Standing: {standing}."
     )
 
 
-def post_telegram(token: str, chat_id: str, text: str) -> int:
+def post_telegram(token: str, chat_id: str, text: str,
+                   max_attempts: int = 3) -> tuple[int, str]:
+    """POST with retry. Council Risk Analyst HIGH mitigation: a single
+    network blip at 09:00 UTC must not silently lose the day's reminder.
+    3 attempts with 30s/60s/90s backoff before failing."""
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     body = urllib.parse.urlencode({
         "chat_id": chat_id,
         "text": text,
         "disable_notification": "false",
     }).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return resp.status
+    last_err = ""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            req = urllib.request.Request(url, data=body, method="POST")
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                return resp.status, ""
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", "replace")
+            # 4xx (auth/chat-not-found) is permanent — don't retry.
+            if 400 <= e.code < 500:
+                return e.code, f"HTTP {e.code}: {err_body[:200]}"
+            last_err = f"HTTP {e.code}: {err_body[:200]}"
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e}"
+        if attempt < max_attempts:
+            import time as _t
+            _t.sleep(30 * attempt)
+    return 0, last_err
+
+
+def compute_day_n(today: str, anchor_iso: str = "2026-05-09") -> int:
+    """Day-stamp sequence: 1-based count from the first push day. Lets the
+    user notice gaps in the sequence (e.g. "Day 12" Tuesday + "Day 14"
+    Thursday = Wednesday silently lost)."""
+    try:
+        return (date.fromisoformat(today) - date.fromisoformat(anchor_iso)).days + 1
+    except Exception:
+        return 0
+
+
+def write_status(path: str, status: dict) -> None:
+    import json as _json
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump(status, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+STATUS_PATH = os.environ.get(
+    "JARVIS_PUSH_STATUS_FILE", "/opt/jarvis/data/last_push_status.json"
+)
 
 
 def main(argv: list[str]) -> int:
     today = datetime.now(timezone.utc).date().isoformat()
+    day_n = compute_day_n(today)
     grades = read_jsonl(GRADES_FILE)
     assignments = read_jsonl(ASSIGN_FILE)
     summaries = summarize_by_subject(grades)
-    weakest = pick_weakest(summaries)
-    action = (
-        pick_next_action(assignments, today, weakest["subject"])
-        if weakest else None
-    )
-    msg = format_message(weakest, action, today)
+    action = pick_priority_action(assignments, summaries, today)
+    msg = format_message(summaries, action, today, day_n)
 
     if os.environ.get("JARVIS_PUSH_DRY_RUN") == "1":
         print(msg)
@@ -226,18 +343,30 @@ def main(argv: list[str]) -> int:
 
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     chat = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    status_record: dict = {
+        "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "today": today,
+        "day_n": day_n,
+        "subject": action["subject"] if action else None,
+        "title": action["title"] if action else None,
+        "due_in_days": action["daysToDue"] if action else None,
+    }
     if not token or not chat:
+        status_record["http_code"] = -1
+        status_record["error"] = "TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID missing"
+        write_status(STATUS_PATH, status_record)
         print("ERROR: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID required", file=sys.stderr)
         return 2
-    try:
-        status = post_telegram(token, chat, msg)
-    except urllib.error.HTTPError as e:
-        print(f"telegram HTTP {e.code}: {e.read().decode('utf-8', 'replace')}", file=sys.stderr)
+    code, err = post_telegram(token, chat, msg)
+    status_record["http_code"] = code
+    if err:
+        status_record["error"] = err
+    write_status(STATUS_PATH, status_record)
+    if code < 200 or code >= 300:
+        print(f"telegram FAILED code={code} err={err}", file=sys.stderr)
         return 3
-    except Exception as e:
-        print(f"telegram error: {e}", file=sys.stderr)
-        return 4
-    print(f"sent ts={today} status={status} subject={weakest['subject'] if weakest else '-'}")
+    print(f"sent day={day_n} ts={today} status={code} "
+          f"subject={action['subject'] if action else '-'}")
     return 0
 
 

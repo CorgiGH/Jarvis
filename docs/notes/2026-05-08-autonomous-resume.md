@@ -593,3 +593,33 @@ After that, cron 09:00 daily.
    estimate: ~80 additional HTML pages. Easy depth-2 follow-up if
    archival queries miss content from those. Skipped this round to
    keep scope bounded.
+
+7. ~~**Post-impl council on session diff**~~ — DONE 2026-05-09.
+   Council 1778256562 (3-agent: Devil's Advocate / Pragmatist / Risk
+   Analyst) saved at `.claude/council-cache/council-1778256562.md`.
+   VERDICT: FLAWED. Devil's Advocate found CRITICAL: send-daily-push.py
+   selector picks weakest-by-ratio (POO 2%) + that-subject's-next-action,
+   so PS HW Tema A-D (no-restanță, 2026-05-21 cliff) would never
+   surface for the 12-day lead-up while POO Lab eval 2 (has-restanță,
+   2026-05-25) pushed daily — forcing function actively misdirected
+   the user away from the cliff.
+8. ~~**Apply CRITICAL + HIGH inline (council 1778256562)**~~ — DONE 2026-05-09.
+   - Selector v2 (`pick_priority_action`): picks across all subjects;
+     ranking key (has_due_date ASC, no_restanta DESC, days_to_due ASC,
+     ratio ASC). NO_RESTANTA_SUBJECTS = {"PS"}. Smoke now surfaces
+     "PRIORITY: PS — Tema A — Laplace + LLN + CLT (R) / Due 2026-05-21
+     (13d) — NO restanță, hard cliff."
+   - `format_message` v2: includes Day N sequence stamp + standing
+     line for all subjects. Lets user notice gaps in the daily cadence.
+   - `post_telegram` v2: 3-attempt retry with 30s/60s/90s backoff on
+     5xx + transport errors; 4xx fails fast (auth/chat-not-found are
+     permanent). Writes `last_push_status.json` for poll-visible
+     liveness check.
+   - Cron temporarily removed during fix; re-installed after smoke.
+   - 23/23 unit tests green (8 new for v2 selector + day-stamp + format).
+
+   **Deferred MEDIUM (not urgent — defer to next session):**
+   - Reflex-trigger negation handling (Pragmatist: "not today" still
+     fires). User can flag false positives if they show up.
+   - Mask-row convention rework (Pragmatist: explicit `"deleted": true`
+     field cleaner than overloading earned=0,max=0).
