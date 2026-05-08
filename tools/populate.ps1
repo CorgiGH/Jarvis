@@ -102,7 +102,7 @@ foreach ($root in $Roots) {
                 -Headers $headers -Body $bytes -ErrorAction Stop | Out-Null
             $ok++
             if ($ok % 25 -eq 0) {
-                Write-Host "  …$ok entries posted"
+                Write-Host "  ???$ok entries posted"
             }
         } catch {
             $failed++

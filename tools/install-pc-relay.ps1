@@ -53,7 +53,7 @@ if ($listener) {
 $tok = -join ((1..64) | ForEach-Object { [char]((48..57) + (97..102) | Get-Random) })
 
 # 3. Persist to user-only file. icacls strips inheritance + grants only the
-#    current user — so other accounts on this box (if any) can't read it.
+#    current user - so other accounts on this box (if any) can't read it.
 Set-Content -Path $TokenFile -Value $tok -Encoding ASCII -NoNewline
 icacls $TokenFile /inheritance:r /grant:r "${env:USERNAME}:F" | Out-Null
 
