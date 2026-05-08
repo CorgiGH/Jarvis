@@ -49,90 +49,152 @@ if (-not $Token) {
     exit 1
 }
 
+# Color palette (GitHub-dark-ish for low-eye-strain reading)
+$colBg       = [System.Drawing.Color]::FromArgb(13, 17, 23)    # body bg
+$colSurface  = [System.Drawing.Color]::FromArgb(22, 27, 34)    # header/footer surfaces
+$colInputBg  = [System.Drawing.Color]::FromArgb(33, 38, 45)    # input box bg
+$colBorder   = [System.Drawing.Color]::FromArgb(48, 54, 61)
+$colText     = [System.Drawing.Color]::FromArgb(201, 209, 217) # body text
+$colMuted    = [System.Drawing.Color]::FromArgb(139, 148, 158) # secondary
+$colAccentYou = [System.Drawing.Color]::FromArgb(88, 166, 255)  # blue, you
+$colAccentBot = [System.Drawing.Color]::FromArgb(126, 231, 135) # green, bot
+$colSendBg   = [System.Drawing.Color]::FromArgb(35, 134, 54)
+$colSendHv   = [System.Drawing.Color]::FromArgb(46, 160, 67)
+
 # Form
 $form = New-Object System.Windows.Forms.Form
 $form.Text = if ($Subject) { "Jarvis Tutor - $Subject$(if ($Concept) { " / $Concept" })" } else { "Jarvis Tutor" }
 $form.Width = 1100
-$form.Height = 750
+$form.Height = 780
+$form.MinimumSize = New-Object System.Drawing.Size(720, 480)
 $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
-$form.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 35)
-$form.ForeColor = [System.Drawing.Color]::WhiteSmoke
+$form.BackColor = $colBg
+$form.ForeColor = $colText
+$form.Padding = New-Object System.Windows.Forms.Padding(0)
+
+# Header bar
+$header = New-Object System.Windows.Forms.Panel
+$header.Dock = [System.Windows.Forms.DockStyle]::Top
+$header.Height = 56
+$header.BackColor = $colSurface
+$header.Padding = New-Object System.Windows.Forms.Padding(20, 8, 20, 8)
+
+$headerTitle = New-Object System.Windows.Forms.Label
+$headerTitle.Dock = [System.Windows.Forms.DockStyle]::Fill
+$headerTitle.Text = if ($Subject) {
+    "Jarvis Tutor  -  $Subject$(if ($Concept) { ' / ' + $Concept })"
+} else {
+    "Jarvis Tutor"
+}
+$headerTitle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 14)
+$headerTitle.ForeColor = $colText
+$headerTitle.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$headerTitle.AutoSize = $false
+
+$header.Controls.Add($headerTitle)
+$form.Controls.Add($header)
+
+# Body wrapper with side padding
+$bodyWrap = New-Object System.Windows.Forms.Panel
+$bodyWrap.Dock = [System.Windows.Forms.DockStyle]::Fill
+$bodyWrap.BackColor = $colBg
+$bodyWrap.Padding = New-Object System.Windows.Forms.Padding(20, 12, 20, 0)
 
 # History (RichTextBox - read-only, scrollable, supports formatting)
 $history = New-Object System.Windows.Forms.RichTextBox
 $history.Dock = [System.Windows.Forms.DockStyle]::Fill
 $history.ReadOnly = $true
-$history.BackColor = [System.Drawing.Color]::FromArgb(20, 20, 24)
-$history.ForeColor = [System.Drawing.Color]::WhiteSmoke
+$history.BackColor = $colBg
+$history.ForeColor = $colText
 $history.Font = New-Object System.Drawing.Font("Segoe UI", 12)
 $history.WordWrap = $true
 $history.DetectUrls = $true
 $history.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 
-# Bottom panel: input + send button
+$bodyWrap.Controls.Add($history)
+
+# Footer with input + send button
+$footer = New-Object System.Windows.Forms.Panel
+$footer.Dock = [System.Windows.Forms.DockStyle]::Bottom
+$footer.Height = 130
+$footer.BackColor = $colSurface
+$footer.Padding = New-Object System.Windows.Forms.Padding(20, 14, 20, 14)
+
+# Inner table for input (85%) + send (15%)
 $bottomPanel = New-Object System.Windows.Forms.TableLayoutPanel
-$bottomPanel.Dock = [System.Windows.Forms.DockStyle]::Bottom
-$bottomPanel.Height = 90
+$bottomPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
 $bottomPanel.ColumnCount = 2
 $bottomPanel.RowCount = 1
-[void]$bottomPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 85)))
-[void]$bottomPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 15)))
+$bottomPanel.BackColor = $colSurface
+[void]$bottomPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 80)))
+[void]$bottomPanel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle([System.Windows.Forms.SizeType]::Percent, 20)))
+
+$txtInputWrap = New-Object System.Windows.Forms.Panel
+$txtInputWrap.Dock = [System.Windows.Forms.DockStyle]::Fill
+$txtInputWrap.BackColor = $colBorder
+$txtInputWrap.Padding = New-Object System.Windows.Forms.Padding(1)
+$txtInputWrap.Margin = New-Object System.Windows.Forms.Padding(0, 0, 12, 0)
 
 $txtInput = New-Object System.Windows.Forms.TextBox
 $txtInput.Dock = [System.Windows.Forms.DockStyle]::Fill
 $txtInput.Multiline = $true
 $txtInput.ScrollBars = [System.Windows.Forms.ScrollBars]::Vertical
 $txtInput.AcceptsReturn = $false
-$txtInput.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 48)
-$txtInput.ForeColor = [System.Drawing.Color]::WhiteSmoke
+$txtInput.BackColor = $colInputBg
+$txtInput.ForeColor = $colText
 $txtInput.Font = New-Object System.Drawing.Font("Segoe UI", 12)
-$txtInput.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$txtInput.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+$txtInputWrap.Controls.Add($txtInput)
 
 $sendBtn = New-Object System.Windows.Forms.Button
-$sendBtn.Text = "Send (Ctrl+Enter)"
+$sendBtn.Text = "Send"
 $sendBtn.Dock = [System.Windows.Forms.DockStyle]::Fill
-$sendBtn.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
-$sendBtn.BackColor = [System.Drawing.Color]::FromArgb(60, 130, 200)
+$sendBtn.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 12)
+$sendBtn.BackColor = $colSendBg
 $sendBtn.ForeColor = [System.Drawing.Color]::White
 $sendBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$sendBtn.FlatAppearance.BorderSize = 0
+$sendBtn.FlatAppearance.MouseOverBackColor = $colSendHv
+$sendBtn.Cursor = [System.Windows.Forms.Cursors]::Hand
+$sendBtn.Margin = New-Object System.Windows.Forms.Padding(0)
 
-$bottomPanel.Controls.Add($txtInput, 0, 0)
+$bottomPanel.Controls.Add($txtInputWrap, 0, 0)
 $bottomPanel.Controls.Add($sendBtn, 1, 0)
+$footer.Controls.Add($bottomPanel)
 
-$form.Controls.Add($history)
-$form.Controls.Add($bottomPanel)
-
-# Status strip (top): show "thinking..." while waiting for bot.
+# Status strip below footer (one-liner, italic muted)
 $status = New-Object System.Windows.Forms.Label
-$status.Dock = [System.Windows.Forms.DockStyle]::Top
-$status.Height = 24
-$status.Text = "Connected: $ApiBase"
-$status.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$status.ForeColor = [System.Drawing.Color]::Gray
+$status.Dock = [System.Windows.Forms.DockStyle]::Bottom
+$status.Height = 22
+$status.Text = "Ctrl+Enter to send  -  $ApiBase"
+$status.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
+$status.ForeColor = $colMuted
+$status.BackColor = $colSurface
 $status.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$status.Padding = New-Object System.Windows.Forms.Padding(8, 0, 0, 0)
+$status.Padding = New-Object System.Windows.Forms.Padding(20, 0, 20, 4)
+
+# Order matters for docking: bottom-most first
 $form.Controls.Add($status)
+$form.Controls.Add($footer)
+$form.Controls.Add($bodyWrap)
 
 # Append helpers - bold labels for "you" / "jarvis", wrapped body.
 function script:Append-Turn($who, $text) {
-    $color = if ($who -eq "you") {
-        [System.Drawing.Color]::FromArgb(255, 200, 100)
-    } else {
-        [System.Drawing.Color]::FromArgb(120, 220, 160)
-    }
-    $history.SelectionStart = $history.TextLength
-    $history.SelectionFont = New-Object System.Drawing.Font("Consolas", 11, [System.Drawing.FontStyle]::Bold)
-    $history.SelectionColor = $color
-    $history.AppendText("[$who]`n")
-    $history.SelectionFont = New-Object System.Drawing.Font("Segoe UI", 12)
-    $history.SelectionColor = [System.Drawing.Color]::WhiteSmoke
-    $history.AppendText("$text`n`n")
-    $history.SelectionStart = $history.TextLength
-    $history.ScrollToCaret()
+    $headerColor = if ($who -eq "you") { $script:colAccentYou } else { $script:colAccentBot }
+    $label = if ($who -eq "you") { "you" } else { "jarvis" }
+    $script:history.SelectionStart = $script:history.TextLength
+    $script:history.SelectionFont = New-Object System.Drawing.Font("Segoe UI Semibold", 11)
+    $script:history.SelectionColor = $headerColor
+    $script:history.AppendText("$label`n")
+    $script:history.SelectionFont = New-Object System.Drawing.Font("Segoe UI", 12)
+    $script:history.SelectionColor = $script:colText
+    $script:history.AppendText("$text`n`n")
+    $script:history.SelectionStart = $script:history.TextLength
+    $script:history.ScrollToCaret()
 }
 
 function script:Reset-UI() {
-    $script:status.Text = "Connected: $script:ApiBase"
+    $script:status.Text = "Ctrl+Enter to send  -  $script:ApiBase"
     $script:sendBtn.Enabled = $true
     $script:txtInput.Enabled = $true
     try { $script:txtInput.Focus() } catch {}
