@@ -174,6 +174,69 @@ After enabling, observe behavior via `ssh root@46.247.109.91 "tail -f /opt/jarvi
 4. WorkManager periodic poll auto-enqueues whenever `authToken` is non-blank in the prefs.
 5. Phone should receive 1 notification within 15 min (the queued `00f1902332a7a153` signal). After that, only fresh signals trigger notifications (`lastSeenTs` advances).
 
+## SESSION WRAP — 2026-05-08 end-of-day
+
+### Numbers
+- ~60 commits today
+- ~6000 LOC server + Android + tests + docs
+- ~150 unit tests passing
+- 12 deploys, all healthchecked
+- 1 PDF-ingestion agent (276 real concepts extracted)
+- 1 idea-generation agent (drove cycle 7 [[quiz]]/[[grade]])
+- 5-agent retro council (REJECT verdict, fixes applied)
+- 5+ council-advisor agents convened across pre-impl + post-impl + retro
+
+### What's enabled on VPS right now
+```
+PROACTIVE_LOOP_ENABLED=true
+STATE_CACHE_ENABLED=true
+REFLECTION_LOOP_ENABLED=true
+REMINDER_LOOP_ENABLED=true
+```
+Single kill switch: `JARVIS_LOOPS_DISABLE=true`
+
+### Today's schedule populated (5/08)
+- 12:00-13:30 PA (wake-fill)
+- 14:00-15:30 ALO (wake-fill)
+- 16:00-17:30 PS (wake-fill)
+- 18:00-19:30 POO (wake-fill)
+- 20:00-22:00 PA (weekend kickoff)
+
+### Plus 14 days of pre-filled blocks (5/09 → 5/21) — user can edit
+
+### Critical open work (verbatim from honest list)
+1. Phone activity logger: compiled, never device-tested. User must install fresh APK + grant Usage access.
+2. Integration test harness: 4 coroutines + rotation + FSRS writes need 8h-simulated runtime test.
+3. Cold-start state persistence: StateCache + ConceptCatalog + BlockReminder seen-ids all in-memory. 12 deploys today wiped each time.
+4. Tool count audit: 9 → ~25 chat tools. Model selection accuracy unverified.
+5. JSONL compaction: rotation cycles, never compresses.
+6. Career / weight / location / multimodal: never built (deferred per user "after finals").
+7. HW PDF deadline auto-import: not built (PDFs in Second brain/HW/*).
+8. AnkiWeb UAIC deck import: research agent never spawned for this.
+9. Cold Turkey / kernel-level intervention: detection-only currently.
+10. Phase 5.1 retraining: feedback.jsonl accumulating, no consumer.
+11. Multi-day strategic planner: Allocator picks single block, no week-ahead.
+12. Goal hierarchy: flat Goals.jsonl, no tree.
+13. TZ awareness inconsistent: Bucharest hardcoded some places, system default others.
+14. Most cycle-7+ work has no integration tests.
+15. Pomodoro 25/30 boundary math against real schedule: untested.
+
+### How to wake up tomorrow + use the system
+1. Chat from phone: `[[wake]]` → today's schedule auto-fills from current time
+2. During study blocks: phone vibrates 5 min before + Pomodoro 25/5 pulses
+3. Active recall: `[[quiz: PA]]` → recall → `[[grade: 3]]` (1=again, 4=easy)
+4. "What now": `[[next_block]]` or `[[study_now: SUBJECT]]`
+5. Track HW: `[[assignment_set: PA|Tema 5|2026-05-15]]`, `[[assignments]]` to list
+6. Drift kicks in if you wander mid-block — phone notification with "back to X" prompt
+
+### Lessons (council retro distillation)
+1. Ask before pre-filling user data — 02:33 incident showed defaults didn't match user reality
+2. Default-OFF behind env flags = museum, not tool
+3. Reinventing > borrowing (FSRS, Pomodoro, Anki conventions exist for reasons)
+4. Council convening matters — 5/5 retro advisors REJECTed the breadth approach
+5. Idea-generation agents > breadth-pursuit
+6. Integration tests > unit tests at coroutine scale
+
 ## Next session candidates
 
 - **Phase 3.1** (research agent for Android FCM vs polling) — the natural next step per Pragmatist's recommendation.
