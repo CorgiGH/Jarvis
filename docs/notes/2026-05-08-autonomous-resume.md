@@ -324,3 +324,16 @@ After deep-research report (`docs/superpowers/research/2026-05-08-personal-ai-li
 - Until Copilot quota resets, fallback chain still ends in error when PC offline. PC must be on for the bot to be reachable today.
 - `claude --print` cold-start ≈ 1-3s on Windows (Domain Expert flagged subprocess-spawn-per-request). Acceptable at this load; revisit if user-facing latency becomes annoying.
 - ToS exposure is acknowledged and accepted by user. Possible mitigations if patterns ever look bot-shaped: lower QPS cap, add nightly quiet hours in PC server.
+
+**Loose-end tooling — landed same evening, commit `<TBD>`:**
+- `tools/install-pc-relay.ps1` — idempotent installer that stops any python on :9999, generates a fresh 64-hex token, persists it 0700 at `~/.jarvis-relay-token`, writes `tools/start_relay_hidden.vbs`, registers schtask `JarvisRelayServer` ONLOGON, smokes /healthz, copies token to clipboard for VPS update.
+- `tools/start_relay_hidden.vbs` — VBS launcher (auto-written by installer). Reads token file, sets `JARVIS_RELAY_TOKEN` + `JARVIS_RELAY_LOG=C:\Users\User\.jarvis-relay.log` env, execs pythonw windowless.
+- `tools/pc-relay-server.py` — patched: when `JARVIS_RELAY_LOG` is set, redirects stdout+stderr to that path early. Without this, pythonw's broken NUL stdio handles caused `BaseHTTPRequestHandler.log_request()` to silently fail mid-handler — connection accepted but never responded (000 from curl). **Caught only because `Get-NetTCPConnection` showed Listen state but `/healthz` hung.**
+- `tools/relay-health-cron.sh` — hourly VPS probe of `$JARVIS_RELAY_URL/healthz`. Logs `{ISO-ts} /healthz={code}` to `/opt/jarvis/data/relay-health.log`, trims to last 1000 entries. Cron line: `0 * * * * /opt/jarvis/tools/relay-health-cron.sh`. Installed via `crontab -l | grep -v relay-health-cron; echo "..."` pipeline (idempotent).
+- VPS `/opt/jarvis/.env` token sync: PowerShell can't safely shell-escape the sed expression through `ssh.exe` argv (Windows OpenSSH strips inner double quotes), and pipeline output adds CRLF that lands inside `systemctl is-active jarvis\r`. Workaround that worked: base64-encode the bash command in PS, decode + execute on the VPS side. Pattern documented for future token rotations.
+
+**End-state smoke 2026-05-08 evening:**
+- PC: schtask running, pid 25752, /healthz 200 via Tailscale + via localhost.
+- VPS: `JARVIS_LLM=fallback`, .env token aligned with PC, `systemctl is-active jarvis` = `active`.
+- Phone APK: chat round-trip → `tail -1 conversations.jsonl | jq -r .model` returned `claude-max-relay`. Bot live end-to-end.
+- Hourly cron: first run logged `/healthz=200` to `/opt/jarvis/data/relay-health.log`.

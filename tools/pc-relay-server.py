@@ -51,6 +51,18 @@ import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# When launched headless via pythonw.exe / wscript, stdout/stderr are
+# connected to broken NUL handles on some Python builds. Any write inside
+# BaseHTTPRequestHandler.log_request() then raises OSError and stalls the
+# request mid-handler — connection accepts but never responds. Opt into
+# a real file via JARVIS_RELAY_LOG so logs are durable AND every write
+# succeeds.
+_LOG_PATH = os.environ.get("JARVIS_RELAY_LOG")
+if _LOG_PATH:
+    _log_fp = open(_LOG_PATH, "a", buffering=1, encoding="utf-8")
+    sys.stdout = _log_fp
+    sys.stderr = _log_fp
+
 TOKEN = os.environ.get("JARVIS_RELAY_TOKEN")
 HOST = os.environ.get("JARVIS_RELAY_HOST", "0.0.0.0")
 PORT = int(os.environ.get("JARVIS_RELAY_PORT", "9999"))
