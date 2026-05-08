@@ -76,18 +76,55 @@ object ActiveDoc {
         //   - no concept matched AND title looks like social/scrolling.
         val title = entry.title?.lowercase().orEmpty()
         val process = entry.process?.lowercase().orEmpty()
-        val scrollingHint = listOf(
+        // 2026-05-09 expansion — user flagged actual distractions (Magic
+        // Garden / Discord / Minecraft / streaming) weren't catching drift
+        // because earlier hint list only matched social-media classics.
+        // Three drift surfaces now:
+        //   (a) different-subject concept matched in title (existing)
+        //   (b) entertainment / scrolling title hint
+        //   (c) known non-study process name (covers PC + phone packages)
+        val entertainmentHints = listOf(
+            // social
             "twitter", "x.com", " / x", "reddit", "instagram", "tiktok",
-            "youtube", "facebook", "(@",
-        ).any { title.contains(it) } ||
-            // Android packages — phone activity logger reports package name.
-            process in setOf(
-                "com.instagram.android", "com.zhiliaoapp.musically",
-                "com.ss.android.ugc.trill", "com.twitter.android",
-                "com.x.android", "com.reddit.frontpage",
-                "com.facebook.katana", "com.snapchat.android",
-                "com.google.android.youtube",
-            )
+            "youtube", "facebook", "(@", "snapchat",
+            // streaming
+            "twitch", "netflix", "disney+", "prime video", "hbo max",
+            "the boys", " s01e", " s02e", " s03e", "- google chrome",
+            // games (browser + standalone)
+            "magic garden", "minecraft", "league of legends", "valorant",
+            "counter-strike", "csgo", "dota", "overwatch",
+            "fortnite", "apex legends", "roblox",
+            // misc browsing
+            "google search", "athens", "wikipedia",
+        )
+        val nonStudyProcesses = setOf(
+            "discord.exe", "spotify.exe", "steam.exe", "applicationframehost.exe",
+            "leagueclient.exe", "league of legends.exe", "csgo.exe",
+            "minecraft.exe", "minecraftlauncher.exe", "javaw.exe",
+            "valorant.exe", "vanguard.exe", "dota2.exe", "overwatch.exe",
+            "obs64.exe", "obs.exe", "vlc.exe",
+            // Android packages (phone-side activity)
+            "com.instagram.android", "com.zhiliaoapp.musically",
+            "com.ss.android.ugc.trill", "com.twitter.android",
+            "com.x.android", "com.reddit.frontpage",
+            "com.facebook.katana", "com.snapchat.android",
+            "com.google.android.youtube",
+            "com.discord", "com.spotify.music",
+            "com.netflix.mediaclient", "tv.twitch.android.app",
+            "com.mojang.minecraftpe",
+            "org.telegram.messenger", "phone:org.telegram.messenger",
+            "com.whatsapp", "com.samsung.android.app.spage",
+            "com.sec.android.app.launcher",
+        )
+        val processIsNonStudy = process in nonStudyProcesses ||
+            // Match phone-prefixed entries — logger writes "phone:com.foo".
+            (process.startsWith("phone:") &&
+                process.removePrefix("phone:") in nonStudyProcesses) ||
+            // Or title prefix.
+            title.startsWith("phone:") &&
+                title.removePrefix("phone:") in nonStudyProcesses
+        val titleIsEntertainment = entertainmentHints.any { title.contains(it) }
+
         if (concept != null && concept.subject != block.subject) {
             return Drift(
                 expectedSubject = block.subject,
@@ -96,12 +133,16 @@ object ActiveDoc {
                 actualReason = "different subject (${concept.subject})",
             )
         }
-        if (concept == null && scrollingHint) {
+        if (concept == null && (titleIsEntertainment || processIsNonStudy)) {
+            val hint = when {
+                processIsNonStudy -> "non-study app (${process.take(40)})"
+                else -> "entertainment / browsing (${title.take(40)})"
+            }
             return Drift(
                 expectedSubject = block.subject,
                 expectedTopic = block.topic,
                 actualConcept = null,
-                actualReason = "off-topic browser (likely social media)",
+                actualReason = hint,
             )
         }
         return null

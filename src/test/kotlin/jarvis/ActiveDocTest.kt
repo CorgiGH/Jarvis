@@ -8,6 +8,7 @@ import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ActiveDocTest {
 
@@ -119,6 +120,81 @@ class ActiveDocTest {
             process = "code.exe",
         )
         assertNull(ActiveDoc.detectDrift(entry, schedule, now, root, java.time.ZoneId.of("UTC")))
+    }
+
+    @Test
+    fun driftDetectedOnMagicGarden(@TempDir tmp: Path) {
+        val root = seedCatalog(tmp)
+        val schedule = ScheduleFile(listOf(
+            ScheduleBlock("2026-05-09", "10:00", "12:00", "study", "Probability"),
+        ))
+        val entry = ActivityEntry(
+            ts = now.toString(), title = "Magic Garden - Google Chrome",
+            process = "chrome.exe",
+        )
+        val drift = ActiveDoc.detectDrift(entry, schedule, now, root, java.time.ZoneId.of("UTC"))
+        assertNotNull(drift)
+        assertNull(drift!!.actualConcept)
+    }
+
+    @Test
+    fun driftDetectedOnDiscordProcess(@TempDir tmp: Path) {
+        val root = seedCatalog(tmp)
+        val schedule = ScheduleFile(listOf(
+            ScheduleBlock("2026-05-09", "10:00", "12:00", "study", "Probability"),
+        ))
+        val entry = ActivityEntry(
+            ts = now.toString(), title = "#general | Magic Circle - Discord",
+            process = "discord.exe",
+        )
+        val drift = ActiveDoc.detectDrift(entry, schedule, now, root, java.time.ZoneId.of("UTC"))
+        assertNotNull(drift)
+        assertTrue(drift!!.actualReason.contains("non-study app"))
+    }
+
+    @Test
+    fun driftDetectedOnPhoneTelegram(@TempDir tmp: Path) {
+        val root = seedCatalog(tmp)
+        val schedule = ScheduleFile(listOf(
+            ScheduleBlock("2026-05-09", "10:00", "12:00", "study", "Probability"),
+        ))
+        // Phone activity logger reports "phone:org.telegram.messenger".
+        val entry = ActivityEntry(
+            ts = now.toString(),
+            title = "phone:org.telegram.messenger",
+            process = "phone:org.telegram.messenger",
+        )
+        val drift = ActiveDoc.detectDrift(entry, schedule, now, root, java.time.ZoneId.of("UTC"))
+        assertNotNull(drift)
+    }
+
+    @Test
+    fun driftDetectedOnMinecraftLauncher(@TempDir tmp: Path) {
+        val root = seedCatalog(tmp)
+        val schedule = ScheduleFile(listOf(
+            ScheduleBlock("2026-05-09", "10:00", "12:00", "study", "Probability"),
+        ))
+        val entry = ActivityEntry(
+            ts = now.toString(),
+            title = "Minecraft* 1.21.10 - Multiplayer (3rd-party Server)",
+            process = "javaw.exe",
+        )
+        val drift = ActiveDoc.detectDrift(entry, schedule, now, root, java.time.ZoneId.of("UTC"))
+        assertNotNull(drift)
+    }
+
+    @Test
+    fun driftDetectedOnNetflixStreaming(@TempDir tmp: Path) {
+        val root = seedCatalog(tmp)
+        val schedule = ScheduleFile(listOf(
+            ScheduleBlock("2026-05-09", "10:00", "12:00", "study", "Probability"),
+        ))
+        val entry = ActivityEntry(
+            ts = now.toString(), title = "The Boys 2019 S01E02 - Google Chrome",
+            process = "chrome.exe",
+        )
+        val drift = ActiveDoc.detectDrift(entry, schedule, now, root, java.time.ZoneId.of("UTC"))
+        assertNotNull(drift)
     }
 
     @Test
