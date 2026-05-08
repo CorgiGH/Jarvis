@@ -67,6 +67,15 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   pressure, weakest concepts, current stress level. Use when user asks
   "what should I do now" or to break decision paralysis.
     [[next_block: now]]
+- quiz(<subject?>): pick FSRS-due-or-weakest concept, ask ONE recall
+  question. Pair with [[grade]] to score + update spaced-rep schedule.
+    [[quiz: PA]]
+- grade(1..4): score pending quiz. 1=again 2=hard 3=good 4=easy.
+  Bumps FSRS stability + KnowledgeState confidence accordingly.
+    [[grade: 3]]
+- study_now(<subject?>): instant 25-min Pomodoro on weakest concept,
+  ignores schedule entirely. Use when user wants action without setup.
+    [[study_now: ALO]]
 - wiki(query): lexical search over the user's wiki notes (reflections,
   /save notes, prior subsystem outputs, model-pinned memories from the
   remember tool). Different from search (archival corpus) and recall

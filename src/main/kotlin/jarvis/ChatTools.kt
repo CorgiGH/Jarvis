@@ -108,11 +108,84 @@ object ChatTools {
         "plan" -> executePlan(call.args)
         "next_block" -> executeNextBlock()
         "study_now" -> executeStudyNow(call.args)
+        "quiz" -> executeQuiz(call.args, client)
+        "grade" -> executeGrade(call.args)
         "assignment_set" -> executeAssignmentSet(call.args)
         "assignment_progress" -> executeAssignmentProgress(call.args)
         "assignment_done" -> executeAssignmentDone(call.args)
         "assignments" -> executeAssignments()
         else -> "(unknown tool: ${call.name})"
+    }
+
+    /** Cycle 7 — pending quiz state for [[quiz]]/[[grade]] flow. Single-slot
+     *  is sufficient for a single user; lock guards concurrent /api/chat. */
+    private val quizLock = Any()
+    private var pendingQuiz: Pair<String, String>? = null  // concept to subject
+
+    /** Cycle 7 — pick a concept (FSRS-due first, else weakest stale) and
+     *  ask the LLM to generate ONE short recall question. Stores pending
+     *  quiz so [[grade]] knows what to score. */
+    private fun executeQuiz(args: String, client: Llm): String {
+        val subjectFilter = args.trim().takeIf { it.isNotEmpty() }
+        // 1. FSRS-due concepts (retrievability < 0.7)
+        val due = KnowledgeFsrs.dueConcepts()
+            .filter { subjectFilter == null || it.first.subject.equals(subjectFilter, true) }
+            .firstOrNull()
+        // 2. Else weakest from stale list
+        val pick: Pair<String, String> = if (due != null) {
+            due.first.concept to due.first.subject
+        } else {
+            val stale = KnowledgeState.staleConcepts()
+                .filter { subjectFilter == null || it.subject.equals(subjectFilter, true) }
+                .firstOrNull()
+            if (stale != null) {
+                stale.concept to stale.subject
+            } else {
+                val seen = KnowledgeState.stats().map { it.concept to it.subject }.toSet()
+                val unseen = ConceptCatalog.all()
+                    .filter { subjectFilter == null || it.subject.equals(subjectFilter, true) }
+                    .firstOrNull { (it.name to it.subject) !in seen }
+                if (unseen == null) return "(no concepts available — populate catalog)"
+                unseen.name to unseen.subject
+            }
+        }
+        synchronized(quizLock) { pendingQuiz = pick }
+        val (concept, subject) = pick
+        // Ask LLM for a single short question.
+        val (reply, _) = try {
+            runBlocking {
+                client.complete(
+                    messages = listOf(
+                        ChatMessage("system",
+                            "Generate ONE short open-ended recall question on the concept " +
+                                "below. No multiple choice. No hints. Just the question."),
+                        ChatMessage("user", "$subject — $concept"),
+                    ),
+                    maxTokens = 150,
+                )
+            }
+        } catch (e: Exception) {
+            return "QUIZ: $subject / $concept\n(LLM unavailable: ${e.javaClass.simpleName}; recall what you know, then [[grade: 1-4]])"
+        }
+        return "QUIZ: $subject / $concept\n${reply.trim()}\n\nWhen ready: [[grade: 1=again 2=hard 3=good 4=easy]]"
+    }
+
+    /** Cycle 7 — score the pending quiz with grade 1..4, write FSRS row. */
+    private fun executeGrade(args: String): String {
+        val grade = args.trim().toIntOrNull()?.coerceIn(1, 4)
+            ?: return "(usage: [[grade: 1-4]])"
+        val pick = synchronized(quizLock) {
+            val p = pendingQuiz ?: return "(no pending quiz — run [[quiz: subject?]] first)"
+            pendingQuiz = null
+            p
+        }
+        val (concept, subject) = pick
+        val state = KnowledgeFsrs.recordReview(concept, subject, grade)
+        val nextDays = Fsrs.nextIntervalDays(state)
+        val gradeName = listOf("", "again", "hard", "good", "easy")[grade]
+        return "graded $subject/$concept = $gradeName\n" +
+            "  next review in ${"%.1f".format(nextDays)}d (S=${"%.1f".format(state.stability)}, " +
+            "D=${"%.1f".format(state.difficulty)})"
     }
 
     /** Council retro 2026-05-08: ignore schedule entirely. Pick the
