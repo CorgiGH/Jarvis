@@ -134,36 +134,72 @@ function script:Append-Turn($who, $text) {
 function script:Send-Turn($msg) {
     if ([string]::IsNullOrWhiteSpace($msg)) { return }
     Append-Turn "you" $msg
-    $status.Text = "thinking..."
-    $sendBtn.Enabled = $false
-    $txtInput.Enabled = $false
-    $form.Refresh()
-    try {
-        $body = @{ msg = $msg } | ConvertTo-Json -Compress
-        $resp = Invoke-RestMethod -Uri "$ApiBase/api/chat" `
-            -Method Post `
-            -Headers @{
-                Authorization = "Bearer $Token"
-                "Content-Type" = "application/json"
-            } `
-            -Body $body `
-            -TimeoutSec 180 `
-            -ErrorAction Stop
-        $reply = $resp.reply
-        if ([string]::IsNullOrWhiteSpace($reply)) { $reply = "(empty reply)" }
-        Append-Turn "jarvis" $reply
-        Write-Log "turn ok: msg=$($msg.Substring(0,[Math]::Min(80,$msg.Length))) reply=$($reply.Substring(0,[Math]::Min(80,$reply.Length)))"
-    } catch {
-        $err = "ERROR: $_"
-        Append-Turn "jarvis" $err
-        Write-Log "turn err: $_"
-    } finally {
-        $status.Text = "Connected: $ApiBase"
-        $sendBtn.Enabled = $true
-        $txtInput.Enabled = $true
-        $txtInput.Clear()
-        $txtInput.Focus()
-    }
+    $script:status.Text = "thinking..."
+    $script:sendBtn.Enabled = $false
+    $script:txtInput.Enabled = $false
+    $script:txtInput.Clear()
+
+    # Run HTTP on a separate runspace so the UI thread keeps pumping
+    # messages and the form does not enter "Not Responding".
+    $rs = [runspacefactory]::CreateRunspace()
+    $rs.Open()
+    $rs.SessionStateProxy.SetVariable("ApiBase", $ApiBase)
+    $rs.SessionStateProxy.SetVariable("Token", $Token)
+    $rs.SessionStateProxy.SetVariable("msg", $msg)
+    $ps = [powershell]::Create()
+    $ps.Runspace = $rs
+    [void]$ps.AddScript({
+        try {
+            $body = @{ msg = $msg } | ConvertTo-Json -Compress
+            $resp = Invoke-RestMethod -Uri "$ApiBase/api/chat" `
+                -Method Post `
+                -Headers @{
+                    Authorization = "Bearer $Token"
+                    "Content-Type" = "application/json"
+                } `
+                -Body $body `
+                -TimeoutSec 180 `
+                -ErrorAction Stop
+            return @{ ok = $true; reply = $resp.reply }
+        } catch {
+            return @{ ok = $false; err = "$_" }
+        }
+    })
+    $async = $ps.BeginInvoke()
+
+    # Poll completion every 200ms on a UI-thread timer; the form stays
+    # responsive because each tick yields back to the message pump.
+    $script:msgSent = $msg
+    $timer = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 200
+    $timer.Tag = @{ ps = $ps; rs = $rs; async = $async }
+    $timer.Add_Tick({
+        param($s, $e)
+        $bag = $s.Tag
+        if (-not $bag.async.IsCompleted) { return }
+        $s.Stop()
+        try {
+            $result = $bag.ps.EndInvoke($bag.async) | Select-Object -First 1
+        } catch {
+            $result = @{ ok = $false; err = "$_" }
+        }
+        if ($result.ok) {
+            $reply = if ([string]::IsNullOrWhiteSpace($result.reply)) { "(empty reply)" } else { $result.reply }
+            Append-Turn "jarvis" $reply
+            Write-Log "turn ok: reply len=$($reply.Length)"
+        } else {
+            Append-Turn "jarvis" "ERROR: $($result.err)"
+            Write-Log "turn err: $($result.err)"
+        }
+        $script:status.Text = "Connected: $ApiBase"
+        $script:sendBtn.Enabled = $true
+        $script:txtInput.Enabled = $true
+        $script:txtInput.Focus()
+        try { $bag.ps.Dispose() } catch {}
+        try { $bag.rs.Close() } catch {}
+        $s.Dispose()
+    }.GetNewClosure())
+    $timer.Start()
 }
 
 $sendBtn.Add_Click({
