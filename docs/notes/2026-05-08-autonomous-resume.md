@@ -176,11 +176,10 @@ After enabling, observe behavior via `ssh root@46.247.109.91 "tail -f /opt/jarvi
 
 ## SESSION WRAP — 2026-05-08 end-of-day
 
-### Numbers
-- ~60 commits today
-- ~6000 LOC server + Android + tests + docs
-- ~150 unit tests passing
-- 12 deploys, all healthchecked
+### Numbers (verified)
+- **46 commits** today (`git log --oneline 1649864..HEAD | wc -l`)
+- LOC delta uncounted; ~150 unit tests pass
+- 12 deploys (deploy.sh runs in shell history)
 - 1 PDF-ingestion agent (276 real concepts extracted)
 - 1 idea-generation agent (drove cycle 7 [[quiz]]/[[grade]])
 - 5-agent retro council (REJECT verdict, fixes applied)
