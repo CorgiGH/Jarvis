@@ -131,6 +131,13 @@ function script:Append-Turn($who, $text) {
     $history.ScrollToCaret()
 }
 
+function script:Reset-UI() {
+    $script:status.Text = "Connected: $script:ApiBase"
+    $script:sendBtn.Enabled = $true
+    $script:txtInput.Enabled = $true
+    try { $script:txtInput.Focus() } catch {}
+}
+
 function script:Send-Turn($msg) {
     if ([string]::IsNullOrWhiteSpace($msg)) { return }
     Append-Turn "you" $msg
@@ -139,12 +146,10 @@ function script:Send-Turn($msg) {
     $script:txtInput.Enabled = $false
     $script:txtInput.Clear()
 
-    # Run HTTP on a separate runspace so the UI thread keeps pumping
-    # messages and the form does not enter "Not Responding".
     $rs = [runspacefactory]::CreateRunspace()
     $rs.Open()
-    $rs.SessionStateProxy.SetVariable("ApiBase", $ApiBase)
-    $rs.SessionStateProxy.SetVariable("Token", $Token)
+    $rs.SessionStateProxy.SetVariable("ApiBase", $script:ApiBase)
+    $rs.SessionStateProxy.SetVariable("Token", $script:Token)
     $rs.SessionStateProxy.SetVariable("msg", $msg)
     $ps = [powershell]::Create()
     $ps.Runspace = $rs
@@ -167,38 +172,49 @@ function script:Send-Turn($msg) {
     })
     $async = $ps.BeginInvoke()
 
-    # Poll completion every 200ms on a UI-thread timer; the form stays
-    # responsive because each tick yields back to the message pump.
-    $script:msgSent = $msg
+    # Persist timer + runspace handles in script scope so they survive
+    # past Send-Turn return + so we can defensively kill them if something
+    # goes wrong.
+    if (-not $script:activeTurns) { $script:activeTurns = @() }
+    $turn = @{ ps = $ps; rs = $rs; async = $async; timer = $null }
     $timer = New-Object System.Windows.Forms.Timer
     $timer.Interval = 200
-    $timer.Tag = @{ ps = $ps; rs = $rs; async = $async }
+    $turn.timer = $timer
+    $script:activeTurns += $turn
+
     $timer.Add_Tick({
-        param($s, $e)
-        $bag = $s.Tag
-        if (-not $bag.async.IsCompleted) { return }
-        $s.Stop()
+        # Find the turn matching this timer (closure-free for scope safety).
+        $myTimer = $this
+        $turn = $null
+        foreach ($t in $script:activeTurns) {
+            if ($t.timer -eq $myTimer) { $turn = $t; break }
+        }
+        if (-not $turn) { $myTimer.Stop(); $myTimer.Dispose(); return }
+        if (-not $turn.async.IsCompleted) { return }
+        $myTimer.Stop()
+        $reply = $null
+        $err = $null
         try {
-            $result = $bag.ps.EndInvoke($bag.async) | Select-Object -First 1
+            $result = $turn.ps.EndInvoke($turn.async) | Select-Object -First 1
+            if ($result.ok) { $reply = $result.reply } else { $err = $result.err }
         } catch {
-            $result = @{ ok = $false; err = "$_" }
+            $err = "$_"
         }
-        if ($result.ok) {
-            $reply = if ([string]::IsNullOrWhiteSpace($result.reply)) { "(empty reply)" } else { $result.reply }
-            Append-Turn "jarvis" $reply
-            Write-Log "turn ok: reply len=$($reply.Length)"
+        try { $turn.ps.Dispose() } catch {}
+        try { $turn.rs.Close() } catch {}
+        $script:activeTurns = @($script:activeTurns | Where-Object { $_.timer -ne $myTimer })
+        try { $myTimer.Dispose() } catch {}
+
+        if ($null -ne $reply) {
+            $r = if ([string]::IsNullOrWhiteSpace($reply)) { "(empty reply)" } else { $reply }
+            Append-Turn "jarvis" $r
+            Write-Log "turn ok: reply len=$($r.Length)"
         } else {
-            Append-Turn "jarvis" "ERROR: $($result.err)"
-            Write-Log "turn err: $($result.err)"
+            Append-Turn "jarvis" "ERROR: $err"
+            Write-Log "turn err: $err"
         }
-        $script:status.Text = "Connected: $ApiBase"
-        $script:sendBtn.Enabled = $true
-        $script:txtInput.Enabled = $true
-        $script:txtInput.Focus()
-        try { $bag.ps.Dispose() } catch {}
-        try { $bag.rs.Close() } catch {}
-        $s.Dispose()
-    }.GetNewClosure())
+        Reset-UI
+    })
     $timer.Start()
 }
 
