@@ -1,4 +1,4 @@
-# tools/install-block-enforcer.ps1 — register block-enforcer.ps1 as a
+# tools/install-block-enforcer.ps1 - register block-enforcer.ps1 as a
 # Windows scheduled task that auto-starts on user logon.
 #
 # Mirror of install-pc-relay.ps1 pattern. Idempotent: existing task
@@ -13,7 +13,7 @@ $ScriptPath = Join-Path $ScriptDir "block-enforcer.ps1"
 $VbsPath   = Join-Path $ScriptDir "start_block_enforcer_hidden.vbs"
 
 if (-not (Test-Path $ScriptPath)) {
-    throw "block-enforcer.ps1 not found at $ScriptPath — clone or copy first."
+    throw "block-enforcer.ps1 not found at $ScriptPath - clone or copy first."
 }
 
 # 1. Stop any existing scheduled-task run + kill any lingering instances.
@@ -26,7 +26,7 @@ Get-Process powershell -ErrorAction SilentlyContinue |
     ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
 
 # 2. Write the VBS launcher (lets the powershell loop run without a
-#    visible console window — same hiding pattern as start_relay_hidden.vbs).
+#    visible console window - same hiding pattern as start_relay_hidden.vbs).
 $vbsContent = @"
 Set objShell = CreateObject("WScript.Shell")
 objShell.Run "powershell -NoProfile -ExecutionPolicy Bypass -File """ & _

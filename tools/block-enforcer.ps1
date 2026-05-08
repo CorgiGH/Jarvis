@@ -1,9 +1,9 @@
-# tools/block-enforcer.ps1 — PC-side drift interrupter.
+# tools/block-enforcer.ps1 - PC-side drift interrupter.
 #
 # Polls https://corgflix.duckdns.org/api/signals every 60s. On any new
 # signal whose rationale starts with "drift:" OR kind in {"drift_alert"},
 # pops a blocking always-on-top red dialog + plays alert beeps. The user
-# must dismiss it explicitly — the dialog will not auto-close.
+# must dismiss it explicitly - the dialog will not auto-close.
 #
 # This is the user's "I asked for something invasive" surface. Less brutal
 # than killing windows; more brutal than the silent Telegram daily push.
@@ -77,7 +77,7 @@ function Get-OpenPathFromSnippet($snippet) {
         foreach ($c in $candidates) {
             if (Test-Path $c) { return (Resolve-Path $c).Path }
         }
-        return $rel  # return raw — let Process.Start try
+        return $rel  # return raw - let Process.Start try
     }
     return $null
 }
@@ -127,7 +127,7 @@ function Show-DriftModal($snippet, $rationale) {
     $body.Padding = New-Object System.Windows.Forms.Padding(20)
     $form.Controls.Add($body)
 
-    # Bottom button row — actionable surfaces. Layout panel for 3 buttons.
+    # Bottom button row - actionable surfaces. Layout panel for 3 buttons.
     $buttonPanel = New-Object System.Windows.Forms.TableLayoutPanel
     $buttonPanel.Dock = [System.Windows.Forms.DockStyle]::Bottom
     $buttonPanel.Height = 70
@@ -220,7 +220,7 @@ function Poll-And-Fire {
 
 if ($Test) {
     Write-Log "TEST mode: forcing drift modal"
-    # Realistic snippet — same shape DriftDirective.build emits.
+    # Realistic snippet - same shape DriftDirective.build emits.
     Show-DriftModal `
         ("GET BACK TO PA. NEXT: Tema 5 dynamic programming (2026-05-15 6d). " +
          "OPEN: Courses/PA/lecture11_ro.pdf. Chat: [[lesson: PA]]") `
