@@ -128,6 +128,8 @@ object ChatTools {
         "feedback_summary" -> executeFeedbackSummary()
         "adherence" -> executeAdherence(call.args)
         "lesson" -> executeLesson(call.args, client)
+        "lesson_check" -> executeLessonCheck(call.args, client)
+        "lesson_status" -> executeLessonStatus()
         else -> "(unknown tool: ${call.name})"
     }
 
@@ -627,7 +629,126 @@ $refsBlock
                 maxTokens = 800,
             )
         }
+        // Persist as a "spec" event so [[lesson_check]] / [[lesson_status]]
+        // can find and grade it across separate chat turns. Latest-spec
+        // wins on read so a re-issued [[lesson]] resets the in-flight state.
+        try {
+            val nowIso = java.time.Instant.now().toString()
+            Lessons.append(LessonEvent(
+                id = Lessons.computeId(subj, targetConcept, "spec", nowIso),
+                ts = nowIso, subject = subj, concept = targetConcept,
+                stage = 1, kind = "spec", content = reply.take(1500),
+            ))
+        } catch (_: Exception) { }
+        return reply +
+            "\n\n(when you've tried the DRILL, run `[[lesson_check: <your answer or notes>]]` for feedback.)"
+    }
+
+    /** Stage 2 of multi-turn lesson flow. User invokes this with their
+     *  drill attempt; bot grades + suggests next concept. Reads the
+     *  latest "spec" lesson event and treats the user's args as their
+     *  attempt at the DRILL or answer to the CHECK question. */
+    private fun executeLessonCheck(args: String, client: Llm): String {
+        val latest = Lessons.latestSpec() ?: return (
+            "(no in-flight lesson — run [[lesson: SUBJECT/CONCEPT]] first)"
+        )
+        val attempt = args.trim().ifEmpty { "(no attempt provided)" }
+        val nowIso = java.time.Instant.now().toString()
+        // Persist user's attempt before grading.
+        try {
+            Lessons.append(LessonEvent(
+                id = Lessons.computeId(latest.subject, latest.concept, "check", nowIso),
+                ts = nowIso, subject = latest.subject, concept = latest.concept,
+                stage = 2, kind = "check", content = attempt.take(1500),
+            ))
+        } catch (_: Exception) { }
+
+        // Suggest next concept once we've graded.
+        val nextStale = jarvis.KnowledgeState.staleConcepts(
+            confidenceFloor = 0.6f, minStaleDays = 1L,
+        ).firstOrNull { it.subject.equals(latest.subject, ignoreCase = true) }
+        val nextHint = nextStale?.concept
+            ?: ConceptCatalog.all()
+                .firstOrNull {
+                    it.subject.equals(latest.subject, ignoreCase = true) &&
+                        it.name != latest.concept
+                }?.name
+        val systemPrompt = """You are grading a student's lesson attempt. Output in this EXACT format:
+
+ASSESSMENT
+<two sentences: was the answer correct/partial/wrong, what specifically (gap or strength)>
+
+FEEDBACK
+<concrete fix or follow-up worked example, max 4 lines. Cite the relevant rule from the lesson.>
+
+NEXT
+<one suggestion for the next concept to study, citing the queued option if useful>
+
+Rules:
+- No preamble. Start with "ASSESSMENT".
+- Be honest. If the attempt is wrong, say so.
+- Use Romanian if the original lesson was Romanian.
+- Total under 200 words.
+"""
+        val userMsg = """
+Subject: ${latest.subject}
+Concept: ${latest.concept}
+
+# Original lesson (DRILL + CHECK questions live in this body)
+${latest.content ?: "(content lost — grade based on student attempt alone)"}
+
+# Student's attempt
+$attempt
+
+${nextStale?.let { "# Next concept hint (FSRS-stale, conf=${"%.2f".format(it.confidence)}): ${it.concept}" } ?: ""}
+${if (nextStale == null && nextHint != null) "# Next concept hint (catalog): $nextHint" else ""}
+""".trimIndent()
+        val (reply, _) = kotlinx.coroutines.runBlocking {
+            client.complete(
+                messages = listOf(
+                    ChatMessage("system", systemPrompt),
+                    ChatMessage("user", userMsg),
+                ),
+                maxTokens = 500,
+            )
+        }
+        // Persist the graded reply.
+        try {
+            val gradedTs = java.time.Instant.now().toString()
+            Lessons.append(LessonEvent(
+                id = Lessons.computeId(latest.subject, latest.concept, "graded", gradedTs),
+                ts = gradedTs, subject = latest.subject, concept = latest.concept,
+                stage = 3, kind = "graded", content = reply.take(1500),
+            ))
+        } catch (_: Exception) { }
         return reply
+    }
+
+    /** Read-only check: shows the in-flight lesson + its history so the
+     *  user can see where they left off. */
+    private fun executeLessonStatus(): String {
+        val latest = Lessons.latestSpec()
+            ?: return "(no lessons started yet — try [[lesson: SUBJECT/CONCEPT]])"
+        val ageMin = try {
+            java.time.Duration.between(
+                java.time.Instant.parse(latest.ts),
+                java.time.Instant.now(),
+            ).toMinutes()
+        } catch (_: Exception) { -1L }
+        val history = Lessons.history(latest.subject, latest.concept)
+        val sb = StringBuilder()
+        sb.append("In-flight: ${latest.subject} / ${latest.concept}\n")
+        sb.append("Started ${ageMin}m ago, ${history.size} event${if (history.size == 1) "" else "s"}.\n")
+        for (e in history.takeLast(5)) {
+            sb.append("  [${e.ts}] stage=${e.stage} kind=${e.kind}")
+            e.content?.takeIf { it.isNotBlank() }?.let { c ->
+                sb.append(" — ").append(c.lineSequence()
+                    .firstOrNull { it.isNotBlank() }?.take(80) ?: "")
+            }
+            sb.append("\n")
+        }
+        sb.append("Continue with [[lesson_check: <attempt>]] or open new with [[lesson: SUBJ/CONCEPT]].")
+        return sb.toString().trimEnd()
     }
 
     private fun parseLessonArgs(args: String): Pair<String, String?> {

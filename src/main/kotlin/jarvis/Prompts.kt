@@ -90,11 +90,22 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   question). Pulls from archival via lexical search; cites file
   paths. If only SUBJECT given, picks weakest stale concept for that
   subject. Different from [[quiz]]: full lesson scaffold, not a
-  single recall question. Use when the user asks "teach me X" or
-  "I don't get X" — anything where they need a structured walkthrough
-  rather than a quick answer.
+  single recall question. Persists the lesson to lessons.jsonl so
+  [[lesson_check]] can grade attempts later.
     [[lesson: PA/greedy algorithms]]
     [[lesson: PS]]
+- lesson_check(<user attempt>): grade a user's drill / check answer
+  against the most recent in-flight lesson and suggest the next
+  concept. ASSESSMENT + FEEDBACK + NEXT 3-section format. Reads the
+  latest "spec" event from lessons.jsonl and treats the args as the
+  user's attempt. Use when the user has tried the DRILL or answered
+  the CHECK question and wants honest feedback. Couple with [[grade]]
+  to bump FSRS confidence after the user reports their self-assessment.
+    [[lesson_check: my answer was {x_n} = sorted by start, then check overlap]]
+- lesson_status: read-only — surfaces the most recent in-flight lesson
+  + its event history (spec / check / graded). Use when the user asks
+  "where were we" or "what was the last lesson".
+    [[lesson_status: now]]
 - adherence(N?): closed-loop check — for the last N days (default 3,
   max 14), report what the daily Telegram push recommended vs what
   the user actually worked on (classified from activity log titles

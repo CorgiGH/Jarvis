@@ -28,6 +28,7 @@ object Config {
     val assignmentsFile: Path = stateDir.resolve("assignments.jsonl")
     val knowledgeFsrsFile: Path = stateDir.resolve("knowledge_fsrs.jsonl")
     val gradesFile: Path = stateDir.resolve("grades.jsonl")
+    val lessonsFile: Path = stateDir.resolve("lessons.jsonl")
 
     /** OpenRouter is no longer used for chat (the copilot / claude-max
      *  subprocess providers replaced it), but EmbeddingsClient still hits
