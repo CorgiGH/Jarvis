@@ -127,6 +127,7 @@ object ChatTools {
         "push_status" -> executePushStatus()
         "feedback_summary" -> executeFeedbackSummary()
         "adherence" -> executeAdherence(call.args)
+        "lesson" -> executeLesson(call.args, client)
         else -> "(unknown tool: ${call.name})"
     }
 
@@ -554,6 +555,97 @@ object ChatTools {
             }
         }
         return sb.toString().trimEnd()
+    }
+
+    /** Structured lesson tool (2026-05-09). User asked: "does it have a
+     *  proper way to teach me stuff?" — existing [[quiz]] is one Q at a
+     *  time, no scaffold. This generates a 4-section lesson:
+     *    DEFINITION (1 paragraph from archival via inline search)
+     *    WORKED EXAMPLE (step-by-step, fully solved)
+     *    DRILL (a problem; solution withheld)
+     *    CHECK (1 understanding question)
+     *  v1: single-turn, no persistent lesson-state. Multi-turn (resume
+     *  mid-lesson) deferred to next session.
+     *
+     *  Args parse:  "SUBJECT/CONCEPT"  e.g. "PA/greedy algorithms"
+     *  If only SUBJECT given, picks weakest stale concept for that subject. */
+    private fun executeLesson(args: String, client: Llm): String {
+        val (subj, concept) = parseLessonArgs(args)
+        // Pick concept if user gave only subject
+        val targetConcept = concept ?: pickStaleConceptFor(subj)
+        if (targetConcept == null) {
+            return "(no concept to teach. Provide SUBJECT/CONCEPT or seed " +
+                "ConceptCatalog with $subj entries.)"
+        }
+        // Pull lesson material from archival via lexical search.
+        val searchHits = jarvis.subsystem.SearchSubsystem
+            .searchIn(Config.archivalDir, targetConcept, k = 5)
+            .take(3)
+        val refsBlock = if (searchHits.isEmpty()) {
+            "(no archival hits — bot will rely on general knowledge)"
+        } else {
+            searchHits.joinToString("\n\n") { hit ->
+                val rel = runCatching {
+                    Config.archivalDir.relativize(hit.path).toString()
+                }.getOrElse { hit.path.toString() }
+                "## $rel  (hits=${hit.hits})\n${hit.snippet}"
+            }
+        }
+        val systemPrompt = """You are a structured tutor. Output a lesson on the given concept in this EXACT 4-section format:
+
+DEFINITION
+<one paragraph, plain prose, no jargon without expansion>
+
+WORKED EXAMPLE
+<a concrete instance of the concept, fully solved with each step labelled>
+
+DRILL
+<a problem similar to the worked example, OR a slight variation. Do NOT include the solution.>
+
+CHECK
+<a single conceptual question testing understanding (not memorization)>
+
+Rules:
+- Cite the archival files used (file path, one per cited claim) where relevant.
+- No preamble. Start directly with "DEFINITION".
+- Use Romanian if the source material is in Romanian; otherwise English.
+- Total length under 600 words.
+"""
+        val userMsg = """
+Subject: $subj
+Concept: $targetConcept
+
+# Reference material from archival
+$refsBlock
+""".trimIndent()
+        val (reply, model) = kotlinx.coroutines.runBlocking {
+            client.complete(
+                messages = listOf(
+                    ChatMessage("system", systemPrompt),
+                    ChatMessage("user", userMsg),
+                ),
+                maxTokens = 800,
+            )
+        }
+        return reply
+    }
+
+    private fun parseLessonArgs(args: String): Pair<String, String?> {
+        val parts = args.split("/", limit = 2).map { it.trim() }
+        val subj = parts.getOrNull(0)?.takeIf { it.isNotBlank() } ?: "PS"
+        val concept = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+        return subj.uppercase() to concept
+    }
+
+    private fun pickStaleConceptFor(subject: String): String? {
+        val stale = jarvis.KnowledgeState.staleConcepts(
+            confidenceFloor = 0.6f, minStaleDays = 1L,
+        ).filter { it.subject.equals(subject, ignoreCase = true) }
+            .sortedBy { it.confidence }
+        return stale.firstOrNull()?.concept
+            ?: ConceptCatalog.all()
+                .firstOrNull { it.subject.equals(subject, ignoreCase = true) }
+                ?.name
     }
 
     /** Closed-loop adherence check (2026-05-09). Reads push_history.jsonl

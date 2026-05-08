@@ -84,6 +84,17 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   yesterday's reminder", or proactively surface this if the user
   mentions missing a notification.
     [[push_status: now]]
+- lesson(SUBJECT/CONCEPT?): structured 4-section tutoring response —
+  DEFINITION (1 paragraph) + WORKED EXAMPLE (step-by-step solved) +
+  DRILL (problem with solution withheld) + CHECK (1 conceptual
+  question). Pulls from archival via lexical search; cites file
+  paths. If only SUBJECT given, picks weakest stale concept for that
+  subject. Different from [[quiz]]: full lesson scaffold, not a
+  single recall question. Use when the user asks "teach me X" or
+  "I don't get X" — anything where they need a structured walkthrough
+  rather than a quick answer.
+    [[lesson: PA/greedy algorithms]]
+    [[lesson: PS]]
 - adherence(N?): closed-loop check — for the last N days (default 3,
   max 14), report what the daily Telegram push recommended vs what
   the user actually worked on (classified from activity log titles
