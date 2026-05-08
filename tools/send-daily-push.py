@@ -39,7 +39,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 GRADES_FILE = os.environ.get(
     "JARVIS_GRADES_FILE", "/opt/jarvis/data/grades.jsonl"
@@ -228,12 +228,16 @@ def pick_priority_action(
 
 
 def format_message(
-    summaries: list[dict], action: dict | None, today: str, day_n: int
+    summaries: list[dict], action: dict | None, today: str, day_n: int,
+    adherence: dict | None = None,
 ) -> str:
-    """v2 (council 1778256562 fix). Surfaces the priority action AND the
-    full standing line for context — so the user can override the bot's
-    pick if it's wrong without opening the chat. day_n is the day-stamp
-    sequence number (HIGH-A mitigation: missing days become visible)."""
+    """v3 (closed-loop fix 2026-05-09). Surfaces priority action + standing
+    line + yesterday's adherence so the user (and the bot itself, on the
+    next round) can see whether the same recommendation has been ignored
+    repeatedly. day_n is the day-stamp sequence number (HIGH-A mitigation:
+    missing days become visible). adherence is the result of
+    `adherence.compute_adherence(history, activity, yesterday)` or None
+    when no yesterday push exists yet."""
     standing = (
         ", ".join(
             f"{s['subject']} {round(s['ratio'] * 100)}%"
@@ -241,10 +245,32 @@ def format_message(
         )
         if summaries else "no grades yet"
     )
+    adherence_line = ""
+    if adherence is not None and adherence.get("recommended"):
+        rec = adherence["recommended"]
+        ratio = adherence.get("ratio", 0.0)
+        rec_min = adherence.get("recommended_minutes", 0)
+        total = adherence.get("total_study_minutes", 0)
+        if total == 0:
+            adherence_line = f"Yesterday: pushed {rec}, no study activity captured.\n"
+        else:
+            pct = round(ratio * 100)
+            # Surface delta — what got worked on instead.
+            obs = adherence.get("observed", {})
+            others = sorted(
+                ((s, mn) for s, mn in obs.items() if s != rec and s != "OTHER"),
+                key=lambda kv: -kv[1],
+            )[:2]
+            delta = ", ".join(f"{s} {mn}m" for s, mn in others) or "no other study"
+            adherence_line = (
+                f"Yesterday: {pct}% adherence to {rec} "
+                f"({rec_min}m / {total}m). Other: {delta}.\n"
+            )
     if action is None:
         head = "No active assignments tracked."
         return (
             f"Day {day_n} ({today})\n"
+            f"{adherence_line}"
             f"{head}\n"
             f"Standing: {standing}.\n"
             f"Open the chat: [[plan: today]]."
@@ -266,6 +292,7 @@ def format_message(
     cliff_note = " — NO restanță, hard cliff" if action["no_restanta"] else ""
     return (
         f"Day {day_n} ({today})\n"
+        f"{adherence_line}"
         f"PRIORITY: {subj} — {title}\n"
         f"Due {due} ({tag}){cliff_note}.\n"
         f"Standing: {standing}."
@@ -328,6 +355,23 @@ STATUS_PATH = os.environ.get(
 )
 
 
+def _load_adherence_module():
+    """Side-load tools/adherence.py without polluting Python path."""
+    import importlib.util
+    here = os.path.dirname(os.path.abspath(__file__))
+    spec = importlib.util.spec_from_file_location(
+        "adherence", os.path.join(here, "adherence.py"),
+    )
+    if spec is None or spec.loader is None:
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:
+        return None
+
+
 def main(argv: list[str]) -> int:
     today = datetime.now(timezone.utc).date().isoformat()
     day_n = compute_day_n(today)
@@ -335,7 +379,23 @@ def main(argv: list[str]) -> int:
     assignments = read_jsonl(ASSIGN_FILE)
     summaries = summarize_by_subject(grades)
     action = pick_priority_action(assignments, summaries, today)
-    msg = format_message(summaries, action, today, day_n)
+
+    # v3: closed-loop adherence — read yesterday's push from push_history
+    # + cross-reference activity.jsonl to compute what got worked on.
+    adherence = None
+    adh = _load_adherence_module()
+    if adh is not None:
+        try:
+            yesterday = (
+                datetime.now(timezone.utc) - timedelta(days=1)
+            ).date().isoformat()
+            history = adh.read_jsonl(adh.PUSH_HISTORY_FILE)
+            activity = adh.read_jsonl(adh.ACTIVITY_FILE)
+            adherence = adh.compute_adherence(history, activity, yesterday)
+        except Exception:
+            adherence = None
+
+    msg = format_message(summaries, action, today, day_n, adherence)
 
     if os.environ.get("JARVIS_PUSH_DRY_RUN") == "1":
         print(msg)
@@ -362,6 +422,14 @@ def main(argv: list[str]) -> int:
     if err:
         status_record["error"] = err
     write_status(STATUS_PATH, status_record)
+    # v3: append every push to push_history.jsonl (used by adherence
+    # tomorrow), regardless of HTTP success. If HTTP failed we still
+    # logged what the bot WOULD have surfaced.
+    if adh is not None:
+        try:
+            adh.append_push_history(status_record)
+        except Exception:
+            pass
     if code < 200 or code >= 300:
         print(f"telegram FAILED code={code} err={err}", file=sys.stderr)
         return 3

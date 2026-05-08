@@ -126,6 +126,7 @@ object ChatTools {
         "grades_sync_status" -> executeGradesSyncStatus()
         "push_status" -> executePushStatus()
         "feedback_summary" -> executeFeedbackSummary()
+        "adherence" -> executeAdherence(call.args)
         else -> "(unknown tool: ${call.name})"
     }
 
@@ -553,6 +554,131 @@ object ChatTools {
             }
         }
         return sb.toString().trimEnd()
+    }
+
+    /** Closed-loop adherence check (2026-05-09). Reads push_history.jsonl
+     *  + activity.jsonl, runs the daily classifier, and reports for the
+     *  last N days (default 3) what was pushed vs what got worked on.
+     *  Catches the failure mode where the same priority pushes daily and
+     *  user ignores it for a week. */
+    private fun executeAdherence(args: String): String {
+        val n = args.trim().toIntOrNull()?.coerceIn(1, 14) ?: 3
+        val historyFile = Config.stateDir.resolve("push_history.jsonl")
+        val activityFile = Config.activityFile
+        if (!historyFile.exists()) {
+            return "(no push_history.jsonl yet — first daily push hasn't run via cron)"
+        }
+        // Parse recent push history rows
+        val histRaw = try {
+            java.nio.file.Files.readAllLines(historyFile, Charsets.UTF_8)
+        } catch (e: Exception) {
+            return "(failed to read push_history.jsonl: ${e.message?.take(160)})"
+        }
+        val history = histRaw.mapNotNull { line ->
+            try {
+                kotlinx.serialization.json.Json.parseToJsonElement(line.trim()).jsonObject
+            } catch (_: Exception) { null }
+        }
+        // Build set of unique target dates (most recent first)
+        val dates = history.mapNotNull { it["today"]?.jsonPrimitive?.contentOrNull }
+            .distinct()
+            .sortedDescending()
+            .take(n)
+        if (dates.isEmpty()) return "(push_history empty after parse)"
+        val sb = StringBuilder("Adherence — last ${dates.size} day${if (dates.size == 1) "" else "s"}:\n")
+        for (date in dates) {
+            // For each date find latest push + sum activity by classify rules
+            val push = history.filter { it["today"]?.jsonPrimitive?.contentOrNull == date }
+                .maxByOrNull { it["ts"]?.jsonPrimitive?.contentOrNull ?: "" }
+            val rec = push?.get("subject")?.jsonPrimitive?.contentOrNull ?: "?"
+            // Re-implement classifier minimally inline: read activity.jsonl,
+            // filter to date, count minutes per classify result. Mirror the
+            // Python adherence.py rules. Kept short by relying on a small
+            // ruleset; if the rules diverge, the chat tool may show a
+            // different number than the morning push — acceptable since
+            // the morning push is the load-bearing surface.
+            val obs = classifyDateMinutes(activityFile, date)
+            val total = obs.values.sum() - (obs["OTHER"] ?: 0)
+            val recMin = obs[rec] ?: 0
+            val pct = if (total > 0) (recMin * 100 / total) else 0
+            sb.append("  $date — pushed $rec, ${pct}% adherence ($recMin/${total}m study)")
+            val others = obs.entries.filter { it.key != rec && it.key != "OTHER" }
+                .sortedByDescending { it.value }.take(2)
+            if (others.isNotEmpty()) {
+                sb.append("; instead: ").append(
+                    others.joinToString(", ") { "${it.key} ${it.value}m" }
+                )
+            }
+            sb.append("\n")
+        }
+        sb.append("(classifier rules in tools/adherence.py SUBJECT_RULES — flag a misclass and I'll tighten the regex)")
+        return sb.toString().trimEnd()
+    }
+
+    private fun classifyDateMinutes(
+        activityFile: java.nio.file.Path, dateIso: String
+    ): Map<String, Int> {
+        if (!activityFile.exists()) return emptyMap()
+        val rules = listOf(
+            "PS" to listOf("rstudio", "rmarkdown", "tema_a", "tema_b", "tema_c", "tema_d",
+                "ps lab", "ps hw", "probabilit", "statistic", " ps -",
+                "monte carlo", "kolmogorov", "laplace", "poisson", "binomial"),
+            "ALO" to listOf("alo curs", "alo lab", "alo seminar", "alo tema",
+                "spațiu liniar", "algebra liniar", "diagonalizab",
+                "vector propriu", "valori proprii"),
+            "PA" to listOf("algorithm design", "pa test", "pa curs", "pa seminar",
+                "proiectarea algoritm", "np-complete", "np complete",
+                "greedy algorithm", "huffman", "dijkstra", "kruskal",
+                "dynamic programming", " pa ", "ed-pa", "pa-tests"),
+            "POO" to listOf("object-oriented", "poo curs", "poo lab",
+                "intellij idea", " poo ", " oop ", "schildt", "kaler",
+                ".java", "javac", "polymorphism", "inheritance"),
+            "RC" to listOf("socket", "tcp", "udp", "wireshark", "rc lab", "rc curs",
+                "retele de calculatoare", "computer networks",
+                " rc -", "ip header", "subnet", "ethernet"),
+            "SO" to listOf("wsl", "linux", "ubuntu", "kernel", "fork()", "syscall",
+                "/proc", "/dev/", "bash script", "shell script",
+                "sisteme de operare", "sisteme-de-operare",
+                "operating system", "operating-systems-and-computer-networks",
+                "cristian.vidrascu", "tlpi", "kerrisk", "tanenbaum",
+                "pid 0", "posix"),
+        )
+        val nonStudyProcs = setOf("discord.exe", "spotify.exe", "steam.exe",
+            "league of legends.exe", "leagueclient.exe",
+            "applicationframehost.exe", "explorer.exe",
+            "minecraftlauncher.exe", "javaw.exe")
+        val rows = mutableListOf<ActivityEntry>()
+        java.nio.file.Files.readAllLines(activityFile, Charsets.UTF_8).forEach { line ->
+            try {
+                val e = kotlinx.serialization.json.Json {
+                    ignoreUnknownKeys = true
+                }.decodeFromString(ActivityEntry.serializer(), line.trim())
+                if ((e.ts).startsWith(dateIso)) rows.add(e)
+            } catch (_: Exception) {}
+        }
+        rows.sortBy { it.ts }
+        val out = mutableMapOf<String, Int>()
+        for (i in rows.indices) {
+            val e = rows[i]
+            val proc = (e.process ?: "").lowercase()
+            val title = (e.title ?: "").lowercase()
+            val haystack = "$proc $title"
+            val cls = if (proc in nonStudyProcs) {
+                "OTHER"
+            } else {
+                rules.firstOrNull { (_, kws) -> kws.any { it in haystack } }?.first ?: "OTHER"
+            }
+            val gapMin = if (i + 1 < rows.size) {
+                val curT = runCatching { java.time.Instant.parse(e.ts) }.getOrNull()
+                val nxtT = runCatching { java.time.Instant.parse(rows[i + 1].ts) }.getOrNull()
+                if (curT != null && nxtT != null) {
+                    val g = java.time.Duration.between(curT, nxtT).toMinutes().toInt()
+                    if (g > 10) 5 else if (g < 0) 0 else g
+                } else 5
+            } else 5
+            out[cls] = (out[cls] ?: 0) + gapMin
+        }
+        return out
     }
 
     /** Phase 5.1 — feedback-driven retraining summary. Reads signals.jsonl +

@@ -84,6 +84,14 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   yesterday's reminder", or proactively surface this if the user
   mentions missing a notification.
     [[push_status: now]]
+- adherence(N?): closed-loop check — for the last N days (default 3,
+  max 14), report what the daily Telegram push recommended vs what
+  the user actually worked on (classified from activity log titles
+  + processes via tools/adherence.py SUBJECT_RULES). Surfaces the
+  "bot keeps pushing PS but I've been doing POO" failure mode.
+  Use when user asks "is the bot tracking what I'm doing", "have I
+  been ignoring its priority", or to diagnose a stale push.
+    [[adherence: 3]]
 - feedback_summary: surface the Phase 5.1 importance-feedback
   retraining state. Returns per-action + per-kind action
   distribution from signals.jsonl + feedback.jsonl, plus the
