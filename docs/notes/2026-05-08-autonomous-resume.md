@@ -544,11 +544,21 @@ After that, cron 09:00 daily.
    POO 0/30, Lab eval 17d-out, ALO Tema 2+3 due Sun — none in core_memory.md,
    so reflex confirmed fired. Catch-up smoke for "how am I doing on grades?"
    returned all 5 subject ratios + 21 stale PS concepts (from `[[catchup]]`).
-4. **POO sentinel rows** for Lab eval 2 + final exam in
-   `tools/sync-grades-from-sheets.py` (note: dry-run shows the eval-2
-   row exists in assignments.jsonl, but the grades.jsonl sentinel is
-   missing — adding it surfaces the 30pt component in `[[grades]]`
-   output even when ungraded).
-5. **ALO column-rename detection** in
-   `tools/sync-grades-from-sheets.py` — header-row hash diff →
-   write to `grades-sync-status.json`.
+4. ~~**POO sentinel rows**~~ — DONE 2026-05-09. Created
+   `tools/seed-poo-sentinels.py` (one-time seed, idempotent via id
+   collapse, NOT extractor-emitted because of the documented PS-style
+   cron-rewrite risk). Seeded `Lab evaluation 2` 0/30 + `Final exam`
+   0/30 into grades.jsonl. POO max bumped from 42 → 102, ratio
+   shifted 8% → 3% (more accurate signal of catch-up debt). Smoked
+   via `[[grades]]` returning "POO 3%".
+5. ~~**ALO column-rename detection**~~ — DONE 2026-05-09. Added
+   `EXPECTED_HEADERS` map + `verify_headers()` to
+   `tools/sync-grades-from-sheets.py`. Per-column header literal
+   compare for 11 ALO columns (col 13: "Test seminar", 14: "T1", ...
+   23: "B5"); mismatch writes a column-by-column drift message to
+   `grades-sync-status.json` with which columns shifted. Falls back
+   to "matricol-not-found" check when no row is even header-shaped.
+   Tests in `tools/test_sync_grades_headers.py` (9 cases — pass
+   on real layout, two leading-blank rows, renames, insertions,
+   truncation, garbage rows). Live run on VPS: appended=0,
+   unchanged=19, failures=[], all 4 subjects synced clean.

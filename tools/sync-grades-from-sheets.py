@@ -112,6 +112,84 @@ def find_row(rows: list[list[str]], matricol_col: int) -> list[str] | None:
     return None
 
 
+# Per-subject expected column-header maps. Verified 2026-05-08; if the sheet
+# author renames or reorders these columns the extractor's hard-coded
+# indices would silently extract from the wrong column. Without a guard the
+# wrong number lands in grades.jsonl and the bot's [[grades]] roll-up shifts
+# silently. The guard hashes the relevant column's header text against the
+# expected literal and writes a failure to grades-sync-status.json on
+# mismatch — cron run skips the affected subject's extract that round.
+#
+# Devil's Advocate post-impl council 2026-05-08 round-3 residual concern.
+# Only ALO is guarded for now (most-shifted layout per session-review note).
+# PA/PS/POO are simpler shapes and their failure modes are better caught
+# by matricol-not-found (which already writes to status JSON).
+EXPECTED_HEADERS: dict[str, dict[int, str]] = {
+    "ALO": {
+        13: "Test seminar",
+        14: "T1",
+        15: "B1",
+        16: "T2",
+        17: "B2",
+        18: "T3",
+        19: "B3",
+        20: "T4",
+        21: "B4",
+        22: "T5",
+        23: "B5",
+    },
+}
+
+
+def find_header_row(
+    rows: list[list[str]], expected: dict[int, str]
+) -> list[str] | None:
+    """Locate the row whose values at the expected columns align with the
+    expected header strings. Returns the first row with ALL expected values
+    matching (case + whitespace exact, after strip), else None.
+
+    Handles the gid=2051389642 layout where rows 0-1 are blank/subheader
+    rubric rows and the canonical header lands at row 2; tolerates
+    insertion of additional leading blank rows since we scan top-down."""
+    for row in rows:
+        ok = True
+        for col, exp in expected.items():
+            if col >= len(row) or row[col].strip() != exp:
+                ok = False
+                break
+        if ok:
+            return row
+    return None
+
+
+def verify_headers(
+    rows: list[list[str]], subject: str
+) -> str | None:
+    """Returns None on pass; an error string on mismatch."""
+    expected = EXPECTED_HEADERS.get(subject)
+    if expected is None:
+        return None
+    header = find_header_row(rows, expected)
+    if header is not None:
+        return None
+    # Scan for the most likely header row (the one with "matricol" in it)
+    # and report which columns drifted, so the failure message tells the
+    # human reading status JSON exactly what to fix.
+    candidates = [
+        r for r in rows
+        if any("matricol" in c.lower() for c in r if isinstance(c, str))
+    ]
+    if not candidates:
+        return f"{subject}: header row not found (no row contains 'matricol')"
+    header = candidates[0]
+    drifts: list[str] = []
+    for col, exp in expected.items():
+        actual = header[col].strip() if col < len(header) else "<out-of-range>"
+        if actual != exp:
+            drifts.append(f"col {col}: expected {exp!r}, got {actual!r}")
+    return f"{subject}: header drift — " + "; ".join(drifts[:5])
+
+
 def extract_alo(row: list[str]) -> list[tuple[str, float, float]]:
     """Headers verified 2026-05-08 (gid=2051389642):
        Grupa | Nume | Nr.matricol | Email | S1..S9 | Activitate seminar
@@ -300,6 +378,10 @@ def main():
                 rows = fetch_csv(sheet["url"])
             except Exception as e:
                 failed.append(f"{subject}: fetch failed: {e}")
+                continue
+            header_err = verify_headers(rows, subject)
+            if header_err is not None:
+                failed.append(header_err)
                 continue
             row = find_row(rows, sheet["matricol_col"])
             if row is None:
