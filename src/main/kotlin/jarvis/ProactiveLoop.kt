@@ -45,6 +45,28 @@ object ProactiveLoop {
     private val COOLDOWN = Duration.ofMinutes(30)
     private val SUBSYSTEM_TIMEOUT = Duration.ofSeconds(60)
 
+    // Phase 5.1 — feedback-driven re-weighting cache. Recompute every 30 min
+    // rather than on every consider() to amortize the JSONL re-read; staleness
+    // is fine since feedback rates change slowly. Null on first call until
+    // the first consider() runs, OR after a forced reset for tests.
+    @Volatile private var thresholdCache: ThresholdRecommendation? = null
+    @Volatile private var thresholdCacheAt: Instant = Instant.EPOCH
+    private val THRESHOLD_REFRESH = Duration.ofMinutes(30)
+
+    private fun currentThreshold(now: Instant): Float {
+        val age = Duration.between(thresholdCacheAt, now)
+        if (thresholdCache == null || age > THRESHOLD_REFRESH) {
+            try {
+                thresholdCache = FeedbackConsumer.current()
+                thresholdCacheAt = now
+            } catch (_: Exception) {
+                // If reading the JSONLs fails, fall back to the static base.
+                return IMPORTANCE_THRESHOLD
+            }
+        }
+        return FeedbackConsumer.effectiveThreshold(thresholdCache)
+    }
+
     // Council retro 2026-05-08: quiet hours moved to QuietHours object.
     // Single source of truth, opt-in via env, default disabled.
 
@@ -91,7 +113,12 @@ object ProactiveLoop {
         val schedule = Schedule.load()
         val drift = ActiveDoc.detectDrift(entry, schedule, now)
         val imp = if (drift != null) 0.85f else (entry.importance ?: 0f)
-        if (imp < IMPORTANCE_THRESHOLD) return null
+        // Phase 5.1: threshold re-weighted by user feedback history (heavier
+        // dismiss-rate raises the bar; sustained useful/pinned lowers it).
+        // Falls back to IMPORTANCE_THRESHOLD if feedback signal is sparse
+        // (<MIN_ACKS_FOR_GLOBAL acked rows) or jsonl reads fail.
+        val effective = currentThreshold(now)
+        if (imp < effective) return null
 
         // 2. Quiet-hours gate (now opt-in via env, default disabled).
         if (QuietHours.isActive(now)) return null

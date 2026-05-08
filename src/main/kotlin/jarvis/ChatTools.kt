@@ -125,6 +125,7 @@ object ChatTools {
         "grades" -> executeGrades()
         "grades_sync_status" -> executeGradesSyncStatus()
         "push_status" -> executePushStatus()
+        "feedback_summary" -> executeFeedbackSummary()
         else -> "(unknown tool: ${call.name})"
     }
 
@@ -551,6 +552,47 @@ object ChatTools {
                 sb.append("  ⚠ STALE — last push was ${ageH}h ago (cron runs every 24h)\n")
             }
         }
+        return sb.toString().trimEnd()
+    }
+
+    /** Phase 5.1 — feedback-driven retraining summary. Reads signals.jsonl +
+     *  feedback.jsonl, surfaces per-action + per-kind action distribution
+     *  and the threshold offset that ProactiveLoop is currently applying.
+     *  Surfaces the basis text so the user can sanity-check the offset
+     *  before the loop actually self-tunes. */
+    private fun executeFeedbackSummary(): String {
+        val signals = Signals.readAll()
+        val feedback = Feedback.readAll()
+        val stats = FeedbackConsumer.analyze(signals, feedback)
+        val rec = FeedbackConsumer.recommend(stats)
+        val effective = FeedbackConsumer.effectiveThreshold(rec)
+        val sb = StringBuilder()
+        sb.append("Feedback retraining summary:\n")
+        sb.append("  signals: ${stats.totalSignals}, feedback rows: ${stats.totalFeedback}, ")
+        sb.append("acked-distinct: ${stats.totalAcked}\n")
+        sb.append("  by action: ")
+        sb.append(stats.byAction.entries.sortedByDescending { it.value }
+            .joinToString(", ") { "${it.key}=${it.value}" }
+            .ifEmpty { "(none)" })
+        sb.append("\n")
+        if (stats.byKind.isNotEmpty()) {
+            sb.append("  by kind:\n")
+            for ((kind, actions) in stats.byKind) {
+                sb.append("    $kind: ")
+                sb.append(actions.entries.joinToString(", ") { "${it.key}=${it.value}" })
+                sb.append("\n")
+            }
+        }
+        sb.append("  base: ${"%.2f".format(rec.baseThreshold)}, ")
+        sb.append("offset: ${"%+.2f".format(rec.globalOffset)}, ")
+        sb.append("effective: ${"%.2f".format(effective)}\n")
+        if (rec.perKindOffset.isNotEmpty()) {
+            sb.append("  per-kind offsets (informational): ")
+            sb.append(rec.perKindOffset.entries
+                .joinToString(", ") { "${it.key}${"%+.2f".format(it.value)}" })
+            sb.append("\n")
+        }
+        sb.append("  basis: ${rec.basis}")
         return sb.toString().trimEnd()
     }
 

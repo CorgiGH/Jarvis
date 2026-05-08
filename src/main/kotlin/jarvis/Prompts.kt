@@ -84,6 +84,15 @@ Tools you may invoke (each on its own line, multiple OK in one turn):
   yesterday's reminder", or proactively surface this if the user
   mentions missing a notification.
     [[push_status: now]]
+- feedback_summary: surface the Phase 5.1 importance-feedback
+  retraining state. Returns per-action + per-kind action
+  distribution from signals.jsonl + feedback.jsonl, plus the
+  threshold offset the ProactiveLoop is now applying on top of
+  base 0.7 (positive = bar raised → fewer signals; negative =
+  lowered). Use when user asks "is the bot too noisy / too quiet",
+  "is it learning from my dismisses", or before recommending a
+  threshold tweak.
+    [[feedback_summary: now]]
 - catchup(<N>?): multi-day plan for the next N days (default 7, max 30).
   Each day: scheduled blocks + stale review queue + up to 3 new untouched
   concepts (deduped across days, biased toward subjects with exams in
