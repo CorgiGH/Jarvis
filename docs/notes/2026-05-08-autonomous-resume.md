@@ -414,19 +414,20 @@ login-walled UAIC pages (SO/RC restricted, student portal grades).
 | PA | 25.5 | 65 | 39% | Test 1 14.5/35 + attendance 11/30. Test 2 + final not yet recorded |
 | SO+RC | 35.5 | 70 | 50% | Continuous eval locked 24.5/50, Linux quiz 10/10, Lab activity 1/10. AI1202 final exam in June pending |
 
-**Gate-zero — MUST happen at start of next session:**
+**Gate-zero — checkpoint as of 2026-05-08 end-of-session:**
 
-1. **Install new APK** from `https://corgflix.duckdns.org/apk`. Council
-   round-2 Risk Analyst flagged this as CRITICAL: until the APK is
-   side-loaded, the Foreground Service shipped in commit 5aad26e is
-   write-only telemetry. Notifications when phone is closed REMAIN
-   broken — every other notification-dependent fix is gated on this.
-   ANY further feature work this session is invalid if APK install
-   doesn't happen first.
-2. **Restart Claude Code session** so Playwright MCP tools load
-   (Playwright MCP added to user-scope `~/.claude.json` via `claude
-   mcp add` this session, `✓ Connected`). Run `npx playwright install
-   chromium` once on PC (~150 MB download).
+1. **Install new APK** from `https://corgflix.duckdns.org/apk`.
+   ⏳ **STILL PENDING USER ACTION.** Council round-2 Risk Analyst
+   flagged this as CRITICAL: until APK side-loaded, the Foreground
+   Service shipped in commit 5aad26e is write-only telemetry.
+   Notifications when phone is closed REMAIN broken. ANY further
+   feature work invalid if APK install doesn't happen first.
+2. **Restart Claude Code session** so Playwright MCP tools load.
+   ⏳ **PENDING USER ACTION.** Playwright MCP added to user-scope
+   `~/.claude.json` via `claude mcp add` this session, `✓ Connected`.
+3. **`npx playwright install chromium`** — ✅ **DONE 2026-05-08
+   evening per user.** Browser binary cached on PC; Playwright MCP
+   tools should fire on next-session open.
 
 **Recommended FIRST commit of next session — forcing-function MVP** (per
 council round-3 First Principles):
