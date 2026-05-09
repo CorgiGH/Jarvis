@@ -35,6 +35,18 @@ jobs:
             if grep -qE 'failures="[1-9]|errors="[1-9]' "$f"; then
               echo "--- $f ---"
               cat "$f"
+              # Surface as a workflow annotation (visible via public API).
+              first_msg=$(python3 -c "
+import xml.etree.ElementTree as ET
+t = ET.parse('$f').getroot()
+for tc in t.iter('testcase'):
+    for child in list(tc):
+        if child.tag in ('failure','error'):
+            msg = (child.get('message') or '').replace('\n',' ').replace('%','%25')[:600]
+            print(f\"{tc.get('classname')}.{tc.get('name')}: {msg}\")
+            raise SystemExit(0)
+")
+              echo "::error file=${f}::${first_msg}"
             fi
           done
       - name: Upload test reports on failure
