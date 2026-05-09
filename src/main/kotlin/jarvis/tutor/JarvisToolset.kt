@@ -211,6 +211,29 @@ object JarvisToolDefs {
             put("section", strParam("Section name (case-sensitive — see description).", required = true))
             put("bullet", strParam("Single-line note. Max 400 chars.", required = true))
         })
+        add(toolDef("calendar_create_event",
+            "Create a Google Calendar event in the user's primary calendar. Use " +
+                "to schedule a study block / pomodoro / deadline reminder. NEVER " +
+                "schedules without explicit user intent. Requires GWS_ENABLED on " +
+                "the server.",
+        ) {
+            put("summary", strParam("Event title.", required = true))
+            put("startIso", strParam("Start time ISO-8601 with TZ.", required = true))
+            put("endIso", strParam("End time ISO-8601.", required = true))
+        })
+        add(toolDef("drive_search",
+            "Search the user's Google Drive for files matching a query.",
+        ) {
+            put("query", strParam("Drive query string (e.g. 'name contains syllabus and mimeType=application/pdf').", required = true))
+            put("pageSize", intParam("Max results (default 5, max 20)."))
+        })
+        add(toolDef("gmail_create_draft",
+            "Create a Gmail draft (NEVER auto-sends).",
+        ) {
+            put("to", strParam("Recipient email.", required = true))
+            put("subject", strParam("Email subject line.", required = true))
+            put("body", strParam("Plain-text email body.", required = true))
+        })
     }
 
     private fun toolDef(name: String, description: String, params: JsonObjectBuilderScope.() -> Unit): JsonObject {
@@ -263,6 +286,9 @@ object JarvisToolDefs {
             "shortest_path" -> dispatchShortestPath(argsJson)
             "wiki_read" -> dispatchWikiRead(argsJson)
             "wiki_append" -> dispatchWikiAppend(argsJson)
+            "calendar_create_event" -> dispatchCalendarCreate(argsJson)
+            "drive_search" -> dispatchDriveSearch(argsJson)
+            "gmail_create_draft" -> dispatchGmailDraft(argsJson)
             else -> "unknown tool: $toolName"
         }
     }
@@ -312,6 +338,66 @@ object JarvisToolDefs {
         val text = WikiPage.read(subject, concept)
             ?: return "wiki_read: no wiki page yet for $subject/$concept"
         return text.take(2000)
+    }
+
+    private fun dispatchCalendarCreate(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val summary = (obj["summary"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val startIso = (obj["startIso"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val endIso = (obj["endIso"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (summary.isEmpty() || startIso.isEmpty() || endIso.isEmpty()) {
+            return "calendar_create_event: summary + startIso + endIso required"
+        }
+        val r = GwsEffector.run(
+            subcommand = "calendar events insert",
+            params = mapOf("calendarId" to "primary"),
+            body = mapOf(
+                "summary" to summary,
+                "start" to mapOf<String, Any>("dateTime" to startIso),
+                "end" to mapOf<String, Any>("dateTime" to endIso),
+            ),
+        )
+        return when (r) {
+            is GwsEffector.Result.Ok -> "calendar event created (raw: ${r.stdout.take(400)})"
+            is GwsEffector.Result.Err -> "calendar_create_event failed (exit ${r.exitCode}): ${r.stderr.take(400)}"
+        }
+    }
+
+    private fun dispatchDriveSearch(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val q = (obj["query"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (q.isEmpty()) return "drive_search: query required"
+        val pageSize = ((obj["pageSize"] as? JsonPrimitive)?.intOrNull ?: 5).coerceIn(1, 20)
+        val r = GwsEffector.run(
+            subcommand = "drive files list",
+            params = mapOf("q" to q, "pageSize" to pageSize),
+        )
+        return when (r) {
+            is GwsEffector.Result.Ok -> r.stdout.take(2000)
+            is GwsEffector.Result.Err -> "drive_search failed (exit ${r.exitCode}): ${r.stderr.take(400)}"
+        }
+    }
+
+    private fun dispatchGmailDraft(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val to = (obj["to"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val subject = (obj["subject"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val body = (obj["body"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (to.isEmpty() || subject.isEmpty() || body.isEmpty()) {
+            return "gmail_create_draft: to + subject + body required"
+        }
+        // Gmail API expects RFC822 message in base64url under message.raw.
+        val rfc = "To: $to\r\nSubject: $subject\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n$body"
+        val raw = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(rfc.toByteArray(Charsets.UTF_8))
+        val r = GwsEffector.run(
+            subcommand = "gmail users drafts create",
+            params = mapOf("userId" to "me"),
+            body = mapOf("message" to mapOf<String, Any>("raw" to raw)),
+        )
+        return when (r) {
+            is GwsEffector.Result.Ok -> "gmail draft created (raw: ${r.stdout.take(400)})"
+            is GwsEffector.Result.Err -> "gmail_create_draft failed (exit ${r.exitCode}): ${r.stderr.take(400)}"
+        }
     }
 
     private fun dispatchWikiAppend(argsJson: String): String {
