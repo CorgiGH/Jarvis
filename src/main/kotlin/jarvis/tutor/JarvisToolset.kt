@@ -54,12 +54,30 @@ class JarvisToolset(
     data class ToolReply(val text: String, val model: String, val toolRounds: Int)
 
     /** Chat with the LLM; allow it to invoke tools. Returns the
-     *  final text after at most [maxToolRounds] tool round-trips. */
-    suspend fun chat(systemPrompt: String, userText: String): ToolReply {
-        // Conversation state — we mutate as we add tool_use/tool_result.
+     *  final text after at most [maxToolRounds] tool round-trips.
+     *
+     *  Skill resolution (Stage C): if [userText] matches a SKILL.md
+     *  trigger under [skillsRoot], that skill's body is appended to
+     *  the system prompt AND its tool_allowlist filters the tool
+     *  surface. Empty allowlist = full surface. No match = full
+     *  default surface. */
+    suspend fun chat(
+        systemPrompt: String,
+        userText: String,
+        skillsRoot: java.nio.file.Path = SkillLoader.defaultRoot(),
+    ): ToolReply {
+        val skills = try { SkillLoader.load(skillsRoot) } catch (_: Exception) { emptyList() }
+        val active = SkillLoader.resolve(skills, userText)
+        val effectiveSystem = if (active != null) {
+            "$systemPrompt\n\n# Active skill: ${active.name}\n${active.systemPromptBody}"
+        } else systemPrompt
+        val effectiveTools = if (active != null)
+            SkillLoader.applyAllowlist(active, JarvisToolDefs.openAiToolDefs)
+        else JarvisToolDefs.openAiToolDefs
+
         val messages = mutableListOf<JsonObject>()
         messages += buildJsonObject {
-            put("role", "system"); put("content", systemPrompt)
+            put("role", "system"); put("content", effectiveSystem)
         }
         messages += buildJsonObject {
             put("role", "user"); put("content", userText)
@@ -68,7 +86,7 @@ class JarvisToolset(
         var rounds = 0
         var lastModel = ""
         while (true) {
-            val toolsToOffer = if (rounds < maxToolRounds) JarvisToolDefs.openAiToolDefs else buildJsonArray {}
+            val toolsToOffer = if (rounds < maxToolRounds) effectiveTools else buildJsonArray {}
             val message = if (toolsToOffer.isEmpty()) {
                 // Final round — text-only completion via Llm interface.
                 val (text, model) = llm.complete(
