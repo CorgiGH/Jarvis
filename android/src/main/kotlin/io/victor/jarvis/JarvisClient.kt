@@ -65,6 +65,17 @@ data class FocusReply(
     val startedTs: String? = null,
 )
 
+@Serializable
+data class PhoneHealthBucket(val pkg: String, val count: Int)
+
+@Serializable
+data class PhoneHealthReply(
+    val count24h: Int = 0,
+    val lastTs: String? = null,
+    val lastPackage: String? = null,
+    val topPackages: List<PhoneHealthBucket> = emptyList(),
+)
+
 class JarvisAuthException(message: String) : Exception(message)
 
 class JarvisClient {
@@ -178,6 +189,21 @@ class JarvisClient {
             resp.status.isSuccess()
         } catch (_: Exception) {
             false
+        }
+    }
+
+    /** Phone-logger device-test: pull server's view of recent phone:* rows. */
+    suspend fun fetchPhoneHealth(baseUrl: String, authToken: String): PhoneHealthReply? {
+        return try {
+            val resp = client.get("$baseUrl/api/_phone_health") {
+                if (authToken.isNotBlank()) {
+                    header("Authorization", "Bearer $authToken")
+                }
+            }
+            if (!resp.status.isSuccess()) null
+            else resp.body<PhoneHealthReply>()
+        } catch (_: Exception) {
+            null
         }
     }
 

@@ -24,6 +24,14 @@ object PrefKeys {
     val ImportanceThreshold = floatPreferencesKey("importance_threshold")
     /** Comma-separated list of muted signal kinds. */
     val MutedKinds = stringPreferencesKey("muted_kinds")
+
+    // Phone-logger device-test diagnostics. Recorded by PhoneActivityWorker
+    // on each tick so SettingsScreen can show why the worker did/didn't
+    // POST. None of these affect runtime behavior.
+    val LastPhoneSampleTs = stringPreferencesKey("phone_last_sample_ts")
+    val LastPhoneSamplePkg = stringPreferencesKey("phone_last_sample_pkg")
+    val LastPhonePostStatus = stringPreferencesKey("phone_last_post_status")
+    val LastPhonePostTs = stringPreferencesKey("phone_last_post_ts")
 }
 
 object Prefs {
@@ -89,5 +97,39 @@ object Prefs {
         context.prefsStore.edit {
             it[PrefKeys.MutedKinds] = kinds.joinToString(",")
         }
+    }
+
+    // Phone-logger diagnostics — written by PhoneActivityWorker each tick.
+
+    suspend fun savePhoneDiag(
+        context: Context,
+        sampleTs: String?,
+        samplePkg: String?,
+        postStatus: String,
+        postTs: String,
+    ) {
+        context.prefsStore.edit {
+            if (sampleTs != null) it[PrefKeys.LastPhoneSampleTs] = sampleTs
+            if (samplePkg != null) it[PrefKeys.LastPhoneSamplePkg] = samplePkg
+            it[PrefKeys.LastPhonePostStatus] = postStatus
+            it[PrefKeys.LastPhonePostTs] = postTs
+        }
+    }
+
+    data class PhoneDiag(
+        val lastSampleTs: String,
+        val lastSamplePkg: String,
+        val lastPostStatus: String,
+        val lastPostTs: String,
+    )
+
+    suspend fun loadPhoneDiag(context: Context): PhoneDiag {
+        val p = context.prefsStore.data.first()
+        return PhoneDiag(
+            lastSampleTs = p[PrefKeys.LastPhoneSampleTs] ?: "(never)",
+            lastSamplePkg = p[PrefKeys.LastPhoneSamplePkg] ?: "(never)",
+            lastPostStatus = p[PrefKeys.LastPhonePostStatus] ?: "(never)",
+            lastPostTs = p[PrefKeys.LastPhonePostTs] ?: "(never)",
+        )
     }
 }

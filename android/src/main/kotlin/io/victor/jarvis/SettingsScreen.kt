@@ -53,15 +53,22 @@ fun SettingsScreen(onClose: () -> Unit) {
     val historySignals = remember { mutableStateListOf<Signal>() }
     var loaded by remember { mutableStateOf(false) }
 
+    // Phone-logger device-test diagnostics
+    var phoneDiag by remember { mutableStateOf<Prefs.PhoneDiag?>(null) }
+    var hasUsageAccess by remember { mutableStateOf(false) }
+    var phoneHealth by remember { mutableStateOf<PhoneHealthReply?>(null) }
+
     LaunchedEffect(Unit) {
         quietStart = Prefs.loadQuietStartHour(context)
         quietEnd = Prefs.loadQuietEndHour(context)
         threshold = Prefs.loadImportanceThreshold(context)
         mutedKinds.clear()
         mutedKinds.addAll(Prefs.loadMutedKinds(context))
+        phoneDiag = Prefs.loadPhoneDiag(context)
+        hasUsageAccess = PhoneActivityWorker.hasUsageAccess(context)
         loaded = true
 
-        // Pull recent history.
+        // Pull recent history + phone health from server.
         val baseUrl = Prefs.loadBackendUrl(context, default = "")
         val token = Prefs.loadAuthToken(context, default = "")
         if (baseUrl.isNotBlank() && token.isNotBlank()) {
@@ -70,6 +77,7 @@ fun SettingsScreen(onClose: () -> Unit) {
                 val signals = client.fetchSignals(baseUrl, since = "", token, limit = 50)
                 historySignals.clear()
                 historySignals.addAll(signals.sortedByDescending { it.ts })
+                phoneHealth = client.fetchPhoneHealth(baseUrl, token)
             } catch (_: Exception) {
                 // ignore — empty history shown
             } finally {
@@ -122,6 +130,38 @@ fun SettingsScreen(onClose: () -> Unit) {
                     },
                 )
                 Text(kind, color = Fg)
+            }
+        }
+
+        Divider(color = Muted)
+
+        // Phone-logger device-test diagnostics
+        Text("phone activity logger", color = Fg)
+        val diag = phoneDiag
+        Column(modifier = Modifier.fillMaxWidth().background(Card).padding(8.dp)) {
+            Text(
+                "usage access: ${if (hasUsageAccess) "GRANTED" else "DENIED — open Settings > Apps > Special access > Usage access"}",
+                color = if (hasUsageAccess) Fg else Muted,
+            )
+            if (diag != null) {
+                Text("last sample ts:  ${diag.lastSampleTs}", color = Muted)
+                Text("last sample pkg: ${diag.lastSamplePkg}", color = Muted)
+                Text("last post:       ${diag.lastPostStatus}  @ ${diag.lastPostTs}", color = Fg)
+            } else {
+                Text("(diagnostics loading)", color = Muted)
+            }
+            val ph = phoneHealth
+            if (ph != null) {
+                Text("server saw ${ph.count24h} phone:* rows in 24h", color = Fg)
+                if (ph.lastPackage != null) {
+                    Text("server's last: ${ph.lastPackage} @ ${ph.lastTs}", color = Muted)
+                }
+                if (ph.topPackages.isNotEmpty()) {
+                    Text("top: " + ph.topPackages.joinToString { "${it.pkg}=${it.count}" },
+                         color = Muted)
+                }
+            } else {
+                Text("(server health unavailable — check token/url)", color = Muted)
             }
         }
 

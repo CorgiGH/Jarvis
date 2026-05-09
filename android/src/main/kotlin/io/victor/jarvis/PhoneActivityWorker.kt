@@ -37,19 +37,37 @@ class PhoneActivityWorker(
 
     override suspend fun doWork(): Result {
         val ctx = applicationContext
-        if (!hasUsageAccess(ctx)) return Result.success()
+        val tickTs = Instant.now().toString()
+        if (!hasUsageAccess(ctx)) {
+            Prefs.savePhoneDiag(ctx, null, null, "no-usage-access", tickTs)
+            return Result.success()
+        }
 
         val baseUrl = Prefs.loadBackendUrl(ctx, default = "")
         val token = Prefs.loadAuthToken(ctx, default = "")
-        if (baseUrl.isBlank() || token.isBlank()) return Result.success()
+        if (baseUrl.isBlank() || token.isBlank()) {
+            Prefs.savePhoneDiag(ctx, null, null, "no-config (url/token blank)", tickTs)
+            return Result.success()
+        }
 
-        val sample = sampleForeground(ctx) ?: return Result.success()
+        val sample = sampleForeground(ctx)
+        if (sample == null) {
+            Prefs.savePhoneDiag(ctx, null, null, "no-foreground-event-30min", tickTs)
+            return Result.success()
+        }
         val client = JarvisClient()
-        try {
+        val ok = try {
             client.postActivity(baseUrl, sample, token)
         } finally {
             client.close()
         }
+        Prefs.savePhoneDiag(
+            ctx,
+            sampleTs = sample.ts,
+            samplePkg = sample.process,
+            postStatus = if (ok) "ok" else "failed",
+            postTs = tickTs,
+        )
         return Result.success()
     }
 

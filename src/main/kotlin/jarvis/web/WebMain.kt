@@ -375,6 +375,28 @@ internal suspend fun runWeb() {
                 call.respond(session)
             }
 
+            // Phone-logger device-test diagnostic. APK debug screen calls
+            // this to confirm the server is actually receiving phone:* rows
+            // (i.e. PhoneActivityWorker → /api/activity round-trip works
+            // end-to-end). Returns recent phone activity stats over the
+            // last 24 h. No auth-sensitive payload — package names only.
+            get("/api/_phone_health") {
+                val rows = jarvis.Activity.loadEntries(hours = 24)
+                    .filter { e -> e.title?.startsWith("phone:") == true }
+                val byPkg = rows.groupingBy { it.process ?: "?" }.eachCount()
+                    .entries.sortedByDescending { it.value }.take(10)
+                    .map { jarvis.web.PhoneHealthBucket(it.key, it.value) }
+                val last = rows.maxByOrNull { it.ts }
+                call.respond(
+                    jarvis.web.PhoneHealthResponse(
+                        count24h = rows.size,
+                        lastTs = last?.ts,
+                        lastPackage = last?.process,
+                        topPackages = byPkg,
+                    ),
+                )
+            }
+
             post("/api/signals/ack") {
                 val req = call.receive<ApiAckRequest>()
                 if (req.signalId.isBlank() || req.action !in jarvis.Feedback.ALLOWED_ACTIONS) {
@@ -541,6 +563,17 @@ private data class ApiSignalsResponse(val signals: List<jarvis.ProactiveSignal>)
 
 @Serializable
 private data class ApiAckRequest(val signalId: String, val action: String)
+
+@Serializable
+data class PhoneHealthBucket(val pkg: String, val count: Int)
+
+@Serializable
+data class PhoneHealthResponse(
+    val count24h: Int,
+    val lastTs: String? = null,
+    val lastPackage: String? = null,
+    val topPackages: List<PhoneHealthBucket> = emptyList(),
+)
 
 private fun escape(s: String): String = s
     .replace("&", "&amp;")
