@@ -2,22 +2,9 @@ package jarvis.tutor
 
 import jarvis.Config
 import jarvis.HybridRetriever
+import jarvis.OpenRouterChatLlm
 import jarvis.embeddings.EmbeddingsClient
 import jarvis.resolveOpenRouterKey
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.contentType
-import io.ktor.http.isSuccess
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -59,25 +46,12 @@ import kotlinx.serialization.json.put
  * dropping tools from the next call.
  */
 class JarvisToolset(
-    private val apiKey: String = resolveOpenRouterKey()
-        ?: error("OPENROUTER_API_KEY required for JarvisToolset"),
-    private val model: String = "anthropic/claude-3.5-sonnet",
-    private val baseUrl: String = Config.OPENROUTER_BASE_URL,
+    private val llm: OpenRouterChatLlm = OpenRouterChatLlm(),
     private val maxToolRounds: Int = 3,
 ) : AutoCloseable {
 
     @Serializable
     data class ToolReply(val text: String, val model: String, val toolRounds: Int)
-
-    private val client = HttpClient(CIO) {
-        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-        install(HttpTimeout) {
-            requestTimeoutMillis = 90_000
-            connectTimeoutMillis = 15_000
-        }
-    }
-
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     /** Chat with the LLM; allow it to invoke tools. Returns the
      *  final text after at most [maxToolRounds] tool round-trips. */
@@ -92,42 +66,34 @@ class JarvisToolset(
         }
 
         var rounds = 0
+        var lastModel = ""
         while (true) {
-            val req = buildJsonObject {
-                put("model", model)
-                put("max_tokens", 1500)
-                put("messages", JsonArray(messages))
-                if (rounds < maxToolRounds) {
-                    put("tools", JarvisToolDefs.openAiToolDefs)
-                    put("tool_choice", JsonPrimitive("auto"))
+            val toolsToOffer = if (rounds < maxToolRounds) JarvisToolDefs.openAiToolDefs else buildJsonArray {}
+            val message = if (toolsToOffer.isEmpty()) {
+                // Final round — text-only completion via Llm interface.
+                val (text, model) = llm.complete(
+                    messages.map { jsonObjectToChatMessage(it) }, maxTokens = 1500,
+                )
+                lastModel = model
+                buildJsonObject {
+                    put("role", "assistant"); put("content", text)
                 }
+            } else {
+                llm.completeWithTools(
+                    messages = JsonArray(messages),
+                    tools = toolsToOffer,
+                    maxTokens = 1500,
+                ).also { lastModel = "openrouter-tools" }
             }
-            val resp = client.post("${baseUrl.trimEnd('/')}/chat/completions") {
-                header(HttpHeaders.Authorization, "Bearer $apiKey")
-                header("HTTP-Referer", "https://github.com/CorgiGH/Jarvis")
-                header("X-Title", "jarvis-kotlin tutor")
-                contentType(ContentType.Application.Json)
-                setBody(req)
-            }
-            if (!resp.status.isSuccess()) {
-                error("openrouter HTTP ${resp.status.value}: ${resp.bodyAsText().take(400)}")
-            }
-            val parsed = resp.body<JsonObject>()
-            val choices = parsed["choices"] as? JsonArray ?: error("no choices in reply")
-            val firstChoice = choices.firstOrNull() as? JsonObject ?: error("empty choices")
-            val message = firstChoice["message"] as? JsonObject ?: error("no message")
             val toolCalls = message["tool_calls"] as? JsonArray
             val content = (message["content"] as? JsonPrimitive)?.contentOrNull.orEmpty()
 
             if (toolCalls.isNullOrEmpty()) {
-                // No tool calls → this is the final answer.
-                return ToolReply(text = content, model = model, toolRounds = rounds)
+                return ToolReply(text = content, model = lastModel, toolRounds = rounds)
             }
-
             // Append the assistant message AS-IS so the model sees its own
             // tool_calls in the next turn (OpenAI requires this).
             messages += message
-            // Resolve each tool call and append a tool_result message.
             for (call in toolCalls) {
                 val callObj = call as? JsonObject ?: continue
                 val callId = (callObj["id"] as? JsonPrimitive)?.contentOrNull.orEmpty()
@@ -151,14 +117,16 @@ class JarvisToolset(
                 }
             }
             rounds++
-            if (rounds >= maxToolRounds) {
-                // One final round WITHOUT tools to force a text answer.
-                continue
-            }
         }
     }
 
-    override fun close() { client.close() }
+    private fun jsonObjectToChatMessage(o: JsonObject): jarvis.ChatMessage {
+        val role = (o["role"] as? JsonPrimitive)?.contentOrNull ?: "user"
+        val content = (o["content"] as? JsonPrimitive)?.contentOrNull ?: ""
+        return jarvis.ChatMessage(role, content)
+    }
+
+    override fun close() { llm.close() }
 }
 
 /** Tool definitions + dispatch logic. Pure object so tests can call

@@ -46,6 +46,7 @@ object LlmFactory {
             "anthropic", "anthropic-api" -> AnthropicLlm(
                 apiKey ?: error("JARVIS_LLM=anthropic requires ANTHROPIC_API_KEY"),
             )
+            "openrouter", "or", "openrouter-free" -> OpenRouterChatLlm()
             "relay" -> RelayLlm()
             "fallback" -> {
                 if (!allowComposite) {
@@ -59,7 +60,7 @@ object LlmFactory {
                 )
             }
             else -> error(
-                "Unknown JARVIS_LLM: $name. Use claude-max | copilot | anthropic | relay | fallback.",
+                "Unknown JARVIS_LLM: $name. Use claude-max | copilot | anthropic | openrouter | relay | fallback.",
             )
         }
     }

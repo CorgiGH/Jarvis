@@ -275,16 +275,39 @@ internal suspend fun runWeb() {
                     }
                     val sysPrompt = CHAT_SYSTEM_PROMPT + CoreMemory.preamble() +
                         "\n\n# Context\n" + buildChatContext() + taskHeader
-                    // F7 — context-pressure aware. Drops oldest turns when
-                    // chat array exceeds a char budget so we don't slam the
-                    // provider with a saturated context window.
-                    val messages = listOf(ChatMessage("system", sysPrompt)) +
-                        Conversations.recentAsChatMessagesWithBudget() +
-                        ChatMessage("user", msg)
-                    val (text, modelName) = try {
-                        ChatTools.runTurn(client, messages)
-                    } catch (e: Exception) {
-                        return@withLock "[error] ${e.message}" to "n/a"
+                    // Tutor surface (taskId + TutorContext present + env
+                    // toggle on) routes through OpenRouter free-tier with
+                    // proper tool_use. Otherwise: legacy ChatTools.runTurn
+                    // (RelayLlm/claude-max + marker-pattern). Council
+                    // 2026-05-09 ruling: tool_use is the architecture for
+                    // tutor; marker-pattern stays for the non-tutor chat
+                    // path so users without OPENROUTER_API_KEY are
+                    // unaffected.
+                    val tutorSurface = req.taskId?.isNotBlank() == true &&
+                        tutorCtxOuter != null &&
+                        (System.getenv("JARVIS_LLM_TUTOR")?.lowercase() == "openrouter") &&
+                        !resolveOpenRouterKey().isNullOrBlank()
+                    val (text, modelName) = if (tutorSurface) {
+                        try {
+                            jarvis.tutor.JarvisToolset().use { ts ->
+                                val r = ts.chat(systemPrompt = sysPrompt, userText = msg)
+                                r.text to "${r.model} (${r.toolRounds} tool rounds)"
+                            }
+                        } catch (e: Exception) {
+                            return@withLock "[tool-chat error] ${e.javaClass.simpleName}: ${e.message?.take(200)}" to "n/a"
+                        }
+                    } else {
+                        // F7 — context-pressure aware. Drops oldest turns when
+                        // chat array exceeds a char budget so we don't slam the
+                        // provider with a saturated context window.
+                        val messages = listOf(ChatMessage("system", sysPrompt)) +
+                            Conversations.recentAsChatMessagesWithBudget() +
+                            ChatMessage("user", msg)
+                        try {
+                            ChatTools.runTurn(client, messages)
+                        } catch (e: Exception) {
+                            return@withLock "[error] ${e.message}" to "n/a"
+                        }
                     }
                     appendChatTurn(msg, text, modelName)
                     text to modelName
