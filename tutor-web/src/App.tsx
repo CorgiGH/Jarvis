@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { TutorWorkspace } from "./components/TutorWorkspace";
 import { TaskQuickStart } from "./components/TaskQuickStart";
 import { jarvisFetch } from "./lib/api";
@@ -7,9 +7,7 @@ import { jarvisFetch } from "./lib/api";
 const LAST_TASK_KEY = "jarvis.lastTaskId";
 
 /** Bootstrap a tutor session via /api/v1/tutor/auto-session — sets
- *  jarvis_session + csrf cookies if missing. Idempotent. Without
- *  this, every POST to /api/v1/* would 403 on CSRF check or 401 on
- *  missing session. */
+ *  jarvis_session + csrf cookies if missing. Idempotent. */
 async function ensureTutorSession(): Promise<void> {
   try {
     const csrf = document.cookie.match(/(?:^|;\s*)csrf=([^;]+)/)?.[1];
@@ -20,35 +18,44 @@ async function ensureTutorSession(): Promise<void> {
 
 export function App() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const explicitTaskId = params.get("taskId");
+  const pickMode = params.get("pick") === "1";  // explicit "go to QuickStart" flag
   const [sessionReady, setSessionReady] = useState(false);
 
-  // Boot 1: ensure tutor session cookies exist before any POSTs run.
   useEffect(() => {
     ensureTutorSession().finally(() => setSessionReady(true));
   }, []);
 
-  // Boot 2: if no taskId in URL, try the last-used taskId from
-  // localStorage. Saves the user one click on every reload.
+  // Cold-start ONLY: restore last-used taskId from localStorage.
+  // Subsequent navigation (workspace link → /) does NOT re-restore;
+  // user can escape back to QuickStart by clicking workspace.
+  const restoredOnce = useRef(false);
   useEffect(() => {
+    if (restoredOnce.current) {
+      // Persist the latest explicit taskId so cold-reload returns here.
+      if (explicitTaskId) {
+        try { localStorage.setItem(LAST_TASK_KEY, explicitTaskId); } catch (_) {}
+      }
+      return;
+    }
+    restoredOnce.current = true;
     if (explicitTaskId) {
       try { localStorage.setItem(LAST_TASK_KEY, explicitTaskId); } catch (_) {}
       return;
     }
+    if (pickMode) return;  // user explicitly asked for QuickStart
     try {
       const last = localStorage.getItem(LAST_TASK_KEY);
       if (last && last !== "TEST-TASK-A") {
         setParams({ taskId: last }, { replace: true });
       }
     } catch (_) {}
-  }, [explicitTaskId, setParams]);
+  }, [explicitTaskId, pickMode, setParams]);
 
   const taskId = explicitTaskId ?? "TEST-TASK-A";
-  const isDefault = taskId === "TEST-TASK-A";
+  const isDefault = taskId === "TEST-TASK-A" || pickMode;
 
-  // Verify the taskId actually exists server-side. If not (e.g. deleted
-  // task referenced via stale URL), fall back to the QuickStart panel
-  // so the user has something to do.
   const [taskExists, setTaskExists] = useState<boolean | null>(null);
   useEffect(() => {
     if (isDefault) { setTaskExists(false); return; }
@@ -66,15 +73,31 @@ export function App() {
 
   const showQuickStart = isDefault || taskExists === false;
 
+  function pickAnotherTask() {
+    try { localStorage.removeItem(LAST_TASK_KEY); } catch (_) {}
+    navigate("/?pick=1", { replace: true });
+  }
+
   return (
     <div className="h-dvh flex flex-col">
       <header className="bg-black text-yellow-300 px-4 py-3 flex items-center justify-between border-b-4 border-yellow-300">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <span className="text-lg font-bold tracking-widest">JARVIS · TUTOR</span>
-          <span className="text-xs tracking-widest text-yellow-200/80">{taskId}</span>
+          {!showQuickStart && (
+            <>
+              <span className="text-xs tracking-widest text-yellow-200/80 truncate">{taskId}</span>
+              <button
+                onClick={pickAnotherTask}
+                data-testid="pick-another-task-btn"
+                className="text-xs tracking-widest bg-yellow-300 text-black px-2 py-0.5 hover:bg-yellow-200"
+              >
+                × close
+              </button>
+            </>
+          )}
         </div>
         <nav className="flex items-center gap-4 text-xs font-bold tracking-widest">
-          <Link to="/" className="hover:underline">workspace</Link>
+          <Link to="/?pick=1" className="hover:underline">workspace</Link>
           <Link to="/tasks" className="hover:underline">tasks</Link>
           <Link to="/settings/trust" className="hover:underline">trust</Link>
         </nav>

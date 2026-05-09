@@ -21,8 +21,25 @@ afterEach(() => { vi.unstubAllGlobals(); });
 test("default route shows QuickStart panel (no real task pinned)", async () => {
   render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("task-quickstart")).toBeInTheDocument());
-  // Header AND quickstart references TEST-TASK-A.
-  expect(screen.getAllByText(/TEST-TASK-A/).length).toBeGreaterThan(0);
+  // Header doesn't show task chip or × close button when on QuickStart.
+  expect(screen.queryByTestId("pick-another-task-btn")).toBeNull();
+});
+
+test("pick=1 query param forces QuickStart even with last-task in localStorage", async () => {
+  try { localStorage.setItem("jarvis.lastTaskId", "T-REAL"); } catch (_) {}
+  render(<MemoryRouter initialEntries={["/?pick=1"]}><App /></MemoryRouter>);
+  await waitFor(() => expect(screen.getByTestId("task-quickstart")).toBeInTheDocument());
+});
+
+test("× close button clears last-task and returns to QuickStart", async () => {
+  render(<MemoryRouter initialEntries={["/?taskId=T-REAL"]}><App /></MemoryRouter>);
+  await waitFor(() => expect(screen.getByTestId("pick-another-task-btn")).toBeInTheDocument());
+  // Persisted by the cold-start effect.
+  expect(localStorage.getItem("jarvis.lastTaskId")).toBe("T-REAL");
+  const { fireEvent } = await import("@testing-library/react");
+  fireEvent.click(screen.getByTestId("pick-another-task-btn"));
+  await waitFor(() => expect(screen.getByTestId("task-quickstart")).toBeInTheDocument());
+  expect(localStorage.getItem("jarvis.lastTaskId")).toBeNull();
 });
 
 test("real taskId pinned in URL renders TutorWorkspace", async () => {
