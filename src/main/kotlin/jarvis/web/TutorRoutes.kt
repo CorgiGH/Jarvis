@@ -7,8 +7,20 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import jarvis.tutor.AuditLinesTable
+import jarvis.tutor.DaemonClient
 import jarvis.tutor.EffectorAttemptsTable
+import jarvis.tutor.EffectorDispatcher
+import jarvis.tutor.EffectorType
 import jarvis.tutor.FsrsCardsTable
+import jarvis.tutor.GrantSource
+import jarvis.tutor.NonceCache
+import jarvis.tutor.Outcome
+import jarvis.tutor.Position
+import jarvis.tutor.Range
+import jarvis.tutor.TextEdit
+import jarvis.tutor.TrustGrant
+import jarvis.tutor.TrustGrantRepo
+import jarvis.tutor.ApplyEditRequest
 import jarvis.tutor.KnowledgeGapsTable
 import jarvis.tutor.ProviderConfigTable
 import jarvis.tutor.ScreenshotExtractor
@@ -214,6 +226,157 @@ fun Application.installTutorRoutes() {
                 )
             }
         }
+
+        // Layer B1 — effector dispatch route. Single mutating endpoint
+        // for the chat surface; routes through EffectorDispatcher so
+        // every dispatch goes preSeal → backend → postSeal/rollback +
+        // audit. Backend selection (clipboard v0 vs daemon v1) is per
+        // ApiDispatchRequest; daemon path requires JARVIS_DAEMON_URL +
+        // JARVIS_DAEMON_SECRET env on the server (or reads them from
+        // ProviderConfig in a future commit).
+        post("/api/v1/effector/dispatch") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                if (sid.isNullOrBlank()) { call.respond(HttpStatusCode.Unauthorized, "missing session"); return@csrfProtect }
+                val userId = SessionRepo(ctx.db).findUserId(sid)
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+
+                val req = try {
+                    sensorJson.decodeFromString(ApiDispatchRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed request: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                val backendChoice = when (req.backend.uppercase()) {
+                    "DAEMON" -> EffectorDispatcher.Backend.DAEMON
+                    "CLIPBOARD" -> EffectorDispatcher.Backend.CLIPBOARD
+                    else -> {
+                        call.respond(HttpStatusCode.BadRequest, "backend must be DAEMON or CLIPBOARD")
+                        return@csrfProtect
+                    }
+                }
+                val daemonUrl = System.getenv("JARVIS_DAEMON_URL")?.trim().orEmpty()
+                val daemonSecret = System.getenv("JARVIS_DAEMON_SECRET")?.trim().orEmpty()
+                if (backendChoice == EffectorDispatcher.Backend.DAEMON &&
+                    (daemonUrl.isBlank() || daemonSecret.isBlank())) {
+                    call.respond(
+                        HttpStatusCode.ServiceUnavailable,
+                        "daemon not configured — set JARVIS_DAEMON_URL + JARVIS_DAEMON_SECRET",
+                    )
+                    return@csrfProtect
+                }
+                val daemonClient = DaemonClient(
+                    baseUrl = daemonUrl.ifBlank { "http://127.0.0.1:7331" },
+                    secret = daemonSecret.toByteArray(),
+                )
+                val dispatcher = EffectorDispatcher(
+                    db = ctx.db,
+                    nonces = NonceCache(),
+                    shadowRoot = ctx.ledgerDir.resolve("shadow"),
+                    ledgerDir = ctx.ledgerDir,
+                    daemonClient = daemonClient,
+                    backend = backendChoice,
+                )
+                try {
+                    val applyReq = ApplyEditRequest(
+                        taskId = req.taskId,
+                        effectorId = req.effectorId,
+                        targetUri = req.targetUri,
+                        expectedDocVersion = req.expectedDocVersion,
+                        edits = req.edits,
+                        nonce = req.nonce,
+                        grantId = req.grantId,
+                    )
+                    val out = dispatcher.dispatch(userId, applyReq, req.expectedDocVersion)
+                    call.respond(out)
+                } finally {
+                    daemonClient.close()
+                }
+            }
+        }
+
+        // Layer B1 — trust grant CRUD for /settings/trust UI.
+        get("/api/v1/grants") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val grants = TrustGrantRepo(ctx.db).listForUser(userId).map { g ->
+                ApiGrantView(
+                    id = g.grantId, scope = g.scope, ops = g.ops.map { it.name },
+                    expiresAt = g.expiresAt.toString(),
+                    callsUsed = g.callsUsed, maxCalls = g.maxCalls,
+                    revokedAt = g.revokedAt?.toString(),
+                )
+            }
+            call.respond(ApiGrantsList(grants))
+        }
+        post("/api/v1/grants") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val req = try {
+                    sensorJson.decodeFromString(ApiCreateGrantRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                // Council fix: per-user grant-creation rate limit.
+                // 5 grants per hour caps prompt-injection-driven grant
+                // explosion without blocking legit power use.
+                val recent = TrustGrantRepo(ctx.db)
+                    .grantsCreatedSince(userId, Instant.now().minusSeconds(3600))
+                if (recent >= 5) {
+                    call.respond(HttpStatusCode.TooManyRequests,
+                        "grant rate limit: 5/hour exceeded (have $recent)")
+                    return@csrfProtect
+                }
+                val ttlSeconds = req.ttlSeconds.coerceIn(60L, 8 * 3600L)  // 1 min .. 8h cap
+                val grant = TrustGrant(
+                    grantId = jarvis.tutor.TutorTypes.ulid(),
+                    userId = userId,
+                    scope = req.scope,
+                    ops = req.ops.mapNotNull {
+                        runCatching { EffectorType.valueOf(it.uppercase()) }.getOrNull()
+                    }.toSet().ifEmpty { setOf(EffectorType.APPLY_EDIT) },
+                    expiresAt = Instant.now().plusSeconds(ttlSeconds),
+                    maxCalls = req.maxCalls.coerceIn(1, 1000),
+                    callsUsed = 0,
+                    grantedFrom = GrantSource.UI,
+                    revokedAt = null,
+                    createdAt = Instant.now(),
+                )
+                TrustGrantRepo(ctx.db).insert(grant)
+                call.respond(HttpStatusCode.Created, ApiGrantView(
+                    id = grant.grantId, scope = grant.scope, ops = grant.ops.map { it.name },
+                    expiresAt = grant.expiresAt.toString(),
+                    callsUsed = 0, maxCalls = grant.maxCalls, revokedAt = null,
+                ))
+            }
+        }
+        post("/api/v1/grants/{id}/revoke") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val id = call.parameters["id"]
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val grant = TrustGrantRepo(ctx.db).findActive(id, Instant.now())
+                if (grant == null || grant.userId != userId) {
+                    call.respond(HttpStatusCode.NotFound, "grant not found"); return@csrfProtect
+                }
+                TrustGrantRepo(ctx.db).revoke(id, Instant.now())
+                call.respond(HttpStatusCode.NoContent)
+            }
+        }
     }
 }
 
@@ -237,6 +400,42 @@ private data class ScreenshotResponse(
      *  disabled in the UI per spec §4 item 5. */
     val readOnlyMode: Boolean = false,
     val readOnlyReason: String = "",
+)
+
+@Serializable
+private data class ApiDispatchRequest(
+    val taskId: String,
+    val effectorId: String,
+    val targetUri: String,
+    val expectedDocVersion: String,
+    val edits: List<TextEdit>,
+    val nonce: String,
+    val grantId: String,
+    /** Layer B0/B1 selector: "CLIPBOARD" or "DAEMON". */
+    val backend: String = "CLIPBOARD",
+)
+
+@Serializable
+private data class ApiGrantView(
+    val id: String,
+    val scope: List<String>,
+    val ops: List<String>,
+    val expiresAt: String,
+    val callsUsed: Int,
+    val maxCalls: Int,
+    val revokedAt: String? = null,
+)
+
+@Serializable
+private data class ApiGrantsList(val grants: List<ApiGrantView>)
+
+@Serializable
+private data class ApiCreateGrantRequest(
+    val scope: List<String>,
+    val ops: List<String> = listOf("APPLY_EDIT"),
+    /** Default 1 hour, hard-capped at 8 hours per spec §4 item 4. */
+    val ttlSeconds: Long = 3600,
+    val maxCalls: Int = 10,
 )
 
 /**
@@ -282,4 +481,8 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
     // 500ing on a NullPointerException.
     val vision = jarvis.VisionLlmFactory.create()
     attributes.put(TutorContextKey, TutorContext(db, ledgerDir, vision))
+    // Layer B1: start the effector watchdog (default-OFF behind
+    // EFFECTOR_WATCHDOG_ENABLED env). Reaps stale PRE_SEALED rows
+    // every 1s.
+    jarvis.tutor.EffectorWatchdog.start(db, ledgerDir)
 }

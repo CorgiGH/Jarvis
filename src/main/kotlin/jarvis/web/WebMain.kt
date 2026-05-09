@@ -84,10 +84,13 @@ internal suspend fun runWeb() {
             if (path == "/login" || path == "/healthz" || path == "/api/v1/health") return@intercept
             if (path == "/tutor" || path.startsWith("/tutor/")) return@intercept
             if (path.startsWith("/auth/")) return@intercept
-            // Layer B sensor + effector routes use the tutor session cookie
-            // + CSRF token (set by /auth/setup), NOT the legacy bearer
-            // JARVIS_AUTH_TOKEN. Hand off to the route's own auth.
-            if (path.startsWith("/api/v1/sensor/") || path.startsWith("/api/v1/effector/")) return@intercept
+            // Layer B sensor + effector + grants routes use the tutor
+            // session cookie + CSRF token (set by /auth/setup), NOT the
+            // legacy bearer JARVIS_AUTH_TOKEN. Hand off to the route's
+            // own auth.
+            if (path.startsWith("/api/v1/sensor/") ||
+                path.startsWith("/api/v1/effector/") ||
+                path.startsWith("/api/v1/grants")) return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]

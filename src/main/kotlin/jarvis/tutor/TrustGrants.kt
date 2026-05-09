@@ -76,6 +76,25 @@ class TrustGrantRepo(private val db: Database) {
         }
     }
 
+    fun listForUser(userId: String): List<TrustGrant> = transaction(db) {
+        TrustGrantsTable.selectAll()
+            .where { TrustGrantsTable.userId eq userId }
+            .orderBy(TrustGrantsTable.createdAt, org.jetbrains.exposed.sql.SortOrder.DESC)
+            .map { it.toGrant() }
+    }
+
+    /** Layer B council fix: per-user grant-creation rate limit so a
+     *  prompt-injection that gets the LLM to spam grant requests can't
+     *  silently wear down the budget. Default 5 grants per 1h window. */
+    fun grantsCreatedSince(userId: String, since: Instant): Int = transaction(db) {
+        TrustGrantsTable.selectAll()
+            .where {
+                (TrustGrantsTable.userId eq userId) and
+                    (TrustGrantsTable.createdAt greaterEq since)
+            }
+            .count().toInt()
+    }
+
     fun tryConsume(grantId: String): Boolean = transaction(db) {
         val row = TrustGrantsTable.selectAll().where { TrustGrantsTable.grantId eq grantId }
             .singleOrNull() ?: return@transaction false
