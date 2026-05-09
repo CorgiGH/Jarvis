@@ -29,14 +29,16 @@ export function TutorWorkspace({ pdfUrl, taskId }: { pdfUrl: string; taskId: str
   return (
     <div className="flex h-full min-h-0">
       <Sidebar activeTaskId={taskId} />
-      <div className="grid grid-cols-2 h-full min-h-0 flex-1">
-        <div className="flex flex-col h-full min-h-0 border-r-4 border-black">
+      <div className="flex h-full min-h-0 flex-1 flex-col sm:flex-row">
+        <div className="flex flex-col h-full min-h-0 flex-1 min-w-0 sm:w-1/2 border-r-4 border-black">
           <div className="flex-1 min-h-0 overflow-hidden">
             <PdfPane url={pdfUrl} />
           </div>
           <Scratchpad value={scratch} onChange={setScratch} />
         </div>
-        <ChatPane taskId={taskId} onScratchpadInsert={appendToScratchpad} />
+        <div className="flex-1 min-w-0 min-h-0 sm:w-1/2 h-full">
+          <ChatPane taskId={taskId} onScratchpadInsert={appendToScratchpad} />
+        </div>
       </div>
     </div>
   );

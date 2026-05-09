@@ -86,7 +86,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   }
 
   return (
-    <div data-testid="chat-pane" className="h-full flex flex-col bg-white font-mono">
+    <div data-testid="chat-pane" className="h-full flex flex-col bg-white font-mono min-w-0">
       <div className="bg-black text-yellow-300 px-4 py-2 text-sm tracking-widest font-bold flex items-center justify-between">
         <span>JARVIS · TASK {taskId}</span>
         {readOnly && (
@@ -98,7 +98,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         )}
       </div>
       <ScreenshotCapture taskId={taskId} onResult={onScreenshot} />
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-3">
+      <div className="flex-1 min-h-0 overflow-auto p-4 space-y-3">
         {messages.map((m, i) => (
           <div key={i} className="min-w-0">
             <div className={`inline-block px-2 py-0.5 text-xs font-bold tracking-widest ${
