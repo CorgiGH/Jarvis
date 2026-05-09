@@ -6,7 +6,9 @@ import { TutorWorkspace } from "../components/TutorWorkspace";
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (typeof url === "string" && url.includes("/api/chat")) {
-      // 200-line reply forces overflow regardless of viewport size.
+      // jsdom can't measure layout — long reply only ensures messages render so
+      // we can locate the scroll container under chat-pane. Actual scroll
+      // behavior is verified by the Phase 1 Playwright gate, not here.
       const longReply = Array.from({ length: 200 }, (_, i) => `line ${i}: laplace transform of f(t) = ...`).join("\n");
       return new Response(JSON.stringify({ reply: longReply }), {
         status: 200, headers: { "content-type": "application/json" },
