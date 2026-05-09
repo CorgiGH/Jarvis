@@ -90,7 +90,8 @@ internal suspend fun runWeb() {
             // own auth.
             if (path.startsWith("/api/v1/sensor/") ||
                 path.startsWith("/api/v1/effector/") ||
-                path.startsWith("/api/v1/grants")) return@intercept
+                path.startsWith("/api/v1/grants") ||
+                path.startsWith("/api/v1/tasks")) return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]

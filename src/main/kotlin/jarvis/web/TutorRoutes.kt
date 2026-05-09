@@ -7,6 +7,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import jarvis.tutor.AuditLinesTable
+import jarvis.tutor.ContentRef
 import jarvis.tutor.DaemonClient
 import jarvis.tutor.EffectorAttemptsTable
 import jarvis.tutor.EffectorDispatcher
@@ -17,6 +18,9 @@ import jarvis.tutor.NonceCache
 import jarvis.tutor.Outcome
 import jarvis.tutor.Position
 import jarvis.tutor.Range
+import jarvis.tutor.Task
+import jarvis.tutor.TaskRepo
+import jarvis.tutor.TaskStatus
 import jarvis.tutor.TextEdit
 import jarvis.tutor.TrustGrant
 import jarvis.tutor.TrustGrantRepo
@@ -360,6 +364,73 @@ fun Application.installTutorRoutes() {
                 ))
             }
         }
+        // Layer B / task-context V0 — task CRUD so user can seed real
+        // PS Tema A / PA Tema 5 / etc. Without this, TaskHeaderBuilder
+        // has nothing to look up. Minimal shape: subject + title +
+        // deadline. ContentRef slots are placeholders so the schema
+        // is satisfied; real content-ref wiring lands when archival
+        // ↔ task linkage UI ships.
+        get("/api/v1/tasks") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val tasks = TaskRepo(ctx.db).listForUser(userId).map { t ->
+                ApiTaskView(
+                    id = t.id, subject = t.subject, title = t.title,
+                    deadline = t.deadline.toString(),
+                    status = t.status.name,
+                )
+            }
+            call.respond(ApiTasksList(tasks))
+        }
+        post("/api/v1/tasks") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val req = try {
+                    sensorJson.decodeFromString(ApiCreateTaskRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                if (req.subject.isBlank() || req.title.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, "subject + title required")
+                    return@csrfProtect
+                }
+                val deadline = try {
+                    Instant.parse(req.deadline)
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "deadline must be ISO-8601: ${e.message?.take(80)}")
+                    return@csrfProtect
+                }
+                val id = jarvis.tutor.TutorTypes.ulid()
+                val now = Instant.now()
+                TaskRepo(ctx.db).insert(Task(
+                    id = id, userId = userId,
+                    subject = req.subject.trim().take(32),
+                    title = req.title.trim().take(256),
+                    deadline = deadline,
+                    problemRef = ContentRef(repo = req.repo.ifBlank { "user" }, path = req.problemPath, sha = "pending"),
+                    conceptRefs = emptyList(),
+                    rubricRef = ContentRef(repo = req.repo.ifBlank { "user" }, path = req.rubricPath.ifBlank { req.problemPath }, sha = "pending"),
+                    scratchpad = null, submission = null, grade = null,
+                    cardRefs = emptyList(),
+                    status = TaskStatus.ACTIVE,
+                    createdAt = now, updatedAt = now,
+                ))
+                jarvis.tutor.StateVersion.bump()
+                call.respond(HttpStatusCode.Created, ApiTaskView(
+                    id = id, subject = req.subject, title = req.title,
+                    deadline = deadline.toString(), status = TaskStatus.ACTIVE.name,
+                ))
+            }
+        }
+
         post("/api/v1/grants/{id}/revoke") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
@@ -428,6 +499,29 @@ private data class ApiGrantView(
 
 @Serializable
 private data class ApiGrantsList(val grants: List<ApiGrantView>)
+
+@Serializable
+private data class ApiTaskView(
+    val id: String,
+    val subject: String,
+    val title: String,
+    val deadline: String,
+    val status: String,
+)
+
+@Serializable
+private data class ApiTasksList(val tasks: List<ApiTaskView>)
+
+@Serializable
+private data class ApiCreateTaskRequest(
+    val subject: String,
+    val title: String,
+    /** ISO-8601 instant. */
+    val deadline: String,
+    val repo: String = "user",
+    val problemPath: String = "",
+    val rubricPath: String = "",
+)
 
 @Serializable
 private data class ApiCreateGrantRequest(
