@@ -1,8 +1,12 @@
 # Jarvis Tutor — Design Spec
 
-**Status:** draft, pending user review
+**Status:** Layer A SHIPPED 2026-05-09. Layers B/C/D = next sessions.
 **Author:** designed via brainstorming + 2-round 5-agent council
-**Council transcripts:** `.claude/council-cache/council-1778274789.md` (R1, blind review) + `.claude/council-cache/council-1778275450-r2.md` (R2, constructive)
+**Council transcripts:** `.claude/council-cache/council-1778274789.md` (R1, blind review) + `.claude/council-cache/council-1778275450-r2.md` (R2, constructive) + `.claude/council-cache/council-1778288445-r3.md` (R3, plan distribution)
+
+> **AMENDMENT 2026-05-09 per Council R3** — React Router moved from Layer B to Layer A. Layer A actually shipped with `BrowserRouter basename="/tutor"` already in place and a single `/` route registered. Spec §3 + §4 below still describe the original Plan A split (Router in Layer B); R3 transcript is the authoritative override on this single decision. All other Layer A schemas + auth + workspace shell match spec §3 verbatim.
+>
+> **READ ORDER for Layer B work:** (1) `docs/notes/2026-05-09-next-session-layer-b.md`, (2) R3 transcript, (3) this spec §4. When R3 disagrees with §3-§4 about Router timing, R3 wins.
 
 ## 1. Vision
 

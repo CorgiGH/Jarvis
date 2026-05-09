@@ -14,7 +14,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:7331",
+      // Backend default port is 8080 (WebMain.kt DEFAULT_PORT). Override with JARVIS_PORT env on backend side.
+      "/api": "http://localhost:8080",
+      "/auth": "http://localhost:8080",
+      "/tutor": "http://localhost:8080",
     },
   },
   test: {

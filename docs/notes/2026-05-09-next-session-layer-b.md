@@ -13,18 +13,38 @@ User dismissed council R1 (5/5 REJECT), accepted council R2 (5/5 CONDITIONAL wit
 Durable transcripts on disk:
 - R1 (build/no-build): `.claude/council-cache/council-1778274789.md` — 5/5 REJECT, dismissed
 - R2 (constructive design): `.claude/council-cache/council-1778275450-r2.md` — 5/5 CONDITIONAL, all fixes incorporated
-- R3 (Plan A vs Option 2 + Router timing): `.claude/council-cache/council-1778288445-r3.md` — Plan A + Router-in-Layer-A
-- Wrap review (this note): `.claude/council-cache/council-r3-wrap-review.md` (added at session end)
+- R3 (Plan A vs Option 2 + Router timing): `.claude/council-cache/council-1778288445-r3.md` — Plan A + Router-in-Layer-A. **Header explicitly says "(reconstructed)" — stances faithful, reasoning bullets are post-hoc summary, not verbatim agent output.**
+- Wrap-review R1 + R2 transcripts saved together: `.claude/council-cache/council-1778290000-wrap-review.md` (concerns from both wrap-review rounds + which fixes landed which session).
+
+## READ ORDER (when artifacts disagree)
+
+1. **This resume note** — most recently updated, authoritative for Layer B start
+2. **R3 transcript** (`council-1778288445-r3.md`) — authoritative for the Router-in-Layer-A deviation; **R3 wins over spec when they conflict** on Router timing
+3. **Spec doc** (`docs/superpowers/specs/2026-05-09-jarvis-tutor-design.md` §4) — authoritative for Layer B SCOPE only; defer to R3 on Router
+4. **Memory + MEMORY.md** — high-level constraints + scope fence; defer to this resume note on operational details
+
+If MEMORY.md and this resume note disagree on stop conditions or disambiguation triggers, **resume note wins** (it's the closer source).
 
 ## Scope fence + stop conditions (HARD)
 
 **Authorization scope:** user said verbatim 2026-05-09 "next session starts work on layer B". Authorization is for Layer B SPECIFICALLY. When Layer B ships (tag `tutor/layer-b-acceptance` placed), authorization expires and the finals lock resumes. NO Layer C, NO parallel projects (Effortless-Paper, *arr, study guide), NO "while I'm here" refactors. If Layer B doesn't fit in the granted session(s), pause and surface trade-off explicitly to user — do NOT silently extend.
 
-**Stop conditions during Layer B (any one triggers immediate pause):**
-- User signals PS HW pressure ("panicking on PS", references to Tema A, asks about probability, etc.) → STOP, surface trade-off, hand control back
+**Tag-placement authority:** next-session Claude SELF-tags after `LayerBAcceptanceTest` passes locally — same protocol as Layer A's `tutor/layer-a-acceptance` (placed autonomously, no user gate). Authorization expires IMMEDIATELY on tag — pause and surface "Layer B shipped, awaiting orders" before doing anything else. Do NOT chain into Layer C because it's "right there".
+
+**Stop conditions during Layer B — split into 2 categories:**
+
+*Checkable at session start (before convening Layer B council):*
+- Vision-LLM provider chain incompatible with image content blocks (see prerequisites §1) → STOP, council on pivot
+- Tauri/Rust toolchain missing AND user not available to confirm install → STOP, pivot to clipboard-only effector v0
+- Backend port mismatch between vite + Ktor → fix in 30 seconds and continue (already fixed in this wrap; vite proxies to `:8080`)
+
+*Watch during execution (continuous):*
+- User asks for direct PS HW help unrelated to Layer B testing ("help me with Tema A", "panicking on PS", "what's the median for…") → STOP, hand control to PS work
 - Any council on a Layer B sub-task returns 5/5 REJECT with new arguments not seen in R1 → STOP, surface to user
 - Layer B doesn't ship within ~2 sessions → STOP, surface progress, ask user whether to continue or pivot
-- Vision-LLM provider chain proves incompatible (see prerequisites below) → STOP, decide pivot OR provider work BEFORE continuing
+- LLM provider chain stops working mid-session → STOP, diagnose before more impl
+
+**NOT a stop condition:** user dogfooding the Layer B workspace by typing PS-relevant questions into the tutor chat. That's the target use case. Distinguish from explicit "I need PS HW help" framing.
 
 **Borrowed time framing:** PS HW deadline 2026-05-21 is 12 days out from session start. Layer B work is borrowed against PS HW prep time. The user dismissed this concern explicitly twice via councils; resume protocol honors that decision but stays vigilant for the user reversing themselves under PS pressure.
 
@@ -99,8 +119,8 @@ Durable transcripts on disk:
 
 ## Dev-loop commands (Layer B will need these)
 
-- **Backend dev:** `gradle -p C:/Users/User/jarvis-kotlin :run` — starts Ktor on port from `Config.port` (default 8080 unless `JARVIS_PORT` env set; check `Config.kt`)
-- **Frontend dev (hot reload):** `cd C:/Users/User/jarvis-kotlin/tutor-web && npm run dev` — Vite on `:5173`, proxies `/api` to backend (configured in `vite.config.ts` — proxy target = `http://localhost:7331` currently; UPDATE if backend port differs)
+- **Backend dev:** `gradle -p C:/Users/User/jarvis-kotlin :run` — starts Ktor on port from `JARVIS_PORT` env or `DEFAULT_PORT = 8080` (defined `WebMain.kt:45`, read at `WebMain.kt:60`)
+- **Frontend dev (hot reload):** `cd C:/Users/User/jarvis-kotlin/tutor-web && npm run dev` — Vite on `:5173`, proxies `/api` + `/auth` + `/tutor` to backend at `http://localhost:8080` (already configured in `vite.config.ts`)
 - **Bundle for prod:** `cd C:/Users/User/jarvis-kotlin/tutor-web && npm run build` — emits to `src/main/resources/tutor-dist/`, picked up by Ktor `staticResources` on next backend start
 - **Full smoke (backend running):** `bash tools/smoke-tutor.sh` (use `HOST=http://localhost:8080 bash tools/smoke-tutor.sh` if port differs)
 
@@ -108,10 +128,26 @@ Durable transcripts on disk:
 
 These are the load-bearing assumptions Layer B is built on. If any fails, surface to user BEFORE writing the plan:
 
-1. **Vision-LLM provider chain compatibility** — Layer B Task 1 is the screenshot sensor. It posts an image to `/api/v1/sensor/screenshot` expecting structured extraction (`{file_path, cursor, console_output, error}`). Memory says `JARVIS_LLM=fallback` (relay → claude-max-relay → copilot CLI). Verify:
-   - Does the PC-side Tailscale relay forward Anthropic `image` content blocks intact? Check `RelayLlm.kt` + relay server impl.
-   - If relay is text-only: pivot options = (a) bring back OpenRouter for vision-only chat path, (b) require `claude` CLI on VPS (currently NOT installed per memory), (c) skip vision sensor for Layer B and rely on editor extensions in Layer D.
-   - This is a Council R3-style decision point — convene if relay isn't vision-capable.
+1. **Vision-LLM provider chain compatibility** — Layer B Task 1 is the screenshot sensor. It posts an image to `/api/v1/sensor/screenshot` expecting structured extraction (`{file_path, cursor, console_output, error}`). Memory says `JARVIS_LLM=fallback` (relay → claude-max-relay → copilot CLI).
+
+   **Concrete verification test (~5 min):**
+   ```bash
+   # On VPS (corgflix): generate a 1x1 PNG, base64-encode, POST through relay
+   echo -n "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" > /tmp/img.b64
+   curl -X POST -H "Authorization: Bearer $JARVIS_RELAY_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d "$(jq -n --arg img "$(cat /tmp/img.b64)" '{model:"claude-max",messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/png",data:$img}},{type:"text",text:"Describe this image in 5 words"}]}]}')" \
+     http://100.80.132.115:9999/v1/messages
+   ```
+   - **PASS:** 200 + reply containing image description → relay forwards `image` blocks → vision sensor will work
+   - **FAIL:** 4xx OR text-only echo OR "I can't see images" reply → relay strips/ignores image blocks → council pivot needed
+
+   **If FAIL, council pivot options (recommended order):**
+   - (a) **Add OpenRouter vision path on VPS** — restore `OPENROUTER_API_KEY` for chat (currently embeddings-only). Cost: $1-3/day under typical use. Implementation: ~30 min adding `OpenRouterLlm` to fallback chain. *Recommended*.
+   - (b) Skip vision sensor for Layer B; rely on editor extensions in Layer D (longer path, more deferred work)
+   - (c) Install `claude` CLI on VPS — needs interactive `claude login` which is on the CAN'T-without-user list. Defer.
+
+   This is a Council R3-style decision point. Grep confirms `RelayLlm.kt` has zero matches for `image|vision|content_block|base64` — relay is **almost certainly text-only**. Plan for the pivot, don't expect the verify to pass.
 
 2. **Tauri 2.x + Rust toolchain** — Layer B Task 2 (daemon) needs `rustup` + Visual Studio C++ Build Tools on Windows (~3GB download + user prompts). User environment has neither installed. Confirm with user before scaffold task. Pivot if user prefers: clipboard-only effector v0 ships without daemon and gives 95% of value safely.
 
