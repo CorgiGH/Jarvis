@@ -3,13 +3,17 @@ package jarvis.web
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.http.content.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import jarvis.tutor.AuditLinesTable
 import jarvis.tutor.FsrsCardsTable
 import jarvis.tutor.KnowledgeGapsTable
 import jarvis.tutor.ProviderConfigTable
+import jarvis.tutor.ScreenshotExtractor
 import jarvis.tutor.SensorEventsTable
+import jarvis.tutor.SensorPayload
+import jarvis.tutor.SensorRepo
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.SessionsTable
 import jarvis.tutor.TasksTable
@@ -20,11 +24,15 @@ import jarvis.tutor.TutorContext
 import jarvis.tutor.TutorContextKey
 import jarvis.tutor.TutorDb
 import jarvis.tutor.UsersTable
+import jarvis.tutor.csrfProtect
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.SecureRandom
+import java.time.Instant
 
 private val rng = SecureRandom()
 
@@ -110,8 +118,114 @@ fun Application.installTutorRoutes() {
             )
             call.respondRedirect("/tutor/")
         }
+
+        // Layer B Task 1 — vision-LLM screenshot sensor.
+        //
+        // Body: JSON {imageBase64: string, mediaType?: string, taskId?: string,
+        //             sensorId?: string, sensorVersion?: string, hint?: string}
+        // Auth: jarvis_session cookie + X-CSRF-Token header (csrfProtect).
+        // Response: {extracted: ScreenshotExtraction, eventSeq: long}
+        // 503 when no vision LLM is configured (OPENROUTER_API_KEY unset).
+        post("/api/v1/sensor/screenshot") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run {
+                    call.respond(HttpStatusCode.InternalServerError, "TutorContext not installed")
+                    return@post
+                }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                if (sid.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.Unauthorized, "missing session")
+                    return@csrfProtect
+                }
+                val userId = SessionRepo(ctx.db).findUserId(sid)
+                    ?: run {
+                        call.respond(HttpStatusCode.Unauthorized, "invalid session")
+                        return@csrfProtect
+                    }
+                val vision = ctx.visionLlm
+                if (vision == null) {
+                    call.respond(
+                        HttpStatusCode.ServiceUnavailable,
+                        "vision LLM not configured — set OPENROUTER_API_KEY on the server",
+                    )
+                    return@csrfProtect
+                }
+                val req = try {
+                    sensorJson.decodeFromString(ScreenshotRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        "malformed request: ${e.message?.take(160)}",
+                    )
+                    return@csrfProtect
+                }
+                if (req.imageBase64.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, "imageBase64 required")
+                    return@csrfProtect
+                }
+                // Cap raw image size — base64 inflates ~33%, so 4 MB encoded
+                // ≈ 3 MB PNG, plenty for a screen capture, prevents trivial
+                // DoS via giant payloads.
+                if (req.imageBase64.length > 4_000_000) {
+                    call.respond(HttpStatusCode.PayloadTooLarge, "imageBase64 over 4 MB cap")
+                    return@csrfProtect
+                }
+
+                val extraction = try {
+                    ScreenshotExtractor.extract(
+                        llm = vision,
+                        imageBase64 = req.imageBase64,
+                        mediaType = req.mediaType ?: "image/png",
+                        promptHint = req.hint,
+                    )
+                } catch (e: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadGateway,
+                        "vision LLM failed: ${e.javaClass.simpleName}: ${e.message?.take(200)}",
+                    )
+                    return@csrfProtect
+                }
+
+                val event = SensorRepo(ctx.db).append(
+                    userId = userId,
+                    sensorId = req.sensorId ?: "screenshot-default",
+                    sensorVersion = req.sensorVersion ?: "1",
+                    taskId = req.taskId,
+                    payload = SensorPayload.ScreenshotMeta(
+                        capturedAt = Instant.now().toString(),
+                        focusedRegion = extraction.filePath,
+                        ocrSummary = extraction.rawReply.take(2000),
+                    ),
+                )
+                call.respond(
+                    ScreenshotResponse(
+                        eventSeq = event.eventSeq,
+                        extracted = extraction,
+                    ),
+                )
+            }
+        }
     }
 }
+
+private val sensorJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+@Serializable
+private data class ScreenshotRequest(
+    val imageBase64: String,
+    val mediaType: String? = null,
+    val taskId: String? = null,
+    val sensorId: String? = null,
+    val sensorVersion: String? = null,
+    val hint: String? = null,
+)
+
+@Serializable
+private data class ScreenshotResponse(
+    val eventSeq: Long,
+    val extracted: jarvis.tutor.ScreenshotExtraction,
+)
 
 /**
  * Wires the Tutor Layer A persistence + ledger context onto the running
@@ -150,5 +264,9 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             ProviderConfigTable,
         )
     }
-    attributes.put(TutorContextKey, TutorContext(db, ledgerDir))
+    // Layer B: resolve vision LLM from env (OPENROUTER_API_KEY). Null when
+    // unset — sensor route returns 503 with a helpful message rather than
+    // 500ing on a NullPointerException.
+    val vision = jarvis.VisionLlmFactory.create()
+    attributes.put(TutorContextKey, TutorContext(db, ledgerDir, vision))
 }

@@ -1,12 +1,20 @@
 package jarvis.tutor
 
 import io.ktor.util.AttributeKey
+import jarvis.VisionLlm
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Database
 import java.nio.file.Path
 import java.security.SecureRandom
 
-data class TutorContext(val db: Database, val ledgerDir: Path)
+data class TutorContext(
+    val db: Database,
+    val ledgerDir: Path,
+    /** Layer B: vision-capable LLM for the screenshot sensor. Null when
+     *  no vision provider is configured (e.g. OPENROUTER_API_KEY unset).
+     *  Routes that need vision check this and respond 503 cleanly. */
+    val visionLlm: VisionLlm? = null,
+)
 val TutorContextKey = AttributeKey<TutorContext>("TutorContext")
 
 object TutorTypes {
