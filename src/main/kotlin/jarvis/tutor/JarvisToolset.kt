@@ -192,6 +192,25 @@ object JarvisToolDefs {
             put("from", strParam("Source node id.", required = true))
             put("to", strParam("Target node id.", required = true))
         })
+        add(toolDef("wiki_read",
+            "Read the user-specific wiki page for a concept. Each page accumulates " +
+                "what the user has historically struggled with, prereqs, and " +
+                "successful clarifications. Use to personalize an explanation.",
+        ) {
+            put("subject", strParam("Subject (PA, PS, POO, ALO, SO, ...).", required = true))
+            put("concept", strParam("Concept name (e.g. `Greedy algorithm`).", required = true))
+        })
+        add(toolDef("wiki_append",
+            "Append a bullet to one section of the user's wiki page for a concept. " +
+                "Use when YOU notice the user struggled with something, a worked " +
+                "clarification landed, or a missing prereq was identified. Sections: " +
+                "Brief / Confusions / Worked clarifications / Prereqs needed / Last user state.",
+        ) {
+            put("subject", strParam("Subject.", required = true))
+            put("concept", strParam("Concept name.", required = true))
+            put("section", strParam("Section name (case-sensitive — see description).", required = true))
+            put("bullet", strParam("Single-line note. Max 400 chars.", required = true))
+        })
     }
 
     private fun toolDef(name: String, description: String, params: JsonObjectBuilderScope.() -> Unit): JsonObject {
@@ -242,6 +261,8 @@ object JarvisToolDefs {
             "get_node" -> dispatchGetNode(argsJson)
             "get_neighbors" -> dispatchGetNeighbors(argsJson)
             "shortest_path" -> dispatchShortestPath(argsJson)
+            "wiki_read" -> dispatchWikiRead(argsJson)
+            "wiki_append" -> dispatchWikiAppend(argsJson)
             else -> "unknown tool: $toolName"
         }
     }
@@ -281,6 +302,30 @@ object JarvisToolDefs {
         val ns = KnowledgeGraphQuery.neighbors(graph, id, kind)
         if (ns.isEmpty()) return "get_neighbors: none for $id${kind?.let { " (kind=$it)" } ?: ""}"
         return ns.joinToString("\n") { (n, k) -> "[$k] ${n.id}" }
+    }
+
+    private fun dispatchWikiRead(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val subject = (obj["subject"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val concept = (obj["concept"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (subject.isEmpty() || concept.isEmpty()) return "wiki_read: subject + concept required"
+        val text = WikiPage.read(subject, concept)
+            ?: return "wiki_read: no wiki page yet for $subject/$concept"
+        return text.take(2000)
+    }
+
+    private fun dispatchWikiAppend(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val subject = (obj["subject"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val concept = (obj["concept"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val section = (obj["section"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val bullet = (obj["bullet"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (subject.isEmpty() || concept.isEmpty() || section.isEmpty() || bullet.isEmpty()) {
+            return "wiki_append: subject + concept + section + bullet required"
+        }
+        val ok = WikiPage.append(subject, concept, section, bullet)
+        return if (ok) "wiki_append: ok ($subject/$concept § $section)"
+            else "wiki_append: rejected (PII or empty bullet)"
     }
 
     private fun dispatchShortestPath(argsJson: String): String {
