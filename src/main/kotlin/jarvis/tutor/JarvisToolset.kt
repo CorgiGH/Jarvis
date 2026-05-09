@@ -234,6 +234,26 @@ object JarvisToolDefs {
             put("subject", strParam("Email subject line.", required = true))
             put("body", strParam("Plain-text email body.", required = true))
         })
+        add(toolDef("search_subject_corpus",
+            "Search the user's per-subject materials for past exams, " +
+                "homework problems, lab tasks, seminar exercises, lecture " +
+                "notes, or practice problems. Covers what ConceptCatalog + " +
+                "search_archival miss (`_extras/<subject>/` tree). Use when " +
+                "the user asks for a 'similar partial', 'practice problem on " +
+                "X', 'last year's exam', or 'what's the lab spec for week N'.",
+        ) {
+            put("subject", strParam("Subject (PA / PS / POO / ALO / SO / RC).", required = true))
+            put("query", strParam("Substring to look for in filenames + content.", required = true))
+            put("kind", strParam("Optional kind filter: courses / seminars / labs / hw / practice / tests / source / study_guide. Use list_subject_kinds to see what the subject has."))
+            put("k", intParam("Top-K hits (default 5, max 10)."))
+        })
+        add(toolDef("list_subject_kinds",
+            "List the materials types available for a subject (e.g. tests, " +
+                "hw, labs, seminars). Use BEFORE search_subject_corpus when " +
+                "you don't know what kind to filter by.",
+        ) {
+            put("subject", strParam("Subject (PA / PS / POO / ALO / SO / RC).", required = true))
+        })
     }
 
     private fun toolDef(name: String, description: String, params: JsonObjectBuilderScope.() -> Unit): JsonObject {
@@ -289,6 +309,8 @@ object JarvisToolDefs {
             "calendar_create_event" -> dispatchCalendarCreate(argsJson)
             "drive_search" -> dispatchDriveSearch(argsJson)
             "gmail_create_draft" -> dispatchGmailDraft(argsJson)
+            "search_subject_corpus" -> dispatchSubjectCorpus(argsJson)
+            "list_subject_kinds" -> dispatchListSubjectKinds(argsJson)
             else -> "unknown tool: $toolName"
         }
     }
@@ -338,6 +360,32 @@ object JarvisToolDefs {
         val text = WikiPage.read(subject, concept)
             ?: return "wiki_read: no wiki page yet for $subject/$concept"
         return text.take(2000)
+    }
+
+    private fun dispatchSubjectCorpus(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val subject = (obj["subject"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val query = (obj["query"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (subject.isEmpty() || query.isEmpty()) return "search_subject_corpus: subject + query required"
+        val kind = (obj["kind"] as? JsonPrimitive)?.contentOrNull?.trim().takeIf { !it.isNullOrEmpty() }
+        val k = ((obj["k"] as? JsonPrimitive)?.intOrNull ?: 5).coerceIn(1, 10)
+        val hits = SubjectCorpus.search(subject, query, kindFilter = kind, k = k)
+        if (hits.isEmpty()) {
+            return "search_subject_corpus: no matches for \"$query\" in $subject" +
+                (kind?.let { " (kind=$it)" } ?: "")
+        }
+        return hits.joinToString("\n\n") { h ->
+            "[${h.subject}/${h.kind}] ${h.relPath} (score=${h.score})\n${h.snippet}"
+        }
+    }
+
+    private fun dispatchListSubjectKinds(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val subject = (obj["subject"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (subject.isEmpty()) return "list_subject_kinds: subject required"
+        val kinds = SubjectCorpus.listKinds(subject)
+        if (kinds.isEmpty()) return "list_subject_kinds: no kinds for $subject (subject not in _extras/?)"
+        return "kinds for $subject:\n  " + kinds.joinToString("\n  ")
     }
 
     private fun dispatchCalendarCreate(argsJson: String): String {
