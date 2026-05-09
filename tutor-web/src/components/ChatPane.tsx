@@ -3,14 +3,22 @@ import { jarvisFetch } from "../lib/api";
 import { ScreenshotCapture, type ScreenshotEvent } from "./ScreenshotCapture";
 import { SuggestedEditCard } from "./SuggestedEditCard";
 import { parseSuggestedEdits, type SuggestedEdit } from "../lib/suggestedEdit";
+import { KnowledgeGapCard } from "./KnowledgeGapCard";
+import { parseKnowledgeGaps, type KnowledgeGap } from "../lib/knowledgeGap";
 
 interface Msg {
   role: "you" | "jarvis" | "sensor";
   text: string;
   edits?: SuggestedEdit[];
+  gaps?: KnowledgeGap[];
 }
 
-export function ChatPane({ taskId }: { taskId: string }) {
+export interface ChatPaneProps {
+  taskId: string;
+  onScratchpadInsert?: (text: string) => void;
+}
+
+export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -39,8 +47,17 @@ export function ChatPane({ taskId }: { taskId: string }) {
       });
       const data = await res.json();
       const raw = data.reply ?? "(no reply)";
-      const { body, edits } = parseSuggestedEdits(raw);
-      setMessages(m => [...m, { role: "jarvis", text: body, edits }]);
+      // Run both extractors. parseSuggestedEdits strips <edit> envelopes
+      // first; parseKnowledgeGaps then strips <gap> envelopes from what's
+      // left. Both produce plain prose body for the message text.
+      const editParsed = parseSuggestedEdits(raw);
+      const gapParsed = parseKnowledgeGaps(editParsed.body);
+      setMessages(m => [...m, {
+        role: "jarvis",
+        text: gapParsed.body,
+        edits: editParsed.edits,
+        gaps: gapParsed.gaps,
+      }]);
     } catch (e) {
       setMessages(m => [...m, { role: "jarvis", text: `(error: ${(e as Error).message})` }]);
     } finally {
@@ -67,6 +84,18 @@ export function ChatPane({ taskId }: { taskId: string }) {
             <div className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{m.text}</div>
             {m.edits?.map(edit => (
               <SuggestedEditCard key={edit.id} edit={edit} />
+            ))}
+            {m.gaps?.map(gap => (
+              <KnowledgeGapCard
+                key={gap.id}
+                gap={gap}
+                onInsertScratchpad={g => {
+                  const text = g.exampleCode
+                    ? `// ${g.topic}\n${g.exampleCode}`
+                    : `// ${g.topic}\n${g.content}`;
+                  onScratchpadInsert?.(text);
+                }}
+              />
             ))}
           </div>
         ))}

@@ -1,11 +1,39 @@
+import { useEffect, useState } from "react";
 import { PdfPane } from "./PdfPane";
 import { ChatPane } from "./ChatPane";
+import { Scratchpad } from "./Scratchpad";
+
+const SCRATCHPAD_KEY = "jarvis.scratchpad";
 
 export function TutorWorkspace({ pdfUrl, taskId }: { pdfUrl: string; taskId: string }) {
+  // Layer B0: scratchpad state lives at the workspace level so chat-side
+  // INSERT actions can append from across the divider. Persisted via
+  // localStorage per browser; server-side per-task storage arrives in B1.
+  const storageKey = `${SCRATCHPAD_KEY}:${taskId}`;
+  const [scratch, setScratch] = useState<string>("");
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    const v = localStorage.getItem(storageKey);
+    if (v != null) setScratch(v);
+  }, [storageKey]);
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(storageKey, scratch);
+  }, [storageKey, scratch]);
+
+  function appendToScratchpad(text: string) {
+    setScratch(prev => prev.length === 0 ? text : `${prev}\n\n${text}`);
+  }
+
   return (
     <div className="grid grid-cols-2 h-dvh">
-      <PdfPane url={pdfUrl} />
-      <ChatPane taskId={taskId} />
+      <div className="flex flex-col h-full">
+        <div className="flex-1 overflow-hidden">
+          <PdfPane url={pdfUrl} />
+        </div>
+        <Scratchpad value={scratch} onChange={setScratch} />
+      </div>
+      <ChatPane taskId={taskId} onScratchpadInsert={appendToScratchpad} />
     </div>
   );
 }
