@@ -18,11 +18,15 @@ Three curl probes against `POST openrouter.ai/api/v1/chat/completions` from VPS 
 
 1. **`models: ["fake/nonexistent-model:free", "meta-llama/llama-3.3-70b-instruct:free"]`** → HTTP 400 `"fake/nonexistent-model:free is not a valid model ID"`. **Finding:** OR validates every entry in `models:` array before routing. Invalid model IDs in fallback list reject the entire request.
 
-2. **`models: ["meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free"]`** → HTTP 429 from llama (Venice upstream rate-limit, `Retry-After: 11s`). Mistral never tried. **Finding:** OR's server-side `models:` array does NOT failover on 429. The first listed model's failure is propagated to the client even when alternates are listed.
+2. **`models: ["meta-llama/llama-3.3-70b-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free"]`** → HTTP 429 from llama (Venice upstream rate-limit, `Retry-After: 11s`). Mistral never tried. **Initial finding (later corrected):** appeared to show OR's `models:` array does NOT failover on 429.
 
-3. **`models: ["google/gemini-2.0-flash-exp:free", "meta-llama/llama-3.3-70b-instruct:free"]`** → HTTP 429 from llama (same upstream issue). Gemini was skipped (likely 404'd at edge), llama tried, llama 429'd. **Finding:** OR's `models:` DOES failover on 404 (model-pulled / model-removed) — the gemini→llama transition happened server-side. So permanent removals are handled by edge routing; transient rate-limits are not.
+3. **`models: ["google/gemini-2.0-flash-exp:free", "meta-llama/llama-3.3-70b-instruct:free"]`** → HTTP 429 from llama (same upstream issue). Gemini was skipped (likely 404'd at edge), llama tried, llama 429'd. **Finding:** OR's `models:` DOES failover on 404 (model-pulled / model-removed).
 
-**Conclusion:** OR `models:` is the right primitive for the original-motivating-incident class (gemini-2.0-flash-exp:free pulled mid-session = HTTP 404 at edge). 429 (rate-limit) needs a separate client-side path.
+**Post-deploy probe (2026-05-09 17:33Z) corrects probe 2's finding.** A retest with `models: ["meta-llama/llama-3.3-70b-instruct:free", "z-ai/glm-4.5-air:free", "openai/gpt-oss-120b:free"]` returned HTTP 200 served from `z-ai/glm-4.5-air:free` (Z.AI provider) even though llama was still 429-rate-limited. Probe 2's "no 429 failover" reading was masked by `mistralai/mistral-small-3.1-24b-instruct:free` being permanently dead (HTTP 404 "no endpoints found"); OR routed past llama-429 → mistral-404 → had nothing left → returned the original llama 429.
+
+**Corrected conclusion:** OR's `models:` array routes past BOTH 404 (permanent) AND 429 (transient) **provided the next entry in the chain is itself reachable**. A chain dominated by dead model IDs degrades to "first-error wins". Fallback list curation matters even more than initially scoped — see Pragmatist's "list rot" risk in Deferred Risks.
+
+**Operational note:** as of 2026-05-09 17:33Z, the Venice provider is throttling its full free-tier model lineup (llama-3.3-70b, llama-3.2-3b, hermes-3-405b, qwen3-next-80b all 429 from Venice). Cross-provider diversity is the load-bearing design property — the deployed chain `meta-llama/llama-3.3-70b:free` + `z-ai/glm-4.5-air:free` (Z.AI) + `openai/gpt-oss-120b:free` (OpenInference) covers three distinct upstream providers.
 
 ## Approach
 
