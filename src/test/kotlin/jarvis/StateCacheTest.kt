@@ -2,8 +2,12 @@ package jarvis
 
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
+import kotlin.io.path.exists
+import kotlin.io.path.readText
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -52,5 +56,54 @@ class StateCacheTest {
         // Default env not set in test → disabled.
         val v = StateCache.isEnabled()
         assertTrue(v == true || v == false)
+    }
+
+    @Test
+    fun persistAndReloadRoundtrip(@TempDir tmp: Path) {
+        val file = tmp.resolve("state_cache.json")
+        val state = UserState(
+            ts = "2026-05-09T10:00:00Z",
+            text = "ENERGY: high; FOCUS: PA chapter 4",
+            model = "claude-sonnet-4-6",
+        )
+        StateCache.persist(state, file)
+        assertTrue(file.exists(), "file written")
+        val raw = file.readText()
+        assertTrue(raw.contains("ENERGY"), "json contains text")
+        // Reload into fresh cell
+        StateCache.resetForTests()
+        StateCache.ensureLoaded(file)
+        val read = StateCache.current(Instant.parse("2026-05-09T10:00:00Z"))
+        assertNotNull(read)
+        assertEquals(state.text, read!!.text)
+        assertEquals(state.model, read.model)
+    }
+
+    @Test
+    fun ensureLoadedSkipsMissingFile(@TempDir tmp: Path) {
+        StateCache.resetForTests()
+        StateCache.ensureLoaded(tmp.resolve("nope.json"))
+        // Cell stays null; current() returns null.
+        assertEquals(null, StateCache.current(Instant.now()))
+    }
+
+    @Test
+    fun ensureLoadedRunsAtMostOnce(@TempDir tmp: Path) {
+        val file = tmp.resolve("state_cache.json")
+        StateCache.persist(
+            UserState(ts = "2026-05-09T10:00:00Z", text = "first", model = "m1"),
+            file,
+        )
+        StateCache.resetForTests()
+        StateCache.ensureLoaded(file)
+        // Mutate the file post-load.
+        StateCache.persist(
+            UserState(ts = "2026-05-09T11:00:00Z", text = "second", model = "m2"),
+            file,
+        )
+        // Second ensureLoaded is a no-op — cell still has "first".
+        StateCache.ensureLoaded(file)
+        val read = StateCache.current(Instant.parse("2026-05-09T10:00:00Z"))
+        assertEquals("first", read?.text)
     }
 }

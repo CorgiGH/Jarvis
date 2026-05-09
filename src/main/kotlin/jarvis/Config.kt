@@ -29,6 +29,7 @@ object Config {
     val knowledgeFsrsFile: Path = stateDir.resolve("knowledge_fsrs.jsonl")
     val gradesFile: Path = stateDir.resolve("grades.jsonl")
     val lessonsFile: Path = stateDir.resolve("lessons.jsonl")
+    val stateCacheFile: Path = stateDir.resolve("state_cache.json")
 
     /** Tutor Layer A SQLite path. Override with JARVIS_TUTOR_DB. Defaults to
      *  ~/.jarvis/tutor.db so it does not collide with the existing .life-os
