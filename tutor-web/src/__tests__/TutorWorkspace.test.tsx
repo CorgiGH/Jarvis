@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { TutorWorkspace } from "../components/TutorWorkspace";
 
 beforeEach(() => {
@@ -16,7 +17,7 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 test("renders left PDF pane, right chat pane, and scratchpad", () => {
-  render(<TutorWorkspace pdfUrl="/sample.pdf" taskId="T1" />);
+  render(<MemoryRouter><TutorWorkspace pdfUrl="/sample.pdf" taskId="T1" /></MemoryRouter>);
   expect(screen.getByTestId("pdf-pane")).toBeInTheDocument();
   expect(screen.getByTestId("chat-pane")).toBeInTheDocument();
   expect(screen.getByTestId("scratchpad")).toBeInTheDocument();
@@ -32,7 +33,7 @@ test("INSERT → SCRATCHPAD from gap card appends to scratchpad slot", async () 
     }
     return new Response("{}", { status: 200 });
   }));
-  render(<TutorWorkspace pdfUrl="/sample.pdf" taskId="T-scratch" />);
+  render(<MemoryRouter><TutorWorkspace pdfUrl="/sample.pdf" taskId="T-scratch" /></MemoryRouter>);
   fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: "explain closures" } });
   fireEvent.click(screen.getByRole("button", { name: /send/i }));
   // Wait for the gap card to render.
@@ -45,7 +46,7 @@ test("INSERT → SCRATCHPAD from gap card appends to scratchpad slot", async () 
 });
 
 test("send button POSTs to /api/chat and shows reply", async () => {
-  render(<TutorWorkspace pdfUrl="/sample.pdf" taskId="T1" />);
+  render(<MemoryRouter><TutorWorkspace pdfUrl="/sample.pdf" taskId="T1" /></MemoryRouter>);
   const input = screen.getByPlaceholderText(/message/i);
   fireEvent.change(input, { target: { value: "hi" } });
   fireEvent.click(screen.getByRole("button", { name: /send/i }));

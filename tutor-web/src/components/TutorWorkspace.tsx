@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PdfPane } from "./PdfPane";
 import { ChatPane } from "./ChatPane";
 import { Scratchpad } from "./Scratchpad";
+import { Sidebar } from "./Sidebar";
 
 const SCRATCHPAD_KEY = "jarvis.scratchpad";
 
@@ -26,14 +27,17 @@ export function TutorWorkspace({ pdfUrl, taskId }: { pdfUrl: string; taskId: str
   }
 
   return (
-    <div className="grid grid-cols-2 h-full min-h-0">
-      <div className="flex flex-col h-full min-h-0 border-r-4 border-black">
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <PdfPane url={pdfUrl} />
+    <div className="flex h-full min-h-0">
+      <Sidebar activeTaskId={taskId} />
+      <div className="grid grid-cols-2 h-full min-h-0 flex-1">
+        <div className="flex flex-col h-full min-h-0 border-r-4 border-black">
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <PdfPane url={pdfUrl} />
+          </div>
+          <Scratchpad value={scratch} onChange={setScratch} />
         </div>
-        <Scratchpad value={scratch} onChange={setScratch} />
+        <ChatPane taskId={taskId} onScratchpadInsert={appendToScratchpad} />
       </div>
-      <ChatPane taskId={taskId} onScratchpadInsert={appendToScratchpad} />
     </div>
   );
 }
