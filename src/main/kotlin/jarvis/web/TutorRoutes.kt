@@ -7,6 +7,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import jarvis.tutor.AuditLinesTable
+import jarvis.tutor.EffectorAttemptsTable
 import jarvis.tutor.FsrsCardsTable
 import jarvis.tutor.KnowledgeGapsTable
 import jarvis.tutor.ProviderConfigTable
@@ -273,6 +274,7 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             KnowledgeGapsTable,
             FsrsCardsTable,
             ProviderConfigTable,
+            EffectorAttemptsTable,
         )
     }
     // Layer B: resolve vision LLM from env (OPENROUTER_API_KEY). Null when
