@@ -48,7 +48,7 @@ class OpenRouterChatLlm(
     private val apiKey: String = resolveOpenRouterKey()
         ?: error("OPENROUTER_API_KEY required for OpenRouterChatLlm"),
     private val defaultModel: String = System.getenv("JARVIS_OPENROUTER_MODEL")
-        ?: "google/gemini-2.0-flash-exp:free",
+        ?: "meta-llama/llama-3.3-70b-instruct:free",
     private val baseUrl: String = Config.OPENROUTER_BASE_URL,
 ) : Llm {
 
