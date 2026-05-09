@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { jarvisFetch } from "../lib/api";
 import { ScreenshotCapture, type ScreenshotEvent } from "./ScreenshotCapture";
 import { SuggestedEditCard } from "./SuggestedEditCard";
@@ -6,12 +6,15 @@ import { parseSuggestedEdits, type SuggestedEdit } from "../lib/suggestedEdit";
 import { KnowledgeGapCard } from "./KnowledgeGapCard";
 import { parseKnowledgeGaps, type KnowledgeGap } from "../lib/knowledgeGap";
 import { MathText } from "./MathText";
+import { ChipRow } from "./ChipRow";
+import { parseChips, type QuickChip } from "../lib/chip";
 
 interface Msg {
   role: "you" | "jarvis" | "sensor";
   text: string;
   edits?: SuggestedEdit[];
   gaps?: KnowledgeGap[];
+  chips?: QuickChip[];
 }
 
 export interface ChatPaneProps {
@@ -23,6 +26,12 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function pickChip(prompt: string) {
+    setInput(prompt);
+    inputRef.current?.focus();
+  }
   // Layer B0 read-only mode latches on the most recent screenshot's
   // server-side classification. Until the next screenshot reclassifies
   // (presumably user is back in their editor), suggested-edit APPLY
@@ -61,11 +70,13 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
       // left. Both produce plain prose body for the message text.
       const editParsed = parseSuggestedEdits(raw);
       const gapParsed = parseKnowledgeGaps(editParsed.body);
+      const chipParsed = parseChips(gapParsed.body);
       setMessages(m => [...m, {
         role: "jarvis",
-        text: gapParsed.body,
+        text: chipParsed.body,
         edits: editParsed.edits,
         gaps: gapParsed.gaps,
+        chips: chipParsed.chips,
       }]);
     } catch (e) {
       setMessages(m => [...m, { role: "jarvis", text: `(error: ${(e as Error).message})` }]);
@@ -120,11 +131,13 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
                 }}
               />
             ))}
+            {m.chips && <ChipRow chips={m.chips} onPick={pickChip} />}
           </div>
         ))}
       </div>
       <div className="flex border-t-4 border-black">
         <input
+          ref={inputRef}
           className="flex-1 px-3 py-2 outline-none text-sm font-mono"
           placeholder="message · ctrl+enter sends"
           value={input}
