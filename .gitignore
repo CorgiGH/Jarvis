@@ -12,3 +12,6 @@ tools/vps.env
 tmp-so-rc-scrape/
 tmp-secondbrain-scrape/
 tmp-study-guide-scrape/
+.superpowers/
+tools/__pycache__/
+test_output.txt
