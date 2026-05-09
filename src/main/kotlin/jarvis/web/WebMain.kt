@@ -77,7 +77,13 @@ internal suspend fun runWeb() {
 
         intercept(ApplicationCallPipeline.Plugins) {
             val path = call.request.path()
-            if (path == "/login" || path == "/healthz") return@intercept
+            // Public routes — no auth: login form, basic liveness, tutor SPA
+            // bundle (token-gated client-side after load), Layer A health,
+            // and the /auth/setup magic-link exchange (gated by its own
+            // raw-token check, not the JARVIS_AUTH_TOKEN bearer).
+            if (path == "/login" || path == "/healthz" || path == "/api/v1/health") return@intercept
+            if (path == "/tutor" || path.startsWith("/tutor/")) return@intercept
+            if (path.startsWith("/auth/")) return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]
@@ -484,6 +490,20 @@ internal suspend fun runWeb() {
                 )
             }
         }
+
+        // Layer A — tutor SPA bundle + /api/v1/health. Mounts a separate
+        // routing block; Ktor merges multiple routing blocks into the same
+        // engine, so this composes with the routes above.
+        //
+        // Bootstrap order matters: installTutorContext() must run BEFORE
+        // installTutorRoutes() so /auth/setup can read TutorContextKey off
+        // application.attributes. Without this, /auth/setup 500s in prod
+        // (the gap Task 21 flagged and Task 25 closes).
+        installTutorContext(
+            dbPath = jarvis.Config.tutorDbPath,
+            ledgerDir = java.nio.file.Path.of(jarvis.Config.tutorLedgerDir),
+        )
+        installTutorRoutes()
     }.start(wait = true)
 }
 

@@ -30,6 +30,19 @@ object Config {
     val gradesFile: Path = stateDir.resolve("grades.jsonl")
     val lessonsFile: Path = stateDir.resolve("lessons.jsonl")
 
+    /** Tutor Layer A SQLite path. Override with JARVIS_TUTOR_DB. Defaults to
+     *  ~/.jarvis/tutor.db so it does not collide with the existing .life-os
+     *  state dir — the tutor surface is intentionally a separate persistence
+     *  domain (different schema, different durability semantics). */
+    val tutorDbPath: String = System.getenv("JARVIS_TUTOR_DB")
+        ?: "${System.getProperty("user.home")}/.jarvis/tutor.db"
+
+    /** Tutor Layer A append-only audit ledger directory. Override with
+     *  JARVIS_TUTOR_LEDGER_DIR. Hash-chained ledger files (one per session)
+     *  land under this directory — see [jarvis.tutor.HashChain]. */
+    val tutorLedgerDir: String = System.getenv("JARVIS_TUTOR_LEDGER_DIR")
+        ?: "${System.getProperty("user.home")}/.jarvis/tutor-ledgers"
+
     /** OpenRouter is no longer used for chat (the copilot / claude-max
      *  subprocess providers replaced it), but EmbeddingsClient still hits
      *  this URL when OPENROUTER_API_KEY is set, since neither Copilot CLI
