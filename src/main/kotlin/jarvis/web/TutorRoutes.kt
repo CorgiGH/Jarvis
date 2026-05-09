@@ -586,7 +586,9 @@ fun Application.installTutorRoutes() {
                 // Phase-1 idempotency band-aid: spec §1.3. Replaced by TaskDetector
                 // dedup in Phase 6. Match key is (subject, title) per user — same
                 // subject+title from this user is interpreted as a re-click of an
-                // in-flight POST, not a deliberate second task.
+                // in-flight POST, not a deliberate second task. Not race-free —
+                // two POSTs interleaved can both miss the lookup and both INSERT;
+                // Phase 6 closes that with TaskDetector + a unique index.
                 val existing = TaskRepo(ctx.db).listForUser(userId)
                     .firstOrNull { it.subject == subjectTrim && it.title == titleTrim }
                 if (existing != null) {
