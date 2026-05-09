@@ -483,6 +483,42 @@ fun Application.installTutorRoutes() {
             call.respond(ApiGatewayInboundResponse(text = text, source = source))
         }
 
+        // Per-task PDF — workspace embed targets this URL. Resolves to
+        // <ledgerDir>/task-pdfs/<taskId>.pdf if present; 404 otherwise
+        // (PdfPane shows friendly fallback). Drop a PDF at that path
+        // to wire it up.
+        get("/api/v1/tasks/{id}/pdf") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val id = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@get }
+            // Path-sanitize: id is ULID-shaped (Crockford base32, 26 chars).
+            // Reject anything else so we don't traverse out of task-pdfs/.
+            if (!id.matches(Regex("^[0-9A-Za-z]{1,32}$"))) {
+                call.respond(HttpStatusCode.BadRequest, "malformed id")
+                return@get
+            }
+            // Verify task belongs to caller.
+            val task = jarvis.tutor.TaskRepo(ctx.db).findById(id)
+            if (task == null || task.userId != userId) {
+                call.respond(HttpStatusCode.NotFound, "task not found")
+                return@get
+            }
+            val pdfPath = ctx.ledgerDir.resolve("task-pdfs").resolve("$id.pdf")
+            if (!java.nio.file.Files.exists(pdfPath)) {
+                call.respond(HttpStatusCode.NotFound,
+                    "no PDF for $id — drop one at ${pdfPath}")
+                return@get
+            }
+            call.respondBytes(
+                bytes = java.nio.file.Files.readAllBytes(pdfPath),
+                contentType = io.ktor.http.ContentType.Application.Pdf,
+            )
+        }
+
         // Layer B / task-context V0 — task CRUD so user can seed real
         // PS Tema A / PA Tema 5 / etc. Without this, TaskHeaderBuilder
         // has nothing to look up. Minimal shape: subject + title +

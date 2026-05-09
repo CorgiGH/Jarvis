@@ -107,7 +107,7 @@ export function App() {
           ? <div className="p-6 font-mono text-sm text-black/60">setting up tutor session…</div>
           : showQuickStart
             ? <TaskQuickStart />
-            : <TutorWorkspace pdfUrl="/tutor/test-task.pdf" taskId={taskId} />}
+            : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} />}
       </main>
     </div>
   );
