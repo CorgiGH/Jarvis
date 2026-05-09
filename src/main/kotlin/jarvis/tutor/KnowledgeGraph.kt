@@ -84,8 +84,7 @@ object KnowledgeGraphBuilder {
                     val rel = runCatching { archivalRoot.relativize(p).toString().replace('\\', '/') }
                         .getOrElse { return@forEach }
                     if (!ConceptCatalogFilter.isCatalogPath(rel)) return@forEach
-                    val subject = rel.substringBefore('/').takeIf { it.isNotEmpty() && it != rel }
-                        ?: return@forEach
+                    val subject = ConceptCatalogFilter.subjectFor(rel) ?: return@forEach
                     extractFromFile(rel, subject, p, nodes)
                 }
         }
@@ -197,14 +196,38 @@ object KnowledgeGraphBuilder {
     }
 }
 
-/** Local mirror of ConceptCatalog.isCatalogPath so the graph builder
- *  doesn't depend on KnowledgeState ordering during tests. */
+/** Graph-specific path filter. Wider than ConceptCatalog.isCatalogPath
+ *  because the graph wants to index ALL subject material, including the
+ *  `_extras/<subject>/` tree where most VPS content actually lives.
+ *  Subject inference handles both `<subject>/...` (catalog-canonical) and
+ *  `_extras/<subject>/...` (raw / curated) layouts. */
 private object ConceptCatalogFilter {
     fun isCatalogPath(rel: String): Boolean {
-        if (rel.contains("tests/") || rel.startsWith("tests/")) return false
-        val components = rel.split('/')
-        if (components.any { it.startsWith("_") }) return false
+        // Reject pdf/image/binary paths only via extension at caller; here
+        // we only block the truly internal namespaces.
+        val parts = rel.split('/')
+        if (parts.firstOrNull() == "_curriculum") return false
+        if (parts.firstOrNull() == "_RC_FOLDED") return false
+        // Allow `_extras` + `_wiki` (Karpathy LLM Wiki dir we own).
         return true
+    }
+
+    /** Returns the subject id for [rel]:
+     *   `PA/notes.md`               → PA
+     *   `_extras/PA/courses/x.md`   → PA
+     *   `_wiki/PA/greedy.md`        → PA
+     *   `study-guide/...`           → null (skip — meta content)
+     *   `second-brain/...`          → null (skip — user notes)
+     */
+    fun subjectFor(rel: String): String? {
+        val parts = rel.split('/').filter { it.isNotEmpty() }
+        if (parts.isEmpty()) return null
+        // Skip meta dirs entirely.
+        if (parts[0] in setOf("study-guide", "second-brain")) return null
+        if (parts[0].startsWith("_")) {
+            return parts.getOrNull(1)?.takeIf { !it.startsWith("_") && it.length <= 16 }
+        }
+        return parts[0].takeIf { it.length <= 16 }
     }
 }
 
