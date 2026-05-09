@@ -51,9 +51,16 @@ object Signals {
     }
 
     fun appendTo(file: Path, entry: ProactiveSignal) {
+        appendToWithCap(file, entry, JsonlRotate.DEFAULT_MAX_BYTES)
+    }
+
+    /** Test-friendly overload exposing the rotation byte cap so harnesses
+     *  can force several rotations mid-stream without writing 10 MB of
+     *  fixture data. Production callers go through [appendTo]. */
+    fun appendToWithCap(file: Path, entry: ProactiveSignal, maxBytes: Long) {
         val line = json.encodeToString(ProactiveSignal.serializer(), entry) + "\n"
         synchronized(LOCK) {
-            JsonlRotate.maybeRotate(file)
+            JsonlRotate.maybeRotate(file, maxBytes)
             file.parent?.createDirectories()
             Files.writeString(
                 file,
