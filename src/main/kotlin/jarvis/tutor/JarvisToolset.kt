@@ -134,43 +134,146 @@ class JarvisToolset(
 object JarvisToolDefs {
 
     val openAiToolDefs: JsonArray = buildJsonArray {
-        add(buildJsonObject {
+        add(toolDef("search_archival",
+            "Hybrid lexical+semantic search over the user's personal archival corpus " +
+                "(lecture notes, textbooks, prior solutions). Use for definitions, " +
+                "theorems, worked examples. Returns top-K matching files with snippets.",
+        ) {
+            put("query", strParam("Single-keyword or short phrase. Lexical match preferred over compound queries.", required = true))
+            put("k", intParam("Number of hits to return (default 3, max 5)."))
+            put("subject", strParam("Optional subject filter (PA, PS, POO, ALO, SO, ...)."))
+        })
+        add(toolDef("query_graph",
+            "Query the cross-corpus knowledge graph by concept name OR snippet text. " +
+                "Cheaper + more structural than search_archival — use when the user " +
+                "asks 'what concepts mention X' or 'what's related to Y'. Returns " +
+                "matching graph nodes (subject, concept, source path, snippet).",
+        ) {
+            put("query", strParam("Concept name or substring.", required = true))
+            put("k", intParam("Top-K (default 5, max 10)."))
+        })
+        add(toolDef("get_node",
+            "Fetch a single graph node by its full id (`<subject>/<concept>`). Use " +
+                "after query_graph to expand a single result.",
+        ) {
+            put("id", strParam("Full node id, e.g. `PA/Greedy algorithm`.", required = true))
+        })
+        add(toolDef("get_neighbors",
+            "Return all graph nodes connected to the given node id, optionally filtered " +
+                "by edge kind (mentions / sibling / subject). Use to explore " +
+                "neighborhood of a concept.",
+        ) {
+            put("id", strParam("Full node id.", required = true))
+            put("kind", strParam("Optional edge kind filter: mentions / sibling / subject."))
+        })
+        add(toolDef("shortest_path",
+            "Find the shortest path between two concepts in the knowledge graph. " +
+                "Returns the chain of node ids. Empty when no path exists. Use to " +
+                "answer 'how does X connect to Y'.",
+        ) {
+            put("from", strParam("Source node id.", required = true))
+            put("to", strParam("Target node id.", required = true))
+        })
+    }
+
+    private fun toolDef(name: String, description: String, params: JsonObjectBuilderScope.() -> Unit): JsonObject {
+        val propsBuilder = JsonObjectBuilderScope()
+        propsBuilder.params()
+        return buildJsonObject {
             put("type", "function")
             put("function", buildJsonObject {
-                put("name", "search_archival")
-                put("description",
-                    "Search the user's personal archival corpus (lecture notes, " +
-                        "textbooks, prior solutions) for material relevant to the " +
-                        "user's current question. Use this when the user asks about " +
-                        "a concept, theorem, definition, or worked example. Returns " +
-                        "top-K matching files with snippets.")
+                put("name", name)
+                put("description", description)
                 put("parameters", buildJsonObject {
                     put("type", "object")
-                    put("properties", buildJsonObject {
-                        put("query", buildJsonObject {
-                            put("type", "string")
-                            put("description", "Single-keyword or short phrase. Lexical match preferred over compound queries.")
-                        })
-                        put("k", buildJsonObject {
-                            put("type", "integer")
-                            put("description", "Number of hits to return (default 3, max 5).")
-                        })
-                        put("subject", buildJsonObject {
-                            put("type", "string")
-                            put("description", "Optional subject filter (PA, PS, POO, ALO, SO, ...).")
-                        })
+                    put("properties", propsBuilder.build())
+                    put("required", buildJsonArray {
+                        propsBuilder.required().forEach { add(it) }
                     })
-                    put("required", buildJsonArray { add("query") })
                 })
             })
-        })
+        }
+    }
+
+    private class JsonObjectBuilderScope {
+        private val out = mutableMapOf<String, JsonObject>()
+        fun put(key: String, schema: JsonObject) { out[key] = schema; if (schema["__required__"] != null) requiredKeys += key }
+        private val requiredKeys = mutableListOf<String>()
+        fun build(): JsonObject = buildJsonObject {
+            for ((k, v) in out) put(k, v)
+        }
+        fun required(): List<String> = requiredKeys
+    }
+
+    private fun strParam(description: String, required: Boolean = false): JsonObject = buildJsonObject {
+        put("type", "string")
+        put("description", description)
+        if (required) put("__required__", true)
+    }
+
+    private fun intParam(description: String, required: Boolean = false): JsonObject = buildJsonObject {
+        put("type", "integer")
+        put("description", description)
+        if (required) put("__required__", true)
     }
 
     fun dispatch(toolName: String, argsJson: String): String {
         return when (toolName) {
             "search_archival" -> dispatchSearchArchival(argsJson)
+            "query_graph" -> dispatchQueryGraph(argsJson)
+            "get_node" -> dispatchGetNode(argsJson)
+            "get_neighbors" -> dispatchGetNeighbors(argsJson)
+            "shortest_path" -> dispatchShortestPath(argsJson)
             else -> "unknown tool: $toolName"
         }
+    }
+
+    private fun parseArgs(argsJson: String): JsonObject? = try {
+        Json.parseToJsonElement(argsJson) as? JsonObject
+    } catch (_: Exception) { null }
+
+    private fun dispatchQueryGraph(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val q = (obj["query"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (q.isEmpty()) return "query_graph: query required"
+        val k = ((obj["k"] as? JsonPrimitive)?.intOrNull ?: 5).coerceIn(1, 10)
+        val graph = KnowledgeGraphBuilder.load() ?: return "query_graph: graph not built — run gradle ingestCorpus"
+        val hits = KnowledgeGraphQuery.query(graph, q, k)
+        if (hits.isEmpty()) return "query_graph: no matches for \"$q\""
+        return hits.joinToString("\n\n") { n ->
+            "[${n.id}] (${n.sourcePath})\n${n.snippet.take(400)}"
+        }
+    }
+
+    private fun dispatchGetNode(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val id = (obj["id"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (id.isEmpty()) return "get_node: id required"
+        val graph = KnowledgeGraphBuilder.load() ?: return "get_node: graph not built"
+        val node = KnowledgeGraphQuery.getNode(graph, id) ?: return "get_node: not found: $id"
+        return "[${node.id}] subject=${node.subject} source=${node.sourcePath}\n${node.snippet}"
+    }
+
+    private fun dispatchGetNeighbors(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val id = (obj["id"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (id.isEmpty()) return "get_neighbors: id required"
+        val kind = (obj["kind"] as? JsonPrimitive)?.contentOrNull?.trim().takeIf { !it.isNullOrEmpty() }
+        val graph = KnowledgeGraphBuilder.load() ?: return "get_neighbors: graph not built"
+        val ns = KnowledgeGraphQuery.neighbors(graph, id, kind)
+        if (ns.isEmpty()) return "get_neighbors: none for $id${kind?.let { " (kind=$it)" } ?: ""}"
+        return ns.joinToString("\n") { (n, k) -> "[$k] ${n.id}" }
+    }
+
+    private fun dispatchShortestPath(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val from = (obj["from"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val to = (obj["to"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (from.isEmpty() || to.isEmpty()) return "shortest_path: from + to required"
+        val graph = KnowledgeGraphBuilder.load() ?: return "shortest_path: graph not built"
+        val path = KnowledgeGraphQuery.shortestPath(graph, from, to)
+        if (path.isEmpty()) return "shortest_path: no path between $from and $to"
+        return "path (${path.size - 1} hops):\n  " + path.joinToString("\n  → ")
     }
 
     private fun dispatchSearchArchival(argsJson: String): String {

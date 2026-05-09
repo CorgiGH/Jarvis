@@ -15,6 +15,7 @@ private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | s
   web                        Start Ktor web server (HTMX UI on :8080 by default).
   reindex                    Embed any wiki entries not yet in the vector store.
   import-anki <subj> <apkg>  Import an Anki .apkg deck as concepts under archival/<subj>/.
+  ingest-corpus              Build / refresh the knowledge graph from archival/ markdown.
 """
 
 fun main(args: Array<String>) {
@@ -26,6 +27,16 @@ fun main(args: Array<String>) {
         "subs" -> runBlocking { runSub(emptyList()) }
         "web" -> runBlocking { runWeb() }
         "reindex" -> runBlocking { runReindex() }
+        "ingest-corpus", "ingestCorpus" -> {
+            val graph = jarvis.tutor.KnowledgeGraphBuilder.build()
+            val path = jarvis.tutor.KnowledgeGraphBuilder.persist(graph)
+            println(
+                "knowledge graph built → $path\n" +
+                    "  nodes: ${graph.nodes.size}\n" +
+                    "  edges: ${graph.edges.size}\n" +
+                    "  by edge kind: ${graph.edges.groupingBy { it.kind }.eachCount()}",
+            )
+        }
         "import-anki" -> {
             val subject = args.getOrNull(1)
             val path = args.getOrNull(2)
