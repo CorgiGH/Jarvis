@@ -581,12 +581,27 @@ fun Application.installTutorRoutes() {
                     call.respond(HttpStatusCode.BadRequest, "deadline must be ISO-8601: ${e.message?.take(80)}")
                     return@csrfProtect
                 }
+                val subjectTrim = req.subject.trim().take(32)
+                val titleTrim = req.title.trim().take(256)
+                // Phase-1 idempotency band-aid: spec §1.3. Replaced by TaskDetector
+                // dedup in Phase 6. Match key is (subject, title) per user — same
+                // subject+title from this user is interpreted as a re-click of an
+                // in-flight POST, not a deliberate second task.
+                val existing = TaskRepo(ctx.db).listForUser(userId)
+                    .firstOrNull { it.subject == subjectTrim && it.title == titleTrim }
+                if (existing != null) {
+                    call.respond(HttpStatusCode.OK, ApiTaskView(
+                        id = existing.id, subject = existing.subject, title = existing.title,
+                        deadline = existing.deadline.toString(), status = existing.status.name,
+                    ))
+                    return@csrfProtect
+                }
                 val id = jarvis.tutor.TutorTypes.ulid()
                 val now = Instant.now()
                 TaskRepo(ctx.db).insert(Task(
                     id = id, userId = userId,
-                    subject = req.subject.trim().take(32),
-                    title = req.title.trim().take(256),
+                    subject = subjectTrim,
+                    title = titleTrim,
                     deadline = deadline,
                     problemRef = ContentRef(repo = req.repo.ifBlank { "user" }, path = req.problemPath, sha = "pending"),
                     conceptRefs = emptyList(),
@@ -598,7 +613,7 @@ fun Application.installTutorRoutes() {
                 ))
                 jarvis.tutor.StateVersion.bump()
                 call.respond(HttpStatusCode.Created, ApiTaskView(
-                    id = id, subject = req.subject, title = req.title,
+                    id = id, subject = subjectTrim, title = titleTrim,
                     deadline = deadline.toString(), status = TaskStatus.ACTIVE.name,
                 ))
             }
