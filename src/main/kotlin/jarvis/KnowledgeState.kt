@@ -87,6 +87,9 @@ object KnowledgeState {
                 StandardOpenOption.APPEND,
             )
         }
+        // Tutor task-context V0: bump state version so cached
+        // TaskHeader snapshots evict on the next /api/chat read.
+        jarvis.tutor.StateVersion.bump()
     }
 
     fun readAll(): List<KnowledgeEntry> = readAllFrom(Config.knowledgeFile)

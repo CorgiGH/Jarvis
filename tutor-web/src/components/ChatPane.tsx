@@ -51,7 +51,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
     try {
       const res = await jarvisFetch("/api/chat", {
         method: "POST",
-        body: JSON.stringify({ taskId, message: userMsg }),
+        body: JSON.stringify({ msg: userMsg, taskId }),
       });
       const data = await res.json();
       const raw = data.reply ?? "(no reply)";

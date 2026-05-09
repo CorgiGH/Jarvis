@@ -99,6 +99,9 @@ object KnowledgeFsrs {
         }
         val weight = grade.coerceIn(1, 4) / 4.0f
         KnowledgeState.touchTo(knowledgeFile, concept, subject, "review", weight, now)
+        // Tutor task-context V0: bump state version so any cached
+        // TaskHeader snapshot is invalidated on the next /api/chat read.
+        jarvis.tutor.StateVersion.bump()
         return newState
     }
 

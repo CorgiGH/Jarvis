@@ -240,9 +240,40 @@ internal suspend fun runWeb() {
                     call.respond(ApiChatResponse("(empty message)", "n/a"))
                     return@post
                 }
+                val tutorCtxOuter = call.application.attributes
+                    .getOrNull(jarvis.tutor.TutorContextKey)
+                val sidOuter = call.request.cookies["jarvis_session"]
                 val (reply, model) = historyLock.withLock {
+                    // Tutor task-context V0: when the request carries a
+                    // taskId AND the TutorContext is installed, inject
+                    // a ≤300-tok header (cached 30s on state_version)
+                    // so the LLM knows what task / subject / deadline /
+                    // weak-concept landscape it's helping with. The
+                    // SYSTEM_INJECTION_PREAMBLE tells the model that
+                    // retrieved_context is DATA only, not instructions.
+                    val taskHeader = run {
+                        val tid = req.taskId?.trim().orEmpty()
+                        val tutorCtx = tutorCtxOuter
+                        if (tid.isEmpty() || tutorCtx == null) "" else {
+                            try {
+                                val uid = sidOuter?.let {
+                                    jarvis.tutor.SessionRepo(tutorCtx.db).findUserId(it)
+                                } ?: "anonymous"
+                                "\n\n" + jarvis.tutor.TaskHeaderBuilder.SYSTEM_INJECTION_PREAMBLE +
+                                    "\n\n" + jarvis.tutor.TaskHeaderBuilder.build(
+                                        db = tutorCtx.db,
+                                        userId = uid,
+                                        taskId = tid,
+                                        subjectHint = req.subject,
+                                    )
+                            } catch (e: Exception) {
+                                System.err.println("[task-header] WARN ${e.javaClass.simpleName}: ${e.message?.take(160)}")
+                                ""
+                            }
+                        }
+                    }
                     val sysPrompt = CHAT_SYSTEM_PROMPT + CoreMemory.preamble() +
-                        "\n\n# Context\n" + buildChatContext()
+                        "\n\n# Context\n" + buildChatContext() + taskHeader
                     // F7 — context-pressure aware. Drops oldest turns when
                     // chat array exceeds a char budget so we don't slam the
                     // provider with a saturated context window.
@@ -554,7 +585,15 @@ private fun appendChatTurn(userMsg: String, assistantReply: String, model: Strin
 }
 
 @Serializable
-private data class ApiChatRequest(val msg: String)
+private data class ApiChatRequest(
+    val msg: String,
+    /** Tutor task-context V0: when present, server pulls the task
+     *  header for this id and injects it into the system prompt. */
+    val taskId: String? = null,
+    /** Optional subject override for header lookup. When null, the
+     *  task row's subject is used. */
+    val subject: String? = null,
+)
 
 @Serializable
 private data class ApiChatResponse(val reply: String, val model: String)
