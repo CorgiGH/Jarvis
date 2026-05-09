@@ -75,6 +75,19 @@ fun Application.installTutorRoutes() {
         // by the standard Gradle source-set layout.
         staticResources("/tutor", "tutor-dist") {
             default("index.html")
+            // Hashed asset filenames (index-XYZ.js) are immutable + can be
+            // aggressively cached. The shell index.html MUST be re-fetched
+            // every visit so a deploy replaces the bundle on phones /
+            // service workers / aggressive browsers.
+            cacheControl { url ->
+                val p = url.path
+                if (p.isEmpty() || p.endsWith("/") || p.endsWith("/index.html") ||
+                    p.endsWith("/tutor") || p.endsWith("/tutor/")) {
+                    listOf(io.ktor.http.CacheControl.NoCache(null))
+                } else {
+                    listOf(io.ktor.http.CacheControl.MaxAge(31536000, mustRevalidate = false))
+                }
+            }
         }
         // Health endpoint (no auth required — see WebMain auth interceptor;
         // when this route is mounted alongside /healthz, both are public).
