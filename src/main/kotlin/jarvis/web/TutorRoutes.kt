@@ -423,33 +423,33 @@ fun Application.installTutorRoutes() {
         // chat path with hard-gated read-only tool surface. Default-
         // OFF behind JARVIS_GATEWAY_ENABLED + secret token check.
         post("/api/v1/gateway/inbound") {
-            val rawBody = call.receiveText()
+            // Council R2 fix: capture RAW BYTES via receiveChannel so
+            // HMAC body-binding survives non-UTF-8 payloads (replacement-
+            // char roundtrip would silently invalidate signatures).
+            val rawBytes = call.receive<ByteArray>()
             val req = try {
-                sensorJson.decodeFromString(ApiGatewayInboundRequest.serializer(), rawBody)
+                sensorJson.decodeFromString(
+                    ApiGatewayInboundRequest.serializer(),
+                    rawBytes.toString(Charsets.UTF_8),
+                )
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
                 return@post
             }
-            val token = call.request.headers["X-Jarvis-Gateway-Token"]
-            // Council R1 fix: prefer HMAC headers when present, fall
-            // back to bare token for transitional clients.
-            val hmacTs = call.request.headers["X-Jarvis-Timestamp"]
-            val hmacNonce = call.request.headers["X-Jarvis-Nonce"]
-            val hmacSig = call.request.headers["X-Jarvis-Hmac"]
-            val hmac = if (!hmacSig.isNullOrBlank()) {
-                jarvis.tutor.GatewayInbound.HmacHeaders(
-                    method = "POST",
-                    path = "/api/v1/gateway/inbound",
-                    timestamp = hmacTs,
-                    nonce = hmacNonce,
-                    signature = hmacSig,
-                    body = rawBody.toByteArray(Charsets.UTF_8),
-                )
-            } else null
+            // HMAC-only — bearer fallback removed (council R2 downgrade
+            // attack fix). Producers MUST send X-Jarvis-Hmac +
+            // X-Jarvis-Timestamp + X-Jarvis-Nonce.
+            val hmac = jarvis.tutor.GatewayInbound.HmacHeaders(
+                method = "POST",
+                path = "/api/v1/gateway/inbound",
+                timestamp = call.request.headers["X-Jarvis-Timestamp"],
+                nonce = call.request.headers["X-Jarvis-Nonce"],
+                signature = call.request.headers["X-Jarvis-Hmac"],
+                body = rawBytes,
+            )
             val pre = jarvis.tutor.GatewayInbound.preflight(
                 channel = req.channel,
                 fromUser = req.fromUser,
-                providedToken = token,
                 hmacHeaders = hmac,
             )
             if (pre is jarvis.tutor.GatewayInbound.Result.Err) {

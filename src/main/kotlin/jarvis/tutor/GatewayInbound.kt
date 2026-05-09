@@ -50,56 +50,55 @@ object GatewayInbound {
         data class Err(val httpStatus: Int, val reason: String) : Result()
     }
 
-    /** Process-wide nonce cache for replay defense (council R1 fix
-     *  2026-05-09: gateway HMAC was constant-time-equal of bare token;
-     *  now mirrors DaemonAuth.verify with method+path+ts+nonce+body
-     *  binding). Same-process scope is fine for single-VPS deploy. */
+    /** Process-wide nonce cache for replay defense. Same-process scope
+     *  is fine for single-VPS deploy. */
     private val nonces = NonceCache(capacity = 4096)
 
-    /** Pre-flight check applied to every inbound request. Caller
-     *  proceeds with the LLM round-trip only when this returns Ok.
+    /**
+     * Pre-flight check applied to every inbound request. Caller
+     * proceeds with the LLM round-trip only when this returns Ok.
      *
-     *  When [hmacHeaders] is non-null, full HMAC verification runs:
-     *  signature = hex(HMAC-SHA256(secret, METHOD\tPATH\tTS\tNONCE\tBODY_SHA256_HEX))
-     *  with ±30s skew tolerance and nonce replay defense.
+     * Verification: HMAC-SHA256 over canonical string
+     *   METHOD\tPATH\tTS_MILLIS\tNONCE\tBODY_SHA256_HEX
+     * with ±30s skew tolerance and nonce replay defense. Producer
+     * must send three headers — X-Jarvis-Timestamp, X-Jarvis-Nonce,
+     * X-Jarvis-Hmac — bound to the raw body bytes.
      *
-     *  When [hmacHeaders] is null, falls back to legacy bearer-style
-     *  X-Jarvis-Gateway-Token compare (transitional). New producers
-     *  should always send hmacHeaders. */
+     * **Council R2 fix 2026-05-09: bearer fallback REMOVED** — the
+     * legacy `X-Jarvis-Gateway-Token` path shared the HMAC secret,
+     * letting an attacker with the secret omit X-Jarvis-Hmac to
+     * bypass replay/body/method binding entirely (downgrade attack).
+     * Only HMAC headers accepted now.
+     *
+     * **Nonce requirement:** producer MUST send a fresh, unguessable
+     * nonce per request. Recommended: 32+ hex chars from a CSPRNG, or
+     * UUIDv4. Any string passes the parser, but the NonceCache rejects
+     * duplicates within its 4096-entry LRU window.
+     */
     fun preflight(
         channel: String,
         fromUser: String,
-        providedToken: String?,
+        hmacHeaders: HmacHeaders,
         now: Instant = Instant.now(),
-        hmacHeaders: HmacHeaders? = null,
     ): Result {
         if (!isEnabled()) return Result.Err(503, "gateway disabled (JARVIS_GATEWAY_ENABLED unset)")
         if (isKilled()) return Result.Err(503, "gateway kill switch active")
         val secret = System.getenv("JARVIS_GATEWAY_SECRET")?.trim().orEmpty()
         if (secret.isEmpty()) return Result.Err(503, "gateway secret not configured")
 
-        if (hmacHeaders != null) {
-            val r = jarvis.tutor.DaemonAuth.verify(
-                secret = secret.toByteArray(),
-                method = hmacHeaders.method,
-                path = hmacHeaders.path,
-                timestampMillisRaw = hmacHeaders.timestamp,
-                nonce = hmacHeaders.nonce,
-                body = hmacHeaders.body,
-                signature = hmacHeaders.signature,
-                nonces = nonces,
-                now = now,
-            )
-            if (r is jarvis.tutor.DaemonAuth.Result.Fail) {
-                return Result.Err(401, "gateway HMAC ${r.kind.name}: ${r.reason}")
-            }
-        } else {
-            // Legacy bearer-style fallback (deprecated). Producers should
-            // upgrade to HMAC headers ASAP; this path stays for one
-            // transitional release.
-            if (providedToken.isNullOrBlank() || !constantTimeEquals(providedToken, secret)) {
-                return Result.Err(401, "missing or invalid X-Jarvis-Gateway-Token")
-            }
+        val r = jarvis.tutor.DaemonAuth.verify(
+            secret = secret.toByteArray(),
+            method = hmacHeaders.method,
+            path = hmacHeaders.path,
+            timestampMillisRaw = hmacHeaders.timestamp,
+            nonce = hmacHeaders.nonce,
+            body = hmacHeaders.body,
+            signature = hmacHeaders.signature,
+            nonces = nonces,
+            now = now,
+        )
+        if (r is jarvis.tutor.DaemonAuth.Result.Fail) {
+            return Result.Err(401, "gateway HMAC ${r.kind.name}: ${r.reason}")
         }
 
         if (channel.isBlank() || fromUser.isBlank()) {
@@ -158,12 +157,8 @@ object GatewayInbound {
     }
 
     /** Test hook — wipe rate buckets between tests. */
-    internal fun resetForTests() { rateBuckets.clear() }
-
-    private fun constantTimeEquals(a: String, b: String): Boolean {
-        if (a.length != b.length) return false
-        var diff = 0
-        for (i in a.indices) diff = diff or (a[i].code xor b[i].code)
-        return diff == 0
+    internal fun resetForTests() {
+        rateBuckets.clear()
+        nonces.let { /* NonceCache has no public reset; tests use unique nonces */ }
     }
 }
