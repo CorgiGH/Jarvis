@@ -104,18 +104,30 @@ class OpenRouterChatLlm(
         return postChat(payload)
     }
 
+    /**
+     * Reply from a tool-using completion. [message] is the assistant
+     * message JsonObject (caller checks for `tool_calls` to decide whether
+     * to dispatch or treat as final text). [model] is the actually-used
+     * model returned by OR's edge router — important for callers that
+     * want to PIN the same model across multiple tool rounds (Risk
+     * Analyst HIGH risk in council R5: mid-loop swap with tool-call
+     * history shaped by a different model's dialect).
+     */
+    @Serializable
+    data class ToolCallReply(val message: JsonObject, val model: String)
+
     /** Tool-using completion. Caller passes [tools] (already in OpenAI
      *  function-calling JSON shape) and pre-built [messages] (which may
      *  include prior tool_calls + tool_result entries). Returns the
-     *  full message JsonObject so the caller can detect tool_calls vs
-     *  final text. */
+     *  assistant message + actually-used model so the caller can detect
+     *  tool_calls vs final text AND pin the model for subsequent rounds. */
     suspend fun completeWithTools(
         messages: JsonArray,
         tools: JsonArray,
         maxTokens: Int = 1500,
         toolChoice: String = "auto",
         modelOverride: String? = null,
-    ): JsonObject {
+    ): ToolCallReply {
         val payload = buildJsonObject {
             putModelField(modelOverride)
             put("max_tokens", maxTokens)
@@ -130,7 +142,12 @@ class OpenRouterChatLlm(
         val parsed = resp.body<JsonObject>()
         val choices = parsed["choices"] as? JsonArray ?: error("no choices in reply")
         val firstChoice = choices.firstOrNull() as? JsonObject ?: error("empty choices")
-        return firstChoice["message"] as? JsonObject ?: error("no message in choice")
+        val message = firstChoice["message"] as? JsonObject ?: error("no message in choice")
+        val actualModel = (parsed["model"] as? JsonPrimitive)?.contentOrNull
+            ?.takeIf { it.isNotBlank() }
+            ?: modelOverride
+            ?: defaultModel
+        return ToolCallReply(message = message, model = actualModel)
     }
 
     private suspend fun postChat(payload: JsonObject): Pair<String, String> {

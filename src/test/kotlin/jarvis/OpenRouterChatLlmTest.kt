@@ -240,4 +240,36 @@ class OpenRouterChatLlmTest {
         )
         assertNull(body["models"], "modelOverride present ⇒ no `models:` array")
     }
+
+    @Test
+    fun completeWithToolsReturnsActualModel() = runBlocking {
+        // OR routed past primary (404 or 429) and served from fallback-2.
+        handlerRef.set(HttpHandler { exchange ->
+            val body = """{"model":"fallback-2","choices":[{"index":0,"message":{"role":"assistant","content":"served"},"finish_reason":"stop"}]}"""
+            exchange.responseHeaders.add("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, body.toByteArray().size.toLong())
+            exchange.responseBody.use { it.write(body.toByteArray()) }
+        })
+        val llm = OpenRouterChatLlm(
+            apiKey = "sk-test",
+            defaultModel = "primary/model",
+            baseUrl = baseUrl,
+            fallbackModels = listOf("fallback-1", "fallback-2"),
+        )
+        val reply = llm.use {
+            val msgArr = buildJsonArray {
+                add(buildJsonObject { put("role", "user"); put("content", "ping") })
+            }
+            it.completeWithTools(messages = msgArr, tools = buildJsonArray { })
+        }
+        assertEquals(
+            "fallback-2",
+            reply.model,
+            "ToolCallReply.model must reflect OR-edge-routed model so caller can pin for next round",
+        )
+        assertEquals(
+            "served",
+            (reply.message["content"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull,
+        )
+    }
 }

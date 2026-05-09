@@ -85,6 +85,13 @@ class JarvisToolset(
 
         var rounds = 0
         var lastModel = ""
+        // Pinned model for the rest of this tool loop. Risk Analyst council
+        // R5 HIGH: round 1 may land on model A and round 2 on model B because
+        // OR's `models:` array routes around 404/429 — but the conversation
+        // history then includes A's `assistant.tool_calls` dialect. Pin once
+        // we know which model OR picked for round 1, and force every later
+        // round at the same model.
+        var pinnedModel: String? = null
         while (true) {
             val toolsToOffer = if (rounds < maxToolRounds) effectiveTools else buildJsonArray {}
             val message = if (toolsToOffer.isEmpty()) {
@@ -97,11 +104,15 @@ class JarvisToolset(
                     put("role", "assistant"); put("content", text)
                 }
             } else {
-                llm.completeWithTools(
+                val reply = llm.completeWithTools(
                     messages = JsonArray(messages),
                     tools = toolsToOffer,
                     maxTokens = 1500,
-                ).also { lastModel = "openrouter-tools" }
+                    modelOverride = pinnedModel,
+                )
+                if (pinnedModel == null) pinnedModel = reply.model
+                lastModel = reply.model
+                reply.message
             }
             val toolCalls = message["tool_calls"] as? JsonArray
             val content = (message["content"] as? JsonPrimitive)?.contentOrNull.orEmpty()
