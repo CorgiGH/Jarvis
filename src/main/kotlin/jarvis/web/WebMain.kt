@@ -494,6 +494,15 @@ internal suspend fun runWeb() {
         // Layer A — tutor SPA bundle + /api/v1/health. Mounts a separate
         // routing block; Ktor merges multiple routing blocks into the same
         // engine, so this composes with the routes above.
+        //
+        // Bootstrap order matters: installTutorContext() must run BEFORE
+        // installTutorRoutes() so /auth/setup can read TutorContextKey off
+        // application.attributes. Without this, /auth/setup 500s in prod
+        // (the gap Task 21 flagged and Task 25 closes).
+        installTutorContext(
+            dbPath = jarvis.Config.tutorDbPath,
+            ledgerDir = java.nio.file.Path.of(jarvis.Config.tutorLedgerDir),
+        )
         installTutorRoutes()
     }.start(wait = true)
 }

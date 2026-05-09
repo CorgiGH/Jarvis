@@ -5,9 +5,25 @@ import io.ktor.server.application.*
 import io.ktor.server.http.content.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import jarvis.tutor.AuditLinesTable
+import jarvis.tutor.FsrsCardsTable
+import jarvis.tutor.KnowledgeGapsTable
+import jarvis.tutor.ProviderConfigTable
+import jarvis.tutor.SensorEventsTable
 import jarvis.tutor.SessionRepo
+import jarvis.tutor.SessionsTable
+import jarvis.tutor.TasksTable
 import jarvis.tutor.TokenRepo
+import jarvis.tutor.TokensTable
+import jarvis.tutor.TrustGrantsTable
+import jarvis.tutor.TutorContext
 import jarvis.tutor.TutorContextKey
+import jarvis.tutor.TutorDb
+import jarvis.tutor.UsersTable
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.transactions.transaction
+import java.nio.file.Files
+import java.nio.file.Path
 import java.security.SecureRandom
 
 private val rng = SecureRandom()
@@ -95,4 +111,44 @@ fun Application.installTutorRoutes() {
             call.respondRedirect("/tutor/")
         }
     }
+}
+
+/**
+ * Wires the Tutor Layer A persistence + ledger context onto the running
+ * Application. Closes the prod gap from Task 21: without this, /auth/setup
+ * 500s because TutorContextKey is missing from application.attributes.
+ *
+ * Side effects:
+ *  - Ensures [ledgerDir] exists.
+ *  - Ensures the parent directory of [dbPath] exists.
+ *  - Opens a SQLite connection via [TutorDb.connect] (sets WAL + foreign_keys).
+ *  - Runs SchemaUtils.create() for every Layer A table — idempotent, will
+ *    no-op if the schema is already present (acceptance criterion: safe to
+ *    call on a hot DB across restarts).
+ *  - Stores the resulting [TutorContext] under [TutorContextKey] so route
+ *    handlers can pull it off `application.attributes`.
+ *
+ * Must be called from inside an `application { ... }` / module block BEFORE
+ * [installTutorRoutes], which is what reads the attribute.
+ */
+fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
+    Files.createDirectories(ledgerDir)
+    val parent = Path.of(dbPath).parent ?: Path.of(".")
+    Files.createDirectories(parent)
+    val db = TutorDb.connect(dbPath)
+    transaction(db) {
+        SchemaUtils.create(
+            UsersTable,
+            TokensTable,
+            SessionsTable,
+            TasksTable,
+            SensorEventsTable,
+            TrustGrantsTable,
+            AuditLinesTable,
+            KnowledgeGapsTable,
+            FsrsCardsTable,
+            ProviderConfigTable,
+        )
+    }
+    attributes.put(TutorContextKey, TutorContext(db, ledgerDir))
 }
