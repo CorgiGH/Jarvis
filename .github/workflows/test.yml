@@ -26,7 +26,17 @@ jobs:
         with:
           gradle-version: "8.10"
       - name: Gradle :test (root project only — android subproject skipped)
-        run: gradle --no-daemon :test --stacktrace
+        run: gradle --no-daemon :test --stacktrace --info
+      - name: Print failing test XML on failure
+        if: failure()
+        run: |
+          echo "=== Failing test details ==="
+          for f in build/test-results/test/*.xml; do
+            if grep -qE 'failures="[1-9]|errors="[1-9]' "$f"; then
+              echo "--- $f ---"
+              cat "$f"
+            fi
+          done
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
