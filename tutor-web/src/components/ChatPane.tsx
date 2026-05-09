@@ -98,9 +98,9 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         )}
       </div>
       <ScreenshotCapture taskId={taskId} onResult={onScreenshot} />
-      <div className="flex-1 overflow-auto p-4 space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-3">
         {messages.map((m, i) => (
-          <div key={i}>
+          <div key={i} className="min-w-0">
             <div className={`inline-block px-2 py-0.5 text-xs font-bold tracking-widest ${
               m.role === "you" ? "bg-yellow-300 text-black"
               : m.role === "sensor" ? "bg-blue-200 text-black"
@@ -109,8 +109,8 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
               {m.role.toUpperCase()}
             </div>
             {m.role === "jarvis"
-              ? <MathText text={m.text} className="text-sm leading-relaxed mt-1" />
-              : <div className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{m.text}</div>}
+              ? <MathText text={m.text} className="text-sm leading-relaxed mt-1 break-words" />
+              : <div className="text-sm leading-relaxed mt-1 whitespace-pre-wrap break-words">{m.text}</div>}
             {m.edits?.map(edit => (
               <SuggestedEditCard
                 key={edit.id}

@@ -13,12 +13,22 @@ export function MathText({ text, className }: { text: string; className?: string
     <div className={className} data-testid="math-text">
       {segments.map((seg, i) =>
         seg.type === "text" ? (
-          <span key={i} style={{ whiteSpace: "pre-wrap" }}>{seg.text}</span>
+          <span key={i} style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{seg.text}</span>
+        ) : seg.display ? (
+          // Display math can be very wide. Allow horizontal scroll within the
+          // block so the parent column doesn't grow beyond viewport width.
+          <span
+            key={i}
+            data-testid="math-display"
+            className="block overflow-x-auto max-w-full my-1"
+            dangerouslySetInnerHTML={{ __html: renderMath(seg.tex, true) }}
+          />
         ) : (
           <span
             key={i}
-            data-testid={seg.display ? "math-display" : "math-inline"}
-            dangerouslySetInnerHTML={{ __html: renderMath(seg.tex, seg.display) }}
+            data-testid="math-inline"
+            className="inline-block max-w-full overflow-x-auto align-middle"
+            dangerouslySetInnerHTML={{ __html: renderMath(seg.tex, false) }}
           />
         ),
       )}
