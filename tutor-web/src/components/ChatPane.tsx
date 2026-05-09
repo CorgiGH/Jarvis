@@ -22,8 +22,16 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  // Layer B0 read-only mode latches on the most recent screenshot's
+  // server-side classification. Until the next screenshot reclassifies
+  // (presumably user is back in their editor), suggested-edit APPLY
+  // stays disabled. This is a soft latch — REJECT still works.
+  const [readOnly, setReadOnly] = useState(false);
+  const [readOnlyReason, setReadOnlyReason] = useState<string>("");
 
   function onScreenshot(e: ScreenshotEvent) {
+    setReadOnly(Boolean(e.readOnlyMode));
+    setReadOnlyReason(e.readOnlyReason ?? "");
     const x = e.extracted;
     const lines: string[] = [`screenshot #${e.eventSeq}`];
     if (x.filePath) lines.push(`  file: ${x.filePath}`);
@@ -67,8 +75,15 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
 
   return (
     <div data-testid="chat-pane" className="h-full flex flex-col bg-white font-mono">
-      <div className="bg-black text-yellow-300 px-4 py-2 text-sm tracking-widest font-bold">
-        JARVIS · TASK {taskId}
+      <div className="bg-black text-yellow-300 px-4 py-2 text-sm tracking-widest font-bold flex items-center justify-between">
+        <span>JARVIS · TASK {taskId}</span>
+        {readOnly && (
+          <span data-testid="read-only-badge"
+                className="bg-red-600 text-white px-2 py-0.5 text-xs"
+                title={readOnlyReason}>
+            READ-ONLY MODE
+          </span>
+        )}
       </div>
       <ScreenshotCapture taskId={taskId} onResult={onScreenshot} />
       <div className="flex-1 overflow-auto p-4 space-y-3">
@@ -83,7 +98,12 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
             </div>
             <div className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{m.text}</div>
             {m.edits?.map(edit => (
-              <SuggestedEditCard key={edit.id} edit={edit} />
+              <SuggestedEditCard
+                key={edit.id}
+                edit={edit}
+                readOnly={readOnly}
+                readOnlyReason={readOnlyReason}
+              />
             ))}
             {m.gaps?.map(gap => (
               <KnowledgeGapCard

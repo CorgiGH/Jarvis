@@ -11,6 +11,11 @@ export interface ScreenshotEvent {
     error: string | null;
     rawReply: string;
   };
+  /** Layer B0 read-only mode: server-side classifier flagged this
+   *  capture as non-code-editor (browser tab, IDE-less window, etc).
+   *  Effectors should be auto-disabled while true. */
+  readOnlyMode?: boolean;
+  readOnlyReason?: string;
 }
 
 export interface ScreenshotCaptureProps {

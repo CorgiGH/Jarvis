@@ -4,6 +4,11 @@ import { applyClipboard, type SuggestedEdit } from "../lib/suggestedEdit";
 export interface SuggestedEditCardProps {
   edit: SuggestedEdit;
   onStatusChange?: (id: string, status: SuggestedEdit["status"]) => void;
+  /** Layer B0 — when true, APPLY/COPY is disabled with a tooltip
+   *  pointing at the read-only badge. REJECT remains available so
+   *  the user can dismiss without enabling effectors. */
+  readOnly?: boolean;
+  readOnlyReason?: string;
 }
 
 /**
@@ -14,12 +19,18 @@ export interface SuggestedEditCardProps {
  * never type into the user's editor in B0. Daemon path (B1) will add
  * APPLY → keystroke injection but only behind an explicit trust grant.
  */
-export function SuggestedEditCard({ edit, onStatusChange }: SuggestedEditCardProps) {
+export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReason }: SuggestedEditCardProps) {
   const [status, setStatus] = useState(edit.status);
   const [error, setError] = useState<string | null>(null);
 
   async function apply() {
     setError(null);
+    if (readOnly) {
+      setStatus("failed");
+      setError(`READ-ONLY MODE — ${readOnlyReason ?? "effectors disabled"}`);
+      onStatusChange?.(edit.id, "failed");
+      return;
+    }
     try {
       if (edit.type === "clipboard") {
         await applyClipboard(edit);
@@ -68,8 +79,15 @@ export function SuggestedEditCard({ edit, onStatusChange }: SuggestedEditCardPro
       )}
       {status === "pending" && (
         <div className="flex gap-2 mt-2">
-          <button onClick={apply} data-testid="suggested-edit-apply"
-                  className="text-xs font-bold tracking-widest bg-black text-yellow-300 px-3 py-1">
+          <button
+            onClick={apply}
+            data-testid="suggested-edit-apply"
+            disabled={readOnly}
+            title={readOnly ? `READ-ONLY MODE: ${readOnlyReason}` : undefined}
+            className={`text-xs font-bold tracking-widest px-3 py-1 ${
+              readOnly ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-black text-yellow-300"
+            }`}
+          >
             {edit.type === "clipboard" ? "COPY" : "APPLY"}
           </button>
           <button onClick={reject} data-testid="suggested-edit-reject"

@@ -187,6 +187,11 @@ fun Application.installTutorRoutes() {
                     return@csrfProtect
                 }
 
+                // Server-side source classification (council R3 fix #3):
+                // never trust client-asserted source field. The same
+                // ScreenshotExtraction the LLM produced is sufficient
+                // signal — file path / raw OCR drives the verdict.
+                val classification = jarvis.tutor.SourceClassifier.classify(extraction)
                 val event = SensorRepo(ctx.db).append(
                     userId = userId,
                     sensorId = req.sensorId ?: "screenshot-default",
@@ -202,6 +207,8 @@ fun Application.installTutorRoutes() {
                     ScreenshotResponse(
                         eventSeq = event.eventSeq,
                         extracted = extraction,
+                        readOnlyMode = classification.mode == jarvis.tutor.SourceClassifier.Mode.READ_ONLY,
+                        readOnlyReason = classification.reason,
                     ),
                 )
             }
@@ -225,6 +232,10 @@ private data class ScreenshotRequest(
 private data class ScreenshotResponse(
     val eventSeq: Long,
     val extracted: jarvis.tutor.ScreenshotExtraction,
+    /** Layer B0 — server-side classification. true = effectors auto-
+     *  disabled in the UI per spec §4 item 5. */
+    val readOnlyMode: Boolean = false,
+    val readOnlyReason: String = "",
 )
 
 /**

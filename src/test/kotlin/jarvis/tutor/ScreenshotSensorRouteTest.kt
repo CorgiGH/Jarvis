@@ -96,10 +96,35 @@ class ScreenshotSensorRouteTest {
         assertTrue(body.contains("\"filePath\":\"src/foo.kt\""), "extracted file path: $body")
         assertTrue(body.contains("\"line\":10"))
         assertTrue(body.contains("\"eventSeq\":1"))
+        // Source classifier verdict on a .kt path = ALLOWED.
+        assertTrue(body.contains("\"readOnlyMode\":false"), "kotlin file → ALLOWED: $body")
 
         // Vision LLM was actually invoked with the extraction prompt.
         assertEquals(1, stub.capturedPrompts.size)
         assertTrue(stub.capturedPrompts[0].contains("file_path"))
+    }
+
+    @Test
+    fun setsReadOnlyModeWhenSourceIsBrowserTab(@TempDir tmp: Path) = testApplication {
+        val stub = StubVisionLlm(
+            """{"file_path":"https://stackoverflow.com/q/123","cursor":null,"console_output":null,"error":null}""",
+        )
+        var ctx: TutorContext? = null
+        application {
+            installTutorWithVision(tmp, stub)
+            ctx = attributes[TutorContextKey]
+        }
+        startApplication()
+        val (_, sid, csrf) = seedSession(ctx!!)
+        val r = client.post("/api/v1/sensor/screenshot") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"imageBase64":"$tinyPng"}""")
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        assertTrue(body.contains("\"readOnlyMode\":true"), "stackoverflow URL → READ_ONLY: $body")
+        assertTrue(body.contains("stackoverflow"), "reason includes host: $body")
     }
 
     @Test

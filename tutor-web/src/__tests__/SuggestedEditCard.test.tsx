@@ -79,6 +79,22 @@ test("clipboard write failure flips status to failed + surfaces error", async ()
   });
 });
 
+test("readOnly disables APPLY with reason in error + tooltip; REJECT still works", async () => {
+  const onChange = vi.fn();
+  render(<SuggestedEditCard
+    edit={baseEdit}
+    onStatusChange={onChange}
+    readOnly
+    readOnlyReason="browser tab: stackoverflow.com"
+  />);
+  const apply = screen.getByTestId("suggested-edit-apply");
+  expect(apply).toBeDisabled();
+  expect(apply.getAttribute("title")).toMatch(/stackoverflow/);
+  // REJECT remains operable.
+  fireEvent.click(screen.getByTestId("suggested-edit-reject"));
+  expect(onChange).toHaveBeenCalledWith("e1", "rejected");
+});
+
 test("truncates long payloads in preview", () => {
   const long = "x".repeat(500);
   render(<SuggestedEditCard edit={{ ...baseEdit, payload: long }} />);
