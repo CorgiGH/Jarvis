@@ -91,7 +91,8 @@ internal suspend fun runWeb() {
             if (path.startsWith("/api/v1/sensor/") ||
                 path.startsWith("/api/v1/effector/") ||
                 path.startsWith("/api/v1/grants") ||
-                path.startsWith("/api/v1/tasks")) return@intercept
+                path.startsWith("/api/v1/tasks") ||
+                path == "/api/v1/tutor/auto-session") return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]
@@ -731,6 +732,7 @@ private val INDEX_HTML = """
 <body>
   <h1>jarvis</h1>
   <div class="links">
+    <a href="/tutor/" style="background:#000;color:#ffd700;padding:4px 10px;text-decoration:none;font-weight:bold;letter-spacing:.15em;border:2px solid #ffd700;">▸ TUTOR</a>
     <a href="/wiki" target="_blank">wiki</a>
     <a href="/activity" target="_blank">activity (7d)</a>
     <a href="/apk">apk</a>

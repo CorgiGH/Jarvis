@@ -149,6 +149,47 @@ fun Application.installTutorRoutes() {
             call.respondRedirect("/tutor/")
         }
 
+        // Single-user auto-session: SPA hits this on mount. If session
+        // cookie is missing OR invalid, mint a fresh session bound to
+        // the canonical "owner" user + set the matching csrf cookie.
+        // Idempotent — repeated calls with a valid session no-op.
+        // The legacy bearer JARVIS_AUTH_TOKEN cookie still gates this
+        // route (interceptor allowlist exempts /api/v1/tutor/auto-session
+        // so logged-in users via /login can bootstrap their tutor side).
+        get("/api/v1/tutor/auto-session") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val existingSid = call.request.cookies["jarvis_session"]
+            val existingCsrf = call.request.cookies["csrf"]
+            val valid = existingSid?.let { SessionRepo(ctx.db).findUserId(it) }
+            if (valid != null && !existingCsrf.isNullOrBlank()) {
+                // Already set up — return current state without rotating.
+                call.respond(HttpStatusCode.OK, """{"ok":true,"userId":"$valid","csrf":"$existingCsrf"}""")
+                return@get
+            }
+            // Mint new session for owner.
+            val sid = SessionRepo(ctx.db).create("owner", ttlSeconds = 60L * 60 * 24 * 14)
+            val csrf = ByteArray(16).also { rng.nextBytes(it) }
+                .joinToString("") { "%02x".format(it) }
+            call.response.cookies.append(
+                Cookie(
+                    name = "jarvis_session", value = sid,
+                    httpOnly = true, secure = true,
+                    extensions = mapOf("SameSite" to "Strict"),
+                    path = "/", maxAge = 60 * 60 * 24 * 14,
+                ),
+            )
+            call.response.cookies.append(
+                Cookie(
+                    name = "csrf", value = csrf,
+                    httpOnly = false, secure = true,
+                    extensions = mapOf("SameSite" to "Strict"),
+                    path = "/", maxAge = 60 * 60 * 24 * 14,
+                ),
+            )
+            call.respond(HttpStatusCode.OK, """{"ok":true,"userId":"owner","csrf":"$csrf"}""")
+        }
+
         // Layer B Task 1 — vision-LLM screenshot sensor.
         //
         // Body: JSON {imageBase64: string, mediaType?: string, taskId?: string,
@@ -583,6 +624,25 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             EffectorAttemptsTable,
         )
     }
+    // Single-user owner row (idempotent). The tutor surface is
+    // single-tenant; one User row backs the auto-session route.
+    if (jarvis.tutor.UserRepo(db).findById("owner") == null) {
+        try {
+            val now = java.time.Instant.now()
+            jarvis.tutor.UserRepo(db).insert(
+                jarvis.tutor.User(
+                    id = "owner",
+                    name = "owner",
+                    scope = jarvis.tutor.UserScope.OWNER,
+                    createdAt = now,
+                    lastSeenAt = now,
+                ),
+            )
+        } catch (e: Exception) {
+            System.err.println("[installTutorContext] WARN owner insert failed: ${e.message?.take(160)}")
+        }
+    }
+
     // Layer B: resolve vision LLM from env (OPENROUTER_API_KEY). Null when
     // unset — sensor route returns 503 with a helpful message rather than
     // 500ing on a NullPointerException.

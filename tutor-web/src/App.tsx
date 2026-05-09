@@ -6,11 +6,29 @@ import { jarvisFetch } from "./lib/api";
 
 const LAST_TASK_KEY = "jarvis.lastTaskId";
 
+/** Bootstrap a tutor session via /api/v1/tutor/auto-session — sets
+ *  jarvis_session + csrf cookies if missing. Idempotent. Without
+ *  this, every POST to /api/v1/* would 403 on CSRF check or 401 on
+ *  missing session. */
+async function ensureTutorSession(): Promise<void> {
+  try {
+    const csrf = document.cookie.match(/(?:^|;\s*)csrf=([^;]+)/)?.[1];
+    if (csrf) return;
+    await fetch("/api/v1/tutor/auto-session", { credentials: "include" });
+  } catch (_) {}
+}
+
 export function App() {
   const [params, setParams] = useSearchParams();
   const explicitTaskId = params.get("taskId");
+  const [sessionReady, setSessionReady] = useState(false);
 
-  // Boot: if no taskId in URL, try the last-used taskId from
+  // Boot 1: ensure tutor session cookies exist before any POSTs run.
+  useEffect(() => {
+    ensureTutorSession().finally(() => setSessionReady(true));
+  }, []);
+
+  // Boot 2: if no taskId in URL, try the last-used taskId from
   // localStorage. Saves the user one click on every reload.
   useEffect(() => {
     if (explicitTaskId) {
@@ -62,9 +80,11 @@ export function App() {
         </nav>
       </header>
       <main className="flex-1 min-h-0 overflow-hidden bg-white">
-        {showQuickStart
-          ? <TaskQuickStart />
-          : <TutorWorkspace pdfUrl="/tutor/test-task.pdf" taskId={taskId} />}
+        {!sessionReady
+          ? <div className="p-6 font-mono text-sm text-black/60">setting up tutor session…</div>
+          : showQuickStart
+            ? <TaskQuickStart />
+            : <TutorWorkspace pdfUrl="/tutor/test-task.pdf" taskId={taskId} />}
       </main>
     </div>
   );
