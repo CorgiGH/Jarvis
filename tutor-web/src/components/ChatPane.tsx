@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { jarvisFetch } from "../lib/api";
 import { ScreenshotCapture, type ScreenshotEvent } from "./ScreenshotCapture";
+import { SuggestedEditCard } from "./SuggestedEditCard";
+import { parseSuggestedEdits, type SuggestedEdit } from "../lib/suggestedEdit";
 
-interface Msg { role: "you" | "jarvis" | "sensor"; text: string; }
+interface Msg {
+  role: "you" | "jarvis" | "sensor";
+  text: string;
+  edits?: SuggestedEdit[];
+}
 
 export function ChatPane({ taskId }: { taskId: string }) {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -32,7 +38,9 @@ export function ChatPane({ taskId }: { taskId: string }) {
         body: JSON.stringify({ taskId, message: userMsg }),
       });
       const data = await res.json();
-      setMessages(m => [...m, { role: "jarvis", text: data.reply ?? "(no reply)" }]);
+      const raw = data.reply ?? "(no reply)";
+      const { body, edits } = parseSuggestedEdits(raw);
+      setMessages(m => [...m, { role: "jarvis", text: body, edits }]);
     } catch (e) {
       setMessages(m => [...m, { role: "jarvis", text: `(error: ${(e as Error).message})` }]);
     } finally {
@@ -57,6 +65,9 @@ export function ChatPane({ taskId }: { taskId: string }) {
               {m.role.toUpperCase()}
             </div>
             <div className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{m.text}</div>
+            {m.edits?.map(edit => (
+              <SuggestedEditCard key={edit.id} edit={edit} />
+            ))}
           </div>
         ))}
       </div>
