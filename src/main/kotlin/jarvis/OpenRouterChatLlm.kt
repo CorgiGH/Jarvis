@@ -8,16 +8,19 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -44,12 +47,32 @@ import kotlinx.serialization.json.put
  * and feeding `role:"tool"` results back. The text-only [Llm] path
  * (no tools) just returns the assistant content as a String pair.
  */
+/**
+ * Parse the comma-separated `JARVIS_OPENROUTER_FALLBACK_MODELS` env var
+ * into a list of model IDs. Used by [OpenRouterChatLlm]'s constructor to
+ * populate its server-side fallback chain. Whitespace is trimmed per
+ * element; blank entries are dropped. Unset / empty ⇒ empty list ⇒ no
+ * `models:` array is sent (status quo, single-model `model:` field only).
+ *
+ * Validation: invalid model IDs are NOT pre-flighted — they surface as
+ * HTTP 400 from OpenRouter on first request. See the design doc at
+ * docs/superpowers/specs/2026-05-09-openrouter-fallback-chain-design.md
+ * for the rationale + V2 mitigation.
+ */
+private fun parseFallbackModels(): List<String> =
+    System.getenv("JARVIS_OPENROUTER_FALLBACK_MODELS")
+        ?.split(',')
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?: emptyList()
+
 class OpenRouterChatLlm(
     private val apiKey: String = resolveOpenRouterKey()
         ?: error("OPENROUTER_API_KEY required for OpenRouterChatLlm"),
     private val defaultModel: String = System.getenv("JARVIS_OPENROUTER_MODEL")
         ?: "meta-llama/llama-3.3-70b-instruct:free",
     private val baseUrl: String = Config.OPENROUTER_BASE_URL,
+    private val fallbackModels: List<String> = parseFallbackModels(),
 ) : Llm {
 
     private val client = HttpClient(CIO) {
@@ -67,7 +90,7 @@ class OpenRouterChatLlm(
         maxTokens: Int,
     ): Pair<String, String> {
         val payload = buildJsonObject {
-            put("model", defaultModel)
+            putModelField(modelOverride = null)
             put("max_tokens", maxTokens)
             put("messages", buildJsonArray {
                 for (m in messages) {
@@ -94,19 +117,13 @@ class OpenRouterChatLlm(
         modelOverride: String? = null,
     ): JsonObject {
         val payload = buildJsonObject {
-            put("model", modelOverride ?: defaultModel)
+            putModelField(modelOverride)
             put("max_tokens", maxTokens)
             put("messages", messages)
             put("tools", tools)
             put("tool_choice", JsonPrimitive(toolChoice))
         }
-        val resp = client.post("${baseUrl.trimEnd('/')}/chat/completions") {
-            header(HttpHeaders.Authorization, "Bearer $apiKey")
-            header("HTTP-Referer", "https://github.com/CorgiGH/Jarvis")
-            header("X-Title", "jarvis-kotlin tutor")
-            contentType(ContentType.Application.Json)
-            setBody(payload)
-        }
+        val resp = postWithRetry(payload, titleHeader = "jarvis-kotlin tutor")
         if (!resp.status.isSuccess()) {
             error("openrouter HTTP ${resp.status.value}: ${resp.bodyAsText().take(400)}")
         }
@@ -117,19 +134,64 @@ class OpenRouterChatLlm(
     }
 
     private suspend fun postChat(payload: JsonObject): Pair<String, String> {
-        val resp = client.post("${baseUrl.trimEnd('/')}/chat/completions") {
-            header(HttpHeaders.Authorization, "Bearer $apiKey")
-            header("HTTP-Referer", "https://github.com/CorgiGH/Jarvis")
-            header("X-Title", "jarvis-kotlin")
-            contentType(ContentType.Application.Json)
-            setBody(payload)
-        }
+        val resp = postWithRetry(payload, titleHeader = "jarvis-kotlin")
         if (!resp.status.isSuccess()) {
             error("openrouter HTTP ${resp.status.value}: ${resp.bodyAsText().take(400)}")
         }
         val parsed: ChatResponse = resp.body()
         val choice = parsed.choices.firstOrNull() ?: error("openrouter returned no choices")
         return choice.message.content to (parsed.model.ifBlank { defaultModel })
+    }
+
+    /**
+     * Pick which model field to send. Per the design doc, `modelOverride`
+     * takes precedence (caller is explicitly pinning); otherwise an
+     * empty fallback chain ⇒ single `model:` field; non-empty chain ⇒
+     * `models: [primary, ...fallbacks]` for OR-edge server-side routing.
+     */
+    private fun JsonObjectBuilder.putModelField(modelOverride: String?) {
+        when {
+            modelOverride != null -> put("model", modelOverride)
+            fallbackModels.isEmpty() -> put("model", defaultModel)
+            else -> put("models", buildJsonArray {
+                add(JsonPrimitive(defaultModel))
+                fallbackModels.forEach { add(JsonPrimitive(it)) }
+            })
+        }
+    }
+
+    /**
+     * POST with single retry on transient 429. Honors the upstream
+     * `Retry-After` header up to 5 seconds; longer waits propagate so the
+     * caller's degraded chat path (WebMain.kt's `tutorSurface` short-circuit)
+     * serves the turn instead of blocking the user. 429s without a
+     * `Retry-After` header also propagate without retry — we won't guess
+     * the cooldown.
+     */
+    private suspend fun postWithRetry(
+        payload: JsonObject,
+        titleHeader: String,
+    ): HttpResponse {
+        suspend fun once(): HttpResponse =
+            client.post("${baseUrl.trimEnd('/')}/chat/completions") {
+                header(HttpHeaders.Authorization, "Bearer $apiKey")
+                header("HTTP-Referer", "https://github.com/CorgiGH/Jarvis")
+                header("X-Title", titleHeader)
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+
+        val first = once()
+        if (first.status.value != 429) return first
+
+        val retryAfterSec = first.headers["Retry-After"]?.toIntOrNull() ?: return first
+        if (retryAfterSec <= 0 || retryAfterSec > 5) return first
+
+        System.err.println(
+            "openrouter: 429 with Retry-After ${retryAfterSec}s — sleeping then retrying once",
+        )
+        delay(retryAfterSec.toLong() * 1000)
+        return once()
     }
 
     override fun close() { client.close() }
