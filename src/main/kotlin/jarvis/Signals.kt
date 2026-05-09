@@ -74,6 +74,22 @@ object Signals {
 
     fun readAll(): List<ProactiveSignal> = readAllFrom(Config.signalsFile)
 
+    /** Read rotated-out archive (`.1.gz`) for [file] and parse each line
+     *  with the same JSON contract as live readers. Returns empty when no
+     *  archive exists. Forensic / integration-test path; production hot
+     *  path does not need historical signals. */
+    fun readArchiveOf(file: Path): List<ProactiveSignal> {
+        val out = mutableListOf<ProactiveSignal>()
+        for (line in JsonlRotate.readArchiveLines(file)) {
+            try {
+                val entry = json.decodeFromString(ProactiveSignal.serializer(), line)
+                if (entry.v == 1) out += entry
+            } catch (_: Exception) {
+            }
+        }
+        return out
+    }
+
     fun readAllFrom(file: Path): List<ProactiveSignal> {
         if (!file.exists()) return emptyList()
         val out = mutableListOf<ProactiveSignal>()

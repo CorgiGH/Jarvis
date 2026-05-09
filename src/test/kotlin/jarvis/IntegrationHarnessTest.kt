@@ -88,10 +88,11 @@ class IntegrationHarnessTest {
         assertTrue(done.await(60, TimeUnit.SECONDS), "all writer threads finished")
         executor.shutdownNow()
 
-        // Read primary + archive and assert full survival.
+        // Read primary + archive and assert full survival. Archive is now
+        // gzipped at .1.gz, so parse via JsonlRotate.readArchiveLines and
+        // hand-decode each row through the same Signals JSON serializer.
         val primary = Signals.readAllFrom(signalsFile)
-        val archive = signalsFile.resolveSibling("${signalsFile.fileName}.1")
-        val archived = if (archive.exists()) Signals.readAllFrom(archive) else emptyList()
+        val archived = Signals.readArchiveOf(signalsFile)
         val all = primary + archived
         assertEquals(total, all.size, "every signal survived rotation across writers")
         val ids = all.map { it.id }
