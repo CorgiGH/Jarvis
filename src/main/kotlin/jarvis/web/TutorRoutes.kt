@@ -507,16 +507,34 @@ fun Application.installTutorRoutes() {
                 call.respond(HttpStatusCode.NotFound, "task not found")
                 return@get
             }
-            val pdfPath = ctx.ledgerDir.resolve("task-pdfs").resolve("$id.pdf")
-            if (!java.nio.file.Files.exists(pdfPath)) {
-                call.respond(HttpStatusCode.NotFound,
-                    "no PDF for $id — drop one at ${pdfPath}")
+            // 1. Primary: per-task copy at <ledgerDir>/task-pdfs/<id>.pdf
+            val taskPdfPath = ctx.ledgerDir.resolve("task-pdfs").resolve("$id.pdf")
+            if (java.nio.file.Files.exists(taskPdfPath)) {
+                call.respondBytes(
+                    bytes = java.nio.file.Files.readAllBytes(taskPdfPath),
+                    contentType = io.ktor.http.ContentType.Application.Pdf,
+                )
                 return@get
             }
-            call.respondBytes(
-                bytes = java.nio.file.Files.readAllBytes(pdfPath),
-                contentType = io.ktor.http.ContentType.Application.Pdf,
-            )
+            // 2. Fallback: task.problemRef.path under archival root.
+            //    Presets pre-fill this with a real path so workspaces
+            //    open with content instantly.
+            val refPath = task.problemRef.path.trim()
+            if (refPath.isNotEmpty() && refPath.endsWith(".pdf")) {
+                // Path-sanitize: must resolve UNDER archivalDir (no ../).
+                val archivalRoot = jarvis.Config.archivalDir.toAbsolutePath().normalize()
+                val resolved = archivalRoot.resolve(refPath).normalize().toAbsolutePath()
+                if (resolved.startsWith(archivalRoot) && java.nio.file.Files.exists(resolved)) {
+                    call.respondBytes(
+                        bytes = java.nio.file.Files.readAllBytes(resolved),
+                        contentType = io.ktor.http.ContentType.Application.Pdf,
+                    )
+                    return@get
+                }
+            }
+            call.respond(HttpStatusCode.NotFound,
+                "no PDF for $id — drop one at ${taskPdfPath} OR set task.problemRef.path " +
+                    "to a real archival/*.pdf at task creation")
         }
 
         // Layer B / task-context V0 — task CRUD so user can seed real

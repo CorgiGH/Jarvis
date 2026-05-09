@@ -14,14 +14,24 @@ interface Preset {
   subject: string;
   title: string;
   daysFromNow: number;
+  /** Path under archival/ pointing to a real PDF. Stored as
+   *  task.problemRef.path so /api/v1/tasks/{id}/pdf can serve
+   *  it instantly (no manual scp). Verified present on VPS
+   *  2026-05-09. */
+  problemPath: string;
 }
 
 const PRESETS: Preset[] = [
-  { subject: "PS", title: "Tema A — derivation example", daysFromNow: 12 },
-  { subject: "PA", title: "Tema 5 — dynamic programming", daysFromNow: 9 },
-  { subject: "POO", title: "Lab — class hierarchy refactor", daysFromNow: 5 },
-  { subject: "ALO", title: "Lab — graph traversal", daysFromNow: 7 },
-  { subject: "SO", title: "Lab — process scheduling", daysFromNow: 14 },
+  { subject: "PS",  title: "Tema A — derivation",
+    daysFromNow: 12, problemPath: "_extras/PS/ps_hw/Tema_A.pdf" },
+  { subject: "PA",  title: "Partial 2021",
+    daysFromNow: 9,  problemPath: "_extras/PA/study_guide/source/Subiect partial 2021.pdf" },
+  { subject: "POO", title: "Lecture C1 — intro",
+    daysFromNow: 5,  problemPath: "_extras/POO/courses/poo_c1.pdf" },
+  { subject: "ALO", title: "Seminar 1",
+    daysFromNow: 7,  problemPath: "_extras/ALO/labs/alo_sem1.pdf" },
+  { subject: "SO",  title: "Lecture — Linux intro",
+    daysFromNow: 14, problemPath: "_extras/SO/lectures__OS1.1_Linux-intro_print-ro.pdf" },
 ];
 
 /**
@@ -57,7 +67,13 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
       const deadline = new Date(Date.now() + p.daysFromNow * 86400000).toISOString();
       const r = await jarvisFetch("/api/v1/tasks", {
         method: "POST",
-        body: JSON.stringify({ subject: p.subject, title: p.title, deadline }),
+        body: JSON.stringify({
+          subject: p.subject,
+          title: p.title,
+          deadline,
+          repo: "archival",
+          problemPath: p.problemPath,
+        }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
       const created: TaskView = await r.json();
