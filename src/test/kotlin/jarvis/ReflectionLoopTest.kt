@@ -126,4 +126,21 @@ class ReflectionLoopTest {
         val v = ReflectionLoop.isEnabled()
         assertTrue(v == true || v == false)
     }
+
+    @Test
+    fun quietHoursSuppressReflection(@TempDir tmp: Path) = runBlocking {
+        val file = tmp.resolve("signals.jsonl")
+        // Plenty of importance to cross σ, well past 6h cooldown — would
+        // normally fire. Quiet predicate set to true must veto BEFORE LLM.
+        repeat(4) { i -> Signals.appendTo(file, signal("q$i", i.toLong(), 0.9f)) }
+        val id = ReflectionLoop.reflectSync(
+            FakeLlm(), file, now,
+            nudgeAllowed = { false },
+        )
+        assertNull(id, "quiet/sleeping must suppress reflection")
+        assertTrue(
+            Signals.readAllFrom(file).none { it.kind == "reflection" },
+            "no reflection row written during quiet hours",
+        )
+    }
 }

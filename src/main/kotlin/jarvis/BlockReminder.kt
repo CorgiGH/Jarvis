@@ -60,7 +60,21 @@ object BlockReminder {
         signalsFile: java.nio.file.Path,
         schedule: ScheduleFile,
         now: Instant,
+        // Gate predicate: by default, soft=false so pomodoro pulses + block-
+        // start reminders are suppressed in QuietHours OR when sleeping OR
+        // in the post-wake eat-buffer. Tests inject a custom predicate.
+        // Activity loaded inside the function so callers don't have to
+        // synthesize a presence reading.
+        nudgeAllowed: (Instant) -> Boolean = { instant ->
+            Presence.shouldNudge(Activity.loadEntries(hours = 6), instant, soft = false)
+        },
     ): String? {
+        // 2026-05-09 user feedback: "notifications keep coming in even when
+        // I'm sleeping say from 7 to 12. it keeps spamming me with 'study
+        // this now' but I just woke up and haven't even eaten." Static
+        // QuietHours window doesn't track real wake time. Presence reads
+        // the activity stream and derives sleep / just-woke / awake.
+        if (!nudgeAllowed(now)) return null
         val ldt = LocalDateTime.ofInstant(now, ZONE)
         val today = ldt.toLocalDate().toString()
         val nowTime = ldt.toLocalTime()

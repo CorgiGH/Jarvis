@@ -120,8 +120,20 @@ object ProactiveLoop {
         val effective = currentThreshold(now)
         if (imp < effective) return null
 
-        // 2. Quiet-hours gate (now opt-in via env, default disabled).
-        if (QuietHours.isActive(now)) return null
+        // 2. Presence gate. 2026-05-09 user feedback: static QuietHours
+        //    misses the actual sleep window because user wakes at variable
+        //    times. Presence derives state from /api/activity gaps:
+        //      - SLEEPING (no recent activity)  → suppress all
+        //      - JUST_WOKE (eat-buffer)          → allow soft only
+        //      - AWAKE                            → full cadence
+        //    Soft=true: drift_alert (you're doomscrolling instead of
+        //    studying) is genuinely helpful even during the wake-up
+        //    buffer. ctx-model summary is suppressed though — the
+        //    importance-threshold path is the soft=false case.
+        val softMode = drift != null
+        if (!Presence.shouldNudge(Activity.loadEntries(hours = 6), now, soft = softMode)) {
+            return null
+        }
 
         // 3. Cooldown gate.
         if (!Signals.cooldownElapsedFrom(signalsFile, COOLDOWN, now)) return null

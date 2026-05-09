@@ -58,7 +58,19 @@ object ReflectionLoop {
         client: Llm,
         signalsFile: java.nio.file.Path,
         now: Instant,
+        // Reflection is high-cost (LLM call) AND user-facing (writes a
+        // signal that pushes a notification). Gate hard on Presence: skip
+        // when sleeping OR in just-woke buffer OR inside QuietHours.
+        nudgeAllowed: (Instant) -> Boolean = { instant ->
+            Presence.shouldNudge(Activity.loadEntries(hours = 6), instant, soft = false)
+        },
     ): String? {
+        // 2026-05-09 fix: BEFORE the LLM call, check presence. User wakes at
+        // variable times; static QuietHours misses the actual sleep window.
+        // Reflection burns provider tokens; firing at 8am during sleep
+        // wastes both money and a turn the user can't read. Same logic +
+        // dynamic detection in BlockReminder.tickOnce.
+        if (!nudgeAllowed(now)) return null
         val all = Signals.readAllFrom(signalsFile)
         if (all.isEmpty()) return null
 
