@@ -115,9 +115,17 @@ class JarvisToolset(
                 reply.message
             }
             val toolCalls = message["tool_calls"] as? JsonArray
-            val content = (message["content"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            val content = extractAssistantText(message)
 
             if (toolCalls.isNullOrEmpty()) {
+                // Some free-tier models (gpt-oss-*:free, glm-4.5-air:free) occasionally
+                // return both content+reasoning empty under tool_use mode with long
+                // system prompts. extractAssistantText already tried the alternates;
+                // if we still have nothing, signal failure so the caller can fall
+                // back to the legacy chat path instead of persisting an empty turn.
+                if (content.isBlank()) {
+                    error("openrouter empty response: model=$lastModel rounds=$rounds — caller should retry via legacy chat")
+                }
                 return ToolReply(text = content, model = lastModel, toolRounds = rounds)
             }
             // Append the assistant message AS-IS so the model sees its own
@@ -147,6 +155,31 @@ class JarvisToolset(
             }
             rounds++
         }
+    }
+
+    /**
+     * Pull assistant-visible text out of an OR chat-completion message.
+     *
+     * Most OR models populate `content`. Some "reasoning-style" free-tier
+     * models (z-ai/glm-4.5-air:free, certain OpenInference variants of
+     * openai/gpt-oss-*:free) instead emit `content: null` plus a populated
+     * `reasoning` field — this happens especially under tool_use mode and
+     * with longer system prompts. The user-visible chat reply was a blank
+     * string in 2026-05-09 21:25Z (`gpt-oss-120b:free`, 0 tool rounds)
+     * because the loop returned `content="".orEmpty()` without checking
+     * the alternate field.
+     *
+     * Order: content → reasoning_text (OpenRouter's structured field) →
+     * reasoning (older shape) → empty string. Whitespace trimmed.
+     */
+    private fun extractAssistantText(message: JsonObject): String {
+        val direct = (message["content"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        if (direct != null) return direct
+        val reasoningText = (message["reasoning_text"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        if (reasoningText != null) return reasoningText
+        val reasoning = (message["reasoning"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+        if (reasoning != null) return reasoning
+        return ""
     }
 
     private fun jsonObjectToChatMessage(o: JsonObject): jarvis.ChatMessage {

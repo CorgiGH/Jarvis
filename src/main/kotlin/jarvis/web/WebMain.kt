@@ -289,6 +289,19 @@ internal suspend fun runWeb() {
                         tutorCtxOuter != null &&
                         (System.getenv("JARVIS_LLM_TUTOR")?.lowercase() == "openrouter") &&
                         !resolveOpenRouterKey().isNullOrBlank()
+                    // F7 — context-pressure aware. Drops oldest turns when
+                    // chat array exceeds a char budget so we don't slam the
+                    // provider with a saturated context window. Built once
+                    // so both the tutor-surface fallback and the legacy
+                    // path can reuse the same shape.
+                    val legacyMessages = listOf(ChatMessage("system", sysPrompt)) +
+                        Conversations.recentAsChatMessagesWithBudget() +
+                        ChatMessage("user", msg)
+                    suspend fun runLegacy(): Pair<String, String> = try {
+                        ChatTools.runTurn(client, legacyMessages)
+                    } catch (e: Exception) {
+                        "[error] ${e.message}" to "n/a"
+                    }
                     val (text, modelName) = if (tutorSurface) {
                         try {
                             jarvis.tutor.JarvisToolset().use { ts ->
@@ -296,20 +309,18 @@ internal suspend fun runWeb() {
                                 r.text to "${r.model} (${r.toolRounds} tool rounds)"
                             }
                         } catch (e: Exception) {
-                            return@withLock "[tool-chat error] ${e.javaClass.simpleName}: ${e.message?.take(200)}" to "n/a"
+                            // Tutor surface threw — could be 429/empty/other.
+                            // Degrade gracefully to legacy chat path so the user
+                            // gets SOMETHING instead of an error string or empty
+                            // turn. Tag the model so observability surfaces it.
+                            System.err.println(
+                                "[tool-chat] degrading to legacy: ${e.javaClass.simpleName}: ${e.message?.take(200)}",
+                            )
+                            val (legacyText, legacyModel) = runLegacy()
+                            legacyText to "$legacyModel (tool-chat-fallback)"
                         }
                     } else {
-                        // F7 — context-pressure aware. Drops oldest turns when
-                        // chat array exceeds a char budget so we don't slam the
-                        // provider with a saturated context window.
-                        val messages = listOf(ChatMessage("system", sysPrompt)) +
-                            Conversations.recentAsChatMessagesWithBudget() +
-                            ChatMessage("user", msg)
-                        try {
-                            ChatTools.runTurn(client, messages)
-                        } catch (e: Exception) {
-                            return@withLock "[error] ${e.message}" to "n/a"
-                        }
+                        runLegacy()
                     }
                     appendChatTurn(msg, text, modelName)
                     text to modelName
