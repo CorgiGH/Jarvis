@@ -1,12 +1,24 @@
 import { useState } from "react";
 import { jarvisFetch } from "../lib/api";
+import { ScreenshotCapture, type ScreenshotEvent } from "./ScreenshotCapture";
 
-interface Msg { role: "you" | "jarvis"; text: string; }
+interface Msg { role: "you" | "jarvis" | "sensor"; text: string; }
 
 export function ChatPane({ taskId }: { taskId: string }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+
+  function onScreenshot(e: ScreenshotEvent) {
+    const x = e.extracted;
+    const lines: string[] = [`screenshot #${e.eventSeq}`];
+    if (x.filePath) lines.push(`  file: ${x.filePath}`);
+    if (x.cursor) lines.push(`  cursor: line ${x.cursor.line}, col ${x.cursor.col}`);
+    if (x.consoleOutput) lines.push(`  console:\n${x.consoleOutput}`);
+    if (x.error) lines.push(`  error:\n${x.error}`);
+    if (lines.length === 1) lines.push("  (no editor / console / error visible)");
+    setMessages(m => [...m, { role: "sensor", text: lines.join("\n") }]);
+  }
 
   async function send() {
     if (!input.trim() || sending) return;
@@ -33,13 +45,18 @@ export function ChatPane({ taskId }: { taskId: string }) {
       <div className="bg-black text-yellow-300 px-4 py-2 text-sm tracking-widest font-bold">
         JARVIS · TASK {taskId}
       </div>
+      <ScreenshotCapture taskId={taskId} onResult={onScreenshot} />
       <div className="flex-1 overflow-auto p-4 space-y-3">
         {messages.map((m, i) => (
           <div key={i}>
-            <div className={`inline-block px-2 py-0.5 text-xs font-bold tracking-widest ${m.role === "you" ? "bg-yellow-300 text-black" : "bg-black text-white"}`}>
+            <div className={`inline-block px-2 py-0.5 text-xs font-bold tracking-widest ${
+              m.role === "you" ? "bg-yellow-300 text-black"
+              : m.role === "sensor" ? "bg-blue-200 text-black"
+              : "bg-black text-white"
+            }`}>
               {m.role.toUpperCase()}
             </div>
-            <div className="text-sm leading-relaxed mt-1">{m.text}</div>
+            <div className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{m.text}</div>
           </div>
         ))}
       </div>

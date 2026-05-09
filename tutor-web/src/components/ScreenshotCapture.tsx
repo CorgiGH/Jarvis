@@ -1,0 +1,98 @@
+import { useEffect, useState } from "react";
+import { jarvisFetch } from "../lib/api";
+import { captureScreenshot } from "../lib/screenshot";
+
+export interface ScreenshotEvent {
+  eventSeq: number;
+  extracted: {
+    filePath: string | null;
+    cursor: { line: number; col: number } | null;
+    consoleOutput: string | null;
+    error: string | null;
+    rawReply: string;
+  };
+}
+
+export interface ScreenshotCaptureProps {
+  taskId: string;
+  onResult?: (e: ScreenshotEvent) => void;
+}
+
+/**
+ * Screenshot capture surface — provides:
+ *  - a global Ctrl+Shift+J hotkey that triggers getDisplayMedia
+ *  - an explicit camera button (also a user-gesture path, required by
+ *    getDisplayMedia even with the hotkey)
+ *  - inline status (capturing → uploading → done/failed)
+ *
+ * Sends the captured PNG to /api/v1/sensor/screenshot. On success
+ * fires onResult so the parent can render the extraction inline in
+ * chat (suggested-edit cards / context display).
+ */
+export function ScreenshotCapture({ taskId, onResult }: ScreenshotCaptureProps) {
+  const [status, setStatus] = useState<string>("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function trigger() {
+    setStatus("capturing");
+    setError(null);
+    try {
+      const shot = await captureScreenshot();
+      setStatus("uploading");
+      const res = await jarvisFetch("/api/v1/sensor/screenshot", {
+        method: "POST",
+        body: JSON.stringify({
+          imageBase64: shot.imageBase64,
+          mediaType: "image/png",
+          taskId,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      }
+      const data: ScreenshotEvent = await res.json();
+      setStatus("done");
+      onResult?.(data);
+    } catch (e) {
+      setStatus("failed");
+      setError((e as Error).message);
+    }
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // Ctrl+Shift+J on Windows/Linux, Cmd+Shift+J on Mac.
+      const meta = e.ctrlKey || e.metaKey;
+      if (meta && e.shiftKey && (e.key === "J" || e.key === "j")) {
+        e.preventDefault();
+        trigger();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [taskId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const label = status === "idle" ? "📷 capture (Ctrl+Shift+J)"
+    : status === "capturing" ? "capturing…"
+    : status === "uploading" ? "uploading…"
+    : status === "done" ? "captured"
+    : "retry";
+
+  return (
+    <div data-testid="screenshot-capture" className="flex items-center gap-2 px-3 py-1.5 border-b border-black/10 bg-white">
+      <button
+        onClick={trigger}
+        disabled={status === "capturing" || status === "uploading"}
+        data-testid="screenshot-capture-btn"
+        className="text-xs font-bold tracking-widest bg-yellow-300 px-3 py-1 disabled:opacity-50"
+      >
+        {label}
+      </button>
+      {error && (
+        <span data-testid="screenshot-error" className="text-xs text-red-700">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
