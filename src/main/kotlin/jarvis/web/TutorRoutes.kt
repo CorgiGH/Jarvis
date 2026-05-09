@@ -418,6 +418,51 @@ fun Application.installTutorRoutes() {
                 ))
             }
         }
+        // Stage F — multi-channel chat gateway. Forwards Telegram /
+        // Signal / iMessage etc inbound messages through the tutor
+        // chat path with hard-gated read-only tool surface. Default-
+        // OFF behind JARVIS_GATEWAY_ENABLED + secret token check.
+        post("/api/v1/gateway/inbound") {
+            val req = try {
+                sensorJson.decodeFromString(ApiGatewayInboundRequest.serializer(), call.receiveText())
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                return@post
+            }
+            val token = call.request.headers["X-Jarvis-Gateway-Token"]
+            val pre = jarvis.tutor.GatewayInbound.preflight(
+                channel = req.channel,
+                fromUser = req.fromUser,
+                providedToken = token,
+            )
+            if (pre is jarvis.tutor.GatewayInbound.Result.Err) {
+                call.respond(HttpStatusCode(pre.httpStatus, "Gateway"), pre.reason)
+                return@post
+            }
+            val source = (pre as jarvis.tutor.GatewayInbound.Result.Ok).source
+            // Run through JarvisToolset with hard read-only allowlist.
+            val gatewaySpec = jarvis.tutor.SkillSpec(
+                name = "_gateway",
+                description = "synthetic gateway-context spec",
+                triggers = emptyList(),
+                toolAllowlist = jarvis.tutor.GatewayInbound.GATEWAY_TOOL_ALLOWLIST.toList(),
+                systemPromptBody = "You are Jarvis answering a $source message from ${req.fromUser}. " +
+                    "Effectors disabled — read-only tools only. Reply concisely.",
+                sourcePath = "(synthetic)",
+            )
+            val systemPrompt = "Source: $source\nUser: ${req.fromUser}\n\n${gatewaySpec.systemPromptBody}"
+            val text = try {
+                jarvis.tutor.JarvisToolset().use { ts ->
+                    val r = ts.chat(systemPrompt, req.text)
+                    r.text
+                }
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadGateway, "LLM failed: ${e.message?.take(200)}")
+                return@post
+            }
+            call.respond(ApiGatewayInboundResponse(text = text, source = source))
+        }
+
         // Layer B / task-context V0 — task CRUD so user can seed real
         // PS Tema A / PA Tema 5 / etc. Without this, TaskHeaderBuilder
         // has nothing to look up. Minimal shape: subject + title +
@@ -578,6 +623,19 @@ private data class ApiCreateTaskRequest(
 )
 
 @Serializable
+private data class ApiGatewayInboundRequest(
+    val channel: String,
+    val fromUser: String,
+    val text: String,
+)
+
+@Serializable
+private data class ApiGatewayInboundResponse(
+    val text: String,
+    val source: String,
+)
+
+@Serializable
 private data class ApiCreateGrantRequest(
     val scope: List<String>,
     val ops: List<String> = listOf("APPLY_EDIT"),
@@ -652,4 +710,8 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
     // EFFECTOR_WATCHDOG_ENABLED env). Reaps stale PRE_SEALED rows
     // every 1s.
     jarvis.tutor.EffectorWatchdog.start(db, ledgerDir)
+
+    // Stage F: cron skill runner (default-OFF, JARVIS_CRON_ENABLED).
+    // Reads SKILL.md frontmatter `cron_minutes` + `cron_enabled`.
+    jarvis.tutor.CronRunner.start()
 }

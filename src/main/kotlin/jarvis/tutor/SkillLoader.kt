@@ -52,6 +52,11 @@ data class SkillSpec(
     val toolAllowlist: List<String> = emptyList(),
     val systemPromptBody: String,
     val sourcePath: String,
+    /** Stage F cron — if set, CronRunner fires this skill every N
+     *  minutes. cron_enabled must ALSO be true (defense-in-depth:
+     *  a typo in cron_minutes shouldn't accidentally enable). */
+    val cronMinutes: Long? = null,
+    val cronEnabled: Boolean = false,
 )
 
 object SkillLoader {
@@ -100,6 +105,9 @@ object SkillLoader {
             .split('|', ',', ';').map { it.trim() }.filter { it.isNotEmpty() }
         val toolAllowlist = map["tool_allowlist"].orEmpty()
             .split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        val cronMinutes = map["cron_minutes"]?.toLongOrNull()?.takeIf { it > 0 }
+        val cronEnabled = map["cron_enabled"]?.lowercase()
+            ?.let { it == "true" || it == "1" || it == "yes" } ?: false
         if (body.isBlank()) return null  // skill with no system prompt body is useless
         return SkillSpec(
             name = name,
@@ -108,6 +116,8 @@ object SkillLoader {
             toolAllowlist = toolAllowlist,
             systemPromptBody = body.trim(),
             sourcePath = sourcePath,
+            cronMinutes = cronMinutes,
+            cronEnabled = cronEnabled,
         )
     }
 

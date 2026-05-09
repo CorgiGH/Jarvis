@@ -92,7 +92,8 @@ internal suspend fun runWeb() {
                 path.startsWith("/api/v1/effector/") ||
                 path.startsWith("/api/v1/grants") ||
                 path.startsWith("/api/v1/tasks") ||
-                path == "/api/v1/tutor/auto-session") return@intercept
+                path == "/api/v1/tutor/auto-session" ||
+                path == "/api/v1/gateway/inbound") return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]
