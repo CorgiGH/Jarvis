@@ -423,17 +423,34 @@ fun Application.installTutorRoutes() {
         // chat path with hard-gated read-only tool surface. Default-
         // OFF behind JARVIS_GATEWAY_ENABLED + secret token check.
         post("/api/v1/gateway/inbound") {
+            val rawBody = call.receiveText()
             val req = try {
-                sensorJson.decodeFromString(ApiGatewayInboundRequest.serializer(), call.receiveText())
+                sensorJson.decodeFromString(ApiGatewayInboundRequest.serializer(), rawBody)
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
                 return@post
             }
             val token = call.request.headers["X-Jarvis-Gateway-Token"]
+            // Council R1 fix: prefer HMAC headers when present, fall
+            // back to bare token for transitional clients.
+            val hmacTs = call.request.headers["X-Jarvis-Timestamp"]
+            val hmacNonce = call.request.headers["X-Jarvis-Nonce"]
+            val hmacSig = call.request.headers["X-Jarvis-Hmac"]
+            val hmac = if (!hmacSig.isNullOrBlank()) {
+                jarvis.tutor.GatewayInbound.HmacHeaders(
+                    method = "POST",
+                    path = "/api/v1/gateway/inbound",
+                    timestamp = hmacTs,
+                    nonce = hmacNonce,
+                    signature = hmacSig,
+                    body = rawBody.toByteArray(Charsets.UTF_8),
+                )
+            } else null
             val pre = jarvis.tutor.GatewayInbound.preflight(
                 channel = req.channel,
                 fromUser = req.fromUser,
                 providedToken = token,
+                hmacHeaders = hmac,
             )
             if (pre is jarvis.tutor.GatewayInbound.Result.Err) {
                 call.respond(HttpStatusCode(pre.httpStatus, "Gateway"), pre.reason)

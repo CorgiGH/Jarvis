@@ -50,21 +50,58 @@ object GatewayInbound {
         data class Err(val httpStatus: Int, val reason: String) : Result()
     }
 
+    /** Process-wide nonce cache for replay defense (council R1 fix
+     *  2026-05-09: gateway HMAC was constant-time-equal of bare token;
+     *  now mirrors DaemonAuth.verify with method+path+ts+nonce+body
+     *  binding). Same-process scope is fine for single-VPS deploy. */
+    private val nonces = NonceCache(capacity = 4096)
+
     /** Pre-flight check applied to every inbound request. Caller
-     *  proceeds with the LLM round-trip only when this returns Ok. */
+     *  proceeds with the LLM round-trip only when this returns Ok.
+     *
+     *  When [hmacHeaders] is non-null, full HMAC verification runs:
+     *  signature = hex(HMAC-SHA256(secret, METHOD\tPATH\tTS\tNONCE\tBODY_SHA256_HEX))
+     *  with ±30s skew tolerance and nonce replay defense.
+     *
+     *  When [hmacHeaders] is null, falls back to legacy bearer-style
+     *  X-Jarvis-Gateway-Token compare (transitional). New producers
+     *  should always send hmacHeaders. */
     fun preflight(
         channel: String,
         fromUser: String,
         providedToken: String?,
         now: Instant = Instant.now(),
+        hmacHeaders: HmacHeaders? = null,
     ): Result {
         if (!isEnabled()) return Result.Err(503, "gateway disabled (JARVIS_GATEWAY_ENABLED unset)")
         if (isKilled()) return Result.Err(503, "gateway kill switch active")
         val secret = System.getenv("JARVIS_GATEWAY_SECRET")?.trim().orEmpty()
         if (secret.isEmpty()) return Result.Err(503, "gateway secret not configured")
-        if (providedToken.isNullOrBlank() || !constantTimeEquals(providedToken, secret)) {
-            return Result.Err(401, "missing or invalid X-Jarvis-Gateway-Token")
+
+        if (hmacHeaders != null) {
+            val r = jarvis.tutor.DaemonAuth.verify(
+                secret = secret.toByteArray(),
+                method = hmacHeaders.method,
+                path = hmacHeaders.path,
+                timestampMillisRaw = hmacHeaders.timestamp,
+                nonce = hmacHeaders.nonce,
+                body = hmacHeaders.body,
+                signature = hmacHeaders.signature,
+                nonces = nonces,
+                now = now,
+            )
+            if (r is jarvis.tutor.DaemonAuth.Result.Fail) {
+                return Result.Err(401, "gateway HMAC ${r.kind.name}: ${r.reason}")
+            }
+        } else {
+            // Legacy bearer-style fallback (deprecated). Producers should
+            // upgrade to HMAC headers ASAP; this path stays for one
+            // transitional release.
+            if (providedToken.isNullOrBlank() || !constantTimeEquals(providedToken, secret)) {
+                return Result.Err(401, "missing or invalid X-Jarvis-Gateway-Token")
+            }
         }
+
         if (channel.isBlank() || fromUser.isBlank()) {
             return Result.Err(400, "channel + fromUser required")
         }
@@ -73,6 +110,15 @@ object GatewayInbound {
         }
         return Result.Ok(source = "channel:${channel.lowercase()}")
     }
+
+    data class HmacHeaders(
+        val method: String,
+        val path: String,
+        val timestamp: String?,
+        val nonce: String?,
+        val signature: String?,
+        val body: ByteArray,
+    )
 
     /** Filter the JarvisToolset tool surface to read-only tools only —
      *  gateway-originated chats can't fire effectors. The set is

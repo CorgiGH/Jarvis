@@ -15,3 +15,6 @@ tmp-study-guide-scrape/
 .superpowers/
 tools/__pycache__/
 test_output.txt
+.playwright-mcp/
+tutor-after-fix.png
+tutor-quickstart.png
