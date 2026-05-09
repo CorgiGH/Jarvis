@@ -423,9 +423,12 @@ fun Application.installTutorRoutes() {
         // chat path with hard-gated read-only tool surface. Default-
         // OFF behind JARVIS_GATEWAY_ENABLED + secret token check.
         post("/api/v1/gateway/inbound") {
-            // Council R2 fix: capture RAW BYTES via receiveChannel so
-            // HMAC body-binding survives non-UTF-8 payloads (replacement-
-            // char roundtrip would silently invalidate signatures).
+            // Council R2 fix: capture RAW BYTES (NOT receiveText().toByteArray)
+            // so HMAC body-binding survives non-UTF-8 payloads — the
+            // replacement-char roundtrip would silently invalidate
+            // signatures. call.receive<ByteArray>() bypasses
+            // ContentNegotiation (no Kotlinx ByteArray serializer
+            // registered) and gives raw bytes off the wire.
             val rawBytes = call.receive<ByteArray>()
             val req = try {
                 sensorJson.decodeFromString(
