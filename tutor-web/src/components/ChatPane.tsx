@@ -5,6 +5,7 @@ import { SuggestedEditCard } from "./SuggestedEditCard";
 import { parseSuggestedEdits, type SuggestedEdit } from "../lib/suggestedEdit";
 import { KnowledgeGapCard } from "./KnowledgeGapCard";
 import { parseKnowledgeGaps, type KnowledgeGap } from "../lib/knowledgeGap";
+import { MathText } from "./MathText";
 
 interface Msg {
   role: "you" | "jarvis" | "sensor";
@@ -96,7 +97,9 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
             }`}>
               {m.role.toUpperCase()}
             </div>
-            <div className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{m.text}</div>
+            {m.role === "jarvis"
+              ? <MathText text={m.text} className="text-sm leading-relaxed mt-1" />
+              : <div className="text-sm leading-relaxed mt-1 whitespace-pre-wrap">{m.text}</div>}
             {m.edits?.map(edit => (
               <SuggestedEditCard
                 key={edit.id}
