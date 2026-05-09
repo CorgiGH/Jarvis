@@ -1,7 +1,13 @@
 package jarvis.tutor
 
+import io.ktor.util.AttributeKey
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.sql.Database
+import java.nio.file.Path
 import java.security.SecureRandom
+
+data class TutorContext(val db: Database, val ledgerDir: Path)
+val TutorContextKey = AttributeKey<TutorContext>("TutorContext")
 
 object TutorTypes {
     private val CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ".toCharArray()

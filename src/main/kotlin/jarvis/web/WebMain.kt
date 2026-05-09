@@ -78,9 +78,12 @@ internal suspend fun runWeb() {
         intercept(ApplicationCallPipeline.Plugins) {
             val path = call.request.path()
             // Public routes — no auth: login form, basic liveness, tutor SPA
-            // bundle (token-gated client-side after load), and Layer A health.
+            // bundle (token-gated client-side after load), Layer A health,
+            // and the /auth/setup magic-link exchange (gated by its own
+            // raw-token check, not the JARVIS_AUTH_TOKEN bearer).
             if (path == "/login" || path == "/healthz" || path == "/api/v1/health") return@intercept
             if (path == "/tutor" || path.startsWith("/tutor/")) return@intercept
+            if (path.startsWith("/auth/")) return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]
