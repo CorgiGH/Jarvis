@@ -257,10 +257,16 @@ object KnowledgeGraphQuery {
 
     fun neighbors(graph: KnowledgeGraph, id: String, kind: String? = null): List<Pair<KgNode, String>> {
         val target = id.lowercase()
+        // Edges are stored undirected (one entry per pair, see KnowledgeGraphBuilder).
+        // Match either endpoint so neighbor traversal is symmetric — otherwise the
+        // result depends on Files.walk() ordering during build, which differs across
+        // OSes (Windows NTFS alphabetic vs Linux ext4 creation-order).
         return graph.edges
-            .filter { it.from.equals(target, ignoreCase = true) && (kind == null || it.kind == kind) }
+            .filter { (kind == null || it.kind == kind) &&
+                (it.from.equals(target, ignoreCase = true) || it.to.equals(target, ignoreCase = true)) }
             .mapNotNull { e ->
-                graph.nodes.firstOrNull { it.id.equals(e.to, ignoreCase = true) }?.let { it to e.kind }
+                val otherId = if (e.from.equals(target, ignoreCase = true)) e.to else e.from
+                graph.nodes.firstOrNull { it.id.equals(otherId, ignoreCase = true) }?.let { it to e.kind }
             }
     }
 
