@@ -77,7 +77,10 @@ internal suspend fun runWeb() {
 
         intercept(ApplicationCallPipeline.Plugins) {
             val path = call.request.path()
-            if (path == "/login" || path == "/healthz") return@intercept
+            // Public routes — no auth: login form, basic liveness, tutor SPA
+            // bundle (token-gated client-side after load), and Layer A health.
+            if (path == "/login" || path == "/healthz" || path == "/api/v1/health") return@intercept
+            if (path == "/tutor" || path.startsWith("/tutor/")) return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]
@@ -484,6 +487,11 @@ internal suspend fun runWeb() {
                 )
             }
         }
+
+        // Layer A — tutor SPA bundle + /api/v1/health. Mounts a separate
+        // routing block; Ktor merges multiple routing blocks into the same
+        // engine, so this composes with the routes above.
+        installTutorRoutes()
     }.start(wait = true)
 }
 
