@@ -17,3 +17,12 @@ vi.mock("react-pdf", () => ({
 }));
 vi.mock("react-pdf/dist/Page/AnnotationLayer.css", () => ({}));
 vi.mock("react-pdf/dist/Page/TextLayer.css", () => ({}));
+
+// Plotly + WebGL aren't available under jsdom. Stub the lazy-loaded
+// react-plotly.js factory + plotly.js-dist-min so PlotlyEmbed renders
+// without trying to load the real ~3MB Plotly bundle.
+vi.mock("react-plotly.js/factory", () => ({
+  default: () => () =>
+    React.createElement("div", { "data-testid": "mock-plotly" }, "mock plot"),
+}));
+vi.mock("plotly.js-dist-min", () => ({ default: {} }));
