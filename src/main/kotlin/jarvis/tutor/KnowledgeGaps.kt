@@ -45,16 +45,20 @@ object KnowledgeGapsTable : Table("knowledge_gaps") {
     val topic = varchar("topic", 256)
     val language = varchar("language", 16).nullable()
     val type = varchar("type", 16)
-    val trigger = varchar("trigger", 32)
+    // Phase 4 columns added after the table shipped — must be nullable so
+    // ALTER TABLE ADD COLUMN succeeds on existing DBs (SQLite ALTER can't
+    // add NOT NULL without a default; Exposed migrations don't synthesize
+    // defaults). New rows always populate via app code.
+    val trigger = varchar("trigger", 32).nullable()
     val filledAt = timestamp("filled_at")
-    val content = text("content")
+    val content = text("content").nullable()
     val exampleCode = text("example_code").nullable()
     val sourceCitation = text("source_citation").nullable()
     val resolvedBy = varchar("resolved_by", 32).nullable()
     val reusedCount = integer("reused_count")
     val fsrsCardId = varchar("fsrs_card_id", 26).nullable()
-    val createdAt = timestamp("created_at")
-    val updatedAt = timestamp("updated_at")
+    val createdAt = timestamp("created_at").nullable()
+    val updatedAt = timestamp("updated_at").nullable()
     override val primaryKey = PrimaryKey(id)
     init { index(false, userId, topic) }
 }
@@ -114,10 +118,13 @@ class KnowledgeGapRepo(private val db: Database, private val ledgerDir: Path) {
         topic = row[KnowledgeGapsTable.topic],
         language = row[KnowledgeGapsTable.language],
         type = GapType.valueOf(row[KnowledgeGapsTable.type]),
-        trigger = GapTrigger.valueOf(row[KnowledgeGapsTable.trigger]),
+        // Pre-Phase-4 rows lack trigger/content/createdAt/updatedAt — they
+        // were added nullable to permit ALTER TABLE on existing DBs. Map
+        // null to safe defaults so downstream code can stay non-null.
+        trigger = row[KnowledgeGapsTable.trigger]?.let { GapTrigger.valueOf(it) } ?: GapTrigger.EXPLICIT_ASK,
         filledAt = row[KnowledgeGapsTable.filledAt],
         source = GapSource.LLM_GROUNDED,
-        content = row[KnowledgeGapsTable.content],
+        content = row[KnowledgeGapsTable.content] ?: "",
         exampleCode = row[KnowledgeGapsTable.exampleCode],
         sourceCitation = row[KnowledgeGapsTable.sourceCitation],
         resolvedBy = row[KnowledgeGapsTable.resolvedBy]?.let { GapResolved.valueOf(it) },
