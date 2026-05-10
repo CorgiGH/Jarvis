@@ -1,14 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PdfPane } from "./PdfPane";
 import { ChatPane } from "./ChatPane";
 import { Scratchpad } from "./Scratchpad";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
+import { InlineAskChip } from "./InlineAskChip";
+import { Sidekick } from "./Sidekick";
+import { attachSelectionListener, buildSidekickEnvelope } from "../lib/inlineAsk";
+import type { SidekickEnvelope } from "../lib/inlineAsk";
 import { jarvisFetch } from "../lib/api";
 
 const SCRATCHPAD_KEY = "jarvis.scratchpad";
 
 export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfUrl: string; taskId: string; dedupedNotice?: boolean }) {
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const [chipState, setChipState] = useState<{ rect: DOMRect; envelope: SidekickEnvelope } | null>(null);
+  const [sidekickEnvelope, setSidekickEnvelope] = useState<SidekickEnvelope | undefined>(undefined);
+
+  useEffect(() => {
+    const root = workspaceRef.current;
+    if (!root) return;
+    const detach = attachSelectionListener(root, (selectedText, rect) => {
+      const env = buildSidekickEnvelope({ taskId, selection: selectedText, userQuestion: selectedText });
+      setChipState({ rect, envelope: env });
+    });
+    function handlePointerDown(e: PointerEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".ask-chip-fade-in")) setChipState(null);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      detach();
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [taskId]);
+
   // Layer B0: scratchpad state lives at the workspace level so chat-side
   // INSERT actions can append from across the divider. Persisted via
   // localStorage per browser; server-side per-task storage arrives in B1.
@@ -88,7 +114,7 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={workspaceRef} className="flex h-full min-h-0 flex-col">
       {dedupedNotice && (
         <div data-testid="deduped-notice"
              role="status"
@@ -117,12 +143,20 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
           </div>
           <Scratchpad value={scratch} onChange={setScratch} />
         </div>
-        <div className="flex-1 min-w-0 min-h-0 md:w-1/2 h-full">
+        <div className="flex-1 min-w-0 min-h-0 md:w-1/2 h-full flex flex-col">
           <ChatPane taskId={taskId} onScratchpadInsert={appendToScratchpad} />
+          <Sidekick envelope={sidekickEnvelope} />
         </div>
       </div>
       </div>
       <StatusBar />
+      {chipState && (
+        <InlineAskChip
+          selectionRect={chipState.rect}
+          envelope={chipState.envelope}
+          onAsk={(env) => { setSidekickEnvelope(env); setChipState(null); }}
+        />
+      )}
     </div>
   );
 }

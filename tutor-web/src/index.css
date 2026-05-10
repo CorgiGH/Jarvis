@@ -138,3 +138,26 @@ code, pre, kbd, samp {
     animation: none;
   }
 }
+
+/* ---------- AskGutter ? hover button (Phase E3) ---------- */
+.askable:hover .ask-gutter-btn,
+.askable:focus-within .ask-gutter-btn {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ask-gutter-btn { transition: none; }
+}
+
+/* ---------- Anim #16 · Sidekick context-quote pop-in (Phase E3) ----------
+   Quote strip slides in 4px from top and fades in over 180ms.
+   Animation is suppressed for reduced-motion users via the media query. */
+@keyframes sidekickQuotePopIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sidekick-quote-pop-in {
+  animation: sidekickQuotePopIn 180ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidekick-quote-pop-in { animation: none; }
+}
