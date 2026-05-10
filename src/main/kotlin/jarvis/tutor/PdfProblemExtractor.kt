@@ -1,5 +1,7 @@
 package jarvis.tutor
 
+import jarvis.ChatMessage
+import jarvis.Llm
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -55,5 +57,32 @@ object PdfProblemExtractor {
             System.err.println("[pdf-extractor] $pdf: ${e.javaClass.simpleName}: ${e.message?.take(120)}")
             ""
         }
+    }
+
+    private const val EXTRACT_PROMPT = """You are reading a homework PDF and identifying the numbered problems.
+
+Return STRICT JSON: an array where each entry has shape:
+  {"problem_id": "A1", "page": 4, "statement": "...", "equation_refs": [...], "data_givens": [...]}
+
+- problem_id: a short stable id like A1, A2, B1, P1, 1, 2, etc. Use what the PDF uses.
+- page: 1-indexed page number where the problem starts
+- statement: the verbatim problem statement, max ~400 chars
+- equation_refs: optional list of equation numbers/labels mentioned
+- data_givens: optional list of concrete data the problem provides
+
+Output ONLY the JSON array. No prose. No code fences."""
+
+    suspend fun identifyProblems(pdf: Path, llm: Llm): List<Problem> {
+        val text = extractText(pdf)
+        if (text.isBlank()) return emptyList()
+        val capped = text.take(20_000)
+        val (raw, _) = llm.complete(
+            listOf(
+                ChatMessage("system", EXTRACT_PROMPT),
+                ChatMessage("user", capped),
+            ),
+            maxTokens = 2000,
+        )
+        return parseLlmJson(raw.trim())
     }
 }
