@@ -169,3 +169,16 @@ describe("DrillCard stagger + reduced-motion", () => {
     expect(card.className).not.toContain("animate-slide-in");
   });
 });
+
+test("DrillCard exposes data-state attribute matching state prop", () => {
+  const states: Array<"locked" | "open" | "complete"> = ["locked", "open", "complete"];
+  states.forEach(state => {
+    const { getByTestId, unmount } = render(
+      <DrillCard cardType="DRILL" title="③ DRILL" state={state} staggerIndex={0}>
+        <p>body</p>
+      </DrillCard>
+    );
+    expect(getByTestId("drill-card").getAttribute("data-state")).toBe(state);
+    unmount();
+  });
+});
