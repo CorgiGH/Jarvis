@@ -102,4 +102,5 @@ End: TOTAL: 0 high, 5 med, 6 low.
 
 ## Phase 8 — Layer D + ops + final audit
 
-(empty)
+- `[8] [ops] [cron-probe-installed] [done] /etc/cron.d/jarvis-probe weekly Mon 06:30 UTC. Logs to /var/log/jarvis-fallback-probe.log. Smoke-tested 2026-05-10 11:15Z: chain 3 models OK (llama 429 transient, z-ai 200, openai 200). Probe script lives at /opt/jarvis/tools/ on VPS — note: deploy.sh doesn't scp tools/, so any tools/ updates need explicit scp before they take effect on the next cron tick.`
+- `[8] [ops] [deploy-tools-rsync] [low] tools/ directory is not part of build/install/jarvis-kotlin so deploy.sh doesn't ship updates to it. Cron entry depends on /opt/jarvis/tools/probe-fallback-models.sh being current. — Add an scp -rq tools/ root@VPS:/opt/jarvis/ block to deploy.sh so probe-fallback-models.sh + future tools stay synced. Until then: scp manually after editing the script.`
