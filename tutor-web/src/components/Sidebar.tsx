@@ -72,12 +72,13 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
           no tasks yet — click NEW TASK
         </div>
       )}
+      <nav aria-label="Tasks by subject" className="flex-1">
       {grouped.map(([subject, subjectTasks]) => (
         <div key={subject} data-testid={`sidebar-subject-${subject}`}>
           <div className="px-3 py-1 mt-2 bg-page-fg/10 tracking-widest font-bold border-y border-border-thin">
             {subject}
           </div>
-          <ul>
+          <ul role="list">
             {subjectTasks.map(t => {
               const days = Math.round(
                 (new Date(t.deadline).getTime() - Date.now()) / 86400000,
@@ -107,6 +108,7 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
           </ul>
         </div>
       ))}
+      </nav>
     </aside>
   );
 }

@@ -39,7 +39,7 @@ export function PdfPane({ url }: { url: string }) {
         </div>
       ) : (
         <>
-          <embed src={url} type="application/pdf" className="w-full h-full" />
+          <iframe src={url} title="PDF document for current task" className="w-full h-full border-0" />
           {size != null && (
             <div className="absolute bottom-1 right-1 bg-page-fg/70 text-white text-xs px-2 py-0.5 rounded">
               {(size / 1024).toFixed(1)} KB

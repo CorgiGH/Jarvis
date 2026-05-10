@@ -94,10 +94,13 @@ export function TrustSettings() {
         Cap 8h. Revoke any time.
       </p>
 
-      <div data-testid="trust-create-form" className="border-2 border-border-strong p-3 mb-6">
+      <form data-testid="trust-create-form"
+            onSubmit={e => { e.preventDefault(); createGrant(); }}
+            className="border-2 border-border-strong p-3 mb-6">
         <div className="text-xs font-bold tracking-widest mb-2">NEW GRANT</div>
-        <label className="block text-xs mb-1">Scope (file:// glob)</label>
+        <label htmlFor="trust-scope-id" className="block text-xs mb-1">Scope (file:// glob)</label>
         <input
+          id="trust-scope-id"
           data-testid="trust-scope-input"
           className="w-full border border-border-thin px-2 py-1 text-sm mb-2"
           value={scope}
@@ -105,8 +108,9 @@ export function TrustSettings() {
         />
         <div className="flex gap-2 mb-2">
           <div className="flex-1">
-            <label className="block text-xs mb-1">TTL minutes (max 480 = 8h)</label>
+            <label htmlFor="trust-ttl-id" className="block text-xs mb-1">TTL minutes (max 480 = 8h)</label>
             <input
+              id="trust-ttl-id"
               data-testid="trust-ttl-input"
               type="number" min={1} max={480}
               className="w-full border border-border-thin px-2 py-1 text-sm"
@@ -115,8 +119,9 @@ export function TrustSettings() {
             />
           </div>
           <div className="flex-1">
-            <label className="block text-xs mb-1">Max calls</label>
+            <label htmlFor="trust-max-calls-id" className="block text-xs mb-1">Max calls</label>
             <input
+              id="trust-max-calls-id"
               data-testid="trust-max-calls-input"
               type="number" min={1} max={1000}
               className="w-full border border-border-thin px-2 py-1 text-sm"
@@ -126,19 +131,19 @@ export function TrustSettings() {
           </div>
         </div>
         <button
+          type="submit"
           data-testid="trust-create-btn"
-          onClick={createGrant}
           className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1"
         >
           GRANT
         </button>
-      </div>
+      </form>
 
       <div className="text-xs font-bold tracking-widest mb-2">ACTIVE ({grants.filter(g => !g.revokedAt).length})</div>
       {loading ? (
         <div className="text-sm">loading…</div>
       ) : grants.length === 0 ? (
-        <div className="text-sm text-page-fg/60">(no grants yet)</div>
+        <div role="status" className="text-sm text-page-fg/60">no grants yet — fill the NEW GRANT form above to add one</div>
       ) : (
         <ul className="space-y-2" data-testid="trust-grants-list">
           {grants.map(g => (

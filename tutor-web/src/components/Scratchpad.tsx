@@ -37,6 +37,7 @@ export function Scratchpad({ value, onChange }: ScratchpadProps) {
       <textarea
         ref={ref}
         data-testid="scratchpad-input"
+        aria-label="Task scratchpad — local notes; auto-saved per browser"
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder="draft answers / inserted snippets land here…"

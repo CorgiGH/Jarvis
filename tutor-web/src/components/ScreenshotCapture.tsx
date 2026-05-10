@@ -77,11 +77,12 @@ export function ScreenshotCapture({ taskId, onResult }: ScreenshotCaptureProps) 
     return () => window.removeEventListener("keydown", onKey);
   }, [taskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const label = status === "idle" ? "📷 capture (Ctrl+Shift+J)"
+  const statusText = status === "idle" ? "capture (Ctrl+Shift+J)"
     : status === "capturing" ? "capturing…"
     : status === "uploading" ? "uploading…"
     : status === "done" ? "captured"
     : "retry";
+  const showCamera = status === "idle";
 
   return (
     <div data-testid="screenshot-capture" className="flex items-center gap-2 px-3 py-1.5 border-b border-page-fg/10 bg-page-bg">
@@ -89,9 +90,11 @@ export function ScreenshotCapture({ taskId, onResult }: ScreenshotCaptureProps) 
         onClick={trigger}
         disabled={status === "capturing" || status === "uploading"}
         data-testid="screenshot-capture-btn"
+        aria-label="Capture a screenshot of the current window for the tutor to read"
         className="text-xs font-bold tracking-widest bg-accent px-3 py-1 disabled:opacity-50"
       >
-        {label}
+        {showCamera && <span aria-hidden="true">📷 </span>}
+        <span>{statusText}</span>
       </button>
       {error && (
         <span data-testid="screenshot-error" className="text-xs text-red-700">
