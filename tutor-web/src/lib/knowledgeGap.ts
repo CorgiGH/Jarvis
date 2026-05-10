@@ -30,6 +30,9 @@ export interface KnowledgeGap {
   exampleCode?: string;
   sourceCitation?: string;
   resolvedBy?: GapResolved;
+  /** Phase 7.5: set after the user promotes the gap to FSRS. UI uses
+   *  this to suppress the promote button on subsequent renders. */
+  fsrsCardId?: string | null;
 }
 
 export interface ParsedGapReply {

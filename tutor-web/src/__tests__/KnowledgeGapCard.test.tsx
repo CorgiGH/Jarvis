@@ -1,5 +1,5 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { test, expect, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { test, expect, vi, beforeEach, afterEach } from "vitest";
 import { KnowledgeGapCard } from "../components/KnowledgeGapCard";
 import type { KnowledgeGap } from "../lib/knowledgeGap";
 
@@ -59,4 +59,34 @@ test("truncates long example code in preview", () => {
   const code = screen.getByTestId("knowledge-gap-code");
   expect(code.textContent!.length).toBeLessThanOrEqual(321);
   expect(code.textContent!.endsWith("…")).toBe(true);
+});
+
+// ─── Phase 7.5 promote → FSRS ───────────────────────────────────────────
+
+beforeEach(() => {
+  Object.defineProperty(document, "cookie", { value: "csrf=zzz", configurable: true, writable: true });
+});
+afterEach(() => { vi.unstubAllGlobals(); });
+
+test("PROMOTE → FSRS button POSTs and renders the promoted pill", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () =>
+    new Response(JSON.stringify({ cardId: "01HABCDEFG", createdNew: true }), { status: 200 }),
+  ));
+  render(<KnowledgeGapCard gap={baseGap} />);
+  fireEvent.click(screen.getByTestId("knowledge-gap-promote"));
+  await waitFor(() => expect(screen.getByTestId("knowledge-gap-promoted")).toBeInTheDocument());
+  expect(screen.queryByTestId("knowledge-gap-promote")).toBeNull();
+});
+
+test("PROMOTE → FSRS surfaces the error message on failure", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
+  render(<KnowledgeGapCard gap={baseGap} />);
+  fireEvent.click(screen.getByTestId("knowledge-gap-promote"));
+  await waitFor(() => expect(screen.getByTestId("knowledge-gap-sync-error")).toBeInTheDocument());
+});
+
+test("already-promoted gap renders pill on mount, no promote button", () => {
+  render(<KnowledgeGapCard gap={{ ...baseGap, fsrsCardId: "01EXISTING" }} />);
+  expect(screen.getByTestId("knowledge-gap-promoted")).toBeInTheDocument();
+  expect(screen.queryByTestId("knowledge-gap-promote")).toBeNull();
 });

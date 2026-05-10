@@ -930,6 +930,31 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        // Phase 7.5 deferral closer: promote a knowledge gap to an FSRS card.
+        // Idempotent — the gap row's fsrs_card_id is the source of truth.
+        post("/api/v1/gap/{id}/promote") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val gapId = call.parameters["id"]
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val gap = jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir).findById(gapId)
+                    ?: run { call.respond(HttpStatusCode.NotFound, "gap not found"); return@csrfProtect }
+                if (gap.userId != userId) {
+                    call.respond(HttpStatusCode.Forbidden, "gap belongs to a different user")
+                    return@csrfProtect
+                }
+                val r = jarvis.tutor.GapPromotion.promote(ctx.db, ctx.ledgerDir, gapId)
+                    ?: run { call.respond(HttpStatusCode.InternalServerError, "promotion failed"); return@csrfProtect }
+                call.respond(HttpStatusCode.OK, ApiPromoteGapReply(
+                    cardId = r.cardId, createdNew = r.createdNew,
+                ))
+            }
+        }
+
         get("/api/v1/gaps") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
@@ -945,6 +970,7 @@ fun Application.installTutorRoutes() {
                     type = g.type.name, trigger = g.trigger.name,
                     content = g.content, exampleCode = g.exampleCode, sourceCitation = g.sourceCitation,
                     resolvedBy = g.resolvedBy?.name, reusedCount = g.reusedCount,
+                    fsrsCardId = g.fsrsCardId,
                 )
             }))
         }
@@ -1114,6 +1140,7 @@ private data class ApiGapView(
     val sourceCitation: String?,
     val resolvedBy: String?,
     val reusedCount: Int,
+    val fsrsCardId: String? = null,
 )
 
 @Serializable
@@ -1130,6 +1157,9 @@ private data class ApiLastTaskReply(val taskId: String?)
 
 @Serializable
 private data class ApiTaskDetectReply(val inserted: Int, val existing: Int, val total: Int)
+
+@Serializable
+private data class ApiPromoteGapReply(val cardId: String, val createdNew: Boolean)
 
 @Serializable
 private data class ApiGwsStatusReply(

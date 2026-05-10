@@ -182,6 +182,18 @@ class KnowledgeGapRepo(private val db: Database, private val ledgerDir: Path) {
         n > 0
     }
 
+    /** Phase 7.5 deferral closer: link a freshly-promoted FSRS card back
+     *  onto its source gap so the UI can render "promoted" + skip the
+     *  promote button on subsequent renders. Idempotent — calling twice
+     *  with the same (gapId, cardId) is a no-op. */
+    fun setFsrsCardId(gapId: String, cardId: String, now: Instant = Instant.now()): Boolean = transaction(db) {
+        val n = KnowledgeGapsTable.update({ KnowledgeGapsTable.id eq gapId }) {
+            it[fsrsCardId] = cardId
+            it[updatedAt] = now
+        }
+        n > 0
+    }
+
     fun incrementReused(id: String, now: Instant = Instant.now()): Boolean = transaction(db) {
         val cur = KnowledgeGapsTable.selectAll()
             .where { KnowledgeGapsTable.id eq id }

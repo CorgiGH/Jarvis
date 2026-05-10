@@ -30,6 +30,23 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
   const [docsOpen, setDocsOpen] = useState(false);
   const [docs, setDocs] = useState<{ filename: string; snippet: string; lineRef: string | null }[] | null>(null);
   const [docsError, setDocsError] = useState<string | null>(null);
+  const [promoted, setPromoted] = useState<string | null>(gap.fsrsCardId ?? null);
+  const [promoting, setPromoting] = useState(false);
+
+  async function promoteToFsrs() {
+    if (promoted || promoting) return;
+    setPromoting(true);
+    try {
+      const r = await jarvisFetch(`/api/v1/gap/${encodeURIComponent(gap.id)}/promote`, { method: "POST" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setPromoted(data.cardId);
+    } catch (e) {
+      setSyncError(`promote failed: ${(e as Error).message}`);
+    } finally {
+      setPromoting(false);
+    }
+  }
 
   async function loadDocs() {
     if (docs != null) { setDocsOpen(o => !o); return; }
@@ -133,6 +150,18 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
                   className="text-xs tracking-widest bg-page-bg text-page-fg/80 px-3 py-1 border border-border-thin">
             {docsOpen ? "HIDE DOCS" : "SHOW DOCS"}
           </button>
+          {promoted ? (
+            <span data-testid="knowledge-gap-promoted"
+                  className="text-xs font-bold tracking-widest bg-page-bg text-page-fg/60 px-3 py-1 border border-border-thin">
+              → FSRS ({promoted.slice(0, 6)})
+            </span>
+          ) : (
+            <button onClick={promoteToFsrs} disabled={promoting}
+                    data-testid="knowledge-gap-promote"
+                    className="text-xs font-bold tracking-widest bg-accent text-page-fg px-3 py-1 border border-border-strong disabled:opacity-50">
+              {promoting ? "PROMOTING…" : "PROMOTE → FSRS"}
+            </button>
+          )}
         </div>
       )}
       {docsOpen && docs && (
