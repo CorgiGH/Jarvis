@@ -704,6 +704,36 @@ fun Application.installTutorRoutes() {
                 materialPaths = task.materialPaths,
             ))
         }
+        // Slice 1.5 A1 — mark task SUBMITTED; validates ownership before flipping status.
+        post("/api/v1/tasks/{id}/submit") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val taskId = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val task = TaskRepo(ctx.db).findById(taskId)
+                    ?: run { call.respond(HttpStatusCode.NotFound, "task not found"); return@csrfProtect }
+                if (task.userId != userId) {
+                    call.respond(HttpStatusCode.Forbidden, "not your task"); return@csrfProtect
+                }
+                val now = java.time.Instant.now()
+                try {
+                    sensorJson.decodeFromString(ApiTaskSubmitRequest.serializer(), call.receiveText())
+                } catch (_: Exception) { /* tolerate missing/malformed body */ }
+                val ok = TaskRepo(ctx.db).updateStatus(taskId, jarvis.tutor.TaskStatus.SUBMITTED, now)
+                if (!ok) {
+                    call.respond(HttpStatusCode.InternalServerError, "status update failed"); return@csrfProtect
+                }
+                call.respond(HttpStatusCode.OK, ApiTaskSubmitReply(
+                    taskId = taskId,
+                    status = jarvis.tutor.TaskStatus.SUBMITTED.name,
+                    submittedAt = now.toString(),
+                ))
+            }
+        }
         // Audit MED closer: per-task delete so the user can prune dupes
         // from the UI instead of needing direct sqlite access. Cascades
         // any detected_task_mapping rows pointing at this task; refuses
@@ -1520,6 +1550,16 @@ private data class ApiPdfUploadReply(val bytes: Int)
 
 @Serializable
 private data class ApiTaskDeleteReply(val taskId: String)
+
+@Serializable
+private data class ApiTaskSubmitRequest(val note: String? = null)
+
+@Serializable
+private data class ApiTaskSubmitReply(
+    val taskId: String,
+    val status: String,
+    val submittedAt: String,
+)
 
 @Serializable
 private data class ApiTaskRepRepReply(

@@ -139,6 +139,14 @@ class TaskRepo(private val db: Database) {
         n > 0
     }
 
+    fun updateStatus(taskId: String, newStatus: TaskStatus, updatedAt: Instant): Boolean = transaction(db) {
+        val n = TasksTable.update({ TasksTable.id eq taskId }) {
+            it[status] = newStatus.name
+            it[TasksTable.updatedAt] = updatedAt
+        }
+        n > 0
+    }
+
     fun findById(id: String): Task? = transaction(db) {
         TasksTable.selectAll().where { TasksTable.id eq id }.singleOrNull()?.toTask()
     }
