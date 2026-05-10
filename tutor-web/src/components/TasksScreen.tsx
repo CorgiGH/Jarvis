@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { jarvisFetch } from "../lib/api";
+import { useInFlight } from "../lib/inFlight";
 
 interface TaskView {
   id: string;
@@ -28,6 +29,7 @@ export function TasksScreen() {
   const [subject, setSubject] = useState("PS");
   const [title, setTitle] = useState("Tema A — derivation example");
   const [deadlineDays, setDeadlineDays] = useState(12);
+  const create = useInFlight();
 
   async function refresh() {
     setLoading(true);
@@ -49,13 +51,15 @@ export function TasksScreen() {
   async function createTask() {
     setError(null);
     try {
-      const deadline = new Date(Date.now() + deadlineDays * 24 * 3600 * 1000).toISOString();
-      const r = await jarvisFetch("/api/v1/tasks", {
-        method: "POST",
-        body: JSON.stringify({ subject, title, deadline }),
+      await create.run(async () => {
+        const deadline = new Date(Date.now() + deadlineDays * 24 * 3600 * 1000).toISOString();
+        const r = await jarvisFetch("/api/v1/tasks", {
+          method: "POST",
+          body: JSON.stringify({ subject, title, deadline }),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        await refresh();
       });
-      if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
-      await refresh();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -114,10 +118,14 @@ export function TasksScreen() {
         <button
           type="submit"
           data-testid="task-create-btn"
-          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1"
+          disabled={create.inFlight}
+          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1 disabled:opacity-50"
         >
           CREATE
         </button>
+        {create.showSpinner && (
+          <span data-testid="task-create-spinner" aria-live="polite" className="ml-2 text-xs text-page-fg/60">creating…</span>
+        )}
       </form>
 
       <div className="text-xs font-bold tracking-widest mb-2">ACTIVE ({tasks.length})</div>

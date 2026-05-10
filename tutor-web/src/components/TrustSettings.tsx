@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { jarvisFetch } from "../lib/api";
+import { useInFlight } from "../lib/inFlight";
 
 interface GrantView {
   id: string;
@@ -29,6 +30,7 @@ export function TrustSettings() {
   const [scope, setScope] = useState("file:///c/Users/User/work/**");
   const [ttlMinutes, setTtlMinutes] = useState(60);
   const [maxCalls, setMaxCalls] = useState(10);
+  const grant = useInFlight();
 
   async function refresh() {
     setLoading(true);
@@ -54,19 +56,21 @@ export function TrustSettings() {
   async function createGrant() {
     setError(null);
     try {
-      const r = await jarvisFetch("/api/v1/grants", {
-        method: "POST",
-        body: JSON.stringify({
-          scope: [scope],
-          ops: ["APPLY_EDIT"],
-          ttlSeconds: ttlMinutes * 60,
-          maxCalls,
-        }),
+      await grant.run(async () => {
+        const r = await jarvisFetch("/api/v1/grants", {
+          method: "POST",
+          body: JSON.stringify({
+            scope: [scope],
+            ops: ["APPLY_EDIT"],
+            ttlSeconds: ttlMinutes * 60,
+            maxCalls,
+          }),
+        });
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        }
+        await refresh();
       });
-      if (!r.ok) {
-        throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
-      }
-      await refresh();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -133,10 +137,14 @@ export function TrustSettings() {
         <button
           type="submit"
           data-testid="trust-create-btn"
-          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1"
+          disabled={grant.inFlight}
+          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1 disabled:opacity-50"
         >
           GRANT
         </button>
+        {grant.showSpinner && (
+          <span data-testid="trust-create-spinner" aria-live="polite" className="ml-2 text-xs text-page-fg/60">granting…</span>
+        )}
       </form>
 
       <div className="text-xs font-bold tracking-widest mb-2">ACTIVE ({grants.filter(g => !g.revokedAt).length})</div>
