@@ -26,11 +26,39 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [historicalGaps, setHistoricalGaps] = useState<KnowledgeGap[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
+
+  // Phase 4.1c: GET historical gaps for the active task on mount + on
+  // jarvis:gap-created event (fired by PdfPane selection or anything
+  // else that POSTs a gap directly without going through this chat).
+  useEffect(() => {
+    let cancelled = false;
+    function fetchGaps() {
+      jarvisFetch(`/api/v1/gaps?taskId=${encodeURIComponent(taskId)}`)
+        .then(r => r.ok ? r.json() : { gaps: [] })
+        .then((data: { gaps: any[] }) => {
+          if (cancelled) return;
+          setHistoricalGaps((data.gaps ?? []).map(g => ({
+            id: g.id, topic: g.topic, language: g.language, type: g.type,
+            trigger: g.trigger, content: g.content, exampleCode: g.exampleCode,
+            sourceCitation: g.sourceCitation,
+          })));
+        })
+        .catch(() => {});
+    }
+    fetchGaps();
+    function onGapCreated() { fetchGaps(); }
+    window.addEventListener("jarvis:gap-created", onGapCreated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("jarvis:gap-created", onGapCreated);
+    };
+  }, [taskId]);
 
   function pickChip(prompt: string) {
     setInput(prompt);
@@ -86,6 +114,23 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         gaps: gapParsed.gaps,
         chips: chipParsed.chips,
       }]);
+      // Phase 4.1c: persist each parsed gap to the server. Best-effort —
+      // local card already renders so a network failure doesn't block UX.
+      gapParsed.gaps.forEach(g => {
+        jarvisFetch("/api/v1/gap", {
+          method: "POST",
+          body: JSON.stringify({
+            topic: g.topic,
+            language: g.language,
+            type: g.type,
+            trigger: g.trigger,
+            content: g.content,
+            exampleCode: g.exampleCode,
+            sourceCitation: g.sourceCitation,
+            taskId,
+          }),
+        }).catch(() => {});
+      });
     } catch (e) {
       if ((e as Error).name === "AbortError") return;
       setMessages(m => [...m, { role: "jarvis", text: `(error: ${(e as Error).message})` }]);
@@ -114,6 +159,22 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
            tabIndex={0}
            role="log"
            aria-label="Chat messages">
+        {historicalGaps.length > 0 && (
+          <div data-testid="historical-gaps" className="mb-2">
+            <div className="text-xs font-bold tracking-widest text-page-fg/60 mb-1">
+              PREVIOUSLY FLAGGED ({historicalGaps.length})
+            </div>
+            {historicalGaps.map(g => (
+              <KnowledgeGapCard key={g.id} gap={g}
+                onInsertScratchpad={gg => {
+                  const text = gg.exampleCode
+                    ? `// ${gg.topic}\n${gg.exampleCode}`
+                    : `// ${gg.topic}\n${gg.content}`;
+                  onScratchpadInsert?.(text);
+                }} />
+            ))}
+          </div>
+        )}
         {messages.map((m, i) => (
           <div key={i} className="min-w-0">
             <div className={`inline-block px-2 py-0.5 text-xs font-bold tracking-widest ${
