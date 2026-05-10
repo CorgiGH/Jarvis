@@ -4,7 +4,7 @@ import jarvis.web.runWeb
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
-private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web | reindex | import-anki <subject> <path>]
+private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web | reindex | import-anki <subject> <path> | google-auth-bootstrap]
 
   chat                       Start interactive chat REPL (default).
   logger                     Always-on activity logger (5-min interval).
@@ -16,6 +16,11 @@ private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | s
   reindex                    Embed any wiki entries not yet in the vector store.
   import-anki <subj> <apkg>  Import an Anki .apkg deck as concepts under archival/<subj>/.
   ingest-corpus              Build / refresh the knowledge graph from archival/ markdown.
+  google-auth-bootstrap      One-time OAuth 2.0 consent flow — opens browser, writes
+                             google-token.json. Run on your PC (needs a browser).
+                             Reads client_secrets.json from GOOGLE_CREDS_PATH or
+                             ./client_secrets.json. Writes token to GOOGLE_TOKEN_PATH
+                             or ./google-token.json.
 """
 
 fun main(args: Array<String>) {
@@ -54,6 +59,25 @@ fun main(args: Array<String>) {
                     "  concepts written:    ${r.conceptsWritten}\n" +
                     "  duplicates skipped:  ${r.skippedDuplicates}",
             )
+        }
+        "google-auth-bootstrap" -> {
+            val credsPath = java.nio.file.Path.of(
+                System.getenv("GOOGLE_CREDS_PATH") ?: "client_secrets.json"
+            )
+            val tokenPath = java.nio.file.Path.of(
+                System.getenv("GOOGLE_TOKEN_PATH") ?: "google-token.json"
+            )
+            if (!credsPath.toFile().exists()) {
+                System.err.println(
+                    "ERROR: client_secrets.json not found at $credsPath\n" +
+                    "  1. Go to https://console.cloud.google.com/apis/credentials\n" +
+                    "  2. Create OAuth client ID → Desktop app → download JSON\n" +
+                    "  3. Place it at $credsPath (or set GOOGLE_CREDS_PATH=<path>)\n" +
+                    "  4. Re-run: jarvis google-auth-bootstrap"
+                )
+                exitProcess(2)
+            }
+            jarvis.tutor.google.GoogleAuthBootstrap.run(credsPath, tokenPath)
         }
         "-h", "--help", "help" -> println(USAGE)
         else -> {
