@@ -2,6 +2,7 @@ package jarvis.tutor
 
 import java.nio.file.Paths
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class PdfProblemExtractorTest {
@@ -43,5 +44,34 @@ class PdfProblemExtractorTest {
     fun `extractText returns empty for missing file`() {
         val text = PdfProblemExtractor.extractText(Paths.get("/no/such/file.pdf"))
         assertTrue(text.isBlank())
+    }
+
+    @Test
+    fun `parseLlmJson handles well-formed array`() {
+        val raw = """[
+      {"problem_id":"A1","page":4,"statement":"derive MLE","equation_refs":[],"data_givens":[]},
+      {"problem_id":"A2","page":6,"statement":"compute median","equation_refs":["med"],"data_givens":["x=(1,2,5)"]}
+    ]""".trimIndent()
+        val problems = PdfProblemExtractor.parseLlmJson(raw)
+        assertEquals(2, problems.size)
+        assertEquals("A1", problems[0].problemId)
+        assertEquals(4, problems[0].page)
+        assertEquals("compute median", problems[1].statement)
+        assertEquals(listOf("x=(1,2,5)"), problems[1].dataGivens)
+    }
+
+    @Test
+    fun `parseLlmJson returns empty on malformed`() {
+        assertTrue(PdfProblemExtractor.parseLlmJson("not json").isEmpty())
+        assertTrue(PdfProblemExtractor.parseLlmJson("{\"single\":\"object\"}").isEmpty())
+    }
+
+    @Test
+    fun `parseLlmJson tolerates missing optional fields`() {
+        val raw = """[{"problem_id":"X1","page":1,"statement":"do thing"}]"""
+        val problems = PdfProblemExtractor.parseLlmJson(raw)
+        assertEquals(1, problems.size)
+        assertEquals(emptyList(), problems[0].equationRefs)
+        assertEquals(emptyList(), problems[0].dataGivens)
     }
 }
