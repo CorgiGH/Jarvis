@@ -115,3 +115,7 @@ Added two new self-review items to the existing 4-item list:
 - `C:\Users\User\.claude\plugins\cache\claude-plugins-official\superpowers\5.1.0\skills\brainstorming\SKILL.md` (+30 lines across 2 edits)
 
 Repo-tracked note only — the actual rule files live outside the jarvis-kotlin repo.
+
+## Trust-but-verify rule extended (this fix)
+
+User-global `C:\Users\User\.claude\CLAUDE.md` extended with "Feature-shipped verification rule" appended after the existing memory-verification rule. See post-mortem fix list above.
