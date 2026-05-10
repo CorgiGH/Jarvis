@@ -1,23 +1,83 @@
 import { useEffect, useRef, useState } from "react";
-import { PdfPane } from "./PdfPane";
-import { ChatPane } from "./ChatPane";
-import { Scratchpad } from "./Scratchpad";
-import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 import { InlineAskChip } from "./InlineAskChip";
 import { Sidekick } from "./Sidekick";
 import { DaemonHealthPill } from "./DaemonHealthPill";
+import { ProblemStepper, parseProblemParam } from "./ProblemStepper";
+import { ProgressStrip } from "./ProgressStrip";
+import { DrillStack } from "./DrillStack";
+import type { DrillContent } from "./DrillStack";
+import { CompileSubmitCard } from "./CompileSubmitCard";
+import { ResourceRail } from "./ResourceRail";
 import { attachSelectionListener, buildSidekickEnvelope } from "../lib/inlineAsk";
 import type { SidekickEnvelope } from "../lib/inlineAsk";
-import { jarvisFetch } from "../lib/api";
+import { getTaskPrep, triggerReprep } from "../lib/taskPrep";
+import type { TaskPrepReply, RailItem } from "../lib/taskPrep";
+import { useSearchParams } from "react-router-dom";
 
-const SCRATCHPAD_KEY = "jarvis.scratchpad";
+interface Problem {
+  problem_id: string;
+  page: number;
+  statement: string;
+  equation_refs?: string[];
+  data_givens?: string[];
+}
 
-export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfUrl: string; taskId: string; dedupedNotice?: boolean }) {
+const POLL_INTERVAL_MS = 2000;
+
+export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false }:
+  { pdfUrl: string; taskId: string; dedupedNotice?: boolean }) {
+
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [chipState, setChipState] = useState<{ rect: DOMRect; envelope: SidekickEnvelope } | null>(null);
   const [sidekickEnvelope, setSidekickEnvelope] = useState<SidekickEnvelope | undefined>(undefined);
 
+  const [prep, setPrep] = useState<TaskPrepReply | null>(null);
+  const [prepError, setPrepError] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+
+  // ── Bootstrap: fetch prep, trigger reprep on miss, poll until present ──
+  useEffect(() => {
+    let cancelled = false;
+    let pollHandle: number | null = null;
+
+    async function bootstrap() {
+      try {
+        const result = await getTaskPrep(taskId);
+        if (cancelled) return;
+        if (result) {
+          setPrep(result);
+          return;
+        }
+        // Miss — trigger reprep, poll until present
+        try { await triggerReprep(taskId); } catch (_) { /* tolerate */ }
+        pollHandle = window.setInterval(async () => {
+          try {
+            const r = await getTaskPrep(taskId);
+            if (cancelled) return;
+            if (r) {
+              setPrep(r);
+              if (pollHandle != null) {
+                window.clearInterval(pollHandle);
+                pollHandle = null;
+              }
+            }
+          } catch (e) {
+            // tolerate poll errors; keep retrying
+          }
+        }, POLL_INTERVAL_MS);
+      } catch (e) {
+        if (!cancelled) setPrepError(e instanceof Error ? e.message : String(e));
+      }
+    }
+    bootstrap();
+    return () => {
+      cancelled = true;
+      if (pollHandle != null) window.clearInterval(pollHandle);
+    };
+  }, [taskId]);
+
+  // ── Inline help: selection chip → sidekick (kept from Slice 1 E3) ──
   useEffect(() => {
     const root = workspaceRef.current;
     if (!root) return;
@@ -36,90 +96,63 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
     };
   }, [taskId]);
 
-  // Layer B0: scratchpad state lives at the workspace level so chat-side
-  // INSERT actions can append from across the divider. Persisted via
-  // localStorage per browser; server-side per-task storage arrives in B1.
-  const storageKey = `${SCRATCHPAD_KEY}:${taskId}`;
-  const [scratch, setScratch] = useState<string>("");
-  useEffect(() => {
-    if (typeof localStorage === "undefined") return;
-    const v = localStorage.getItem(storageKey);
-    if (v != null) setScratch(v);
-  }, [storageKey]);
-  useEffect(() => {
-    if (typeof localStorage === "undefined") return;
-    localStorage.setItem(storageKey, scratch);
-  }, [storageKey, scratch]);
+  // ── Parse prep payload ──
+  const problems: Problem[] = prep
+    ? (() => { try { return JSON.parse(prep.problemsJson); } catch { return []; } })()
+    : [];
+  const drillsByProblem: Record<string, DrillContent> = prep
+    ? (() => { try { return JSON.parse(prep.drillsJson); } catch { return {}; } })()
+    : {};
+  const railItems: RailItem[] = prep
+    ? (() => { try { return JSON.parse(prep.railJson); } catch { return []; } })()
+    : [];
 
-  // Phase 3.4: server-persist. Fetch on task mount; server wins so a
-  // different device's edits flow back. Subsequent local edits PUT
-  // back via 500ms debounce. localStorage stays as offline cache so
-  // the textarea isn't blank during the round-trip.
-  useEffect(() => {
-    let cancelled = false;
-    jarvisFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}/scratchpad`)
-      .then(r => r.ok ? r.json() : null)
-      .then((data: { text?: string } | null) => {
-        if (cancelled || !data) return;
-        setScratch(data.text ?? "");
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [taskId]);
+  const activeIndex = parseProblemParam(searchParams.get("problem"));
+  const activeProblem = problems[activeIndex] ?? problems[0];
 
-  useEffect(() => {
-    if (typeof scratch !== "string") return;
-    const t = setTimeout(() => {
-      jarvisFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}/scratchpad`, {
-        method: "PUT",
-        body: JSON.stringify({ text: scratch }),
-      }).catch(() => {});
-    }, 500);
-    return () => clearTimeout(t);
-  }, [scratch, taskId]);
-
-  function appendToScratchpad(text: string) {
-    setScratch(prev => prev.length === 0 ? text : `${prev}\n\n${text}`);
+  const [completedProblems, setCompletedProblems] = useState<Set<string>>(new Set());
+  function handleProblemComplete(problemId: string) {
+    setCompletedProblems(prev => new Set(prev).add(problemId));
   }
 
-  // Phase 6.3b: fetch task detail to surface auto-attached materialPaths.
-  const [materialPaths, setMaterialPaths] = useState<string[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    jarvisFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}`)
-      .then(r => r.ok ? r.json() : null)
-      .then((d: { materialPaths?: string[] } | null) => {
-        if (!cancelled && d?.materialPaths) setMaterialPaths(d.materialPaths);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [taskId]);
+  const allDone = problems.length > 0 && completedProblems.size >= problems.length;
 
-  // Phase 4.3: PdfPane selection-tooltip callback. POSTs gap directly + fires
-  // window event so ChatPane re-fetches its historical-gaps list.
-  async function emitPdfSelectionGap(selection: { text: string; page: number }) {
-    try {
-      await jarvisFetch("/api/v1/gap", {
-        method: "POST",
-        body: JSON.stringify({
-          topic: selection.text,
-          type: "CONCEPT",
-          trigger: "EXPLICIT_ASK",
-          content: selection.text,
-          sourceCitation: `pdf:page=${selection.page}`,
-          taskId,
-        }),
-      });
-      window.dispatchEvent(new CustomEvent("jarvis:gap-created", { detail: { taskId } }));
-    } catch (_) {}
+  // ── Skeleton when prep is loading ──
+  if (!prep && !prepError) {
+    return (
+      <div ref={workspaceRef} className="flex flex-col h-full bg-page-bg text-page-fg">
+        <header data-testid="tutor-header"
+                className="flex items-center justify-between px-4 py-1 border-b-4 border-border-strong bg-panel-dark-bg text-panel-dark-fg text-[10px] font-mono tracking-widest">
+          <span className="font-bold">JARVIS · TUTOR</span>
+          <DaemonHealthPill />
+        </header>
+        <div data-testid="workspace-skeleton" aria-busy="true"
+             className="flex-1 flex flex-col items-center justify-center gap-4 p-12 font-mono text-page-fg/60 tracking-widest">
+          <p>preparing drill stack…</p>
+          <p className="text-xs">LLM extracting problems from your PDF · poll every 2s</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (prepError) {
+    return (
+      <div ref={workspaceRef} className="flex flex-col h-full bg-page-bg text-page-fg p-12 font-mono">
+        <p className="text-danger-text tracking-widest" role="alert">
+          (couldn't load task prep — {prepError})
+        </p>
+      </div>
+    );
   }
 
   return (
-    <div ref={workspaceRef} className="flex h-full min-h-0 flex-col">
-      <div data-testid="tutor-header" className="flex items-center justify-between px-4 py-1 border-b-4 border-border-strong bg-panel-dark-bg text-panel-dark-fg text-[10px] font-mono tracking-widest">
-        <span className="font-bold">JARVIS · TUTOR</span>
+    <div ref={workspaceRef} className="flex flex-col h-full bg-page-bg text-page-fg">
+      <header data-testid="tutor-header"
+              className="flex items-center justify-between px-4 py-1 border-b-4 border-border-strong bg-panel-dark-bg text-panel-dark-fg text-[10px] font-mono tracking-widest">
+        <span className="font-bold">JARVIS · TUTOR · {taskId}</span>
         <DaemonHealthPill />
-      </div>
+      </header>
+
       {dedupedNotice && (
         <div data-testid="deduped-notice"
              role="status"
@@ -128,33 +161,51 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
           OPENED EXISTING TASK · same subject + title already on file
         </div>
       )}
-      {materialPaths.length > 0 && (
-        <div data-testid="reference-materials"
-             className="border-b-4 border-border-strong bg-accent-soft px-4 py-2 font-mono text-xs">
-          <div className="font-bold tracking-widest mb-1">REFERENCE MATERIALS ({materialPaths.length})</div>
-          <ul role="list" className="space-y-0.5">
-            {materialPaths.map((p, i) => (
-              <li key={`${p}-${i}`} className="text-page-fg/80 truncate">{p}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <div className="flex flex-1 min-h-0">
-      <Sidebar activeTaskId={taskId} />
-      <div className="flex h-full min-h-0 flex-1 flex-col md:flex-row">
-        <div className="flex flex-col h-full min-h-0 flex-1 min-w-0 md:w-1/2 border-b-4 md:border-b-0 md:border-r-4 border-border-strong">
-          <div className="flex-1 min-h-[50vh] md:min-h-0 overflow-hidden">
-            <PdfPane url={pdfUrl} uploadUrl={pdfUrl} onPdfSelectionGap={emitPdfSelectionGap} />
-          </div>
-          <Scratchpad value={scratch} onChange={setScratch} />
-        </div>
-        <div className="flex-1 min-w-0 min-h-0 md:w-1/2 h-full flex flex-col">
-          <ChatPane taskId={taskId} onScratchpadInsert={appendToScratchpad} />
+
+      <ProblemStepper
+        problems={problems.map(p => ({ problemId: p.problem_id, label: p.problem_id }))}
+        activeProblemIndex={activeIndex}
+      />
+
+      <ProgressStrip
+        outer={{ done: completedProblems.size, total: problems.length }}
+        inner={{
+          done: 0,  // Slice 1.5: drill-stack-internal phase doesn't lift up yet
+          total: 4, // DRILL + WORKED + DEFINITION + CHECK
+        }}
+        currentProblemLabel={activeProblem?.problem_id ?? "—"}
+      />
+
+      <div className="flex-1 min-h-0 flex">
+        <main className="flex-1 min-w-0 flex flex-col overflow-y-auto p-4 gap-4">
+          {activeProblem && drillsByProblem[activeProblem.problem_id] && (
+            <DrillStack
+              taskId={taskId}
+              problemId={activeProblem.problem_id}
+              content={drillsByProblem[activeProblem.problem_id]}
+              onProblemComplete={handleProblemComplete}
+            />
+          )}
+
           <Sidekick envelope={sidekickEnvelope} />
-        </div>
+
+          {allDone && (
+            <CompileSubmitCard
+              taskId={taskId}
+              answers={problems.map(p => ({
+                problemId: p.problem_id,
+                attempt: drillsByProblem[p.problem_id]?.drill ?? "",
+              }))}
+              onSubmitted={() => { /* no-op for Slice 1.5; tasks page reflects status */ }}
+            />
+          )}
+        </main>
+
+        <ResourceRail taskId={taskId} items={railItems} />
       </div>
-      </div>
+
       <StatusBar />
+
       {chipState && (
         <InlineAskChip
           selectionRect={chipState.rect}

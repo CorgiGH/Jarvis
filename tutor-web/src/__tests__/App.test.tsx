@@ -50,10 +50,29 @@ test("× close button clears last-task and returns to dashboard", async () => {
 });
 
 test("real taskId pinned in URL renders TutorWorkspace", async () => {
+  // Provide a /prep response so TutorWorkspace exits the skeleton state.
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (typeof url === "string" && url.endsWith("/api/v1/tasks")) {
+      return new Response(JSON.stringify({
+        tasks: [{ id: "T-REAL", subject: "PS", title: "Tema A", deadline: new Date(Date.now() + 5 * 86400000).toISOString(), status: "ACTIVE" }],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (typeof url === "string" && url.includes("/prep")) {
+      const prep = {
+        taskId: "T-REAL",
+        generatedAt: "2026-05-11T00:00:00Z",
+        version: 1,
+        problemsJson: '[{"problem_id":"A1","page":1,"statement":"test"}]',
+        drillsJson: '{"A1":{"drill":"d","worked":"w","definition":"def","check":"c","expectedAnswerHint":"h"}}',
+        railJson: '[]',
+      };
+      return new Response(JSON.stringify(prep), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response("{}", { status: 200 });
+  }));
   render(<MemoryRouter initialEntries={["/?taskId=T-REAL"]}><App /></MemoryRouter>);
-  // Wait for the existence-check to pass so workspace renders instead of dashboard.
-  await waitFor(() => expect(screen.getByTestId("pdf-pane")).toBeInTheDocument());
-  expect(screen.getByTestId("chat-pane")).toBeInTheDocument();
+  // Wait for the drill stack to render (skeleton exits → full layout).
+  await waitFor(() => expect(screen.getByTestId("tutor-header")).toBeInTheDocument(), { timeout: 5000 });
   expect(screen.getAllByText(/T-REAL/).length).toBeGreaterThan(0);
 });
 
