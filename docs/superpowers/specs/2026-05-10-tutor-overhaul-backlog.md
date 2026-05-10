@@ -31,7 +31,7 @@ Format per entry:
 
 ## Phase 3 — Hygiene
 
-(empty)
+- `[3] [ops] [pii-scrub] [done] core_memory.md PII scrubbed on VPS 2026-05-10. Removed line "- Matricol: 31091001031ROSL251002" from /opt/jarvis/data/core_memory.md via single sed -i; restarted jarvis service; tail of /var/log/jarvis.log shows no further CoreMemory WARN since restart. Closes spec § 3.5.`
 
 ## Phase 4 — Layer B §4 close
 
