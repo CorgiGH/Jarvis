@@ -431,6 +431,28 @@ internal suspend fun runWeb() {
                 call.respondText(msg, ContentType.Text.Plain)
             }
 
+            // Mockup-gap closer: per-subject confidence rollup for the
+            // sidebar % strip. Reads KnowledgeState.stats(), groups by
+            // subject, returns avg + max confidence + concept count so
+            // the UI can render "PA 43%" / "POO 2%" style indicators.
+            // Confidence values get capped soft at 10 by stats(); we
+            // normalize to a 0..1 range before returning so the frontend
+            // stays decoupled from the soft-cap constant.
+            get("/api/v1/subject-confidence") {
+                val all = jarvis.KnowledgeState.stats()
+                val grouped = all.groupBy { it.subject.ifBlank { "OTHER" } }
+                val rows = grouped.map { (subject, stats) ->
+                    val confs = stats.map { it.confidence }
+                    ApiSubjectConfidenceRow(
+                        subject = subject,
+                        concepts = stats.size,
+                        avgConfidence = (confs.average().toFloat() / 10f).coerceIn(0f, 1f),
+                        maxConfidence = ((confs.maxOrNull() ?: 0f) / 10f).coerceIn(0f, 1f),
+                    )
+                }.sortedByDescending { it.maxConfidence }
+                call.respond(ApiSubjectConfidenceResponse(rows))
+            }
+
             // Phase 7.1 deferral closer: ConceptInline confidence query.
             // Frontend gates inline-link affordance behind threshold so well-
             // known concepts render plain (no underline). Match policy:
@@ -711,6 +733,17 @@ private data class ApiSignalsResponse(val signals: List<jarvis.ProactiveSignal>)
 
 @Serializable
 private data class ApiAckRequest(val signalId: String, val action: String)
+
+@Serializable
+private data class ApiSubjectConfidenceRow(
+    val subject: String,
+    val concepts: Int,
+    val avgConfidence: Float,
+    val maxConfidence: Float,
+)
+
+@Serializable
+private data class ApiSubjectConfidenceResponse(val subjects: List<ApiSubjectConfidenceRow>)
 
 @Serializable
 private data class ApiConceptConfidenceResponse(

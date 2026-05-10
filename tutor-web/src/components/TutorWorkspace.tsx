@@ -3,6 +3,7 @@ import { PdfPane } from "./PdfPane";
 import { ChatPane } from "./ChatPane";
 import { Scratchpad } from "./Scratchpad";
 import { Sidebar } from "./Sidebar";
+import { StatusBar } from "./StatusBar";
 import { jarvisFetch } from "../lib/api";
 
 const SCRATCHPAD_KEY = "jarvis.scratchpad";
@@ -121,6 +122,7 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
         </div>
       </div>
       </div>
+      <StatusBar />
     </div>
   );
 }

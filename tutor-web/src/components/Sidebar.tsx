@@ -24,11 +24,19 @@ interface TaskView {
  * Hidden on mobile (sm:flex) so the 2-col PDF/chat workspace keeps its
  * full width on phones.
  */
+interface SubjectConfidence {
+  subject: string;
+  concepts: number;
+  avgConfidence: number;
+  maxConfidence: number;
+}
+
 export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskView[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [confidence, setConfidence] = useState<Record<string, SubjectConfidence>>({});
 
   useEffect(() => {
     function fetchTasks() {
@@ -38,8 +46,19 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
         .catch(() => setTasks([]))
         .finally(() => setLoaded(true));
     }
+    function fetchConfidence() {
+      jarvisFetch("/api/v1/subject-confidence")
+        .then(r => r.ok ? r.json() : { subjects: [] })
+        .then((data: { subjects: SubjectConfidence[] }) => {
+          const map: Record<string, SubjectConfidence> = {};
+          for (const row of data.subjects ?? []) map[row.subject.toUpperCase()] = row;
+          setConfidence(map);
+        })
+        .catch(() => {});
+    }
     fetchTasks();
-    function onTaskCreated() { fetchTasks(); }
+    fetchConfidence();
+    function onTaskCreated() { fetchTasks(); fetchConfidence(); }
     window.addEventListener("jarvis:task-created", onTaskCreated);
     return () => window.removeEventListener("jarvis:task-created", onTaskCreated);
   }, []);
@@ -92,10 +111,21 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
         </div>
       )}
       <nav aria-label="Tasks by subject" className="flex-1">
-      {grouped.map(([subject, subjectTasks]) => (
+      {grouped.map(([subject, subjectTasks]) => {
+        const conf = confidence[subject.toUpperCase()];
+        const pct = conf ? Math.round(conf.maxConfidence * 100) : null;
+        const low = pct != null && pct < 30;
+        return (
         <div key={subject} data-testid={`sidebar-subject-${subject}`}>
-          <div className="px-3 py-1 mt-2 bg-page-fg/10 tracking-widest font-bold border-y border-border-thin">
-            {subject}
+          <div className="px-3 py-1 mt-2 bg-page-fg/10 tracking-widest font-bold border-y border-border-thin flex items-center justify-between">
+            <span>{subject}</span>
+            {pct != null && (
+              <span data-testid={`sidebar-subject-pct-${subject}`}
+                    className={`text-[10px] font-bold ${low ? "text-danger-text" : "text-page-fg/70"}`}
+                    title={`${conf!.concepts} concepts touched, max confidence ${pct}%`}>
+                {pct}%
+              </span>
+            )}
           </div>
           <ul role="list">
             {subjectTasks.map(t => {
@@ -126,7 +156,8 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
             })}
           </ul>
         </div>
-      ))}
+        );
+      })}
       </nav>
     </aside>
   );

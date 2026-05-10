@@ -85,8 +85,9 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
       }
       const pm = /^PLOTLY(\d+)$/.exec(p);
       if (pm) {
-        const pl = plots[parseInt(pm[1], 10)];
-        return pl ? <PlotlyEmbed key={`p-${i}`} figure={pl.json} /> : null;
+        const idx = parseInt(pm[1], 10);
+        const pl = plots[idx];
+        return pl ? <PlotlyEmbed key={`p-${i}`} figure={pl.json} indexLabel={`FIG ${idx + 1}`} /> : null;
       }
       if (!p) return null;
       return <MathText key={`t-${i}`} text={p} className="text-sm leading-relaxed mt-1 break-words" />;
