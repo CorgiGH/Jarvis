@@ -40,7 +40,7 @@ export function Scratchpad({ value, onChange }: ScratchpadProps) {
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder="draft answers / inserted snippets land here…"
-        className="w-full h-32 p-3 outline-none text-sm font-mono resize-none"
+        className="w-full min-h-[6rem] max-h-[40vh] p-3 outline-none text-sm font-mono resize-y"
       />
     </div>
   );

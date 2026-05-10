@@ -33,7 +33,7 @@ test("workspace outer container is flex (not grid) so flex children get bounded 
   expect(twoColParent!.className).toMatch(/\bflex\b/);
   expect(twoColParent!.className).not.toMatch(/\bgrid\b/);
   expect(twoColParent!.className).toMatch(/flex-col/);
-  expect(twoColParent!.className).toMatch(/sm:flex-row/);
+  expect(twoColParent!.className).toMatch(/(sm|md):flex-row/);
 });
 
 test("chat pane root carries min-w-0 so flex sibling can shrink", () => {

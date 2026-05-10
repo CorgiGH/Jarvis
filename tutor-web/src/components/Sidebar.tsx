@@ -93,7 +93,7 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
                     data-task-id={t.id}
                     onClick={() => navigate(`/?taskId=${t.id}`)}
                     aria-current={active ? "true" : undefined}
-                    className={`w-full text-left px-3 py-1.5 border-b border-border-thin hover:bg-accent-soft ${
+                    className={`w-full text-left px-3 py-3 sm:py-1.5 border-b border-border-thin hover:bg-accent-soft ${
                       active ? "bg-accent font-bold" : ""
                     }`}
                     title={t.title}

@@ -38,14 +38,14 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
       )}
       <div className="flex flex-1 min-h-0">
       <Sidebar activeTaskId={taskId} />
-      <div className="flex h-full min-h-0 flex-1 flex-col sm:flex-row">
-        <div className="flex flex-col h-full min-h-0 flex-1 min-w-0 sm:w-1/2 border-b-4 sm:border-b-0 sm:border-r-4 border-black">
-          <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex h-full min-h-0 flex-1 flex-col md:flex-row">
+        <div className="flex flex-col h-full min-h-0 flex-1 min-w-0 md:w-1/2 border-b-4 md:border-b-0 md:border-r-4 border-border-strong">
+          <div className="flex-1 min-h-[50vh] md:min-h-0 overflow-hidden">
             <PdfPane url={pdfUrl} />
           </div>
           <Scratchpad value={scratch} onChange={setScratch} />
         </div>
-        <div className="flex-1 min-w-0 min-h-0 sm:w-1/2 h-full">
+        <div className="flex-1 min-w-0 min-h-0 md:w-1/2 h-full">
           <ChatPane taskId={taskId} onScratchpadInsert={appendToScratchpad} />
         </div>
       </div>

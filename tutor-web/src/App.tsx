@@ -104,7 +104,7 @@ export function App() {
               <button
                 onClick={pickAnotherTask}
                 data-testid="pick-another-task-btn"
-                className="text-xs tracking-widest bg-accent text-page-fg px-2 py-0.5 hover:bg-accent-hover"
+                className="text-xs tracking-widest bg-accent text-page-fg px-3 py-2 sm:px-2 sm:py-0.5 hover:bg-accent-hover"
               >
                 × close
               </button>
