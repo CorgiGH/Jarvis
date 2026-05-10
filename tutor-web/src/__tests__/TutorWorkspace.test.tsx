@@ -55,3 +55,15 @@ test("send button POSTs to /api/chat and shows reply", async () => {
     typeof c[0] === "string" && c[0].includes("/api/chat"));
   expect(call?.[1]?.headers?.["X-CSRF-Token"]).toBe("zzz");
 });
+
+test("deduped banner renders only when dedupedNotice prop is true", () => {
+  const { rerender } = render(
+    <MemoryRouter><TutorWorkspace pdfUrl="/sample.pdf" taskId="T1" /></MemoryRouter>,
+  );
+  expect(screen.queryByTestId("deduped-notice")).toBeNull();
+  rerender(
+    <MemoryRouter><TutorWorkspace pdfUrl="/sample.pdf" taskId="T1" dedupedNotice={true} /></MemoryRouter>,
+  );
+  const banner = screen.getByTestId("deduped-notice");
+  expect(banner.textContent).toMatch(/OPENED EXISTING TASK/);
+});

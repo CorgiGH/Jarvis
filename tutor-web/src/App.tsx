@@ -21,7 +21,21 @@ export function App() {
   const navigate = useNavigate();
   const explicitTaskId = params.get("taskId");
   const pickMode = params.get("pick") === "1";  // explicit "go to QuickStart" flag
+  const dedupedFlag = params.get("deduped") === "1";  // surfaced when POST /tasks deduped
   const [sessionReady, setSessionReady] = useState(false);
+
+  // Strip ?deduped=1 after a tick so a refresh doesn't re-flash the banner.
+  useEffect(() => {
+    if (!dedupedFlag) return;
+    const t = setTimeout(() => {
+      setParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.delete("deduped");
+        return next;
+      }, { replace: true });
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [dedupedFlag, setParams]);
 
   useEffect(() => {
     ensureTutorSession().finally(() => setSessionReady(true));
@@ -107,7 +121,7 @@ export function App() {
           ? <div className="p-6 font-mono text-sm text-black/60">setting up tutor session…</div>
           : showQuickStart
             ? <TaskQuickStart />
-            : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} />}
+            : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
       </main>
     </div>
   );

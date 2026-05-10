@@ -78,7 +78,11 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
       const created: TaskView = await r.json();
       onCreated?.(created.id);
-      navigate(`/?taskId=${created.id}`);
+      // 200 = server matched (subject,title) → existing task. 201 = fresh insert.
+      // Pass `deduped=1` so the workspace can flash a banner; otherwise the user
+      // sees no difference between "made a new task" and "re-opened an old one".
+      const deduped = r.status === 200;
+      navigate(`/?taskId=${created.id}${deduped ? "&deduped=1" : ""}`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
