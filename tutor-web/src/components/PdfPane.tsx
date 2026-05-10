@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { jarvisFetch } from "../lib/api";
 
 export function PdfPane({ url }: { url: string }) {
   const [error, setError] = useState<string | null>(null);
@@ -6,7 +7,7 @@ export function PdfPane({ url }: { url: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(url, { credentials: "include" })
+    jarvisFetch(url)
       .then(async r => {
         if (cancelled) return;
         if (!r.ok) {
