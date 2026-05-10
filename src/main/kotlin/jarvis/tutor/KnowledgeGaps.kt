@@ -193,6 +193,33 @@ class KnowledgeGapRepo(private val db: Database, private val ledgerDir: Path) {
         true
     }
 
+    private fun tokenize(s: String): Set<String> =
+        s.lowercase().split(Regex("\\W+")).filter { it.length >= 2 }.toSet()
+
+    private fun jaccard(a: Set<String>, b: Set<String>): Double {
+        if (a.isEmpty() && b.isEmpty()) return 0.0
+        val inter = a.intersect(b).size.toDouble()
+        val union = a.union(b).size.toDouble()
+        return if (union == 0.0) 0.0 else inter / union
+    }
+
+    /**
+     * Phase 7.3 token-overlap Jaccard search across the user's gap
+     * history. Returns candidates with score >= threshold, sorted by
+     * score desc, capped at k. Embedding-cosine path deferred — no
+     * embed function wired into the repo today.
+     */
+    fun findSimilar(userId: String, topic: String, threshold: Double = 0.75, k: Int = 5): List<Pair<KnowledgeGap, Double>> {
+        val needle = tokenize(topic)
+        if (needle.isEmpty()) return emptyList()
+        val candidates = listForUser(userId, limit = 500)
+        return candidates
+            .map { it to jaccard(tokenize(it.topic), needle) }
+            .filter { it.second >= threshold }
+            .sortedByDescending { it.second }
+            .take(k)
+    }
+
     private fun loadFromJsonl(userId: String, id: String): KnowledgeGap? {
         val file = ledgerDir.resolve("knowledge_gaps_$userId.jsonl")
         if (!Files.exists(file)) return null
