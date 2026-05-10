@@ -1,1 +1,79 @@
 @import "tailwindcss";
+
+/* ---------- Brutalist-yellow design tokens (Phase 2.1) ----------
+   Color tokens are semantic, not literal. To reskin (e.g. light/dark
+   later phase), swap the :root block; components don't churn.
+   Tailwind v4 picks up @theme `--color-<name>` as `bg-<name>`,
+   `text-<name>`, `border-<name>` etc. */
+:root {
+  /* Surface */
+  --color-page-bg: #ffffff;
+  --color-page-fg: #000000;
+  --color-panel-dark-bg: #000000;
+  --color-panel-dark-fg: #fde047;          /* yellow-300 */
+
+  /* Accent */
+  --color-accent: #fde047;                  /* yellow-300 */
+  --color-accent-hover: #facc15;            /* yellow-400 */
+  --color-accent-soft: #fefce8;             /* yellow-50 */
+
+  /* Border */
+  --color-border-strong: #000000;
+  --color-border-thin: rgba(0, 0, 0, 0.2);
+
+  /* Focus */
+  --color-ring-focus: #facc15;              /* yellow-400 */
+
+  /* Typography */
+  --type-sm: 12px;
+  --type-body: clamp(14px, calc(13.5px + 0.1vw), 16px);
+  --type-lg: 18px;
+  --type-h2: 20px;
+}
+
+@theme {
+  --color-page-bg: var(--color-page-bg);
+  --color-page-fg: var(--color-page-fg);
+  --color-panel-dark-bg: var(--color-panel-dark-bg);
+  --color-panel-dark-fg: var(--color-panel-dark-fg);
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-border-strong: var(--color-border-strong);
+  --color-border-thin: var(--color-border-thin);
+  --color-ring-focus: var(--color-ring-focus);
+}
+
+/* ---------- Body baseline typography (Phase 2.2) ---------- */
+html, body {
+  font-size: var(--type-body);
+  line-height: 1.5;
+}
+
+code, pre, kbd, samp {
+  line-height: 1.6;
+}
+
+/* Cap chat reply prose width per wiki [[Typography & Readability]];
+   class is opt-in so we don't regress card layouts that need wide rows. */
+.prose-clamp p,
+.prose-clamp li,
+.prose-clamp pre {
+  max-width: 60ch;
+}
+
+/* ---------- Focus ring (Phase 2.3) ----------
+   Global focus-visible per wiki [[Keyboard Navigation]]; keyboard users
+   get the ring, mouse users don't. */
+*:focus-visible {
+  outline: 2px solid var(--color-ring-focus);
+  outline-offset: 2px;
+}
+
+/* ---------- Reduced motion (Phase 2.3) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
