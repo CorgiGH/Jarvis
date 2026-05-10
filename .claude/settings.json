@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "powershell -ExecutionPolicy Bypass -File C:\\Users\\User\\jarvis-kotlin\\tools\\memory-verify.ps1"
+      }
+    ]
+  }
+}
