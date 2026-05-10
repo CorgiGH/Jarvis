@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { TutorWorkspace } from "./components/TutorWorkspace";
 import { TaskQuickStart } from "./components/TaskQuickStart";
+import { ActiveTaskDashboard } from "./components/ActiveTaskDashboard";
 import { jarvisFetch } from "./lib/api";
 
 const LAST_TASK_KEY = "jarvis.lastTaskId";
@@ -178,7 +179,7 @@ export function App() {
         {!sessionReady
           ? <div className="p-6 font-mono text-sm text-page-fg/60">setting up tutor session…</div>
           : showQuickStart
-            ? <TaskQuickStart />
+            ? <ActiveTaskDashboard />
             : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
       </main>
     </div>
