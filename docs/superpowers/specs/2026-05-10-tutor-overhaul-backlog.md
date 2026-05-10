@@ -58,7 +58,7 @@ Format per entry:
 
 ## Phase 5 — Corpus expansion
 
-(empty)
+- `[5] [ops] [reingest-runbook] [done] Post-crawl knowledge-graph rebuild on VPS: ssh root@46.247.109.91 "set -a; source /opt/jarvis/.env; set +a; /opt/jarvis/jarvis-kotlin/bin/jarvis-kotlin ingest-corpus". Idempotent on existing nodes; new files in _extras/<subject>/extracted/ become new nodes + edges. Run after each crawler invocation that fetches new PDFs.`
 
 ## Phase 6 — Task autonomy
 
