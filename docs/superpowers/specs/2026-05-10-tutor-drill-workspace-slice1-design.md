@@ -19,6 +19,7 @@ Pivot the tutor workspace into a chat-first **drill stack** that grounds every c
 7. **Full motion language** — all 18 v5.1 animations + Bret-Victor-grade concept illustrations: drag-μ-on-the-line direct manipulation, sumplot marker tracks curve via RAF, slope-counter votes viz, Σ-decomposition stacked bar, plus Plotly frame morphs for distribution comparisons.
 8. **Tema A as the live test case** — Slice 1 ships against the real `_extras/PS/ps_hw/Tema_A.pdf`. Other tasks fall back to the legacy single-problem path until Slice 2 ports them.
 9. **Daemon PC-boot autostart** — Windows Task Scheduler installer for `jarvis-daemon` Rust binary + reverse SSH tunnel. Survives PC reboot/sleep. User runs the installer once with admin perms.
+10. **Google OAuth 2.0 + REST replacement for `GwsEffector`** — replace the broken `gws` subprocess approach with a direct Kotlin OAuth client + Calendar/Drive/Gmail REST clients. Wires the existing `calendar_create_event` / `drive_search` / `gmail_create_draft` LLM tools to actually work. User does one-time setup: create OAuth client in Google Cloud Console, download credentials JSON, run consent flow once.
 
 ## What's out of scope (Slice 2, deferred)
 
@@ -36,7 +37,6 @@ Pivot the tutor workspace into a chat-first **drill stack** that grounds every c
 ## What's permanently out of scope
 
 - Telegram bot producer (user-blocked, awaiting token)
-- ~~gws OAuth (user-blocked, interactive `gws auth login` on VPS)~~ **REVISED 2026-05-10:** the `@googleworkspace/cli` reference in earlier session memory + `GwsEffector.kt` was hallucinated — `gws` is not a real binary. Real path: replace `GwsEffector` subprocess approach with direct Google OAuth 2.0 + REST API client (Kotlin), or migrate to `gam` (Google Apps Manager). Demoted to Slice 2 backlog item rather than "user-blocked" — no user can fix what doesn't exist.
 
 ## Architecture
 
@@ -222,6 +222,57 @@ Fixed in `E` above: replace regex with LLM grader. `giveUp()` flow grades as AGA
 
 Replace placeholder `'(in the real app, the LLM answers here ...)'` with actual call to existing `JarvisToolset.chat` via `/api/v1/sidekick/ask` route. Free-tier OpenRouter chain + 5-layer prompt-injection scrubber already in place.
 
+### K. Google OAuth 2.0 + REST replacement
+
+**Problem:** `GwsEffector.kt` shells out to a `gws` binary that doesn't exist (`@googleworkspace/cli` is not a real npm package; verified by `gws auth login` returning "Command 'gws' not found" on VPS 2026-05-10). The existing `calendar_create_event` / `drive_search` / `gmail_create_draft` tools in `JarvisToolset.openAiToolDefs` will silently fail every invocation in Slice 1's drill workspace.
+
+**Replacement:** new `jarvis.tutor.GoogleApiClient` Kotlin module using direct OAuth 2.0 + Google REST APIs:
+
+```
+jarvis.tutor.GoogleApiClient
+├── OAuth2Token (data class: accessToken, refreshToken, expiresAt)
+├── TokenStore (loads/persists from /opt/jarvis/data/google-token.json)
+├── refreshIfExpired(token, clientCreds): OAuth2Token
+├── calendar.events.insert(summary, startIso, endIso, calendarId="primary")
+├── drive.files.list(query, pageSize)
+├── gmail.users.drafts.create(to, subject, body, userId="me")
+└── REST helper using java.net.http.HttpClient (already in classpath, no new deps)
+```
+
+OAuth scopes (minimal):
+- `https://www.googleapis.com/auth/calendar.events` (Calendar event read+write)
+- `https://www.googleapis.com/auth/drive.readonly` (Drive read; downgraded from full)
+- `https://www.googleapis.com/auth/gmail.compose` (Gmail draft only — never send)
+
+**One-time setup (user action, browser-required):**
+1. Open https://console.cloud.google.com/apis/credentials
+2. Create new project "Jarvis Personal Tutor" (or reuse existing)
+3. Enable APIs: Calendar API + Drive API + Gmail API
+4. Create OAuth client ID → application type: "Desktop app" → name: "jarvis-personal"
+5. Download `client_secrets.json`
+6. Add OAuth consent screen with the user's gmail (publishing status: Testing — only the user's own email is in test-users list)
+7. SCP the JSON to VPS: `scp client_secrets.json root@46.247.109.91:/opt/jarvis/data/`
+8. Run new `jarvis google-auth-bootstrap` CLI subcommand on user's PC (browser-capable):
+   - Reads `client_secrets.json`
+   - Spins up local `http://localhost:9999/callback` listener
+   - Opens browser to OAuth consent
+   - Receives auth code, exchanges for refresh + access token
+   - Prints token JSON to stdout
+   - User SCPs `google-token.json` to VPS at `/opt/jarvis/data/google-token.json`
+9. Set `GWS_ENABLED=1` in `/opt/jarvis/.env`, restart service
+
+**JarvisToolset wiring:** `dispatchCalendarCreate` / `dispatchDriveSearch` / `dispatchGmailDraft` (currently call `GwsEffector.run`) get redirected to `GoogleApiClient` methods. Tool descriptions in `openAiToolDefs` stay identical so the LLM doesn't need to relearn anything.
+
+**`GwsEffector.kt` fate:** kept temporarily as a compat shim that delegates to `GoogleApiClient` so any other caller (none today) doesn't break. New code uses `GoogleApiClient` directly. `GwsEffector` deleted in a follow-up commit.
+
+**Health surface:** existing `GET /api/v1/gws/status` route (Phase 7 deferral closer) renamed to `/api/v1/google/status`; reports `enabled`, `tokenPresent`, `tokenExpiresAt`, `tokenRefreshable`. Tutor settings page surfaces this so user knows when re-consent is needed (refresh tokens never expire unless user revokes, but token file could be deleted by ops).
+
+**Failure modes:**
+- Missing `google-token.json` → return structured error "GoogleApi disabled — run google-auth-bootstrap on your PC + scp the token to VPS"
+- 401 on access token → auto-refresh via stored refresh_token + retry once; if refresh also fails, surface as "consent expired, re-run bootstrap"
+- 429 rate limit → exponential backoff (3 tries, 1s/4s/16s)
+- All errors include the upstream Google error code in the LLM-visible message so debugging is fast
+
 ### J. Daemon PC-boot autostart
 
 **Problem:** the Rust `jarvis-daemon` (HMAC-gated effector at 127.0.0.1:7331) + reverse SSH tunnel both die on PC reboot/sleep. Effector tools then fail with BadGateway. Currently manual `cargo run` after every boot.
@@ -291,6 +342,9 @@ Backend (Kotlin):
 - `/api/v1/fsrs/due` returns due cards, `/api/v1/fsrs/{id}/grade` updates state
 - Existing `GapPromotionTest` extended to mint multiple cards per problem
 - `/api/v1/daemon/health` returns reachable/tunnel-only/unreachable based on probe
+- `GoogleApiClient.refreshIfExpired` handles expired access token + refresh
+- `/api/v1/google/status` returns enabled/tokenPresent/expiresAt/refreshable
+- `GoogleApiClient` integration tests (mocked HTTP server returning canned Google responses for each endpoint shape)
 
 Frontend (Vitest):
 - `DrillStack` renders DRILL first, others locked
@@ -332,11 +386,12 @@ Implementation order (also the writing-plans task order):
 10. Frontend: `/tutor/review` route. Flip card + 4 grade buttons + forecast.
 11. Frontend: concept animations — direct-drag μ, sumplot RAF, slope-counter, Σ-stacked-bar, Plotly frame morphs.
 12. Daemon autostart: `tools/install-daemon-autostart.ps1` + `tools/jarvis-daemon-task.xml` + `tools/uninstall-daemon-autostart.ps1` + `GET /api/v1/daemon/health` route + Tutor header status pill.
-13. Wire end-to-end against Tema A. Manual dogfood pass. Bugfix.
-14. Backend tests. Frontend tests. axe.
-15. Deploy. Verify bundle hash. Backlog Slice 2 items.
+13. Google OAuth+REST: `GoogleApiClient.kt` + `TokenStore` + 3 REST clients (calendar/drive/gmail) + `jarvis google-auth-bootstrap` CLI subcommand + redirect 3 dispatch methods in `JarvisToolset` + rename `/api/v1/gws/status` → `/api/v1/google/status`.
+14. Wire end-to-end against Tema A. Manual dogfood pass. Bugfix.
+15. Backend tests. Frontend tests. axe.
+16. Deploy. Verify bundle hash. Backlog Slice 2 items.
 
-Estimated 9-13 hours for one Claude Code session running the writing-plans → subagent-driven-development pipeline.
+Estimated 12-17 hours for one Claude Code session running the writing-plans → subagent-driven-development pipeline.
 
 ## Self-review (per skill)
 
@@ -360,7 +415,6 @@ Lifted directly from the 19 specialist reports. Will be its own spec doc:
 - onboarding: 90s coachmark on first launch covering `FSRS DUE`, `PRIOR GAP %`, drill stack flow
 - Romanian register: `verifică`/`salvează`/`marchează rezolvată` for academic verbs, keep tech terms English
 - streak gamification opt-out toggle in settings
-- **Replace `GwsEffector` subprocess (non-existent `gws` binary) with direct OAuth 2.0 + REST API client.** Two options: (a) Kotlin client using `google-oauth-client` + raw HTTPS calls to `googleapis.com/calendar/v3/...`, `gmail/v1/...`, `drive/v3/...`. (b) Adapter for `gam` (Google Apps Manager) if installed on VPS. Either path needs OAuth client credentials JSON downloaded from Google Cloud Console + interactive consent step performed once on a browser-capable machine + refresh token persisted to VPS keyring. Recommend (a) for fewer moving parts.
 - Plotly Boeing → uPlot or featherweight alt
 - nav pills onclick wiring + free-chat surface + settings cog
 - inline-help context envelope schema documented for LLM-side
