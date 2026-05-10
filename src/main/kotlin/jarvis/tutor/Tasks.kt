@@ -51,6 +51,7 @@ data class Task(
     val updatedAt: Instant,
     val scratchpadText: String? = null,
     val materialPaths: List<String> = emptyList(),
+    val problemRefs: List<ContentRef> = emptyList(),
 )
 
 object TasksTable : Table("tasks") {
@@ -71,6 +72,7 @@ object TasksTable : Table("tasks") {
     val updatedAt = timestamp("updated_at")
     val scratchpadText = text("scratchpad_text").nullable()
     val materialPaths = text("material_paths").nullable()
+    val problemRefsJson = text("problem_refs_json").nullable()
     override val primaryKey = PrimaryKey(id)
     init {
         // Closes the Phase-6 deferred unique-index gap. Two concurrent
@@ -112,6 +114,9 @@ class TaskRepo(private val db: Database) {
             it[TasksTable.materialPaths] = if (t.materialPaths.isEmpty()) null
                 else TutorTypes.tutorJson.encodeToString(
                     ListSerializer(String.serializer()), t.materialPaths)
+            it[TasksTable.problemRefsJson] = if (t.problemRefs.isEmpty()) null
+                else TutorTypes.tutorJson.encodeToString(
+                    ListSerializer(ContentRef.serializer()), t.problemRefs)
         }
     }
 
@@ -162,6 +167,12 @@ class TaskRepo(private val db: Database) {
             runCatching {
                 TutorTypes.tutorJson.decodeFromString(
                     ListSerializer(String.serializer()), json)
+            }.getOrDefault(emptyList())
+        } ?: emptyList(),
+        problemRefs = this[TasksTable.problemRefsJson]?.let { json ->
+            runCatching {
+                TutorTypes.tutorJson.decodeFromString(
+                    ListSerializer(ContentRef.serializer()), json)
             }.getOrDefault(emptyList())
         } ?: emptyList(),
     )

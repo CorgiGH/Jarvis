@@ -67,4 +67,21 @@ class TasksTest {
         assertEquals(1, repo.listForUser(u1).size)
         assertEquals(1, repo.listForUser(u2).size)
     }
+
+    @Test
+    fun `insert with problemRefs round-trips through repo`() {
+        val db = freshDb()
+        val u = seedUser(db)
+        val refs = listOf(
+            ContentRef("archival", "_extras/PS/ps_hw/Tema_A.pdf#page=4", "abc"),
+            ContentRef("archival", "_extras/PS/ps_hw/Tema_A.pdf#page=6", "def"),
+        )
+        val t = makeTask(u, Instant.now().plusSeconds(3600), title = "Multi PA")
+            .copy(problemRefs = refs)
+        TaskRepo(db).insert(t)
+        val found = TaskRepo(db).findById(t.id)
+        assertNotNull(found)
+        assertEquals(2, found.problemRefs.size)
+        assertEquals("_extras/PS/ps_hw/Tema_A.pdf#page=4", found.problemRefs[0].path)
+    }
 }
