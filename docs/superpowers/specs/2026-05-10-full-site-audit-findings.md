@@ -109,7 +109,7 @@ Installed 2026-05-10 via `apt-get install python3-sympy` on VPS (sympy 1.9). Bri
 
 ## Final state
 
-- Live bundle hash: _set after final deploy_
+- Live bundle hash: `index-CFXAulB7.js` (verified via curl after deploy)
 - HIGH shipped this audit: 3 (delete route, mockup deltas all MED actually — HIGH from earlier in session)
 - MED shipped this audit: 8
 - LOW deferred to backlog: 8
