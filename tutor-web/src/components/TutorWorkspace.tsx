@@ -3,6 +3,7 @@ import { PdfPane } from "./PdfPane";
 import { ChatPane } from "./ChatPane";
 import { Scratchpad } from "./Scratchpad";
 import { Sidebar } from "./Sidebar";
+import { jarvisFetch } from "../lib/api";
 
 const SCRATCHPAD_KEY = "jarvis.scratchpad";
 
@@ -21,6 +22,33 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
     if (typeof localStorage === "undefined") return;
     localStorage.setItem(storageKey, scratch);
   }, [storageKey, scratch]);
+
+  // Phase 3.4: server-persist. Fetch on task mount; server wins so a
+  // different device's edits flow back. Subsequent local edits PUT
+  // back via 500ms debounce. localStorage stays as offline cache so
+  // the textarea isn't blank during the round-trip.
+  useEffect(() => {
+    let cancelled = false;
+    jarvisFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}/scratchpad`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { text?: string } | null) => {
+        if (cancelled || !data) return;
+        setScratch(data.text ?? "");
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [taskId]);
+
+  useEffect(() => {
+    if (typeof scratch !== "string") return;
+    const t = setTimeout(() => {
+      jarvisFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}/scratchpad`, {
+        method: "PUT",
+        body: JSON.stringify({ text: scratch }),
+      }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(t);
+  }, [scratch, taskId]);
 
   function appendToScratchpad(text: string) {
     setScratch(prev => prev.length === 0 ? text : `${prev}\n\n${text}`);
