@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import java.time.Instant
 
 enum class TaskStatus { TODO, ACTIVE, SUBMITTED, GRADED, ARCHIVED }
@@ -48,6 +49,7 @@ data class Task(
     val status: TaskStatus,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val scratchpadText: String? = null,
 )
 
 object TasksTable : Table("tasks") {
@@ -66,6 +68,7 @@ object TasksTable : Table("tasks") {
     val status = varchar("status", 16)
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
+    val scratchpadText = text("scratchpad_text").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -95,7 +98,16 @@ class TaskRepo(private val db: Database) {
             it[status] = t.status.name
             it[createdAt] = t.createdAt
             it[updatedAt] = t.updatedAt
+            it[scratchpadText] = t.scratchpadText
         }
+    }
+
+    fun updateScratchpadText(taskId: String, text: String?, now: Instant = Instant.now()): Boolean = transaction(db) {
+        val n = TasksTable.update({ TasksTable.id eq taskId }) {
+            it[scratchpadText] = text
+            it[updatedAt] = now
+        }
+        n > 0
     }
 
     fun findById(id: String): Task? = transaction(db) {
@@ -132,5 +144,6 @@ class TaskRepo(private val db: Database) {
         status = TaskStatus.valueOf(this[TasksTable.status]),
         createdAt = this[TasksTable.createdAt],
         updatedAt = this[TasksTable.updatedAt],
+        scratchpadText = this[TasksTable.scratchpadText],
     )
 }

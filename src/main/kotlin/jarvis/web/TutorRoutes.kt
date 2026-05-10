@@ -6,6 +6,7 @@ import io.ktor.server.http.content.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.server.routing.put
 import jarvis.tutor.AuditLinesTable
 import jarvis.tutor.ContentRef
 import jarvis.tutor.DaemonClient
@@ -537,6 +538,55 @@ fun Application.installTutorRoutes() {
                     "to a real archival/*.pdf at task creation")
         }
 
+        // Phase 3.4 — task scratchpad text persistence. Plain text only,
+        // bound to a single task; the SPA debounces PUTs while the user
+        // types and rehydrates from GET on workspace load.
+        get("/api/v1/tasks/{id}/scratchpad") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val taskId = call.parameters["id"]
+                ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@get }
+            val task = TaskRepo(ctx.db).findById(taskId)
+            if (task == null || task.userId != userId) {
+                call.respond(HttpStatusCode.NotFound, "task not found"); return@get
+            }
+            call.respond(HttpStatusCode.OK, ApiScratchpadView(text = task.scratchpadText ?: ""))
+        }
+
+        put("/api/v1/tasks/{id}/scratchpad") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@put }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val taskId = call.parameters["id"]
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val task = TaskRepo(ctx.db).findById(taskId)
+                if (task == null || task.userId != userId) {
+                    call.respond(HttpStatusCode.NotFound, "task not found"); return@csrfProtect
+                }
+                val req = try {
+                    sensorJson.decodeFromString(ApiScratchpadView.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                if (req.text.length > 50_000) {
+                    call.respond(HttpStatusCode.BadRequest, "scratchpad too large (max 50000 chars)")
+                    return@csrfProtect
+                }
+                val ok = TaskRepo(ctx.db).updateScratchpadText(taskId, req.text)
+                if (!ok) {
+                    call.respond(HttpStatusCode.NotFound, "task not found"); return@csrfProtect
+                }
+                call.respond(HttpStatusCode.OK, ApiScratchpadView(text = req.text))
+            }
+        }
+
         // Layer B / task-context V0 — task CRUD so user can seed real
         // PS Tema A / PA Tema 5 / etc. Without this, TaskHeaderBuilder
         // has nothing to look up. Minimal shape: subject + title +
@@ -789,6 +839,9 @@ private data class ApiCreateGrantRequest(
     val maxCalls: Int = 10,
 )
 
+@Serializable
+private data class ApiScratchpadView(val text: String)
+
 /**
  * Wires the Tutor Layer A persistence + ledger context onto the running
  * Application. Closes the prod gap from Task 21: without this, /auth/setup
@@ -813,7 +866,7 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
     Files.createDirectories(parent)
     val db = TutorDb.connect(dbPath)
     transaction(db) {
-        SchemaUtils.create(
+        SchemaUtils.createMissingTablesAndColumns(
             UsersTable,
             TokensTable,
             SessionsTable,
