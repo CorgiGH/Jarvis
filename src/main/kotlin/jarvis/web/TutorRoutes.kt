@@ -1062,6 +1062,7 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             ProviderConfigTable,
             EffectorAttemptsTable,
             jarvis.tutor.CardActionLogTable,
+            jarvis.tutor.taskdetect.DetectedTaskMappingTable,
         )
     }
     // Single-user owner row (idempotent). The tutor surface is
