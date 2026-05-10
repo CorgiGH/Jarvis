@@ -104,7 +104,17 @@ function Invoke-MemoryVerify {
         $exitCode = 0
 
         try {
-            $stdout = pwsh -NoProfile -Command $entry.cmd 2>&1 | Out-String
+            # If command contains pipes or bash-specific operators, delegate to bash
+            if ($entry.cmd -match '\|' -or $entry.cmd -match 'grep|sed|awk|head|tail') {
+                # Try Git bash first, fall back to system bash
+                $bashPath = 'C:\Program Files\Git\bin\bash.exe'
+                if (-not (Test-Path $bashPath)) {
+                    $bashPath = 'bash'
+                }
+                $stdout = & $bashPath -c $entry.cmd 2>&1 | Out-String
+            } else {
+                $stdout = pwsh -NoProfile -Command $entry.cmd 2>&1 | Out-String
+            }
             $exitCode = $LASTEXITCODE
             if ($null -eq $exitCode) { $exitCode = 0 }
         } catch {
