@@ -1,9 +1,6 @@
 package jarvis.tutor
 
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import java.util.concurrent.TimeUnit
 
 /**
@@ -55,51 +52,58 @@ object GwsEffector {
         data class Err(val exitCode: Int, val stderr: String) : Result()
     }
 
-    /** Run `gws <subcommand>` with structured args. Returns parsed
-     *  JSON object on success, or stderr excerpt on failure. */
+    /** Compat shim — delegates to GoogleApiClient. Kept temporarily so any
+     *  future caller that still uses GwsEffector.run() is not broken.
+     *  New code uses GoogleClients directly. Scheduled for deletion post-Slice-1. */
     fun run(
         subcommand: String,
         params: Map<String, Any>? = null,
         body: Map<String, Any>? = null,
         timeoutSeconds: Long = DEFAULT_TIMEOUT_S,
     ): Result {
-        if (!isEnabled()) {
-            return Result.Err(0,
-                "gws disabled — set GWS_ENABLED=1 + ensure `gws auth login` succeeded on this machine")
-        }
         val parts = subcommand.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
         if (parts.isEmpty()) return Result.Err(0, "subcommand required")
-        // Only allow known subcommand prefixes.
-        val first = parts[0]
-        if (first !in setOf("calendar", "drive", "gmail", "sheets", "docs")) {
-            return Result.Err(0, "subcommand not allowed: $first (allow: calendar/drive/gmail/sheets/docs)")
+        return try {
+            when {
+                parts.size >= 3 && parts[0] == "calendar" && parts[2] == "insert" -> {
+                    val summary = (body?.get("summary") as? String).orEmpty()
+                    val startIso = ((body?.get("start") as? Map<*, *>)?.get("dateTime") as? String).orEmpty()
+                    val endIso = ((body?.get("end") as? Map<*, *>)?.get("dateTime") as? String).orEmpty()
+                    val calId = (params?.get("calendarId") as? String) ?: "primary"
+                    val r = jarvis.tutor.GoogleClients.calendar()
+                        .eventsInsert(calId, summary, startIso, endIso)
+                    if (r.isSuccess) Result.Ok("""{"id":"${r.getOrThrow()}"}""", null)
+                    else Result.Err(0, r.exceptionOrNull()?.message?.take(400).orEmpty())
+                }
+                parts.size >= 3 && parts[0] == "drive" && parts[2] == "list" -> {
+                    val q = (params?.get("q") as? String).orEmpty()
+                    val ps = (params?.get("pageSize") as? Int) ?: 5
+                    val r = jarvis.tutor.GoogleClients.drive().filesList(q, ps)
+                    if (r.isSuccess) {
+                        val json = r.getOrThrow().joinToString(",") {
+                            """{"id":"${it.id}","name":"${it.name}"}"""
+                        }
+                        Result.Ok("""{"files":[$json]}""", null)
+                    } else Result.Err(0, r.exceptionOrNull()?.message?.take(400).orEmpty())
+                }
+                parts.size >= 4 && parts[0] == "gmail" && parts[2] == "drafts" -> {
+                    val raw = (body?.get("message") as? Map<*, *>)?.get("raw") as? String
+                    if (raw == null) return Result.Err(0, "gmail shim: message.raw required")
+                    val decoded = String(java.util.Base64.getUrlDecoder().decode(raw), Charsets.UTF_8)
+                    val to = decoded.lines().firstOrNull { it.startsWith("To:") }
+                        ?.removePrefix("To:")?.trim().orEmpty()
+                    val subjectLine = decoded.lines().firstOrNull { it.startsWith("Subject:") }
+                        ?.removePrefix("Subject:")?.trim().orEmpty()
+                    val bodyText = decoded.substringAfter("\r\n\r\n", "")
+                    val r = jarvis.tutor.GoogleClients.gmail().draftsCreate(to, subjectLine, bodyText)
+                    if (r.isSuccess) Result.Ok("""{"id":"${r.getOrThrow()}"}""", null)
+                    else Result.Err(0, r.exceptionOrNull()?.message?.take(400).orEmpty())
+                }
+                else -> Result.Err(0, "GwsEffector shim: unsupported subcommand '$subcommand' (use GoogleClients directly)")
+            }
+        } catch (e: Exception) {
+            Result.Err(-1, "GwsEffector shim error: ${e.message?.take(400)}")
         }
-        val cmd = mutableListOf("gws").apply { addAll(parts); add("--format"); add("json") }
-        if (params != null) {
-            cmd += "--params"; cmd += JSON.encodeToString(JsonObject.serializer(), mapToJsonObject(params))
-        }
-        if (body != null) {
-            cmd += "--json"; cmd += JSON.encodeToString(JsonObject.serializer(), mapToJsonObject(body))
-        }
-
-        val pb = ProcessBuilder(cmd).redirectErrorStream(false)
-        val env = pb.environment()
-        env.keys.retainAll { it in safeEnv }
-        val proc = try { pb.start() } catch (e: Exception) {
-            return Result.Err(-1, "gws launch failed: ${e.javaClass.simpleName}: ${e.message?.take(200)}")
-        }
-        val finished = proc.waitFor(timeoutSeconds, TimeUnit.SECONDS)
-        if (!finished) {
-            proc.destroyForcibly()
-            return Result.Err(-1, "gws timeout after ${timeoutSeconds}s")
-        }
-        val stdout = proc.inputStream.bufferedReader().readText().take(20_000)
-        val stderr = proc.errorStream.bufferedReader().readText().take(2_000)
-        if (proc.exitValue() != 0) {
-            return Result.Err(proc.exitValue(), stderr.ifBlank { "gws exit ${proc.exitValue()}" })
-        }
-        val parsed = try { JSON.parseToJsonElement(stdout) as? JsonObject } catch (_: Exception) { null }
-        return Result.Ok(stdout, parsed)
     }
 
     /**
@@ -168,22 +172,4 @@ object GwsEffector {
         return proc.exitValue() to stderr
     }
 
-    private val JSON = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-
-    private fun mapToJsonObject(m: Map<String, Any>): JsonObject {
-        val out = mutableMapOf<String, kotlinx.serialization.json.JsonElement>()
-        for ((k, v) in m) {
-            out[k] = when (v) {
-                is String -> JsonPrimitive(v)
-                is Int -> JsonPrimitive(v)
-                is Long -> JsonPrimitive(v)
-                is Boolean -> JsonPrimitive(v)
-                is Double -> JsonPrimitive(v)
-                is Map<*, *> -> @Suppress("UNCHECKED_CAST") mapToJsonObject(v as Map<String, Any>)
-                is JsonObject -> v
-                else -> JsonPrimitive(v.toString())
-            }
-        }
-        return JsonObject(out)
-    }
 }

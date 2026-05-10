@@ -993,22 +993,28 @@ fun Application.installTutorRoutes() {
             }
         }
 
-        // Phase 7 deferral closer: surface gws auth state to the UI so
-        // the user can tell whether calendar/drive/gmail tools will fire.
-        // Interactive `gws auth login` still runs on the VPS — this only
-        // reports current state and what to do if it's not authenticated.
-        get("/api/v1/gws/status") {
+        // Renamed from /api/v1/gws/status (Phase I). Reports Google OAuth token
+        // state so the user can diagnose calendar/drive/gmail availability from
+        // the Tutor settings page without SSHing into the VPS.
+        get("/api/v1/google/status") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
             val sid = call.request.cookies["jarvis_session"]
             sid?.let { SessionRepo(ctx.db).findUserId(it) }
                 ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
-            val h = jarvis.tutor.GwsEffector.health()
-            call.respond(HttpStatusCode.OK, ApiGwsStatusReply(
-                enabled = h.enabled,
-                binaryFound = h.binaryFound,
-                authenticated = h.authenticated,
-                detail = h.detail,
+            val tokenPath = java.nio.file.Path.of(
+                System.getenv("GOOGLE_TOKEN_PATH") ?: "/opt/jarvis/data/google-token.json"
+            )
+            val store = jarvis.tutor.google.TokenStore(tokenPath)
+            val token = store.load()
+            val enabled = System.getenv("GWS_ENABLED")?.lowercase()?.let {
+                it == "1" || it == "true" || it == "yes"
+            } ?: false
+            call.respond(HttpStatusCode.OK, ApiGoogleStatusReply(
+                enabled = enabled,
+                tokenPresent = token != null,
+                tokenExpiresAt = token?.expiresAt,
+                tokenRefreshable = token?.refreshToken?.isNotBlank() == true,
             ))
         }
 
@@ -1535,6 +1541,14 @@ private data class ApiGwsStatusReply(
     val binaryFound: Boolean,
     val authenticated: Boolean,
     val detail: String,
+)
+
+@Serializable
+private data class ApiGoogleStatusReply(
+    val enabled: Boolean,
+    val tokenPresent: Boolean,
+    val tokenExpiresAt: String?,
+    val tokenRefreshable: Boolean,
 )
 
 @Serializable

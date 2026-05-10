@@ -5,6 +5,12 @@ import jarvis.HybridRetriever
 import jarvis.OpenRouterChatLlm
 import jarvis.embeddings.EmbeddingsClient
 import jarvis.resolveOpenRouterKey
+import jarvis.tutor.google.CalendarClient
+import jarvis.tutor.google.ClientCreds
+import jarvis.tutor.google.DiskTokenStore
+import jarvis.tutor.google.DriveClient
+import jarvis.tutor.google.GmailClient
+import jarvis.tutor.google.GoogleApiClient
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -16,6 +22,8 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 /**
@@ -480,18 +488,14 @@ object JarvisToolDefs {
         if (summary.isEmpty() || startIso.isEmpty() || endIso.isEmpty()) {
             return "calendar_create_event: summary + startIso + endIso required"
         }
-        val r = GwsEffector.run(
-            subcommand = "calendar events insert",
-            params = mapOf("calendarId" to "primary"),
-            body = mapOf(
-                "summary" to summary,
-                "start" to mapOf<String, Any>("dateTime" to startIso),
-                "end" to mapOf<String, Any>("dateTime" to endIso),
-            ),
-        )
-        return when (r) {
-            is GwsEffector.Result.Ok -> "calendar event created (raw: ${r.stdout.take(400)})"
-            is GwsEffector.Result.Err -> "calendar_create_event failed (exit ${r.exitCode}): ${r.stderr.take(400)}"
+        return try {
+            val cal = GoogleClients.calendar()
+            val result = cal.eventsInsert(calendarId = "primary", summary = summary,
+                startIso = startIso, endIso = endIso)
+            if (result.isSuccess) "calendar event created (id=${result.getOrThrow()})"
+            else "calendar_create_event failed: ${result.exceptionOrNull()?.message?.take(400)}"
+        } catch (e: Exception) {
+            "calendar_create_event error: ${e.message?.take(400)}"
         }
     }
 
@@ -500,13 +504,16 @@ object JarvisToolDefs {
         val q = (obj["query"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
         if (q.isEmpty()) return "drive_search: query required"
         val pageSize = ((obj["pageSize"] as? JsonPrimitive)?.intOrNull ?: 5).coerceIn(1, 20)
-        val r = GwsEffector.run(
-            subcommand = "drive files list",
-            params = mapOf("q" to q, "pageSize" to pageSize),
-        )
-        return when (r) {
-            is GwsEffector.Result.Ok -> r.stdout.take(2000)
-            is GwsEffector.Result.Err -> "drive_search failed (exit ${r.exitCode}): ${r.stderr.take(400)}"
+        return try {
+            val drive = GoogleClients.drive()
+            val result = drive.filesList(query = q, pageSize = pageSize)
+            if (result.isSuccess) {
+                val files = result.getOrThrow()
+                if (files.isEmpty()) "drive_search: no files matched \"$q\""
+                else files.joinToString("\n") { f -> "[${f.id}] ${f.name} (${f.mimeType})" }
+            } else "drive_search failed: ${result.exceptionOrNull()?.message?.take(400)}"
+        } catch (e: Exception) {
+            "drive_search error: ${e.message?.take(400)}"
         }
     }
 
@@ -518,17 +525,13 @@ object JarvisToolDefs {
         if (to.isEmpty() || subject.isEmpty() || body.isEmpty()) {
             return "gmail_create_draft: to + subject + body required"
         }
-        // Gmail API expects RFC822 message in base64url under message.raw.
-        val rfc = "To: $to\r\nSubject: $subject\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n$body"
-        val raw = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(rfc.toByteArray(Charsets.UTF_8))
-        val r = GwsEffector.run(
-            subcommand = "gmail users drafts create",
-            params = mapOf("userId" to "me"),
-            body = mapOf("message" to mapOf<String, Any>("raw" to raw)),
-        )
-        return when (r) {
-            is GwsEffector.Result.Ok -> "gmail draft created (raw: ${r.stdout.take(400)})"
-            is GwsEffector.Result.Err -> "gmail_create_draft failed (exit ${r.exitCode}): ${r.stderr.take(400)}"
+        return try {
+            val gmail = GoogleClients.gmail()
+            val result = gmail.draftsCreate(to = to, subject = subject, body = body)
+            if (result.isSuccess) "gmail draft created (id=${result.getOrThrow()})"
+            else "gmail_create_draft failed: ${result.exceptionOrNull()?.message?.take(400)}"
+        } catch (e: Exception) {
+            "gmail_create_draft error: ${e.message?.take(400)}"
         }
     }
 
@@ -594,4 +597,56 @@ object JarvisToolDefs {
             "[${hit.source} score=${"%.3f".format(hit.score)}] ${hit.id}\n${hit.snippet.take(600)}"
         }
     }
+}
+
+/**
+ * Lazy-initialized Google API clients rooted at the VPS data directory.
+ * Token path: /opt/jarvis/data/google-token.json
+ * Credentials path: /opt/jarvis/data/client_secrets.json (parsed once on first use).
+ *
+ * Both paths are overridable via env vars GOOGLE_TOKEN_PATH and
+ * GOOGLE_CREDS_PATH for tests and alternative deployments.
+ */
+object GoogleClients {
+    private val tokenPath: java.nio.file.Path by lazy {
+        java.nio.file.Path.of(
+            System.getenv("GOOGLE_TOKEN_PATH") ?: "/opt/jarvis/data/google-token.json"
+        )
+    }
+
+    private val credsPath: java.nio.file.Path by lazy {
+        java.nio.file.Path.of(
+            System.getenv("GOOGLE_CREDS_PATH") ?: "/opt/jarvis/data/client_secrets.json"
+        )
+    }
+
+    private val creds: ClientCreds by lazy {
+        try {
+            val text = credsPath.toFile().readText()
+            val jsonParser = Json { ignoreUnknownKeys = true }
+            // client_secrets.json downloaded from Google Cloud Console
+            // has shape: {"installed":{"client_id":"...","client_secret":"...",...}}
+            val root = jsonParser.parseToJsonElement(text).jsonObject
+            val block = (root["installed"] ?: root["web"])?.jsonObject
+                ?: error("client_secrets.json missing 'installed' or 'web' key")
+            val clientId = block["client_id"]?.jsonPrimitive?.content
+                ?: error("client_secrets.json missing client_id")
+            val clientSecret = block["client_secret"]?.jsonPrimitive?.content
+                ?: error("client_secrets.json missing client_secret")
+            ClientCreds(clientId, clientSecret)
+        } catch (e: Exception) {
+            error("GoogleClients: cannot load credentials from $credsPath — " +
+                "run google-auth-bootstrap on your PC. Detail: ${e.message}")
+        }
+    }
+
+    private val store: DiskTokenStore by lazy { DiskTokenStore(tokenPath) }
+
+    private val api: GoogleApiClient by lazy {
+        GoogleApiClient(store = store, creds = creds)
+    }
+
+    fun calendar(): CalendarClient = CalendarClient(api)
+    fun drive(): DriveClient = DriveClient(api)
+    fun gmail(): GmailClient = GmailClient(api)
 }

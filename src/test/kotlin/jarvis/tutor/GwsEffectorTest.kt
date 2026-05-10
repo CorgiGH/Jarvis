@@ -30,11 +30,14 @@ class GwsEffectorTest {
     }
 
     @Test
-    fun `run returns disabled-Err when GWS_ENABLED is unset`() {
-        if (System.getenv("GWS_ENABLED") != null) return
+    fun `run returns Err for unsupported subcommand`() {
+        // The shim no longer gates on GWS_ENABLED; unknown subcommands
+        // return an Err with a message directing callers to GoogleClients.
         val r = GwsEffector.run("calendar events list")
         assertTrue(r is GwsEffector.Result.Err)
         val err = r as GwsEffector.Result.Err
-        assertTrue(err.stderr.contains("disabled"))
+        // "list" is not "insert" so it falls into the unsupported branch.
+        assertTrue(err.stderr.contains("unsupported") || err.exitCode != 0,
+            "expected unsupported-subcommand error but got: ${err.stderr}")
     }
 }
