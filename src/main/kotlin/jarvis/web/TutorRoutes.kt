@@ -35,6 +35,7 @@ import jarvis.tutor.SensorPayload
 import jarvis.tutor.SensorRepo
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.SessionsTable
+import jarvis.tutor.TaskPrepTable
 import jarvis.tutor.TasksTable
 import jarvis.tutor.TokenRepo
 import jarvis.tutor.TokensTable
@@ -1332,6 +1333,7 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             EffectorAttemptsTable,
             jarvis.tutor.CardActionLogTable,
             jarvis.tutor.taskdetect.DetectedTaskMappingTable,
+            TaskPrepTable,
         )
     }
     // Single-user owner row (idempotent). The tutor surface is
