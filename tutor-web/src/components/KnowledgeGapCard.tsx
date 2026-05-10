@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { KnowledgeGap, GapResolved } from "../lib/knowledgeGap";
+import { jarvisFetch } from "../lib/api";
 
 export interface KnowledgeGapCardProps {
   gap: KnowledgeGap;
@@ -24,6 +25,21 @@ export interface KnowledgeGapCardProps {
  */
 export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: KnowledgeGapCardProps) {
   const [resolved, setResolved] = useState<GapResolved | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [contentExpanded, setContentExpanded] = useState(false);
+
+  async function postStatus(status: GapResolved) {
+    setSyncError(null);
+    try {
+      const r = await jarvisFetch(`/api/v1/gap/${encodeURIComponent(gap.id)}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    } catch (e) {
+      setSyncError((e as Error).message);
+    }
+  }
 
   function insert() {
     onInsertScratchpad?.(gap);
@@ -31,10 +47,12 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
   function markResolved() {
     setResolved("USER_MARKED_DONE");
     onResolve?.(gap.id, "USER_MARKED_DONE");
+    postStatus("USER_MARKED_DONE");
   }
   function dismiss() {
     setResolved("USER_DISMISSED");
     onResolve?.(gap.id, "USER_DISMISSED");
+    postStatus("USER_DISMISSED");
   }
 
   const previewCode = gap.exampleCode && gap.exampleCode.length > 320
@@ -58,9 +76,20 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
           source: {gap.sourceCitation}
         </div>
       )}
-      <div className="text-sm leading-relaxed mb-2 whitespace-pre-wrap">
-        {gap.content}
-      </div>
+      {gap.content.length > 240 && !contentExpanded ? (
+        <>
+          <div className="text-sm leading-relaxed mb-1 whitespace-pre-wrap">
+            {gap.content.slice(0, 240)}…
+          </div>
+          <button onClick={() => setContentExpanded(true)}
+                  data-testid="knowledge-gap-show-more"
+                  className="text-xs underline text-page-fg/60 mb-2">show more</button>
+        </>
+      ) : (
+        <div className="text-sm leading-relaxed mb-2 whitespace-pre-wrap">
+          {gap.content}
+        </div>
+      )}
       {previewCode && (
         <pre data-testid="knowledge-gap-code"
              tabIndex={0}
@@ -83,6 +112,11 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
                   className="text-xs tracking-widest bg-page-bg text-page-fg/60 px-3 py-1 border border-border-thin">
             FLAG WRONG
           </button>
+        </div>
+      )}
+      {syncError && (
+        <div data-testid="knowledge-gap-sync-error" className="text-xs text-danger-text mt-1">
+          status sync failed: {syncError}
         </div>
       )}
     </div>

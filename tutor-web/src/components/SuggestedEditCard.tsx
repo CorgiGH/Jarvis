@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { applyClipboard, type SuggestedEdit } from "../lib/suggestedEdit";
+import { jarvisFetch } from "../lib/api";
 
 export interface SuggestedEditCardProps {
   edit: SuggestedEdit;
@@ -22,6 +23,21 @@ export interface SuggestedEditCardProps {
 export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReason }: SuggestedEditCardProps) {
   const [status, setStatus] = useState(edit.status);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  async function postStatus(s: "applied" | "rejected" | "failed") {
+    try {
+      const r = await jarvisFetch(`/api/v1/edit/${encodeURIComponent(edit.id)}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status: s.toUpperCase() }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    } catch (e) {
+      // Non-blocking — local apply already happened. Log into existing
+      // error surface so the user knows the audit log didn't take.
+      setError(prev => prev ?? `status sync failed: ${(e as Error).message}`);
+    }
+  }
 
   async function apply() {
     setError(null);
@@ -29,6 +45,7 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
       setStatus("failed");
       setError(`READ-ONLY MODE — ${readOnlyReason ?? "effectors disabled"}`);
       onStatusChange?.(edit.id, "failed");
+      postStatus("failed");
       return;
     }
     try {
@@ -36,26 +53,30 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
         await applyClipboard(edit);
         setStatus("applied");
         onStatusChange?.(edit.id, "applied");
+        postStatus("applied");
       } else {
         setStatus("failed");
         setError(`type ${edit.type} not supported in B0 (daemon path arrives in B1)`);
         onStatusChange?.(edit.id, "failed");
+        postStatus("failed");
       }
     } catch (e) {
       setStatus("failed");
       setError((e as Error).message);
       onStatusChange?.(edit.id, "failed");
+      postStatus("failed");
     }
   }
 
   function reject() {
     setStatus("rejected");
     onStatusChange?.(edit.id, "rejected");
+    postStatus("rejected");
   }
 
-  const previewText = edit.payload.length > 240
-    ? edit.payload.slice(0, 240) + "…"
-    : edit.payload;
+  const TRUNCATE = 320;
+  const isLong = edit.payload.length > TRUNCATE;
+  const previewText = !isLong || expanded ? edit.payload : edit.payload.slice(0, TRUNCATE) + "…";
 
   return (
     <div data-testid="suggested-edit-card" data-edit-id={edit.id}
@@ -74,6 +95,11 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
            className="text-xs whitespace-pre-wrap font-mono bg-page-bg px-2 py-1 border border-page-fg/10 max-h-48 overflow-auto">
         {previewText}
       </pre>
+      {isLong && !expanded && (
+        <button onClick={() => setExpanded(true)}
+                data-testid="suggested-edit-show-more"
+                className="text-xs underline text-page-fg/60 mt-1">show more</button>
+      )}
       {error && (
         <div data-testid="suggested-edit-error" className="text-xs text-danger-text mt-1">
           {error}

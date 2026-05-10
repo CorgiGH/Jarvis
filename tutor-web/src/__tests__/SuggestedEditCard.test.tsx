@@ -95,12 +95,13 @@ test("readOnly disables APPLY with reason in error + tooltip; REJECT still works
   expect(onChange).toHaveBeenCalledWith("e1", "rejected");
 });
 
-test("truncates long payloads in preview", () => {
+test("truncates long payloads in preview at 320 chars + show-more reveals", () => {
   const long = "x".repeat(500);
   render(<SuggestedEditCard edit={{ ...baseEdit, payload: long }} />);
-  // Preview cuts to 240 + ellipsis; original payload still on the
-  // edit object for clipboard write.
+  // Phase 3: truncation bumped to 320 with a show-more toggle that
+  // reveals the full payload on click.
   const preview = screen.getByText(/x{200,}/);
-  expect(preview.textContent!.length).toBeLessThanOrEqual(241);
+  expect(preview.textContent!.length).toBeLessThanOrEqual(321);
   expect(preview.textContent!.endsWith("…")).toBe(true);
+  expect(screen.getByTestId("suggested-edit-show-more")).toBeInTheDocument();
 });
