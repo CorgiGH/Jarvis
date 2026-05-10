@@ -8,6 +8,10 @@ import { parseKnowledgeGaps, type KnowledgeGap } from "../lib/knowledgeGap";
 import { MathText } from "./MathText";
 import { ChipRow } from "./ChipRow";
 import { parseChips, type QuickChip } from "../lib/chip";
+import { parseConcepts, type ConceptRef } from "../lib/conceptEnvelope";
+import { ConceptInline } from "./ConceptInline";
+import { parsePlotly, type PlotlyBlock } from "../lib/plotlyParse";
+import { PlotlyEmbed } from "./PlotlyEmbed";
 
 interface Msg {
   role: "you" | "jarvis" | "sensor";
@@ -15,6 +19,8 @@ interface Msg {
   edits?: SuggestedEdit[];
   gaps?: KnowledgeGap[];
   chips?: QuickChip[];
+  concepts?: ConceptRef[];
+  plots?: PlotlyBlock[];
 }
 
 export interface ChatPaneProps {
@@ -64,6 +70,28 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
     setInput(prompt);
     inputRef.current?.focus();
   }
+
+  // Render assistant prose with CONCEPT/PLOTLY sentinels expanded into
+  // their components. Text parts pipe through MathText so KaTeX still
+  // renders. Concept + plotly sentinels never coexist with math inside
+  // the same word, so split-on-pattern is safe.
+  function renderJarvisProse(text: string, concepts: ConceptRef[] = [], plots: PlotlyBlock[] = []) {
+    const parts = text.split(/(CONCEPT\d+|PLOTLY\d+)/);
+    return parts.map((p, i) => {
+      const cm = /^CONCEPT(\d+)$/.exec(p);
+      if (cm) {
+        const c = concepts[parseInt(cm[1], 10)];
+        return c ? <ConceptInline key={`c-${i}`} name={c.name} /> : null;
+      }
+      const pm = /^PLOTLY(\d+)$/.exec(p);
+      if (pm) {
+        const pl = plots[parseInt(pm[1], 10)];
+        return pl ? <PlotlyEmbed key={`p-${i}`} figure={pl.json} /> : null;
+      }
+      if (!p) return null;
+      return <MathText key={`t-${i}`} text={p} className="text-sm leading-relaxed mt-1 break-words" />;
+    });
+  }
   // Layer B0 read-only mode latches on the most recent screenshot's
   // server-side classification. Until the next screenshot reclassifies
   // (presumably user is back in their editor), suggested-edit APPLY
@@ -107,12 +135,16 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
       const editParsed = parseSuggestedEdits(raw);
       const gapParsed = parseKnowledgeGaps(editParsed.body);
       const chipParsed = parseChips(gapParsed.body);
+      const conceptParsed = parseConcepts(chipParsed.body);
+      const plotlyParsed = parsePlotly(conceptParsed.body);
       setMessages(m => [...m, {
         role: "jarvis",
-        text: chipParsed.body,
+        text: plotlyParsed.body,
         edits: editParsed.edits,
         gaps: gapParsed.gaps,
         chips: chipParsed.chips,
+        concepts: conceptParsed.concepts,
+        plots: plotlyParsed.plots,
       }]);
       // Phase 4.1c: persist each parsed gap to the server. Best-effort —
       // local card already renders so a network failure doesn't block UX.
@@ -185,7 +217,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
               {m.role.toUpperCase()}
             </div>
             {m.role === "jarvis"
-              ? <MathText text={m.text} className="text-sm leading-relaxed mt-1 break-words" />
+              ? <div className="mt-1">{renderJarvisProse(m.text, m.concepts, m.plots)}</div>
               : <div className="text-sm leading-relaxed mt-1 whitespace-pre-wrap break-words">{m.text}</div>}
             {m.edits?.map(edit => (
               <SuggestedEditCard
