@@ -302,6 +302,18 @@ object JarvisToolDefs {
         ) {
             put("subject", strParam("Subject (PA / PS / POO / ALO / SO / RC).", required = true))
         })
+        add(toolDef("symbolic_math",
+            "Evaluate a symbolic-math expression via sympy. Supports simplify, " +
+                "differentiate, integrate, solve, expand, factor. Use when the user " +
+                "needs a verified algebraic answer (not a guess) — derivatives, " +
+                "integrals, equation solutions, simplifications. Returns the result " +
+                "in plaintext + LaTeX. Requires `pip install sympy` on the server " +
+                "(returns a clear error if missing).",
+        ) {
+            put("op", strParam("Operation: simplify | diff | integrate | solve | expand | factor.", required = true))
+            put("expression", strParam("The expression. Example: \"x**2 + 2*x + 1\".", required = true))
+            put("symbol", strParam("Variable name when relevant (default \"x\")."))
+        })
     }
 
     private fun toolDef(name: String, description: String, params: JsonObjectBuilderScope.() -> Unit): JsonObject {
@@ -359,6 +371,7 @@ object JarvisToolDefs {
             "gmail_create_draft" -> dispatchGmailDraft(argsJson)
             "search_subject_corpus" -> dispatchSubjectCorpus(argsJson)
             "list_subject_kinds" -> dispatchListSubjectKinds(argsJson)
+            "symbolic_math" -> dispatchSymbolicMath(argsJson)
             else -> "unknown tool: $toolName"
         }
     }
@@ -434,6 +447,29 @@ object JarvisToolDefs {
         val kinds = SubjectCorpus.listKinds(subject)
         if (kinds.isEmpty()) return "list_subject_kinds: no kinds for $subject (subject not in _extras/?)"
         return "kinds for $subject:\n  " + kinds.joinToString("\n  ")
+    }
+
+    private fun dispatchSymbolicMath(argsJson: String): String {
+        val obj = parseArgs(argsJson) ?: return "bad args json"
+        val op = (obj["op"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        val expression = (obj["expression"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+        val symbol = (obj["symbol"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+        if (op.isEmpty() || expression.isBlank()) {
+            return "symbolic_math: op + expression required"
+        }
+        val r = SympyTool.run(op = op, expression = expression, symbol = symbol.ifEmpty { "x" })
+        return if (r.ok) {
+            buildString {
+                append("op=$op  ")
+                append(r.plain)
+                if (!r.latex.isNullOrBlank()) {
+                    append("\nlatex: ")
+                    append(r.latex)
+                }
+            }
+        } else {
+            "symbolic_math error: ${r.error.orEmpty()}"
+        }
     }
 
     private fun dispatchCalendarCreate(argsJson: String): String {
