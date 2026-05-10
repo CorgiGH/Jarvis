@@ -64,12 +64,12 @@ export function TasksScreen() {
   return (
     <div data-testid="tasks-screen" className="p-4 font-mono">
       <h1 className="text-lg font-bold tracking-widest mb-3">TASKS</h1>
-      <p className="text-xs text-black/60 mb-4">
+      <p className="text-xs text-page-fg/60 mb-4">
         Create a task row to make Jarvis aware of what you're working on.
         Subject + title + deadline drive the in-chat task header.
       </p>
 
-      <div data-testid="task-create-form" className="border-2 border-black p-3 mb-6">
+      <div data-testid="task-create-form" className="border-2 border-border-strong p-3 mb-6">
         <div className="text-xs font-bold tracking-widest mb-2">NEW TASK</div>
         <label className="block text-xs mb-1">Subject</label>
         <div className="flex gap-1 mb-2">
@@ -78,14 +78,14 @@ export function TasksScreen() {
               data-testid={`task-subject-${s}`}
               onClick={() => setSubject(s)}
               className={`text-xs font-bold tracking-widest px-2 py-1 border ${
-                subject === s ? "bg-black text-yellow-300" : "bg-white text-black border-black"
+                subject === s ? "bg-panel-dark-bg text-panel-dark-fg" : "bg-page-bg text-page-fg border-border-strong"
               }`}>
               {s}
             </button>
           ))}
           <input
             data-testid="task-subject-custom"
-            className="flex-1 border border-black/30 px-2 py-1 text-sm"
+            className="flex-1 border border-border-thin px-2 py-1 text-sm"
             value={subject}
             onChange={e => setSubject(e.target.value)}
           />
@@ -93,7 +93,7 @@ export function TasksScreen() {
         <label className="block text-xs mb-1">Title</label>
         <input
           data-testid="task-title"
-          className="w-full border border-black/30 px-2 py-1 text-sm mb-2"
+          className="w-full border border-border-thin px-2 py-1 text-sm mb-2"
           value={title}
           onChange={e => setTitle(e.target.value)}
         />
@@ -101,14 +101,14 @@ export function TasksScreen() {
         <input
           data-testid="task-deadline-days"
           type="number" min={0} max={365}
-          className="w-full border border-black/30 px-2 py-1 text-sm mb-2"
+          className="w-full border border-border-thin px-2 py-1 text-sm mb-2"
           value={deadlineDays}
           onChange={e => setDeadlineDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
         />
         <button
           data-testid="task-create-btn"
           onClick={createTask}
-          className="text-xs font-bold tracking-widest bg-black text-yellow-300 px-3 py-1"
+          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1"
         >
           CREATE
         </button>
@@ -116,7 +116,7 @@ export function TasksScreen() {
 
       <div className="text-xs font-bold tracking-widest mb-2">ACTIVE ({tasks.length})</div>
       {loading ? <div className="text-sm">loading…</div> :
-       tasks.length === 0 ? <div className="text-sm text-black/60">(no tasks yet)</div> :
+       tasks.length === 0 ? <div className="text-sm text-page-fg/60">(no tasks yet)</div> :
        <ul data-testid="tasks-list" className="space-y-2">
          {tasks.map(t => {
            const days = Math.round((new Date(t.deadline).getTime() - Date.now()) / 86400000);
@@ -125,14 +125,14 @@ export function TasksScreen() {
              : `${days}d remaining`;
            return (
              <li key={t.id} data-testid="task-row" data-task-id={t.id}
-                 className="border border-black p-2">
+                 className="border border-border-strong p-2">
                <div className="text-xs font-bold tracking-widest">
                  {t.subject} · {dueTag} · {t.status}
                </div>
                <div className="text-sm mt-1">{t.title}</div>
                <Link to={`/?taskId=${t.id}`}
                      data-testid="task-open-btn"
-                     className="inline-block mt-2 text-xs font-bold tracking-widest bg-yellow-300 text-black px-2 py-1">
+                     className="inline-block mt-2 text-xs font-bold tracking-widest bg-accent text-page-fg px-2 py-1">
                  OPEN
                </Link>
              </li>

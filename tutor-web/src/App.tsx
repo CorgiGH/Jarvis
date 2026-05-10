@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import { useSearchParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { TutorWorkspace } from "./components/TutorWorkspace";
 import { TaskQuickStart } from "./components/TaskQuickStart";
 import { jarvisFetch } from "./lib/api";
@@ -19,6 +19,7 @@ async function ensureTutorSession(): Promise<void> {
 export function App() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
+  const here = useLocation();
   const explicitTaskId = params.get("taskId");
   const pickMode = params.get("pick") === "1";  // explicit "go to QuickStart" flag
   const dedupedFlag = params.get("deduped") === "1";  // surfaced when POST /tasks deduped
@@ -94,16 +95,16 @@ export function App() {
 
   return (
     <div className="h-dvh flex flex-col">
-      <header className="bg-black text-yellow-300 px-4 py-3 flex items-center justify-between border-b-4 border-yellow-300">
+      <header className="bg-panel-dark-bg text-panel-dark-fg px-4 py-3 flex items-center justify-between border-b-4 border-accent">
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-lg font-bold tracking-widest">JARVIS · TUTOR</span>
           {!showQuickStart && (
             <>
-              <span className="text-xs tracking-widest text-yellow-200/80 truncate">{taskId}</span>
+              <span className="text-xs tracking-widest text-panel-dark-fg/80 truncate">{taskId}</span>
               <button
                 onClick={pickAnotherTask}
                 data-testid="pick-another-task-btn"
-                className="text-xs tracking-widest bg-yellow-300 text-black px-2 py-0.5 hover:bg-yellow-200"
+                className="text-xs tracking-widest bg-accent text-page-fg px-2 py-0.5 hover:bg-accent-hover"
               >
                 × close
               </button>
@@ -111,14 +112,32 @@ export function App() {
           )}
         </div>
         <nav className="flex items-center gap-4 text-xs font-bold tracking-widest">
-          <Link to="/?pick=1" className="hover:underline">workspace</Link>
-          <Link to="/tasks" className="hover:underline">tasks</Link>
-          <Link to="/settings/trust" className="hover:underline">trust</Link>
+          <Link
+            to="/?pick=1"
+            aria-current={here.pathname === "/" ? "page" : undefined}
+            className="hover:underline"
+          >
+            workspace
+          </Link>
+          <Link
+            to="/tasks"
+            aria-current={here.pathname === "/tasks" ? "page" : undefined}
+            className="hover:underline"
+          >
+            tasks
+          </Link>
+          <Link
+            to="/settings/trust"
+            aria-current={here.pathname === "/settings/trust" ? "page" : undefined}
+            className="hover:underline"
+          >
+            trust
+          </Link>
         </nav>
       </header>
-      <main className="flex-1 min-h-0 overflow-hidden bg-white">
+      <main className="flex-1 min-h-0 overflow-hidden bg-page-bg">
         {!sessionReady
-          ? <div className="p-6 font-mono text-sm text-black/60">setting up tutor session…</div>
+          ? <div className="p-6 font-mono text-sm text-page-fg/60">setting up tutor session…</div>
           : showQuickStart
             ? <TaskQuickStart />
             : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}

@@ -86,8 +86,8 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   }
 
   return (
-    <div data-testid="chat-pane" className="h-full flex flex-col bg-white font-mono min-w-0">
-      <div className="bg-black text-yellow-300 px-4 py-2 text-sm tracking-widest font-bold flex items-center justify-between">
+    <div data-testid="chat-pane" className="h-full flex flex-col bg-page-bg font-mono min-w-0">
+      <div className="bg-panel-dark-bg text-panel-dark-fg px-4 py-2 text-sm tracking-widest font-bold flex items-center justify-between">
         <span>JARVIS · TASK {taskId}</span>
         {readOnly && (
           <span data-testid="read-only-badge"
@@ -98,13 +98,13 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         )}
       </div>
       <ScreenshotCapture taskId={taskId} onResult={onScreenshot} />
-      <div className="flex-1 min-h-0 overflow-auto p-4 space-y-3">
+      <div className="prose-clamp flex-1 min-h-0 overflow-auto p-4 space-y-3">
         {messages.map((m, i) => (
           <div key={i} className="min-w-0">
             <div className={`inline-block px-2 py-0.5 text-xs font-bold tracking-widest ${
-              m.role === "you" ? "bg-yellow-300 text-black"
-              : m.role === "sensor" ? "bg-blue-200 text-black"
-              : "bg-black text-white"
+              m.role === "you" ? "bg-accent text-page-fg"
+              : m.role === "sensor" ? "bg-blue-200 text-page-fg"
+              : "bg-panel-dark-bg text-page-bg"
             }`}>
               {m.role.toUpperCase()}
             </div>
@@ -135,7 +135,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
           </div>
         ))}
       </div>
-      <div className="flex border-t-4 border-black">
+      <div className="flex border-t-4 border-border-strong">
         <input
           ref={inputRef}
           className="flex-1 px-3 py-2 outline-none text-sm font-mono"
@@ -146,7 +146,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
           disabled={sending}
         />
         <button
-          className="bg-yellow-300 px-6 font-bold tracking-widest text-sm disabled:opacity-50 border-l-4 border-black"
+          className="bg-accent px-6 font-bold tracking-widest text-sm disabled:opacity-50 border-l-4 border-border-strong"
           onClick={send}
           disabled={sending}
         >

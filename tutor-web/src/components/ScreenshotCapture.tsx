@@ -84,12 +84,12 @@ export function ScreenshotCapture({ taskId, onResult }: ScreenshotCaptureProps) 
     : "retry";
 
   return (
-    <div data-testid="screenshot-capture" className="flex items-center gap-2 px-3 py-1.5 border-b border-black/10 bg-white">
+    <div data-testid="screenshot-capture" className="flex items-center gap-2 px-3 py-1.5 border-b border-page-fg/10 bg-page-bg">
       <button
         onClick={trigger}
         disabled={status === "capturing" || status === "uploading"}
         data-testid="screenshot-capture-btn"
-        className="text-xs font-bold tracking-widest bg-yellow-300 px-3 py-1 disabled:opacity-50"
+        className="text-xs font-bold tracking-widest bg-accent px-3 py-1 disabled:opacity-50"
       >
         {label}
       </button>

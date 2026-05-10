@@ -53,27 +53,28 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
   return (
     <aside
       data-testid="sidebar"
-      className="hidden sm:flex flex-col w-48 border-r-4 border-black bg-yellow-50 font-mono text-xs overflow-y-auto"
+      className="hidden sm:flex flex-col w-48 border-r-4 border-border-strong bg-accent-soft font-mono text-xs overflow-y-auto"
     >
-      <div className="bg-black text-yellow-300 px-3 py-2 tracking-widest font-bold">
+      <div className="bg-panel-dark-bg text-panel-dark-fg px-3 py-2 tracking-widest font-bold">
         TASKS
       </div>
       <button
         data-testid="sidebar-new-task"
         onClick={() => navigate("/?pick=1")}
-        className="border-b-2 border-black px-3 py-2 text-left bg-yellow-300 hover:bg-yellow-400 font-bold tracking-widest"
+        aria-label="Create a new tutor task"
+        className="border-b-2 border-border-strong px-3 py-2 text-left bg-accent hover:bg-accent-hover font-bold tracking-widest"
       >
         + NEW TASK
       </button>
-      {!loaded && <div className="px-3 py-2 text-black/60">loading…</div>}
+      {!loaded && <div className="px-3 py-2 text-page-fg/60">loading…</div>}
       {loaded && tasks.length === 0 && (
-        <div data-testid="sidebar-empty" className="px-3 py-2 text-black/60">
+        <div data-testid="sidebar-empty" className="px-3 py-2 text-page-fg/60">
           no tasks yet — click NEW TASK
         </div>
       )}
       {grouped.map(([subject, subjectTasks]) => (
         <div key={subject} data-testid={`sidebar-subject-${subject}`}>
-          <div className="px-3 py-1 mt-2 bg-black/10 tracking-widest font-bold border-y border-black/30">
+          <div className="px-3 py-1 mt-2 bg-page-fg/10 tracking-widest font-bold border-y border-border-thin">
             {subject}
           </div>
           <ul>
@@ -91,13 +92,14 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
                     data-testid="sidebar-task"
                     data-task-id={t.id}
                     onClick={() => navigate(`/?taskId=${t.id}`)}
-                    className={`w-full text-left px-3 py-1.5 border-b border-black/20 hover:bg-yellow-100 ${
-                      active ? "bg-yellow-300 font-bold" : ""
+                    aria-current={active ? "true" : undefined}
+                    className={`w-full text-left px-3 py-1.5 border-b border-border-thin hover:bg-accent-soft ${
+                      active ? "bg-accent font-bold" : ""
                     }`}
                     title={t.title}
                   >
                     <div className="truncate">{t.title}</div>
-                    <div className="text-[10px] text-black/60">{dueTag}</div>
+                    <div className="text-[10px] text-page-fg/60">{dueTag}</div>
                   </button>
                 </li>
               );

@@ -88,18 +88,18 @@ export function TrustSettings() {
   return (
     <div data-testid="trust-settings" className="p-4 font-mono">
       <h1 className="text-lg font-bold tracking-widest mb-3">TRUST GRANTS</h1>
-      <p className="text-xs text-black/60 mb-4">
+      <p className="text-xs text-page-fg/60 mb-4">
         Each grant gives the daemon permission to write to one or more
         paths for a limited time + call count. Default 1h / 10 calls.
         Cap 8h. Revoke any time.
       </p>
 
-      <div data-testid="trust-create-form" className="border-2 border-black p-3 mb-6">
+      <div data-testid="trust-create-form" className="border-2 border-border-strong p-3 mb-6">
         <div className="text-xs font-bold tracking-widest mb-2">NEW GRANT</div>
         <label className="block text-xs mb-1">Scope (file:// glob)</label>
         <input
           data-testid="trust-scope-input"
-          className="w-full border border-black/30 px-2 py-1 text-sm mb-2"
+          className="w-full border border-border-thin px-2 py-1 text-sm mb-2"
           value={scope}
           onChange={e => setScope(e.target.value)}
         />
@@ -109,7 +109,7 @@ export function TrustSettings() {
             <input
               data-testid="trust-ttl-input"
               type="number" min={1} max={480}
-              className="w-full border border-black/30 px-2 py-1 text-sm"
+              className="w-full border border-border-thin px-2 py-1 text-sm"
               value={ttlMinutes}
               onChange={e => setTtlMinutes(Math.max(1, parseInt(e.target.value, 10) || 60))}
             />
@@ -119,7 +119,7 @@ export function TrustSettings() {
             <input
               data-testid="trust-max-calls-input"
               type="number" min={1} max={1000}
-              className="w-full border border-black/30 px-2 py-1 text-sm"
+              className="w-full border border-border-thin px-2 py-1 text-sm"
               value={maxCalls}
               onChange={e => setMaxCalls(Math.max(1, parseInt(e.target.value, 10) || 10))}
             />
@@ -128,7 +128,7 @@ export function TrustSettings() {
         <button
           data-testid="trust-create-btn"
           onClick={createGrant}
-          className="text-xs font-bold tracking-widest bg-black text-yellow-300 px-3 py-1"
+          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1"
         >
           GRANT
         </button>
@@ -138,13 +138,13 @@ export function TrustSettings() {
       {loading ? (
         <div className="text-sm">loading…</div>
       ) : grants.length === 0 ? (
-        <div className="text-sm text-black/60">(no grants yet)</div>
+        <div className="text-sm text-page-fg/60">(no grants yet)</div>
       ) : (
         <ul className="space-y-2" data-testid="trust-grants-list">
           {grants.map(g => (
             <li key={g.id}
                 data-testid="trust-grant-row" data-grant-id={g.id}
-                className={`border ${g.revokedAt ? "border-black/20 opacity-50" : "border-black"} p-2`}>
+                className={`border ${g.revokedAt ? "border-border-thin opacity-50" : "border-border-strong"} p-2`}>
               <div className="text-xs font-bold tracking-widest">
                 {g.ops.join("+")} · expires {g.expiresAt.slice(0, 19)} ·
                 {" "}{g.callsUsed}/{g.maxCalls} calls
@@ -155,7 +155,7 @@ export function TrustSettings() {
                 <button
                   data-testid="trust-revoke-btn"
                   onClick={() => revokeGrant(g.id)}
-                  className="mt-2 text-xs font-bold tracking-widest bg-white text-black border border-black px-2 py-0.5"
+                  className="mt-2 text-xs font-bold tracking-widest bg-page-bg text-page-fg border border-border-strong px-2 py-0.5"
                 >
                   REVOKE
                 </button>

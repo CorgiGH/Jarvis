@@ -91,14 +91,14 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
   }
 
   if (!loaded) {
-    return <div className="p-6 font-mono text-sm text-black/60">loading workspace…</div>;
+    return <div className="p-6 font-mono text-sm text-page-fg/60">loading workspace…</div>;
   }
 
   return (
     <div data-testid="task-quickstart" className="p-6 font-mono text-sm">
-      <div className="bg-yellow-100 border-l-4 border-yellow-500 p-4 mb-4">
+      <div className="bg-accent-soft border-l-4 border-yellow-500 p-4 mb-4">
         <div className="text-xs font-bold tracking-widest mb-1">QUICK START</div>
-        <div className="text-sm text-black/80">
+        <div className="text-sm text-page-fg/80">
           {tasks.length === 0
             ? "No real tasks yet. Pick one to get going — Jarvis pulls subject + deadline + weak-concept context per chat turn."
             : `You have ${tasks.length} active task${tasks.length === 1 ? "" : "s"}. Pick one or jump into a fresh subject.`}
@@ -118,7 +118,7 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
                 <li key={t.id} data-testid="task-quickstart-row" data-task-id={t.id}>
                   <button
                     onClick={() => navigate(`/?taskId=${t.id}`)}
-                    className="w-full text-left border border-black p-2 hover:bg-yellow-50"
+                    className="w-full text-left border border-border-strong p-2 hover:bg-accent-soft"
                   >
                     <div className="text-xs font-bold tracking-widest">
                       {t.subject} · {dueTag}
@@ -142,19 +142,19 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
               data-testid={`task-preset-${p.subject}`}
               onClick={() => createPreset(p)}
               disabled={busy != null}
-              className="text-left border-2 border-black bg-white hover:bg-yellow-50 p-2 disabled:opacity-50"
+              className="text-left border-2 border-border-strong bg-page-bg hover:bg-accent-soft p-2 disabled:opacity-50"
             >
               <div className="text-xs font-bold tracking-widest">
                 + {p.subject} · {p.daysFromNow}d
               </div>
               <div className="text-sm">{p.title}</div>
-              {busy === id && <div className="text-xs text-black/60 mt-1">creating…</div>}
+              {busy === id && <div className="text-xs text-page-fg/60 mt-1">creating…</div>}
             </button>
           );
         })}
       </div>
 
-      <div className="text-xs text-black/60">
+      <div className="text-xs text-page-fg/60">
         Custom task? <a className="underline" href="/tutor/tasks">/tasks page</a>.
         Don't want this panel? Pick any task above.
       </div>

@@ -30,8 +30,8 @@ export function Scratchpad({ value, onChange }: ScratchpadProps) {
   }, [value]);
 
   return (
-    <div data-testid="scratchpad" className="border-t-4 border-black bg-white">
-      <div className="bg-black text-yellow-300 px-3 py-1 text-xs tracking-widest font-bold">
+    <div data-testid="scratchpad" className="border-t-4 border-border-strong bg-page-bg">
+      <div className="bg-panel-dark-bg text-panel-dark-fg px-3 py-1 text-xs tracking-widest font-bold">
         SCRATCHPAD
       </div>
       <textarea

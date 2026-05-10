@@ -59,17 +59,17 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
 
   return (
     <div data-testid="suggested-edit-card" data-edit-id={edit.id}
-         className="border-l-4 border-yellow-400 bg-yellow-50 p-3 my-2">
+         className="border-l-4 border-yellow-400 bg-accent-soft p-3 my-2">
       <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-bold tracking-widest text-black/70">
+        <div className="text-xs font-bold tracking-widest text-page-fg/70">
           SUGGESTED · {edit.type.toUpperCase()}
           {edit.label ? ` · ${edit.label}` : ""}
         </div>
-        <div data-testid="suggested-edit-status" className="text-xs text-black/60">
+        <div data-testid="suggested-edit-status" className="text-xs text-page-fg/60">
           {status}
         </div>
       </div>
-      <pre className="text-xs whitespace-pre-wrap font-mono bg-white px-2 py-1 border border-black/10 max-h-48 overflow-auto">
+      <pre className="text-xs whitespace-pre-wrap font-mono bg-page-bg px-2 py-1 border border-page-fg/10 max-h-48 overflow-auto">
         {previewText}
       </pre>
       {error && (
@@ -85,13 +85,13 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
             disabled={readOnly}
             title={readOnly ? `READ-ONLY MODE: ${readOnlyReason}` : undefined}
             className={`text-xs font-bold tracking-widest px-3 py-1 ${
-              readOnly ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-black text-yellow-300"
+              readOnly ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-panel-dark-bg text-panel-dark-fg"
             }`}
           >
             {edit.type === "clipboard" ? "COPY" : "APPLY"}
           </button>
           <button onClick={reject} data-testid="suggested-edit-reject"
-                  className="text-xs font-bold tracking-widest bg-white text-black px-3 py-1 border border-black">
+                  className="text-xs font-bold tracking-widest bg-page-bg text-page-fg px-3 py-1 border border-border-strong">
             REJECT
           </button>
         </div>

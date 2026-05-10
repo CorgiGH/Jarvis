@@ -30,7 +30,9 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
     <div className="flex h-full min-h-0 flex-col">
       {dedupedNotice && (
         <div data-testid="deduped-notice"
-             className="bg-yellow-300 border-b-4 border-black text-black font-mono text-xs font-bold tracking-widest px-4 py-1.5">
+             role="status"
+             aria-live="polite"
+             className="bg-accent border-b-4 border-border-strong text-page-fg font-mono text-xs font-bold tracking-widest px-4 py-1.5">
           OPENED EXISTING TASK · same subject + title already on file
         </div>
       )}

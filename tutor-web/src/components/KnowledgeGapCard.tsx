@@ -43,18 +43,18 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
 
   return (
     <div data-testid="knowledge-gap-card" data-gap-id={gap.id}
-         className="border-l-4 border-yellow-500 bg-yellow-50 p-3 my-2">
+         className="border-l-4 border-yellow-500 bg-accent-soft p-3 my-2">
       <div className="flex items-center justify-between mb-1">
-        <div className="text-xs font-bold tracking-widest text-black/70">
+        <div className="text-xs font-bold tracking-widest text-page-fg/70">
           GAP · {gap.type} · {gap.topic}
           {gap.language ? ` · ${gap.language}` : ""}
         </div>
-        <div data-testid="knowledge-gap-status" className="text-xs text-black/60">
+        <div data-testid="knowledge-gap-status" className="text-xs text-page-fg/60">
           {resolved ?? "open"}
         </div>
       </div>
       {gap.sourceCitation && (
-        <div data-testid="knowledge-gap-citation" className="text-xs italic text-black/60 mb-2">
+        <div data-testid="knowledge-gap-citation" className="text-xs italic text-page-fg/60 mb-2">
           source: {gap.sourceCitation}
         </div>
       )}
@@ -63,22 +63,22 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
       </div>
       {previewCode && (
         <pre data-testid="knowledge-gap-code"
-             className="text-xs whitespace-pre-wrap font-mono bg-white px-2 py-1 border border-black/10 max-h-48 overflow-auto">
+             className="text-xs whitespace-pre-wrap font-mono bg-page-bg px-2 py-1 border border-page-fg/10 max-h-48 overflow-auto">
           {previewCode}
         </pre>
       )}
       {!resolved && (
         <div className="flex gap-2 mt-2 flex-wrap">
           <button onClick={insert} data-testid="knowledge-gap-insert"
-                  className="text-xs font-bold tracking-widest bg-black text-yellow-300 px-3 py-1">
+                  className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1">
             INSERT → SCRATCHPAD
           </button>
           <button onClick={markResolved} data-testid="knowledge-gap-resolve"
-                  className="text-xs font-bold tracking-widest bg-white text-black px-3 py-1 border border-black">
+                  className="text-xs font-bold tracking-widest bg-page-bg text-page-fg px-3 py-1 border border-border-strong">
             MARK RESOLVED
           </button>
           <button onClick={dismiss} data-testid="knowledge-gap-dismiss"
-                  className="text-xs tracking-widest bg-white text-black/60 px-3 py-1 border border-black/30">
+                  className="text-xs tracking-widest bg-page-bg text-page-fg/60 px-3 py-1 border border-border-thin">
             FLAG WRONG
           </button>
         </div>

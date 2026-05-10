@@ -20,7 +20,7 @@ export function ChipRow({
           key={`${c.label}-${i}`}
           data-testid="chip-button"
           onClick={() => onPick(c.prompt)}
-          className="font-mono text-xs px-2 py-1 border-2 border-black bg-yellow-200 hover:bg-yellow-300 tracking-wide"
+          className="font-mono text-xs px-2 py-1 border-2 border-border-strong bg-accent-hover hover:bg-accent tracking-wide"
           title={c.prompt}
         >
           {c.label}
