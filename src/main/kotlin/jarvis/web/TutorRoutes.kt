@@ -873,10 +873,11 @@ fun Application.installTutorRoutes() {
                 val sid = call.request.cookies["jarvis_session"]
                 val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
                     ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
-                val sources: List<jarvis.tutor.taskdetect.TaskDetector> = listOf(
-                    jarvis.tutor.taskdetect.ManualSource(ctx.db, userId),
-                    jarvis.tutor.taskdetect.FiimaterialsSource(ctx.ledgerDir.resolve("archival/_extras")),
-                )
+                val sources: List<jarvis.tutor.taskdetect.TaskDetector> = buildList {
+                    add(jarvis.tutor.taskdetect.ManualSource(ctx.db, userId))
+                    add(jarvis.tutor.taskdetect.FiimaterialsSource(ctx.ledgerDir.resolve("archival/_extras")))
+                    addAll(jarvis.tutor.taskdetect.IcsScraper.fromEnv())
+                }
                 val agg = jarvis.tutor.taskdetect.TaskDetectorAggregator(sources)
                 val detected = kotlinx.coroutines.runBlocking { agg.discoverAll() }
                 val repo = jarvis.tutor.taskdetect.DetectedTaskRepo(ctx.db)
