@@ -843,6 +843,50 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        post("/api/v1/task-detect/run") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val sources: List<jarvis.tutor.taskdetect.TaskDetector> = listOf(
+                    jarvis.tutor.taskdetect.ManualSource(ctx.db, userId),
+                    jarvis.tutor.taskdetect.FiimaterialsSource(ctx.ledgerDir.resolve("archival/_extras")),
+                )
+                val agg = jarvis.tutor.taskdetect.TaskDetectorAggregator(sources)
+                val detected = kotlinx.coroutines.runBlocking { agg.discoverAll() }
+                val repo = jarvis.tutor.taskdetect.DetectedTaskRepo(ctx.db)
+                val taskRepo = TaskRepo(ctx.db)
+                var inserted = 0; var existing = 0
+                for (d in detected) {
+                    val mappedId = repo.findExisting(d.sourceId, d.externalId)
+                    if (mappedId != null) {
+                        repo.upsertMapping(d.sourceId, d.externalId, mappedId, userId)
+                        existing++
+                        continue
+                    }
+                    val newId = jarvis.tutor.TutorTypes.ulid()
+                    val now = Instant.now()
+                    taskRepo.insert(jarvis.tutor.Task(
+                        id = newId, userId = userId,
+                        subject = d.subject.take(32), title = d.title.take(256),
+                        deadline = d.deadline,
+                        problemRef = jarvis.tutor.ContentRef(repo = "detected", path = d.problemPath ?: "", sha = "pending"),
+                        conceptRefs = emptyList(),
+                        rubricRef = jarvis.tutor.ContentRef(repo = "detected", path = d.problemPath ?: "", sha = "pending"),
+                        scratchpad = null, submission = null, grade = null,
+                        cardRefs = emptyList(),
+                        status = jarvis.tutor.TaskStatus.ACTIVE,
+                        createdAt = now, updatedAt = now,
+                    ))
+                    repo.upsertMapping(d.sourceId, d.externalId, newId, userId)
+                    inserted++
+                }
+                call.respond(HttpStatusCode.OK, ApiTaskDetectReply(inserted = inserted, existing = existing, total = detected.size))
+            }
+        }
+
         get("/api/v1/gaps") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
@@ -1040,6 +1084,9 @@ private data class ApiSearchDocsReply(val results: List<ApiSearchDocResult>)
 
 @Serializable
 private data class ApiLastTaskReply(val taskId: String?)
+
+@Serializable
+private data class ApiTaskDetectReply(val inserted: Int, val existing: Int, val total: Int)
 
 @Serializable
 private data class ApiGatewayInboundRequest(

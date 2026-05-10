@@ -152,4 +152,26 @@ class TasksRouteIdempotentTest {
             assertEquals(HttpStatusCode.OK, r2.status, r2.bodyAsText())
             assertTrue(r2.bodyAsText().contains("\"materialPaths\""))
         }
+
+    @Test
+    fun `POST task-detect run returns counts`(@TempDir tmp: Path) = testApplication {
+        var ctx: TutorContext? = null
+        application {
+            installFreshTutor(tmp)
+            ctx = attributes[TutorContextKey]
+        }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val r = client.post("/api/v1/task-detect/run") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+        }
+        assertEquals(HttpStatusCode.OK, r.status, r.bodyAsText())
+        assertTrue(r.bodyAsText().contains("\"inserted\""))
+        assertTrue(r.bodyAsText().contains("\"existing\""))
+    }
 }
