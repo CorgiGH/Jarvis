@@ -19,9 +19,9 @@ class TasksTest {
         return id
     }
 
-    private fun makeTask(userId: String, deadline: Instant) = Task(
+    private fun makeTask(userId: String, deadline: Instant, title: String = "Tema ${TutorTypes.ulid().takeLast(6)}") = Task(
         id = TutorTypes.ulid(), userId = userId, subject = "PS",
-        title = "Tema A", deadline = deadline,
+        title = title, deadline = deadline,
         problemRef = ContentRef("study-guide", "ps/tema-a/problem.md", "abc"),
         conceptRefs = listOf(ContentRef("study-guide", "ps/laplace.md", "def")),
         rubricRef = ContentRef("study-guide", "ps/tema-a/rubric.v1.yaml", "ghi"),
