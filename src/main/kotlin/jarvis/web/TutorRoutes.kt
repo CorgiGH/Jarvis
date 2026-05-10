@@ -1212,6 +1212,54 @@ fun Application.installTutorRoutes() {
                 call.respond(HttpStatusCode.OK, ApiSidekickReply(text = text, model = model, quotedContext = quoted))
             }
         }
+
+        // Phase C3: drill answer grader — delegates to DrillGrader.grade() via
+        // OpenRouterChatLlm. Returns a structured rubric + misconception code.
+        post("/api/v1/drill/grade") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val req = try {
+                    sensorJson.decodeFromString(ApiDrillGradeRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                val result = try {
+                    jarvis.OpenRouterChatLlm().use { llm ->
+                        kotlinx.coroutines.runBlocking {
+                            jarvis.tutor.DrillGrader.grade(
+                                problemStatement = req.problemStatement,
+                                userAttempt = req.userAttempt,
+                                expectedHint = req.expectedAnswerHint,
+                                llm = llm,
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadGateway, "LLM unavailable: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                if (result == null) {
+                    call.respond(HttpStatusCode.OK, ApiDrillGradeReply(
+                        correct = false, score = 0.0, rubric = emptyMap(),
+                        misconception = "OTHER",
+                        elaboratedFeedback = "LLM grader returned malformed output; please re-attempt or ask sidekick.",
+                    ))
+                    return@csrfProtect
+                }
+                call.respond(HttpStatusCode.OK, ApiDrillGradeReply(
+                    correct = result.correct,
+                    score = result.score,
+                    rubric = result.rubric,
+                    misconception = result.misconception,
+                    elaboratedFeedback = result.elaboratedFeedback,
+                ))
+            }
+        }
     }
 }
 
@@ -1398,6 +1446,24 @@ private data class ApiCreateGrantRequest(
 
 @Serializable
 private data class ApiScratchpadView(val text: String)
+
+@Serializable
+private data class ApiDrillGradeRequest(
+    val taskId: String,
+    val problemId: String,
+    val problemStatement: String,
+    val userAttempt: String,
+    val expectedAnswerHint: String,
+)
+
+@Serializable
+private data class ApiDrillGradeReply(
+    val correct: Boolean,
+    val score: Double,
+    val rubric: Map<String, Boolean>,
+    val misconception: String?,
+    val elaboratedFeedback: String,
+)
 
 /**
  * Wires the Tutor Layer A persistence + ledger context onto the running
