@@ -79,8 +79,12 @@ class JarvisToolset(
         messages += buildJsonObject {
             put("role", "system"); put("content", effectiveSystem)
         }
+        // Phase 7.7 Layer 3: sanitize user input before LLM round-trip.
+        // Strips role-marker tokens + jailbreak prefixes; logs to stderr
+        // when present. Layer 4 (tool-return wrap) already lives below.
+        val sanitizedUserText = PromptInjectionScrubber.sanitizeInput(userText)
         messages += buildJsonObject {
-            put("role", "user"); put("content", userText)
+            put("role", "user"); put("content", sanitizedUserText)
         }
 
         var rounds = 0
