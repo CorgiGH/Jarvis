@@ -45,31 +45,67 @@ export function App() {
     ensureTutorSession().finally(() => setSessionReady(true));
   }, []);
 
-  // Cold-start ONLY: restore last-used taskId from localStorage.
-  // Subsequent navigation (workspace link → /) does NOT re-restore;
-  // user can escape back to QuickStart by clicking workspace.
+  // Phase 4.4 cross-device sync: read jarvis_last_task server cookie on
+  // cold mount. Server cookie wins over localStorage when both present.
+  const [serverLastTask, setServerLastTask] = useState<string | null>(null);
+  const [serverLastTaskLoaded, setServerLastTaskLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    jarvisFetch("/api/v1/last-task")
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { taskId?: string } | null) => {
+        if (cancelled) return;
+        setServerLastTask(d?.taskId ?? null);
+        setServerLastTaskLoaded(true);
+      })
+      .catch(() => { if (!cancelled) setServerLastTaskLoaded(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Cold-start: restore last-used taskId. Explicit URL params don't gate on
+  // /last-task (so direct ?taskId= still persists immediately). When no
+  // explicit param is present, server cookie wins, then localStorage.
   const restoredOnce = useRef(false);
   useEffect(() => {
-    if (restoredOnce.current) {
-      // Persist the latest explicit taskId so cold-reload returns here.
-      if (explicitTaskId) {
-        try { localStorage.setItem(LAST_TASK_KEY, explicitTaskId); } catch (_) {}
-      }
-      return;
-    }
-    restoredOnce.current = true;
+    if (restoredOnce.current) return;
     if (explicitTaskId) {
+      restoredOnce.current = true;
       try { localStorage.setItem(LAST_TASK_KEY, explicitTaskId); } catch (_) {}
       return;
     }
-    if (pickMode) return;  // user explicitly asked for QuickStart
+    if (pickMode) { restoredOnce.current = true; return; }
+    if (!serverLastTaskLoaded) return;  // only wait when restoring from absence
+    restoredOnce.current = true;
+    if (serverLastTask) {
+      setParams({ taskId: serverLastTask }, { replace: true });
+      return;
+    }
     try {
       const last = localStorage.getItem(LAST_TASK_KEY);
       if (last && last !== "TEST-TASK-A") {
         setParams({ taskId: last }, { replace: true });
       }
     } catch (_) {}
-  }, [explicitTaskId, pickMode, setParams]);
+  }, [explicitTaskId, pickMode, setParams, serverLastTask, serverLastTaskLoaded]);
+
+  // Persist subsequent explicit taskId changes to localStorage so cold-reload
+  // returns here. Not in the cold-start effect — that runs once. This fires
+  // when the user navigates between real tasks.
+  useEffect(() => {
+    if (!restoredOnce.current) return;
+    if (explicitTaskId) {
+      try { localStorage.setItem(LAST_TASK_KEY, explicitTaskId); } catch (_) {}
+    }
+  }, [explicitTaskId]);
+
+  // POST cookie when explicit task id changes so other devices sync.
+  useEffect(() => {
+    if (!explicitTaskId || explicitTaskId === "TEST-TASK-A") return;
+    jarvisFetch("/api/v1/last-task", {
+      method: "POST",
+      body: JSON.stringify({ taskId: explicitTaskId }),
+    }).catch(() => {});
+  }, [explicitTaskId]);
 
   const taskId = explicitTaskId ?? "TEST-TASK-A";
   const isDefault = taskId === "TEST-TASK-A" || pickMode;

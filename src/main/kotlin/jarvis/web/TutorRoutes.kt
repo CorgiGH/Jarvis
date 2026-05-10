@@ -764,6 +764,51 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        get("/api/v1/last-task") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val taskId = call.request.cookies["jarvis_last_task"]
+            val valid = taskId?.let { TaskRepo(ctx.db).findById(it)?.takeIf { t -> t.userId == userId } }
+            call.respond(HttpStatusCode.OK, ApiLastTaskReply(taskId = valid?.id))
+        }
+
+        post("/api/v1/last-task") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val req = try {
+                    sensorJson.decodeFromString(ApiLastTaskReply.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                val taskId = req.taskId ?: ""
+                val valid = if (taskId.isNotBlank())
+                    TaskRepo(ctx.db).findById(taskId)?.takeIf { t -> t.userId == userId } else null
+                if (valid == null) {
+                    call.respond(HttpStatusCode.BadRequest, "taskId not found"); return@csrfProtect
+                }
+                call.response.cookies.append(
+                    Cookie(
+                        name = "jarvis_last_task",
+                        value = valid.id,
+                        httpOnly = true,
+                        secure = true,
+                        extensions = mapOf("SameSite" to "Strict"),
+                        path = "/",
+                        maxAge = 60 * 60 * 24 * 30,
+                    ),
+                )
+                call.respond(HttpStatusCode.OK, ApiLastTaskReply(taskId = valid.id))
+            }
+        }
+
         get("/api/v1/gaps") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
@@ -951,6 +996,9 @@ private data class ApiSearchDocResult(val filename: String, val snippet: String,
 
 @Serializable
 private data class ApiSearchDocsReply(val results: List<ApiSearchDocResult>)
+
+@Serializable
+private data class ApiLastTaskReply(val taskId: String?)
 
 @Serializable
 private data class ApiGatewayInboundRequest(
