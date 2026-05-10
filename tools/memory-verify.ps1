@@ -81,6 +81,76 @@ function Parse-MemoryFrontmatter {
     }
 }
 
+function Invoke-MemoryVerify {
+    param([string]$Path)
+
+    $parsed = Parse-MemoryFrontmatter -Path $Path
+    $result = @{
+        path = $Path
+        name = $parsed.name
+        status = 'OK'
+        reasons = @()
+        ranCount = 0
+    }
+
+    # No verify block + no freshness gate => trusted.
+    if ($parsed.verify.Count -eq 0 -and $null -eq $parsed.freshness_window_hours) {
+        return $result
+    }
+
+    foreach ($entry in $parsed.verify) {
+        $result.ranCount++
+        $stdout = ''
+        $exitCode = 0
+
+        try {
+            $stdout = pwsh -NoProfile -Command $entry.cmd 2>&1 | Out-String
+            $exitCode = $LASTEXITCODE
+            if ($null -eq $exitCode) { $exitCode = 0 }
+        } catch {
+            $result.status = 'ERROR'
+            $result.reasons += "cmd '$($entry.cmd)' threw: $($_.Exception.Message). on_fail: $($entry.on_fail)"
+            continue
+        }
+
+        # Differentiate ERROR (cmd-not-found / exit != expected) from STALE (cmd ok, output mismatch).
+        if ($exitCode -ne $entry.expect_exit -and $exitCode -ne 0) {
+            $result.status = 'ERROR'
+            $result.reasons += "cmd '$($entry.cmd)' exit=$exitCode (expected $($entry.expect_exit)). on_fail: $($entry.on_fail)"
+            continue
+        }
+
+        $stdoutTrimmed = $stdout.Trim()
+
+        if ($null -ne $entry.expect_match) {
+            if ($stdoutTrimmed -notmatch $entry.expect_match) {
+                if ($result.status -eq 'OK') { $result.status = 'STALE' }
+                $result.reasons += "cmd '$($entry.cmd)' output '$stdoutTrimmed' does NOT match '$($entry.expect_match)'. on_fail: $($entry.on_fail)"
+            }
+        }
+        if ($null -ne $entry.expect_no_match) {
+            if ($stdoutTrimmed -match $entry.expect_no_match) {
+                if ($result.status -eq 'OK') { $result.status = 'STALE' }
+                $result.reasons += "cmd '$($entry.cmd)' output '$stdoutTrimmed' matches forbidden pattern '$($entry.expect_no_match)'. on_fail: $($entry.on_fail)"
+            }
+        }
+    }
+
+    # Freshness window check.
+    if ($null -ne $parsed.freshness_window_hours -and $parsed.last_verified_at) {
+        try {
+            $lastTs = [DateTime]::Parse($parsed.last_verified_at)
+            $hoursSince = ([DateTime]::UtcNow - $lastTs.ToUniversalTime()).TotalHours
+            if ($hoursSince -gt $parsed.freshness_window_hours -and $result.status -eq 'OK') {
+                $result.status = 'STALE'
+                $result.reasons += "last_verified_at $($parsed.last_verified_at) exceeds freshness_window_hours $($parsed.freshness_window_hours)"
+            }
+        } catch { }
+    }
+
+    return $result
+}
+
 # Runner block — skipped in test mode so the test harness can dot-source us.
 if ($env:MEMORY_VERIFY_TEST_MODE -ne '1') {
     Write-Host "memory-verify.ps1: runner not yet implemented (Task 3)"

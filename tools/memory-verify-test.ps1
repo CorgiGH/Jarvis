@@ -36,6 +36,22 @@ $nvParsed = Parse-MemoryFrontmatter -Path $nvPath
 Assert-Equal 'No-verify fixture' $nvParsed.name 'parse name from no-verify.md'
 Assert-Equal 0 $nvParsed.verify.Count 'no-verify.md has empty verify array'
 
+# Test 3: Run-Verify on ok.md returns OK
+$okResult = Invoke-MemoryVerify -Path $okPath
+Assert-Equal 'OK' $okResult.status 'ok.md verify status is OK'
+
+# Test 4: Run-Verify on stale.md returns STALE
+$staleResult = Invoke-MemoryVerify -Path (Join-Path $repo 'tools/memory-verify-fixtures/stale.md')
+Assert-Equal 'STALE' $staleResult.status 'stale.md verify status is STALE'
+
+# Test 5: Run-Verify on error.md returns ERROR
+$errorResult = Invoke-MemoryVerify -Path (Join-Path $repo 'tools/memory-verify-fixtures/error.md')
+Assert-Equal 'ERROR' $errorResult.status 'error.md verify status is ERROR'
+
+# Test 6: Run-Verify on no-verify.md returns OK trivially
+$nvResult = Invoke-MemoryVerify -Path $nvPath
+Assert-Equal 'OK' $nvResult.status 'no-verify.md verify status is OK (trusted)'
+
 if ($failures -gt 0) {
     Write-Host "$failures test(s) failed" -ForegroundColor Red
     exit 1
