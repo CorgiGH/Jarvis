@@ -3,6 +3,7 @@ package jarvis.tutor
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
 import io.ktor.client.plugins.cookies.HttpCookies
 import io.ktor.client.request.cookie
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -121,4 +122,34 @@ class TasksRouteIdempotentTest {
         assertEquals(HttpStatusCode.Created, r1.status)
         assertEquals(HttpStatusCode.Created, r2.status, "different subject must NOT dedup: ${r2.bodyAsText()}")
     }
+
+    @Test
+    fun `POST tasks populates materialPaths via HybridRetriever (empty when no corpus)`(@TempDir tmp: Path) =
+        testApplication {
+            var ctx: TutorContext? = null
+            application {
+                installFreshTutor(tmp)
+                ctx = attributes[TutorContextKey]
+            }
+            startApplication()
+            val (_, sid) = seedSession(ctx!!)
+            val csrf = "test-csrf-12345"
+            val client = createClient {
+                install(HttpCookies)
+                install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+            }
+            val payload = """
+                {"subject":"PA","title":"Tema 99","deadline":"2026-05-21T00:00:00Z",
+                 "repo":"user","problemPath":"x.pdf","rubricPath":""}
+            """.trimIndent()
+            val r = client.post("/api/v1/tasks") {
+                cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+                contentType(ContentType.Application.Json); setBody(payload)
+            }
+            assertEquals(HttpStatusCode.Created, r.status)
+            val id = Regex("\"id\":\"([^\"]+)\"").find(r.bodyAsText())!!.groupValues[1]
+            val r2 = client.get("/api/v1/tasks/$id") { cookie("jarvis_session", sid) }
+            assertEquals(HttpStatusCode.OK, r2.status, r2.bodyAsText())
+            assertTrue(r2.bodyAsText().contains("\"materialPaths\""))
+        }
 }

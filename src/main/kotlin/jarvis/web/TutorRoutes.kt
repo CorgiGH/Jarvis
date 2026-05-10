@@ -608,6 +608,28 @@ fun Application.installTutorRoutes() {
             }
             call.respond(ApiTasksList(tasks))
         }
+        // Phase 6.3a — single-task fetch with materialPaths surfaced.
+        // The earlier-declared /tasks/{id}/pdf + /tasks/{id}/scratchpad
+        // routes coexist via Ktor's tree router (it picks the longer
+        // segment-match regardless of declaration order).
+        get("/api/v1/tasks/{id}") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val taskId = call.parameters["id"]
+                ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@get }
+            val task = TaskRepo(ctx.db).findById(taskId)
+            if (task == null || task.userId != userId) {
+                call.respond(HttpStatusCode.NotFound, "task not found"); return@get
+            }
+            call.respond(HttpStatusCode.OK, ApiTaskDetailView(
+                id = task.id, subject = task.subject, title = task.title,
+                deadline = task.deadline.toString(), status = task.status.name,
+                materialPaths = task.materialPaths,
+            ))
+        }
         post("/api/v1/tasks") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
@@ -650,6 +672,17 @@ fun Application.installTutorRoutes() {
                 }
                 val id = jarvis.tutor.TutorTypes.ulid()
                 val now = Instant.now()
+                // Phase 6.3a — auto-attach reference materials at INSERT.
+                // HybridRetriever.search runs lexical+optional-semantic over
+                // archivalDir; we keep the top-5 distinct hit ids (relative
+                // archival paths) so the workspace can show a "Reference
+                // materials" rail without a per-task scrape. Empty corpus
+                // (test harness) → empty list, NOT a failure.
+                val materialPaths: List<String> = try {
+                    kotlinx.coroutines.runBlocking {
+                        jarvis.HybridRetriever.search(titleTrim, k = 5, semanticEmbed = null)
+                    }.map { it.id }.distinct().take(5)
+                } catch (e: Exception) { emptyList() }
                 TaskRepo(ctx.db).insert(Task(
                     id = id, userId = userId,
                     subject = subjectTrim,
@@ -662,6 +695,7 @@ fun Application.installTutorRoutes() {
                     cardRefs = emptyList(),
                     status = TaskStatus.ACTIVE,
                     createdAt = now, updatedAt = now,
+                    materialPaths = materialPaths,
                 ))
                 jarvis.tutor.StateVersion.bump()
                 call.respond(HttpStatusCode.Created, ApiTaskView(
@@ -943,6 +977,13 @@ private data class ApiTaskView(
 
 @Serializable
 private data class ApiTasksList(val tasks: List<ApiTaskView>)
+
+@Serializable
+private data class ApiTaskDetailView(
+    val id: String, val subject: String, val title: String,
+    val deadline: String, val status: String,
+    val materialPaths: List<String>,
+)
 
 @Serializable
 private data class ApiCreateTaskRequest(

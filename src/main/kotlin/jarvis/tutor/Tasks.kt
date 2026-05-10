@@ -50,6 +50,7 @@ data class Task(
     val createdAt: Instant,
     val updatedAt: Instant,
     val scratchpadText: String? = null,
+    val materialPaths: List<String> = emptyList(),
 )
 
 object TasksTable : Table("tasks") {
@@ -69,6 +70,7 @@ object TasksTable : Table("tasks") {
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
     val scratchpadText = text("scratchpad_text").nullable()
+    val materialPaths = text("material_paths").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -99,6 +101,9 @@ class TaskRepo(private val db: Database) {
             it[createdAt] = t.createdAt
             it[updatedAt] = t.updatedAt
             it[scratchpadText] = t.scratchpadText
+            it[TasksTable.materialPaths] = if (t.materialPaths.isEmpty()) null
+                else TutorTypes.tutorJson.encodeToString(
+                    ListSerializer(String.serializer()), t.materialPaths)
         }
     }
 
@@ -145,5 +150,11 @@ class TaskRepo(private val db: Database) {
         createdAt = this[TasksTable.createdAt],
         updatedAt = this[TasksTable.updatedAt],
         scratchpadText = this[TasksTable.scratchpadText],
+        materialPaths = this[TasksTable.materialPaths]?.let { json ->
+            runCatching {
+                TutorTypes.tutorJson.decodeFromString(
+                    ListSerializer(String.serializer()), json)
+            }.getOrDefault(emptyList())
+        } ?: emptyList(),
     )
 }
