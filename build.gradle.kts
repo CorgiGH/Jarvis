@@ -47,6 +47,9 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-java-time:0.55.0")
     implementation("org.xerial:sqlite-jdbc:3.45.3.0")
 
+    // Layer B: PDF text-layer extraction for study-material ingestion.
+    implementation("org.apache.pdfbox:pdfbox:2.0.30")
+
     testImplementation(kotlin("test"))
     testImplementation("io.ktor:ktor-server-test-host:3.0.1")
     testImplementation("io.ktor:ktor-client-content-negotiation:3.0.1")
