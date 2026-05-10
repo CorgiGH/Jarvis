@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { App } from "./App";
 import { TrustSettings } from "./components/TrustSettings";
 import { TasksScreen } from "./components/TasksScreen";
+import { FsrsReview } from "./components/FsrsReview";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -14,6 +15,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/" element={<App />} />
         <Route path="/tasks" element={<TasksScreen />} />
         <Route path="/settings/trust" element={<TrustSettings />} />
+        <Route path="/review" element={<FsrsReview streak={0} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -3,6 +3,7 @@ import { useSearchParams, Link, useNavigate, useLocation } from "react-router-do
 import { TutorWorkspace } from "./components/TutorWorkspace";
 import { TaskQuickStart } from "./components/TaskQuickStart";
 import { ActiveTaskDashboard } from "./components/ActiveTaskDashboard";
+import { FsrsReview } from "./components/FsrsReview";
 import { jarvisFetch } from "./lib/api";
 
 const LAST_TASK_KEY = "jarvis.lastTaskId";
@@ -167,6 +168,13 @@ export function App() {
             tasks
           </Link>
           <Link
+            to="/review"
+            aria-current={here.pathname === "/review" ? "page" : undefined}
+            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+          >
+            review
+          </Link>
+          <Link
             to="/settings/trust"
             aria-current={here.pathname === "/settings/trust" ? "page" : undefined}
             className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
@@ -176,11 +184,13 @@ export function App() {
         </nav>
       </header>
       <main className="flex-1 min-h-0 overflow-hidden bg-page-bg">
-        {!sessionReady
-          ? <div className="p-6 font-mono text-sm text-page-fg/60">setting up tutor session…</div>
-          : showQuickStart
-            ? <ActiveTaskDashboard />
-            : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
+        {here.pathname === "/review"
+          ? <FsrsReview streak={0} />
+          : !sessionReady
+            ? <div className="p-6 font-mono text-sm text-page-fg/60">setting up tutor session…</div>
+            : showQuickStart
+              ? <ActiveTaskDashboard />
+              : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
       </main>
     </div>
   );

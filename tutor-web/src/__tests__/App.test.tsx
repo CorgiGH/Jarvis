@@ -2,6 +2,13 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../App";
+import React from "react";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { FsrsReview } from "../components/FsrsReview";
+
+vi.mock("../components/FsrsReview", () => ({
+  FsrsReview: () => React.createElement("div", { "data-testid": "fsrs-review-page" }, "FSRS REVIEW"),
+}));
 
 beforeEach(() => {
   Object.defineProperty(document, "cookie", { value: "csrf=cc", configurable: true, writable: true });
@@ -62,4 +69,24 @@ test("manual-entry path reveals TaskQuickStart presets", async () => {
   fireEvent.click(screen.getByTestId("active-task-manual-btn"));
   await waitFor(() => expect(screen.getByTestId("task-preset-PS")).toBeInTheDocument());
   expect(screen.getByTestId("task-preset-PA")).toBeInTheDocument();
+});
+
+test("/review route renders FsrsReview page", async () => {
+  render(<MemoryRouter initialEntries={["/review"]}><App /></MemoryRouter>);
+  await waitFor(() => expect(screen.getByTestId("fsrs-review-page")).toBeInTheDocument());
+});
+
+test("header nav pill 'review' links to /review", async () => {
+  render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
+  await waitFor(() => expect(screen.getByTestId("active-task-dashboard")).toBeInTheDocument());
+  const pill = screen.getByRole("link", { name: /review/i });
+  expect(pill).toBeInTheDocument();
+  expect(pill.getAttribute("href")).toContain("review");
+});
+
+test("review nav pill has aria-current=page when on /review", async () => {
+  render(<MemoryRouter initialEntries={["/review"]}><App /></MemoryRouter>);
+  await waitFor(() => expect(screen.getByTestId("fsrs-review-page")).toBeInTheDocument());
+  const pill = screen.getByRole("link", { name: /review/i });
+  expect(pill.getAttribute("aria-current")).toBe("page");
 });
