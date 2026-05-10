@@ -75,7 +75,7 @@ export function ScreenshotCapture({ taskId, onResult }: ScreenshotCaptureProps) 
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [taskId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [taskId]);
 
   const statusText = status === "idle" ? "capture (Ctrl+Shift+J)"
     : status === "capturing" ? "capturing…"

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { jarvisFetch } from "../lib/api";
 import { ScreenshotCapture, type ScreenshotEvent } from "./ScreenshotCapture";
 import { SuggestedEditCard } from "./SuggestedEditCard";
@@ -27,6 +27,10 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
 
   function pickChip(prompt: string) {
     setInput(prompt);
@@ -58,10 +62,14 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
     setMessages(m => [...m, { role: "you", text: userMsg }]);
     setInput("");
     setSending(true);
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
     try {
       const res = await jarvisFetch("/api/chat", {
         method: "POST",
         body: JSON.stringify({ msg: userMsg, taskId }),
+        signal: ac.signal,
       });
       const data = await res.json();
       const raw = data.reply ?? "(no reply)";
@@ -79,9 +87,13 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         chips: chipParsed.chips,
       }]);
     } catch (e) {
+      if ((e as Error).name === "AbortError") return;
       setMessages(m => [...m, { role: "jarvis", text: `(error: ${(e as Error).message})` }]);
     } finally {
-      setSending(false);
+      if (abortRef.current === ac) {
+        setSending(false);
+        abortRef.current = null;
+      }
     }
   }
 

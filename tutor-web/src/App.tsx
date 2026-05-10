@@ -38,7 +38,10 @@ export function App() {
     return () => clearTimeout(t);
   }, [dedupedFlag, setParams]);
 
+  const sessionBootstrapped = useRef(false);
   useEffect(() => {
+    if (sessionBootstrapped.current) return;
+    sessionBootstrapped.current = true;
     ensureTutorSession().finally(() => setSessionReady(true));
   }, []);
 
