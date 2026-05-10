@@ -689,6 +689,72 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        post("/api/v1/gap") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val req = try {
+                    sensorJson.decodeFromString(ApiCreateGapRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                if (req.topic.isBlank() || req.topic.length > 256) {
+                    call.respond(HttpStatusCode.BadRequest, "topic 1-256 chars")
+                    return@csrfProtect
+                }
+                val typeEnum = try { jarvis.tutor.GapType.valueOf(req.type) } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "type must be one of GapType"); return@csrfProtect
+                }
+                val triggerEnum = try { jarvis.tutor.GapTrigger.valueOf(req.trigger) } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "trigger must be one of GapTrigger"); return@csrfProtect
+                }
+                val now = Instant.now()
+                val gap = jarvis.tutor.KnowledgeGap(
+                    id = jarvis.tutor.TutorTypes.ulid(), userId = userId, taskId = req.taskId,
+                    topic = req.topic.take(256), language = req.language, type = typeEnum,
+                    trigger = triggerEnum, filledAt = now, source = jarvis.tutor.GapSource.LLM_GROUNDED,
+                    content = req.content, exampleCode = req.exampleCode, sourceCitation = req.sourceCitation,
+                    resolvedBy = null, reusedCount = 0, fsrsCardId = null,
+                )
+                val gapRepo = jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir)
+                val id = gapRepo.upsertByTriple(gap, taskId = req.taskId, content = req.content,
+                    exampleCode = req.exampleCode, sourceCitation = req.sourceCitation, now = now)
+                val saved = gapRepo.findById(id)
+                call.respond(HttpStatusCode.Created, ApiGapView(
+                    id = id, taskId = saved?.taskId, topic = saved?.topic ?: req.topic,
+                    language = saved?.language, type = saved?.type?.name ?: req.type,
+                    trigger = saved?.trigger?.name ?: req.trigger,
+                    content = saved?.content ?: req.content,
+                    exampleCode = saved?.exampleCode, sourceCitation = saved?.sourceCitation,
+                    resolvedBy = saved?.resolvedBy?.name,
+                    reusedCount = saved?.reusedCount ?: 0,
+                ))
+            }
+        }
+
+        get("/api/v1/gaps") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val taskId = call.request.queryParameters["taskId"]
+            val repo = jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir)
+            val gaps = if (taskId != null) repo.listForTask(userId, taskId) else repo.listForUser(userId)
+            call.respond(HttpStatusCode.OK, ApiGapsList(gaps.map { g ->
+                ApiGapView(
+                    id = g.id, taskId = g.taskId, topic = g.topic, language = g.language,
+                    type = g.type.name, trigger = g.trigger.name,
+                    content = g.content, exampleCode = g.exampleCode, sourceCitation = g.sourceCitation,
+                    resolvedBy = g.resolvedBy?.name, reusedCount = g.reusedCount,
+                )
+            }))
+        }
+
         post("/api/v1/gap/{id}/status") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
@@ -709,6 +775,11 @@ fun Application.installTutorRoutes() {
                     return@csrfProtect
                 }
                 val logId = jarvis.tutor.CardActionLogRepo(ctx.db).insert(userId, "GAP", cardId, req.status)
+                // Phase 4: status → KnowledgeGap.resolvedBy if it parses as one.
+                val resolved = try { jarvis.tutor.GapResolved.valueOf(req.status) } catch (e: Exception) { null }
+                if (resolved != null) {
+                    jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir).markResolved(cardId, resolved)
+                }
                 call.respond(HttpStatusCode.OK, ApiCardStatusReply(logId = logId))
             }
         }
@@ -816,6 +887,36 @@ private data class ApiCardStatusRequest(val status: String)
 
 @Serializable
 private data class ApiCardStatusReply(val logId: String)
+
+@Serializable
+private data class ApiCreateGapRequest(
+    val topic: String,
+    val language: String? = null,
+    val type: String,
+    val trigger: String,
+    val content: String,
+    val exampleCode: String? = null,
+    val sourceCitation: String? = null,
+    val taskId: String? = null,
+)
+
+@Serializable
+private data class ApiGapView(
+    val id: String,
+    val taskId: String?,
+    val topic: String,
+    val language: String?,
+    val type: String,
+    val trigger: String,
+    val content: String,
+    val exampleCode: String?,
+    val sourceCitation: String?,
+    val resolvedBy: String?,
+    val reusedCount: Int,
+)
+
+@Serializable
+private data class ApiGapsList(val gaps: List<ApiGapView>)
 
 @Serializable
 private data class ApiGatewayInboundRequest(
