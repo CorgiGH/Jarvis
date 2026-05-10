@@ -51,6 +51,7 @@ import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.SecureRandom
@@ -1213,6 +1214,89 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        // Phase C5: FSRS due-card queue. Returns up to `limit` cards whose
+        // dueAt <= now, ordered by dueAt ASC. Limit clamped 1..100, default 20.
+        get("/api/v1/fsrs/due") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val limit = call.request.queryParameters["limit"]?.toIntOrNull()?.coerceIn(1, 100) ?: 20
+            val cards = jarvis.tutor.FsrsDueQueue.due(ctx.db, userId, java.time.Instant.now(), limit)
+            call.respond(HttpStatusCode.OK, ApiFsrsDueReply(cards = cards.map { c ->
+                ApiFsrsCardView(
+                    id = c.id, front = c.front, back = c.back,
+                    sourceTaskId = if (c.source == jarvis.tutor.FsrsSource.GAP_PROMOTION) c.sourceRef else null,
+                    difficulty = c.state.difficulty, stability = c.state.stability,
+                    retrievability = c.state.retrievability,
+                    dueAt = c.state.dueAt.toString(), lapses = c.state.lapses,
+                )
+            }))
+        }
+
+        // Phase C5: FSRS grade route. Accepts grade 1..4, updates card state
+        // inline via Fsrs.update, returns new dueAt + updated D/S values.
+        post("/api/v1/fsrs/{id}/grade") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val cardId = call.parameters["id"]
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val req = try {
+                    sensorJson.decodeFromString(ApiFsrsGradeRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(120)}")
+                    return@csrfProtect
+                }
+                if (req.grade !in 1..4) {
+                    call.respond(HttpStatusCode.BadRequest, "grade must be 1..4"); return@csrfProtect
+                }
+                val card = jarvis.tutor.FsrsCardRepo(ctx.db).findDueForUser(userId, java.time.Instant.MAX)
+                    .firstOrNull { it.id == cardId }
+                    ?: run { call.respond(HttpStatusCode.NotFound, "card not found"); return@csrfProtect }
+                val now = java.time.Instant.now()
+                val elapsed = java.time.Duration.between(card.state.lastReviewedAt, now).toMinutes() / (60.0 * 24.0)
+                val next = jarvis.Fsrs.update(
+                    jarvis.Fsrs.State(card.state.difficulty, card.state.stability),
+                    req.grade, elapsed,
+                )
+                org.jetbrains.exposed.sql.transactions.transaction(ctx.db) {
+                    jarvis.tutor.FsrsCardsTable.update({
+                        jarvis.tutor.FsrsCardsTable.id eq cardId
+                    }) {
+                        it[jarvis.tutor.FsrsCardsTable.difficulty] = next.difficulty
+                        it[jarvis.tutor.FsrsCardsTable.stability] = next.stability
+                        it[jarvis.tutor.FsrsCardsTable.retrievability] = jarvis.Fsrs.retrievability(next.stability, 0.0)
+                        it[jarvis.tutor.FsrsCardsTable.dueAt] = now.plus(java.time.Duration.ofMinutes((next.stability * 24 * 60).toLong()))
+                        it[jarvis.tutor.FsrsCardsTable.lastReviewedAt] = now
+                        it[jarvis.tutor.FsrsCardsTable.lapses] = card.state.lapses + (if (req.grade == 1) 1 else 0)
+                    }
+                }
+                val newDue = now.plus(java.time.Duration.ofMinutes((next.stability * 24 * 60).toLong()))
+                call.respond(HttpStatusCode.OK, ApiFsrsGradeReply(
+                    cardId = cardId, nextDueAt = newDue.toString(),
+                    newDifficulty = next.difficulty, newStability = next.stability,
+                ))
+            }
+        }
+
+        // Phase C5: FSRS forecast — counts cards due within tomorrow / 7 days / 30 days.
+        get("/api/v1/fsrs/forecast") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val f = jarvis.tutor.FsrsDueQueue.forecast(ctx.db, userId, java.time.Instant.now())
+            call.respond(HttpStatusCode.OK, ApiFsrsForecastReply(
+                tomorrow = f.tomorrow, thisWeek = f.thisWeek, thisMonth = f.thisMonth,
+            ))
+        }
+
         // Phase C3: drill answer grader — delegates to DrillGrader.grade() via
         // OpenRouterChatLlm. Returns a structured rubric + misconception code.
         post("/api/v1/drill/grade") {
@@ -1464,6 +1548,29 @@ private data class ApiDrillGradeReply(
     val misconception: String?,
     val elaboratedFeedback: String,
 )
+
+@Serializable
+private data class ApiFsrsCardView(
+    val id: String, val front: String, val back: String,
+    val sourceTaskId: String?,
+    val difficulty: Double, val stability: Double, val retrievability: Double,
+    val dueAt: String, val lapses: Int,
+)
+
+@Serializable
+private data class ApiFsrsDueReply(val cards: List<ApiFsrsCardView>)
+
+@Serializable
+private data class ApiFsrsGradeRequest(val grade: Int)
+
+@Serializable
+private data class ApiFsrsGradeReply(
+    val cardId: String, val nextDueAt: String,
+    val newDifficulty: Double, val newStability: Double,
+)
+
+@Serializable
+private data class ApiFsrsForecastReply(val tomorrow: Int, val thisWeek: Int, val thisMonth: Int)
 
 /**
  * Wires the Tutor Layer A persistence + ledger context onto the running
