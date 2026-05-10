@@ -151,7 +151,57 @@ function Invoke-MemoryVerify {
     return $result
 }
 
+function Invoke-MemoryVerifyDirectory {
+    param(
+        [string]$MemoryDir,
+        [string]$ReportPath
+    )
+
+    if (-not (Test-Path $MemoryDir)) {
+        Set-Content -LiteralPath $ReportPath -Value "# Verify report — memory dir not found: $MemoryDir`n" -Encoding UTF8
+        return
+    }
+
+    $files = Get-ChildItem -LiteralPath $MemoryDir -Filter '*.md' -File |
+        Where-Object { $_.Name -ne 'MEMORY.md' -and $_.Name -ne 'BRIDGE.md' -and -not $_.Name.StartsWith('.') } |
+        Sort-Object Name
+
+    $now = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $sb = New-Object System.Text.StringBuilder
+    [void]$sb.AppendLine("# Verify report — $now")
+    [void]$sb.AppendLine('')
+
+    foreach ($f in $files) {
+        $r = Invoke-MemoryVerify -Path $f.FullName
+        $tag = "[$($r.status)]"
+        if ($r.ranCount -eq 0) {
+            [void]$sb.AppendLine("$tag $($f.Name) (no verify; trusted)")
+        } else {
+            [void]$sb.AppendLine("$tag $($f.Name) ($($r.ranCount) verify)")
+        }
+        foreach ($reason in $r.reasons) {
+            [void]$sb.AppendLine("    reason: $reason")
+        }
+    }
+
+    Set-Content -LiteralPath $ReportPath -Value $sb.ToString() -Encoding UTF8
+}
+
 # Runner block — skipped in test mode so the test harness can dot-source us.
 if ($env:MEMORY_VERIFY_TEST_MODE -ne '1') {
-    Write-Host "memory-verify.ps1: runner not yet implemented (Task 3)"
+    # Resolve memory dir.
+    $memoryDir = $env:CLAUDE_MEMORY_DIR
+    if (-not $memoryDir) {
+        $cwd = (Get-Location).Path
+        $sanitized = $cwd -replace '[\\:]', '-'
+        $memoryDir = Join-Path $env:USERPROFILE ".claude/projects/$sanitized/memory"
+    }
+    if (-not (Test-Path $memoryDir)) {
+        Write-Host "[memory-verify] memory dir not found: $memoryDir (skipping)"
+        exit 0
+    }
+    $reportPath = Join-Path $memoryDir '.verify-report.md'
+    Invoke-MemoryVerifyDirectory -MemoryDir $memoryDir -ReportPath $reportPath
+    Write-Host "[memory-verify] report written to $reportPath"
+    exit 0
 }

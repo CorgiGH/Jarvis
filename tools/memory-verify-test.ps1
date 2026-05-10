@@ -52,6 +52,30 @@ Assert-Equal 'ERROR' $errorResult.status 'error.md verify status is ERROR'
 $nvResult = Invoke-MemoryVerify -Path $nvPath
 Assert-Equal 'OK' $nvResult.status 'no-verify.md verify status is OK (trusted)'
 
+# Test 7: Walk fixture dir + produce report
+$fixturesDir = Join-Path $repo 'tools/memory-verify-fixtures'
+$reportPath = Join-Path $env:TEMP 'memory-verify-test-report.md'
+if (Test-Path $reportPath) { Remove-Item $reportPath -Force }
+Invoke-MemoryVerifyDirectory -MemoryDir $fixturesDir -ReportPath $reportPath
+Assert-Equal $true (Test-Path $reportPath) 'report file written'
+
+$reportContent = Get-Content $reportPath -Raw
+if ($reportContent -notmatch '\[OK\]\s+ok\.md') {
+    Write-Host "[FAIL] report contains [OK] ok.md  body=<$reportContent>" -ForegroundColor Red; $script:failures++
+} else { Write-Host "[OK]   report contains [OK] ok.md" -ForegroundColor Green }
+
+if ($reportContent -notmatch '\[STALE\]\s+stale\.md') {
+    Write-Host "[FAIL] report contains [STALE] stale.md" -ForegroundColor Red; $script:failures++
+} else { Write-Host "[OK]   report contains [STALE] stale.md" -ForegroundColor Green }
+
+if ($reportContent -notmatch '\[ERROR\]\s+error\.md') {
+    Write-Host "[FAIL] report contains [ERROR] error.md" -ForegroundColor Red; $script:failures++
+} else { Write-Host "[OK]   report contains [ERROR] error.md" -ForegroundColor Green }
+
+if ($reportContent -notmatch '\[OK\]\s+no-verify\.md') {
+    Write-Host "[FAIL] report contains [OK] no-verify.md" -ForegroundColor Red; $script:failures++
+} else { Write-Host "[OK]   report contains [OK] no-verify.md" -ForegroundColor Green }
+
 if ($failures -gt 0) {
     Write-Host "$failures test(s) failed" -ForegroundColor Red
     exit 1
