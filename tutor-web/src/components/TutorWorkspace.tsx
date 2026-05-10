@@ -6,6 +6,7 @@ import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 import { InlineAskChip } from "./InlineAskChip";
 import { Sidekick } from "./Sidekick";
+import { DaemonHealthPill } from "./DaemonHealthPill";
 import { attachSelectionListener, buildSidekickEnvelope } from "../lib/inlineAsk";
 import type { SidekickEnvelope } from "../lib/inlineAsk";
 import { jarvisFetch } from "../lib/api";
@@ -115,6 +116,10 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
 
   return (
     <div ref={workspaceRef} className="flex h-full min-h-0 flex-col">
+      <div data-testid="tutor-header" className="flex items-center justify-between px-4 py-1 border-b-4 border-border-strong bg-panel-dark-bg text-panel-dark-fg text-[10px] font-mono tracking-widest">
+        <span className="font-bold">JARVIS · TUTOR</span>
+        <DaemonHealthPill />
+      </div>
       {dedupedNotice && (
         <div data-testid="deduped-notice"
              role="status"

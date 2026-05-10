@@ -101,6 +101,37 @@ fun Application.installTutorRoutes() {
             call.respondText("""{"ok":true}""", ContentType.Application.Json)
         }
 
+        // Daemon health probe: checks if the local background daemon at
+        // port 7331 is reachable. No auth required (public liveness data).
+        get("/api/v1/daemon/health") {
+            val url = "http://127.0.0.1:7331/health"
+            val client = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(2))
+                .build()
+            val now = java.time.Instant.now()
+            val (reachable, tunnelUp) = try {
+                val req = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(url))
+                    .timeout(java.time.Duration.ofSeconds(3))
+                    .GET()
+                    .build()
+                val resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString())
+                Pair(resp.statusCode() in 200..299, true)
+            } catch (_: java.net.ConnectException) {
+                Pair(false, false)
+            } catch (_: Exception) {
+                Pair(false, false)
+            }
+            val lastSeenAt = if (reachable) now.toString() else null
+            val body = buildString {
+                append("""{"reachable":$reachable,"tunnelUp":$tunnelUp,"lastSeenAt":""")
+                if (lastSeenAt != null) append('"').append(lastSeenAt).append('"')
+                else append("null")
+                append("}")
+            }
+            call.respondText(body, ContentType.Application.Json)
+        }
+
         // Layer A auth bootstrap. Visited via a magic link emailed/sent to
         // the user. Mints a server-side session row + sets two cookies:
         //   jarvis_session — httpOnly, holds the sid (auth credential).
