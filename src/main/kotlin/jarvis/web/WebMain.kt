@@ -431,6 +431,34 @@ internal suspend fun runWeb() {
                 call.respondText(msg, ContentType.Text.Plain)
             }
 
+            // Phase 7.1 deferral closer: ConceptInline confidence query.
+            // Frontend gates inline-link affordance behind threshold so well-
+            // known concepts render plain (no underline). Match policy:
+            // case-insensitive name; max confidence across subjects (rare
+            // for a name to span subjects, but takes the strongest signal).
+            get("/api/v1/concept-confidence") {
+                val name = call.request.queryParameters["name"]?.trim().orEmpty()
+                if (name.isEmpty()) {
+                    call.respond(HttpStatusCode.BadRequest, "name required")
+                    return@get
+                }
+                val all = jarvis.KnowledgeState.stats()
+                val match = all
+                    .filter { it.concept.equals(name, ignoreCase = true) }
+                    .maxByOrNull { it.confidence }
+                val conf = match?.confidence ?: 0f
+                val threshold = conceptLinkThreshold()
+                call.respond(
+                    ApiConceptConfidenceResponse(
+                        concept = name,
+                        confidence = conf,
+                        staleDays = match?.staleDays ?: Long.MAX_VALUE,
+                        matched = match != null,
+                        linked = conf < threshold,
+                    ),
+                )
+            }
+
             // Daily allocator — single best next block.
             get("/api/next_block") {
                 val now = java.time.Instant.now()
@@ -683,6 +711,21 @@ private data class ApiSignalsResponse(val signals: List<jarvis.ProactiveSignal>)
 
 @Serializable
 private data class ApiAckRequest(val signalId: String, val action: String)
+
+@Serializable
+private data class ApiConceptConfidenceResponse(
+    val concept: String,
+    val confidence: Float,
+    val staleDays: Long,
+    val matched: Boolean,
+    /** Server-computed gate: false → frontend should skip inline-link
+     *  affordance and render plain text. Driven by env
+     *  JARVIS_CONCEPT_LINK_CONFIDENCE_THRESHOLD (default 0.7). */
+    val linked: Boolean,
+)
+
+private fun conceptLinkThreshold(): Float =
+    System.getenv("JARVIS_CONCEPT_LINK_CONFIDENCE_THRESHOLD")?.toFloatOrNull() ?: 0.7f
 
 @Serializable
 data class PhoneHealthBucket(val pkg: String, val count: Int)
