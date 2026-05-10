@@ -1172,6 +1172,46 @@ fun Application.installTutorRoutes() {
                 call.respond(HttpStatusCode.OK, ApiCardStatusReply(logId = logId))
             }
         }
+
+        // Phase C1: inline-help Sidekick — takes a structured envelope describing
+        // what the user is looking at (task, card, anchor paragraph, selection) and
+        // returns an LLM reply scoped to that context.
+        post("/api/v1/sidekick/ask") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val env = try {
+                    sensorJson.decodeFromString(jarvis.tutor.SidekickEnvelope.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                if (env.userQuestion.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, "userQuestion required")
+                    return@csrfProtect
+                }
+                val systemContext = jarvis.tutor.SidekickContext.systemContext(env)
+                val text: String
+                val model: String
+                try {
+                    jarvis.tutor.JarvisToolset().use { ts ->
+                        val r = kotlinx.coroutines.runBlocking {
+                            ts.chat(systemPrompt = systemContext, userText = env.userQuestion)
+                        }
+                        text = r.text
+                        model = r.model
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadGateway, "LLM unavailable: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                val quoted = env.selection ?: env.anchorText?.take(160)
+                call.respond(HttpStatusCode.OK, ApiSidekickReply(text = text, model = model, quotedContext = quoted))
+            }
+        }
     }
 }
 
@@ -1317,6 +1357,13 @@ private data class ApiTaskRepRepReply(
     val taskId: String,
     val problems: Int,
     val generatedAt: String,
+)
+
+@Serializable
+private data class ApiSidekickReply(
+    val text: String,
+    val model: String,
+    val quotedContext: String?,
 )
 
 @Serializable
