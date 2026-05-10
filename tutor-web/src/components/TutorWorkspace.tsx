@@ -54,6 +54,19 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
     setScratch(prev => prev.length === 0 ? text : `${prev}\n\n${text}`);
   }
 
+  // Phase 6.3b: fetch task detail to surface auto-attached materialPaths.
+  const [materialPaths, setMaterialPaths] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    jarvisFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { materialPaths?: string[] } | null) => {
+        if (!cancelled && d?.materialPaths) setMaterialPaths(d.materialPaths);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [taskId]);
+
   // Phase 4.3: PdfPane selection-tooltip callback. POSTs gap directly + fires
   // window event so ChatPane re-fetches its historical-gaps list.
   async function emitPdfSelectionGap(selection: { text: string; page: number }) {
@@ -81,6 +94,17 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
              aria-live="polite"
              className="bg-accent border-b-4 border-border-strong text-page-fg font-mono text-xs font-bold tracking-widest px-4 py-1.5">
           OPENED EXISTING TASK · same subject + title already on file
+        </div>
+      )}
+      {materialPaths.length > 0 && (
+        <div data-testid="reference-materials"
+             className="border-b-4 border-border-strong bg-accent-soft px-4 py-2 font-mono text-xs">
+          <div className="font-bold tracking-widest mb-1">REFERENCE MATERIALS ({materialPaths.length})</div>
+          <ul role="list" className="space-y-0.5">
+            {materialPaths.map((p, i) => (
+              <li key={`${p}-${i}`} className="text-page-fg/80 truncate">{p}</li>
+            ))}
+          </ul>
         </div>
       )}
       <div className="flex flex-1 min-h-0">
