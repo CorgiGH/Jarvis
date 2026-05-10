@@ -7,6 +7,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.routing.put
+import io.ktor.server.routing.delete
 import jarvis.tutor.AuditLinesTable
 import jarvis.tutor.ContentRef
 import jarvis.tutor.DaemonClient
@@ -46,6 +47,8 @@ import jarvis.tutor.csrfProtect
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.file.Files
 import java.nio.file.Path
@@ -668,6 +671,41 @@ fun Application.installTutorRoutes() {
                 materialPaths = task.materialPaths,
             ))
         }
+        // Audit MED closer: per-task delete so the user can prune dupes
+        // from the UI instead of needing direct sqlite access. Cascades
+        // any detected_task_mapping rows pointing at this task; refuses
+        // when the task has knowledge_gaps or fsrs_cards back-pointing
+        // to preserve audit history.
+        delete("/api/v1/tasks/{id}") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@delete }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val taskId = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val task = TaskRepo(ctx.db).findById(taskId)
+                if (task == null || task.userId != userId) {
+                    call.respond(HttpStatusCode.NotFound, "task not found"); return@csrfProtect
+                }
+                val gaps = jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir).listForTask(userId, taskId)
+                if (gaps.isNotEmpty()) {
+                    call.respond(HttpStatusCode.Conflict,
+                        "task has ${gaps.size} knowledge gaps; resolve or detach first")
+                    return@csrfProtect
+                }
+                val tid: String = taskId
+                transaction(ctx.db) {
+                    jarvis.tutor.taskdetect.DetectedTaskMappingTable.deleteWhere {
+                        jarvis.tutor.taskdetect.DetectedTaskMappingTable.taskId eq tid
+                    }
+                    TasksTable.deleteWhere { TasksTable.id eq tid }
+                }
+                call.respond(HttpStatusCode.OK, ApiTaskDeleteReply(taskId = taskId))
+            }
+        }
+
         post("/api/v1/tasks") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
@@ -1219,6 +1257,9 @@ private data class ApiPromoteGapReply(val cardId: String, val createdNew: Boolea
 
 @Serializable
 private data class ApiPdfUploadReply(val bytes: Int)
+
+@Serializable
+private data class ApiTaskDeleteReply(val taskId: String)
 
 @Serializable
 private data class ApiGwsStatusReply(

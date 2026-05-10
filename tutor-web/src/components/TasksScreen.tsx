@@ -65,6 +65,21 @@ export function TasksScreen() {
     }
   }
 
+  async function deleteTask(t: TaskView) {
+    if (!confirm(`Delete task "${t.title}"? This cannot be undone.`)) return;
+    setError(null);
+    try {
+      const r = await jarvisFetch(`/api/v1/tasks/${encodeURIComponent(t.id)}`, { method: "DELETE" });
+      if (!r.ok) {
+        const body = await r.text();
+        throw new Error(`HTTP ${r.status}: ${body.slice(0, 200)}`);
+      }
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <div data-testid="tasks-screen" className="p-4 font-mono">
       <h1 className="text-lg font-bold tracking-widest mb-3">TASKS</h1>
@@ -84,6 +99,7 @@ export function TasksScreen() {
               type="button"
               data-testid={`task-subject-${s}`}
               onClick={() => setSubject(s)}
+              aria-pressed={subject === s}
               className={`text-xs font-bold tracking-widest px-2 py-1 border ${
                 subject === s ? "bg-panel-dark-bg text-panel-dark-fg" : "bg-page-bg text-page-fg border-border-strong"
               }`}>
@@ -144,11 +160,19 @@ export function TasksScreen() {
                  {t.subject} · {dueTag} · {t.status}
                </div>
                <div className="text-sm mt-1">{t.title}</div>
-               <Link to={`/?taskId=${t.id}`}
-                     data-testid="task-open-btn"
-                     className="inline-block mt-2 text-xs font-bold tracking-widest bg-accent text-page-fg px-2 py-1">
-                 OPEN
-               </Link>
+               <div className="flex gap-2 mt-2 flex-wrap">
+                 <Link to={`/?taskId=${t.id}`}
+                       data-testid="task-open-btn"
+                       className="inline-block text-xs font-bold tracking-widest bg-accent text-page-fg px-2 py-1">
+                   OPEN
+                 </Link>
+                 <button onClick={() => deleteTask(t)}
+                         data-testid="task-delete-btn"
+                         aria-label={`Delete task ${t.title}`}
+                         className="inline-block text-xs font-bold tracking-widest bg-page-bg text-page-fg/70 border border-border-thin px-2 py-1 hover:bg-danger-bg hover:text-danger-fg">
+                   × DELETE
+                 </button>
+               </div>
              </li>
            );
          })}

@@ -18,6 +18,7 @@ export function ActiveTaskDashboard() {
   const [loaded, setLoaded] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [detectResult, setDetectResult] = useState<string | null>(null);
 
   useEffect(() => {
     jarvisFetch("/api/v1/tasks")
@@ -31,15 +32,22 @@ export function ActiveTaskDashboard() {
 
   async function runDetection() {
     setDetecting(true);
+    setDetectResult(null);
     try {
-      await jarvisFetch("/api/v1/task-detect/run", { method: "POST" });
-      const r = await jarvisFetch("/api/v1/tasks");
+      const r = await jarvisFetch("/api/v1/task-detect/run", { method: "POST" });
       if (r.ok) {
-        const data: { tasks: TaskView[] } = await r.json();
+        const reply = await r.json() as { inserted: number; existing: number; total: number };
+        setDetectResult(`${reply.inserted} new · ${reply.existing} existing · ${reply.total} discovered`);
+      } else {
+        setDetectResult(`HTTP ${r.status}`);
+      }
+      const r2 = await jarvisFetch("/api/v1/tasks");
+      if (r2.ok) {
+        const data: { tasks: TaskView[] } = await r2.json();
         setTasks(data.tasks ?? []);
       }
-    } catch (_) {
-      // best-effort
+    } catch (e) {
+      setDetectResult(`error: ${(e as Error).message}`);
     } finally {
       setDetecting(false);
     }
@@ -51,7 +59,7 @@ export function ActiveTaskDashboard() {
         ACTIVE TASKS · ranked by urgency × weight × readiness
       </div>
       {!loaded ? (
-        <div className="text-page-fg/60">loading…</div>
+        <div role="status" aria-live="polite" className="text-page-fg/60">loading…</div>
       ) : ranked.length === 0 ? (
         <div data-testid="active-task-empty" className="text-page-fg/60 mb-4">
           No active tasks yet. Trigger detection or add one manually below.
@@ -77,11 +85,12 @@ export function ActiveTaskDashboard() {
           })}
         </ul>
       )}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-2 flex-wrap">
         <button
           data-testid="active-task-detect-btn"
           onClick={runDetection}
           disabled={detecting}
+          aria-busy={detecting}
           className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-2 sm:py-1 disabled:opacity-50"
         >
           {detecting ? "RUNNING…" : "RUN DETECTION"}
@@ -89,11 +98,19 @@ export function ActiveTaskDashboard() {
         <button
           data-testid="active-task-manual-btn"
           onClick={() => setShowManual(s => !s)}
+          aria-expanded={showManual}
           className="text-xs font-bold tracking-widest bg-page-bg text-page-fg border-2 border-border-strong px-3 py-2 sm:py-1"
         >
           {showManual ? "− Hide manual entry" : "+ Manual entry"}
         </button>
       </div>
+      {detectResult && (
+        <div data-testid="active-task-detect-result"
+             role="status" aria-live="polite"
+             className="text-xs text-page-fg/80 mb-4 border border-border-thin bg-accent-soft px-2 py-1">
+          detection: {detectResult}
+        </div>
+      )}
       {showManual && <TaskQuickStart />}
     </div>
   );
