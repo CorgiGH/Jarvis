@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { jarvisFetch } from "../lib/api";
+import { KnowledgeLedger } from "./KnowledgeLedger";
 
 interface TaskView {
   id: string;
@@ -27,6 +28,7 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskView[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
 
   useEffect(() => {
     function fetchTasks() {
@@ -66,6 +68,15 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
       <div className="bg-panel-dark-bg text-panel-dark-fg px-3 py-2 tracking-widest font-bold">
         TASKS
       </div>
+      <button
+        data-testid="sidebar-ledger-btn"
+        onClick={() => setLedgerOpen(true)}
+        aria-label="Open knowledge ledger"
+        className="border-b border-border-thin px-3 py-2 text-left hover:bg-accent-soft tracking-widest"
+      >
+        📒 LEDGER
+      </button>
+      {ledgerOpen && <KnowledgeLedger onClose={() => setLedgerOpen(false)} />}
       <button
         data-testid="sidebar-new-task"
         onClick={() => navigate("/?pick=1")}
