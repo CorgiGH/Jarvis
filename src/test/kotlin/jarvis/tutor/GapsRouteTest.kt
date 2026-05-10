@@ -115,4 +115,45 @@ class GapsRouteTest {
         val r3 = client.get("/api/v1/gaps?taskId=T3") { cookie("jarvis_session", sid) }
         assertTrue(r3.bodyAsText().contains("\"resolvedBy\":\"USER_MARKED_DONE\""))
     }
+
+    @Test
+    fun `POST gap search-docs returns 200 + results array (empty when no corpus)`(@TempDir tmp: Path) = testApplication {
+        var ctx: TutorContext? = null
+        application { freshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seed(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val r1 = client.post("/api/v1/gap") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"topic":"riemann","type":"CONCEPT","trigger":"EXPLICIT_ASK","content":"x","taskId":"T9"}""")
+        }
+        val gapId = Regex("\"id\":\"([^\"]+)\"").find(r1.bodyAsText())!!.groupValues[1]
+        val r2 = client.post("/api/v1/gap/$gapId/search-docs") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+        }
+        assertEquals(HttpStatusCode.OK, r2.status, r2.bodyAsText())
+        assertTrue(r2.bodyAsText().contains("\"results\""))
+    }
+
+    @Test
+    fun `POST gap search-docs returns 404 for missing gap`(@TempDir tmp: Path) = testApplication {
+        var ctx: TutorContext? = null
+        application { freshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seed(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val r = client.post("/api/v1/gap/nonexistent/search-docs") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+        }
+        assertEquals(HttpStatusCode.NotFound, r.status)
+    }
 }

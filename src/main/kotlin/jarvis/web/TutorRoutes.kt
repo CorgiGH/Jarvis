@@ -736,6 +736,34 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        post("/api/v1/gap/{id}/search-docs") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val gapId = call.parameters["id"]
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val repo = jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir)
+                val gap = repo.findById(gapId)
+                if (gap == null || gap.userId != userId) {
+                    call.respond(HttpStatusCode.NotFound, "gap not found"); return@csrfProtect
+                }
+                val hits = try {
+                    kotlinx.coroutines.runBlocking {
+                        jarvis.HybridRetriever.search(gap.topic, k = 6, semanticEmbed = null)
+                    }
+                } catch (e: Exception) {
+                    emptyList()
+                }
+                val results = hits.take(6).map {
+                    ApiSearchDocResult(filename = it.id, snippet = it.snippet, lineRef = null)
+                }
+                call.respond(HttpStatusCode.OK, ApiSearchDocsReply(results = results))
+            }
+        }
+
         get("/api/v1/gaps") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
@@ -917,6 +945,12 @@ private data class ApiGapView(
 
 @Serializable
 private data class ApiGapsList(val gaps: List<ApiGapView>)
+
+@Serializable
+private data class ApiSearchDocResult(val filename: String, val snippet: String, val lineRef: String?)
+
+@Serializable
+private data class ApiSearchDocsReply(val results: List<ApiSearchDocResult>)
 
 @Serializable
 private data class ApiGatewayInboundRequest(
