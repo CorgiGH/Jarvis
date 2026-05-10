@@ -102,6 +102,72 @@ object GwsEffector {
         return Result.Ok(stdout, parsed)
     }
 
+    /**
+     * Lightweight health probe: reports whether (a) the GWS_ENABLED env
+     * is set, (b) a `gws` binary is on PATH, and (c) `gws auth status`
+     * exits 0. Used by the `/api/v1/gws/status` route so the user can
+     * tell from the UI whether the workspace tools will actually fire.
+     *
+     * Interactive login (`gws auth login`) still requires the user to
+     * run it on the VPS — we cannot drive a browser-based OAuth flow
+     * from a long-running headless process. The status endpoint just
+     * surfaces "logged in / not logged in" so the LLM doesn't try to
+     * call calendar/drive tools that will fail.
+     */
+    data class Health(
+        val enabled: Boolean,
+        val binaryFound: Boolean,
+        val authenticated: Boolean,
+        val detail: String,
+    )
+
+    fun health(): Health {
+        val enabled = isEnabled()
+        if (!enabled) {
+            return Health(false, false, false,
+                "set GWS_ENABLED=1 then run `gws auth login` on the server")
+        }
+        val binaryFound = isBinaryOnPath()
+        if (!binaryFound) {
+            return Health(true, false, false,
+                "install @googleworkspace/cli: `npm install -g @googleworkspace/cli`")
+        }
+        val (exit, stderr) = runProbe(listOf("gws", "auth", "status", "--format", "json"))
+        return Health(
+            enabled = true,
+            binaryFound = true,
+            authenticated = exit == 0,
+            detail = if (exit == 0) "ok" else "run `gws auth login` on the server (exit=$exit, ${stderr.lines().firstOrNull { it.isNotBlank() }?.take(200).orEmpty()})",
+        )
+    }
+
+    internal fun isBinaryOnPath(): Boolean {
+        val path = System.getenv("PATH") ?: return false
+        val sep = if (System.getProperty("os.name").lowercase().contains("win")) ";" else ":"
+        val candidates = if (System.getProperty("os.name").lowercase().contains("win"))
+            listOf("gws.cmd", "gws.exe", "gws") else listOf("gws")
+        for (dir in path.split(sep)) {
+            for (cand in candidates) {
+                val p = java.nio.file.Paths.get(dir, cand)
+                if (java.nio.file.Files.isRegularFile(p)) return true
+            }
+        }
+        return false
+    }
+
+    private fun runProbe(cmd: List<String>): Pair<Int, String> {
+        val pb = ProcessBuilder(cmd).redirectErrorStream(false)
+        val env = pb.environment()
+        env.keys.retainAll { it in safeEnv }
+        val proc = try { pb.start() } catch (e: Exception) {
+            return -1 to "probe-launch-failed: ${e.javaClass.simpleName}: ${e.message?.take(120)}"
+        }
+        val finished = proc.waitFor(8, TimeUnit.SECONDS)
+        if (!finished) { proc.destroyForcibly(); return -1 to "probe timeout" }
+        val stderr = proc.errorStream.bufferedReader().readText().take(800)
+        return proc.exitValue() to stderr
+    }
+
     private val JSON = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private fun mapToJsonObject(m: Map<String, Any>): JsonObject {

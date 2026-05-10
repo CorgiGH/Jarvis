@@ -866,6 +866,25 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        // Phase 7 deferral closer: surface gws auth state to the UI so
+        // the user can tell whether calendar/drive/gmail tools will fire.
+        // Interactive `gws auth login` still runs on the VPS — this only
+        // reports current state and what to do if it's not authenticated.
+        get("/api/v1/gws/status") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val h = jarvis.tutor.GwsEffector.health()
+            call.respond(HttpStatusCode.OK, ApiGwsStatusReply(
+                enabled = h.enabled,
+                binaryFound = h.binaryFound,
+                authenticated = h.authenticated,
+                detail = h.detail,
+            ))
+        }
+
         post("/api/v1/task-detect/run") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
@@ -1111,6 +1130,14 @@ private data class ApiLastTaskReply(val taskId: String?)
 
 @Serializable
 private data class ApiTaskDetectReply(val inserted: Int, val existing: Int, val total: Int)
+
+@Serializable
+private data class ApiGwsStatusReply(
+    val enabled: Boolean,
+    val binaryFound: Boolean,
+    val authenticated: Boolean,
+    val detail: String,
+)
 
 @Serializable
 private data class ApiGatewayInboundRequest(
