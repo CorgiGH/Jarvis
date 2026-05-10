@@ -5,6 +5,19 @@ import React from "react";
 
 expect.extend(matchers);
 
+// jsdom 25 does not implement PointerEvent. Polyfill it so that
+// fireEvent.pointerDown/Move/Up carry clientX/Y through MouseEvent.
+if (typeof window !== "undefined" && !window.PointerEvent) {
+  class PointerEventPolyfill extends MouseEvent {
+    readonly pointerId: number;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 0;
+    }
+  }
+  (window as any).PointerEvent = PointerEventPolyfill;
+}
+
 // react-pdf depends on DOMMatrix + Worker which jsdom doesn't provide.
 // Stub at module level so any test that mounts <PdfPane> (transitively via
 // TutorWorkspace etc.) doesn't try to load the real pdfjs-dist worker.
