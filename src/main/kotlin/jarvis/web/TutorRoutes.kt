@@ -1025,6 +1025,56 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        // Phase B5: re-run PDF problem extraction for a task and cache the result.
+        post("/api/v1/task/{id}/reprep") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val taskId = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val task = TaskRepo(ctx.db).findById(taskId)
+                if (task == null || task.userId != userId) {
+                    call.respond(HttpStatusCode.NotFound, "task not found"); return@csrfProtect
+                }
+                val pdfPath = jarvis.Config.archivalDir
+                    .resolve(task.problemRef.path)
+                    .normalize()
+                    .toAbsolutePath()
+                val problems = try {
+                    jarvis.OpenRouterChatLlm().use { llm ->
+                        kotlinx.coroutines.runBlocking {
+                            jarvis.tutor.PdfProblemExtractor.identifyProblems(pdfPath, llm)
+                        }
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadGateway, "LLM error: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                val now = java.time.Instant.now()
+                val problemsJson = jarvis.tutor.TutorTypes.tutorJson.encodeToString(
+                    kotlinx.serialization.builtins.ListSerializer(
+                        jarvis.tutor.Problem.serializer()),
+                    problems,
+                )
+                jarvis.tutor.TaskPrepRepo(ctx.db).upsert(jarvis.tutor.TaskPrep(
+                    taskId = taskId,
+                    generatedAt = now,
+                    version = 1,
+                    problemsJson = problemsJson,
+                    drillsJson = "{}",
+                    railJson = "[]",
+                ))
+                call.respond(HttpStatusCode.OK, ApiTaskRepRepReply(
+                    taskId = taskId,
+                    problems = problems.size,
+                    generatedAt = now.toString(),
+                ))
+            }
+        }
+
         // Phase 7.5 deferral closer: promote a knowledge gap to an FSRS card.
         // Idempotent — the gap row's fsrs_card_id is the source of truth.
         post("/api/v1/gap/{id}/promote") {
@@ -1261,6 +1311,13 @@ private data class ApiPdfUploadReply(val bytes: Int)
 
 @Serializable
 private data class ApiTaskDeleteReply(val taskId: String)
+
+@Serializable
+private data class ApiTaskRepRepReply(
+    val taskId: String,
+    val problems: Int,
+    val generatedAt: String,
+)
 
 @Serializable
 private data class ApiGwsStatusReply(
