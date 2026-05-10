@@ -1,0 +1,223 @@
+import { useState } from "react";
+import { DrillCard } from "./DrillCard";
+import type { DrillCardState } from "./DrillCard";
+import { gradeDrill } from "../lib/drillGrader";
+import type { GradeResult } from "../lib/drillGrader";
+
+export interface DrillContent {
+  drill: string;
+  worked: string;
+  definition: string;
+  check: string;
+  expectedAnswerHint: string;
+}
+
+interface DrillStackProps {
+  taskId: string;
+  problemId: string;
+  content: DrillContent;
+  onProblemComplete: (problemId: string) => void;
+}
+
+type StackPhase =
+  | "idle"
+  | "grading"
+  | "correct"
+  | "incorrect"
+  | "given-up"
+  | "check-done";
+
+/**
+ * Orchestrates 4 DrillCards in DRILL → WORKED → DEFINITION → CHECK order.
+ *
+ * State machine:
+ *   idle      → user types attempt → click "CHECK ANSWER" → grading
+ *   grading   → API responds correct   → correct  (WORKED/DEF/CHECK unlock, stagger 80ms)
+ *   grading   → API responds incorrect → incorrect (cards stay locked, misconception banner)
+ *   idle      → user clicks "GIVE UP"  → given-up  (POST giveUp=true, unlock all)
+ *   correct   → user clicks "MARK CHECK DONE" → check-done → onProblemComplete fires
+ *   given-up  → user clicks "MARK CHECK DONE" → check-done → onProblemComplete fires
+ *
+ * Animation #1 (unlock stagger) is driven by data-stagger-index + CSS
+ * `animation-delay` set in DrillCard. No JS timers needed — CSS handles the 80ms cascade.
+ */
+export function DrillStack({
+  taskId,
+  problemId,
+  content,
+  onProblemComplete,
+}: DrillStackProps) {
+  const [attempt, setAttempt] = useState("");
+  const [phase, setPhase] = useState<StackPhase>("idle");
+  const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const unlocked = phase === "correct" || phase === "given-up" || phase === "check-done";
+
+  function drillState(): DrillCardState {
+    if (phase === "check-done" || phase === "correct" || phase === "given-up") return "complete";
+    return "open";
+  }
+
+  function secondaryState(): DrillCardState {
+    if (!unlocked) return "locked";
+    if (phase === "check-done") return "complete";
+    return "open";
+  }
+
+  function checkState(): DrillCardState {
+    if (!unlocked) return "locked";
+    if (phase === "check-done") return "complete";
+    return "open";
+  }
+
+  async function handleCheckAnswer() {
+    if (phase === "grading") return;
+    setPhase("grading");
+    setError(null);
+    try {
+      const result = await gradeDrill({
+        taskId,
+        problemId,
+        problemStatement: content.drill,
+        userAttempt: attempt,
+        expectedAnswerHint: content.expectedAnswerHint,
+      });
+      setGradeResult(result);
+      setPhase(result.correct ? "correct" : "incorrect");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Network error — please retry.");
+      setPhase("idle");
+    }
+  }
+
+  async function handleGiveUp() {
+    if (phase === "grading") return;
+    setPhase("grading");
+    setError(null);
+    try {
+      const result = await gradeDrill({
+        taskId,
+        problemId,
+        problemStatement: content.drill,
+        userAttempt: "ATTEMPTED_NOT_SOLVED",
+        expectedAnswerHint: content.expectedAnswerHint,
+        giveUp: true,
+      });
+      setGradeResult(result);
+      setPhase("given-up");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Network error — please retry.");
+      setPhase("idle");
+    }
+  }
+
+  function handleCheckDone() {
+    setPhase("check-done");
+    onProblemComplete(problemId);
+  }
+
+  return (
+    <div data-testid="drill-stack" className="flex flex-col gap-4 p-4">
+      {/* Card order: DRILL → WORKED → DEFINITION → CHECK (§D productive-failure inversion) */}
+
+      {/* 1. DRILL card — always open */}
+      <DrillCard
+        cardType="DRILL"
+        title="③ DRILL · YOUR TURN"
+        state={drillState()}
+        staggerIndex={0}
+      >
+        <p className="mb-4 leading-relaxed">{content.drill}</p>
+        <textarea
+          data-testid="drill-attempt-input"
+          value={attempt}
+          onChange={(e) => setAttempt(e.target.value)}
+          disabled={unlocked || phase === "grading"}
+          rows={3}
+          placeholder="Type your answer here…"
+          className="w-full border-2 border-border-strong bg-page-bg font-mono text-xs p-2 resize-none focus:outline-none focus:border-accent disabled:opacity-50"
+        />
+        {gradeResult && (
+          <div
+            data-testid="grade-feedback"
+            className={`mt-3 px-3 py-2 border-l-4 font-mono text-xs leading-relaxed ${
+              gradeResult.correct
+                ? "border-accent bg-accent/10 text-page-fg"
+                : "border-danger-text bg-danger-text/10 text-page-fg"
+            }`}
+          >
+            {gradeResult.elaboratedFeedback}
+          </div>
+        )}
+        {gradeResult && !gradeResult.correct && gradeResult.misconception && (
+          <div
+            data-testid="misconception-banner"
+            className="mt-2 px-3 py-1.5 bg-panel-dark-bg text-panel-dark-fg font-mono text-[10px] tracking-widest"
+          >
+            MISCONCEPTION · {gradeResult.misconception.replace(/_/g, " ")}
+          </div>
+        )}
+        {error && (
+          <div className="mt-2 text-danger-text font-mono text-xs">{error}</div>
+        )}
+        {!unlocked && (
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={handleCheckAnswer}
+              disabled={phase === "grading" || attempt.trim().length === 0}
+              className="px-4 py-1.5 bg-accent text-page-fg font-mono text-xs font-bold tracking-widest border-2 border-border-strong hover:bg-accent-hover disabled:opacity-40 transition-all duration-[280ms] ease-in-out active:scale-95"
+            >
+              {phase === "grading" ? "GRADING…" : "CHECK ANSWER"}
+            </button>
+            <button
+              onClick={handleGiveUp}
+              disabled={phase === "grading"}
+              className="px-4 py-1.5 text-page-fg/60 font-mono text-xs tracking-widest border-2 border-border-thin hover:text-page-fg hover:border-border-strong disabled:opacity-40"
+            >
+              give up — show solution
+            </button>
+          </div>
+        )}
+      </DrillCard>
+
+      {/* 2. WORKED EXAMPLE card — locked until drill graded */}
+      <DrillCard
+        cardType="WORKED"
+        title="② WORKED EXAMPLE"
+        state={secondaryState()}
+        staggerIndex={1}
+      >
+        <p className="leading-relaxed">{content.worked}</p>
+      </DrillCard>
+
+      {/* 3. DEFINITION card — locked until drill graded */}
+      <DrillCard
+        cardType="DEFINITION"
+        title="① DEFINITION"
+        state={secondaryState()}
+        staggerIndex={2}
+      >
+        <p className="leading-relaxed">{content.definition}</p>
+      </DrillCard>
+
+      {/* 4. CHECK card — locked until drill graded */}
+      <DrillCard
+        cardType="CHECK"
+        title="④ CHECK · TRANSFER"
+        state={checkState()}
+        staggerIndex={3}
+      >
+        <p className="mb-4 leading-relaxed">{content.check}</p>
+        {unlocked && phase !== "check-done" && (
+          <button
+            onClick={handleCheckDone}
+            className="px-4 py-1.5 bg-accent text-page-fg font-mono text-xs font-bold tracking-widest border-2 border-border-strong hover:bg-accent-hover transition-all duration-[280ms] ease-in-out active:scale-95"
+          >
+            MARK CHECK DONE
+          </button>
+        )}
+      </DrillCard>
+    </div>
+  );
+}

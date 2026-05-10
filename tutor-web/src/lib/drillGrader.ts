@@ -21,6 +21,7 @@ export interface GradeDrillArgs {
   problemStatement: string;
   userAttempt: string;
   expectedAnswerHint: string;
+  giveUp?: boolean;
 }
 
 export async function gradeDrill(args: GradeDrillArgs): Promise<GradeResult> {
@@ -32,6 +33,7 @@ export async function gradeDrill(args: GradeDrillArgs): Promise<GradeResult> {
       problemStatement: args.problemStatement,
       userAttempt: args.userAttempt,
       expectedAnswerHint: args.expectedAnswerHint,
+      ...(args.giveUp ? { giveUp: true } : {}),
     }),
   });
   if (!res.ok) {
