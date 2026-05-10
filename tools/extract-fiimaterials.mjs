@@ -90,12 +90,18 @@ async function discoverPdfLinks(page, startUrl) {
   while (queue.length > 0 && visited < MAX_PAGES) {
     const url = queue.shift();
     try {
-      await page.goto(url, { timeout: FETCH_TIMEOUT_MS, waitUntil: "domcontentloaded" });
+      await page.goto(url, { timeout: FETCH_TIMEOUT_MS, waitUntil: "networkidle" });
     } catch (e) {
       console.error(`[crawl] skip (${url}): ${e.message}`);
       continue;
     }
     visited++;
+    // SPA sites (Angular/React) render anchors after hydration; wait for at
+    // least one <a> to exist or timeout briefly. networkidle above usually
+    // covers this, but add a short fallback wait.
+    try {
+      await page.waitForSelector("a[href]", { timeout: 5000 });
+    } catch (_) { /* page may legitimately have no links */ }
     const hrefs = await page.$$eval("a[href]", els => els.map(a => a.getAttribute("href")));
     for (const h of hrefs) {
       if (!h) continue;
@@ -103,10 +109,16 @@ async function discoverPdfLinks(page, startUrl) {
       try { abs = new URL(h, url).toString(); } catch (_) { continue; }
       if (!abs.startsWith("http")) continue;
       const u = new URL(abs);
-      if (!HOST_FILTER.test(u.host)) continue;
+      // Collect .pdf links regardless of host (most fiimaterials content
+      // links to off-domain hosts: drive.google.com, github.com, etc).
       if (abs.toLowerCase().endsWith(".pdf")) {
         pdfs.add(abs);
-      } else if (!seen.has(abs)) {
+        continue;
+      }
+      // Only follow same-host pages for BFS — don't crawl Drive/GitHub
+      // recursively (they need different auth + scraping logic).
+      if (!HOST_FILTER.test(u.host)) continue;
+      if (!seen.has(abs)) {
         seen.add(abs);
         queue.push(abs);
       }
@@ -178,7 +190,15 @@ async function run() {
   console.log(`[crawl] done. fetched=${fetched} skipped=${skipped} errored=${errored} dry=${DRY_RUN}`);
 }
 
-const isMain = import.meta.url === `file://${process.argv[1].replace(/\\/g, "/")}`;
+// Cross-platform isMain check. On Windows, import.meta.url is
+// "file:///C:/path/to/file.mjs" (3 slashes); process.argv[1] is the OS
+// path. Compare via fileURLToPath so we don't fight slash counts.
+import { fileURLToPath } from "node:url";
+const isMain = (() => {
+  try {
+    return path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1] ?? "");
+  } catch (_) { return false; }
+})();
 if (isMain) {
   run().catch(e => {
     console.error(`[crawl] fatal: ${e.message}`);

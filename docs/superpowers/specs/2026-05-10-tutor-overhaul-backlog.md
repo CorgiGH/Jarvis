@@ -59,6 +59,7 @@ Format per entry:
 ## Phase 5 — Corpus expansion
 
 - `[5] [ops] [reingest-runbook] [done] Post-crawl knowledge-graph rebuild on VPS: ssh root@46.247.109.91 "set -a; source /opt/jarvis/.env; set +a; /opt/jarvis/jarvis-kotlin/bin/jarvis-kotlin ingest-corpus". Idempotent on existing nodes; new files in _extras/<subject>/extracted/ become new nodes + edges. Run after each crawler invocation that fetches new PDFs.`
+- `[5] [crawler] [off-site-content] [med] fiimaterials.web.app dry-run discovers 0 .pdf links because the site links almost exclusively to off-domain hosts (drive.google.com folders, github.com repos, mega.nz folders, profs.info.uaic.ro/~sd, edu.info.uaic.ro/...). The crawler ships + works correctly (40 anchors discovered post-hydration, 0 are direct .pdf URLs); real yield needs per-source adapters: Google Drive folder API enumerator (with OAuth or shared-link fetch), GitHub release downloader, optional fac-page-specific HTML scrapers. — Phase 6+ work: write GoogleDriveFolderScraper that takes a shared-link folder URL + lists+downloads PDFs; same pattern for GitHub releases. Hook into the CourseScraper interface from Phase 5.3. The current crawler stays as a fallback for any direct fiimaterials.web.app static PDFs (none today, may change).`
 
 ## Phase 6 — Task autonomy
 
