@@ -638,6 +638,54 @@ fun Application.installTutorRoutes() {
                 call.respond(HttpStatusCode.NoContent)
             }
         }
+
+        post("/api/v1/gap/{id}/status") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val cardId = call.parameters["id"]
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val req = try {
+                    sensorJson.decodeFromString(ApiCardStatusRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                if (req.status.isBlank() || req.status.length > 32) {
+                    call.respond(HttpStatusCode.BadRequest, "status must be 1-32 chars")
+                    return@csrfProtect
+                }
+                val logId = jarvis.tutor.CardActionLogRepo(ctx.db).insert(userId, "GAP", cardId, req.status)
+                call.respond(HttpStatusCode.OK, ApiCardStatusReply(logId = logId))
+            }
+        }
+
+        post("/api/v1/edit/{id}/status") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val cardId = call.parameters["id"]
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val req = try {
+                    sensorJson.decodeFromString(ApiCardStatusRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
+                if (req.status.isBlank() || req.status.length > 32) {
+                    call.respond(HttpStatusCode.BadRequest, "status must be 1-32 chars")
+                    return@csrfProtect
+                }
+                val logId = jarvis.tutor.CardActionLogRepo(ctx.db).insert(userId, "EDIT", cardId, req.status)
+                call.respond(HttpStatusCode.OK, ApiCardStatusReply(logId = logId))
+            }
+        }
     }
 }
 
@@ -714,6 +762,12 @@ private data class ApiCreateTaskRequest(
 )
 
 @Serializable
+private data class ApiCardStatusRequest(val status: String)
+
+@Serializable
+private data class ApiCardStatusReply(val logId: String)
+
+@Serializable
 private data class ApiGatewayInboundRequest(
     val channel: String,
     val fromUser: String,
@@ -771,6 +825,7 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             FsrsCardsTable,
             ProviderConfigTable,
             EffectorAttemptsTable,
+            jarvis.tutor.CardActionLogTable,
         )
     }
     // Single-user owner row (idempotent). The tutor surface is
