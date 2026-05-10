@@ -3,6 +3,25 @@ import { expect, vi } from "vitest";
 import * as matchers from "vitest-axe/matchers";
 import React from "react";
 
+// jsdom does not implement window.matchMedia. Provide a default stub that
+// always returns matches: false (no reduced motion, no dark mode, etc.).
+// Individual tests that need a specific result can override via vi.fn().
+if (typeof window !== "undefined" && !window.matchMedia) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 expect.extend(matchers);
 
 // jsdom 25 does not implement PointerEvent. Polyfill it so that
