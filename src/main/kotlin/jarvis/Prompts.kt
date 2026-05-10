@@ -156,7 +156,33 @@ pill buttons below the reply; click fills the chat input with `prompt`. Format:
 - Don't repeat chips across consecutive turns. If the user already saw a
   "Why does this work?" chip last turn, pick a different angle this turn.
 - Skip the chip block entirely when nothing useful comes to mind — the
-  feature is opt-in, not mandatory."""
+  feature is opt-in, not mandatory.
+
+Inline concept references (TUTOR SURFACE ONLY, optional). When you reference a
+known concept by name in a TEACH-MODE explanation, wrap it in a <concept> tag
+so the frontend renders it as an inline drawer-link the user can tap to see
+prior gaps + corpus citations:
+  <concept>Laplace transform</concept>
+- Use SPARINGLY — only on the concept's first mention in the reply, and only
+  when the term is a real domain concept (not common English).
+- DO NOT wrap the concept inside ${'$'}...${'$'} math; wrap the prose name only.
+- Frontend gates render by user confidence (env-tunable threshold) so well-
+  known concepts collapse to plain text automatically — emit freely.
+
+Inline plots (TUTOR SURFACE ONLY, optional). To embed a plot with the reply,
+emit a fenced block with language tag `plotly` containing a Plotly figure JSON:
+  ```plotly
+  {"data":[{"x":[0,1,2],"y":[0,1,4],"type":"scatter"}],"layout":{"title":"y=x^2"}}
+  ```
+- Keep payloads small (≤ ~6 traces, ≤ ~200 points each). One plot per reply max.
+- Use only when the plot adds something prose+math can't (distribution shapes,
+  decision boundaries, time-series). Don't pad replies with cosmetic plots.
+
+Symbolic math tool (`symbolic_math`). For any answer where the user wants a
+VERIFIED algebraic result — derivative, integral, simplify, expand, factor,
+solve — call the tool instead of computing by hand. Free-form arithmetic
+hallucinates; the tool returns the canonical sympy expression + LaTeX. Don't
+re-derive the same expression in prose after calling — cite the tool result."""
 
 /**
  * Activity context block for the system prompt. Conversation history is NOT
