@@ -246,6 +246,43 @@ internal suspend fun runWeb() {
                 val tutorCtxOuter = call.application.attributes
                     .getOrNull(jarvis.tutor.TutorContextKey)
                 val sidOuter = call.request.cookies["jarvis_session"]
+                // Phase 7.4 implicit-gap detection. If the user msg matches
+                // "i don't (get|know|understand) X" / "what (is|does) X" /
+                // "how do X", auto-POST a gap before LLM round-trip so the
+                // ledger captures the question. Best-effort — failure
+                // doesn't block the chat reply.
+                jarvis.tutor.ImplicitGapDetector.detect(msg)?.let { topic ->
+                    val tid = req.taskId?.trim().orEmpty()
+                    val tutorCtx = tutorCtxOuter
+                    if (tutorCtx != null) try {
+                        val uid = sidOuter?.let {
+                            jarvis.tutor.SessionRepo(tutorCtx.db).findUserId(it)
+                        }
+                        if (uid != null) {
+                            val gap = jarvis.tutor.KnowledgeGap(
+                                id = jarvis.tutor.TutorTypes.ulid(),
+                                userId = uid,
+                                taskId = tid.takeIf { it.isNotEmpty() },
+                                topic = topic.take(256),
+                                language = null,
+                                type = jarvis.tutor.GapType.CONCEPT,
+                                trigger = jarvis.tutor.GapTrigger.EXPLICIT_ASK,
+                                filledAt = java.time.Instant.now(),
+                                source = jarvis.tutor.GapSource.LLM_GROUNDED,
+                                content = msg.take(512),
+                                exampleCode = null,
+                                sourceCitation = null,
+                                resolvedBy = null,
+                                reusedCount = 0,
+                                fsrsCardId = null,
+                            )
+                            jarvis.tutor.KnowledgeGapRepo(tutorCtx.db, tutorCtx.ledgerDir)
+                                .upsertByTriple(gap, taskId = tid.takeIf { it.isNotEmpty() }, content = msg.take(512))
+                        }
+                    } catch (e: Exception) {
+                        System.err.println("[implicit-gap] WARN ${e.message?.take(160)}")
+                    }
+                }
                 val (reply, model) = historyLock.withLock {
                     // Tutor task-context V0: when the request carries a
                     // taskId AND the TutorContext is installed, inject
