@@ -98,7 +98,10 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         )}
       </div>
       <ScreenshotCapture taskId={taskId} onResult={onScreenshot} />
-      <div className="prose-clamp flex-1 min-h-0 overflow-auto p-4 space-y-3">
+      <div className="prose-clamp flex-1 min-h-0 overflow-auto p-4 space-y-3"
+           tabIndex={0}
+           role="log"
+           aria-label="Chat messages">
         {messages.map((m, i) => (
           <div key={i} className="min-w-0">
             <div className={`inline-block px-2 py-0.5 text-xs font-bold tracking-widest ${

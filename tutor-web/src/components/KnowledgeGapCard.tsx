@@ -63,6 +63,8 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
       </div>
       {previewCode && (
         <pre data-testid="knowledge-gap-code"
+             tabIndex={0}
+             aria-label="Example code snippet"
              className="text-xs whitespace-pre-wrap font-mono bg-page-bg px-2 py-1 border border-page-fg/10 max-h-48 overflow-auto">
           {previewCode}
         </pre>

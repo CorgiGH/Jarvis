@@ -53,6 +53,8 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
   return (
     <aside
       data-testid="sidebar"
+      tabIndex={0}
+      aria-label="Tutor sidebar"
       className="hidden sm:flex flex-col w-48 border-r-4 border-border-strong bg-accent-soft font-mono text-xs overflow-y-auto"
     >
       <div className="bg-panel-dark-bg text-panel-dark-fg px-3 py-2 tracking-widest font-bold">

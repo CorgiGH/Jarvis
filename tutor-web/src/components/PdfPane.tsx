@@ -22,7 +22,10 @@ export function PdfPane({ url }: { url: string }) {
   }, [url]);
 
   return (
-    <div data-testid="pdf-pane" className="h-full bg-zinc-50 overflow-auto relative">
+    <div data-testid="pdf-pane"
+         tabIndex={0}
+         aria-label="PDF viewer"
+         className="h-full bg-zinc-50 overflow-auto relative">
       {error ? (
         <div className="p-6 font-mono text-sm">
           <div className="text-xs font-bold tracking-widest text-page-fg/70 mb-2">PDF</div>

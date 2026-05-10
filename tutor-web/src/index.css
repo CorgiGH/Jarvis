@@ -64,9 +64,14 @@ code, pre, kbd, samp {
 
 /* ---------- Focus ring (Phase 2.3) ----------
    Global focus-visible per wiki [[Keyboard Navigation]]; keyboard users
-   get the ring, mouse users don't. */
+   get the ring, mouse users don't. Longhand to dodge Tailwind v4
+   preflight's `outline-width: 0` reset (the shorthand was rendering as
+   ~1.6px in some browsers because preflight cleared width while we
+   only set the shorthand). */
 *:focus-visible {
-  outline: 2px solid var(--color-ring-focus);
+  outline-width: 2px;
+  outline-style: solid;
+  outline-color: var(--color-ring-focus);
   outline-offset: 2px;
 }
 

@@ -69,7 +69,9 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
           {status}
         </div>
       </div>
-      <pre className="text-xs whitespace-pre-wrap font-mono bg-page-bg px-2 py-1 border border-page-fg/10 max-h-48 overflow-auto">
+      <pre tabIndex={0}
+           aria-label="Suggested edit preview"
+           className="text-xs whitespace-pre-wrap font-mono bg-page-bg px-2 py-1 border border-page-fg/10 max-h-48 overflow-auto">
         {previewText}
       </pre>
       {error && (
