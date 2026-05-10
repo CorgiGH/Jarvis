@@ -43,7 +43,7 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
 
   return (
     <div data-testid="knowledge-gap-card" data-gap-id={gap.id}
-         className="border-l-4 border-yellow-500 bg-accent-soft p-3 my-2">
+         className="border-l-4 border-accent-rule bg-accent-soft p-3 my-2">
       <div className="flex items-center justify-between mb-1">
         <div className="text-xs font-bold tracking-widest text-page-fg/70">
           GAP · {gap.type} · {gap.topic}

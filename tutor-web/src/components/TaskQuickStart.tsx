@@ -96,7 +96,7 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
 
   return (
     <div data-testid="task-quickstart" className="p-6 font-mono text-sm">
-      <div className="bg-accent-soft border-l-4 border-yellow-500 p-4 mb-4">
+      <div className="bg-accent-soft border-l-4 border-accent-rule p-4 mb-4">
         <div className="text-xs font-bold tracking-widest mb-1">QUICK START</div>
         <div className="text-sm text-page-fg/80">
           {tasks.length === 0
@@ -160,7 +160,7 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
       </div>
 
       {error && (
-        <div data-testid="task-quickstart-error" className="mt-4 text-xs text-red-700">
+        <div data-testid="task-quickstart-error" className="mt-4 text-xs text-danger-text">
           {error}
         </div>
       )}

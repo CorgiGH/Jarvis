@@ -155,7 +155,7 @@ export function TasksScreen() {
        </ul>}
 
       {error && (
-        <div data-testid="tasks-error" className="mt-4 text-xs text-red-700">
+        <div data-testid="tasks-error" className="mt-4 text-xs text-danger-text">
           {error}
         </div>
       )}

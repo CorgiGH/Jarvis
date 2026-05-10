@@ -25,12 +25,12 @@ export function PdfPane({ url }: { url: string }) {
     <div data-testid="pdf-pane"
          tabIndex={0}
          aria-label="PDF viewer"
-         className="h-full bg-zinc-50 overflow-auto relative">
+         className="h-full bg-surface-muted overflow-auto relative">
       {error ? (
         <div className="p-6 font-mono text-sm">
           <div className="text-xs font-bold tracking-widest text-page-fg/70 mb-2">PDF</div>
           <div className="text-page-fg/80 mb-2 break-all">{url}</div>
-          <div className="bg-accent-soft border-l-4 border-yellow-500 p-3 mb-3">
+          <div className="bg-accent-soft border-l-4 border-accent-rule p-3 mb-3">
             <div className="font-bold text-xs tracking-widest mb-1">PDF NOT VIEWABLE</div>
             <div className="text-xs text-page-fg/70">{error}</div>
           </div>
@@ -44,7 +44,7 @@ export function PdfPane({ url }: { url: string }) {
         <>
           <iframe src={url} title="PDF document for current task" className="w-full h-full border-0" />
           {size != null && (
-            <div className="absolute bottom-1 right-1 bg-page-fg/70 text-white text-xs px-2 py-0.5 rounded">
+            <div className="absolute bottom-1 right-1 bg-page-fg/70 text-overlay-fg text-xs px-2 py-0.5 rounded">
               {(size / 1024).toFixed(1)} KB
             </div>
           )}

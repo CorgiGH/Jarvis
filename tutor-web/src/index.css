@@ -16,6 +16,7 @@
   --color-accent: #fde047;                  /* yellow-300 */
   --color-accent-hover: #facc15;            /* yellow-400 */
   --color-accent-soft: #fefce8;             /* yellow-50 */
+  --color-accent-rule: #eab308;             /* yellow-500 — left-rule on cards */
 
   /* Border */
   --color-border-strong: #000000;
@@ -23,6 +24,16 @@
 
   /* Focus */
   --color-ring-focus: #facc15;              /* yellow-400 */
+
+  /* Status — semantic, used by inline cards/badges */
+  --color-danger-bg: #dc2626;               /* red-600 */
+  --color-danger-fg: #ffffff;
+  --color-danger-text: #b91c1c;             /* red-700 */
+  --color-info-bg: #bfdbfe;                 /* blue-200 — sensor / info bubble */
+  --color-disabled-bg: #d1d5db;             /* gray-300 */
+  --color-disabled-fg: #6b7280;             /* gray-500 */
+  --color-surface-muted: #fafafa;           /* zinc-50 — pdf canvas backdrop */
+  --color-overlay-fg: #ffffff;              /* white text on dark overlay badges */
 
   /* Typography */
   --type-sm: 12px;
@@ -39,9 +50,18 @@
   --color-accent: var(--color-accent);
   --color-accent-hover: var(--color-accent-hover);
   --color-accent-soft: var(--color-accent-soft);
+  --color-accent-rule: var(--color-accent-rule);
   --color-border-strong: var(--color-border-strong);
   --color-border-thin: var(--color-border-thin);
   --color-ring-focus: var(--color-ring-focus);
+  --color-danger-bg: var(--color-danger-bg);
+  --color-danger-fg: var(--color-danger-fg);
+  --color-danger-text: var(--color-danger-text);
+  --color-info-bg: var(--color-info-bg);
+  --color-disabled-bg: var(--color-disabled-bg);
+  --color-disabled-fg: var(--color-disabled-fg);
+  --color-surface-muted: var(--color-surface-muted);
+  --color-overlay-fg: var(--color-overlay-fg);
 }
 
 /* ---------- Body baseline typography (Phase 2.2) ---------- */

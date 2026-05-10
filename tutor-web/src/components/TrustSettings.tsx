@@ -161,7 +161,7 @@ export function TrustSettings() {
               <div className="text-xs font-bold tracking-widest">
                 {g.ops.join("+")} · expires {g.expiresAt.slice(0, 19)} ·
                 {" "}{g.callsUsed}/{g.maxCalls} calls
-                {g.revokedAt ? <span className="ml-2 text-red-700">REVOKED</span> : null}
+                {g.revokedAt ? <span className="ml-2 text-danger-text">REVOKED</span> : null}
               </div>
               <div className="text-xs mt-1 break-all">{g.scope.join(", ")}</div>
               {!g.revokedAt && (
@@ -179,7 +179,7 @@ export function TrustSettings() {
       )}
 
       {error && (
-        <div data-testid="trust-error" className="mt-4 text-xs text-red-700">
+        <div data-testid="trust-error" className="mt-4 text-xs text-danger-text">
           {error}
         </div>
       )}

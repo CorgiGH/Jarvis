@@ -59,7 +59,7 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
 
   return (
     <div data-testid="suggested-edit-card" data-edit-id={edit.id}
-         className="border-l-4 border-yellow-400 bg-accent-soft p-3 my-2">
+         className="border-l-4 border-accent-hover bg-accent-soft p-3 my-2">
       <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-bold tracking-widest text-page-fg/70">
           SUGGESTED · {edit.type.toUpperCase()}
@@ -75,7 +75,7 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
         {previewText}
       </pre>
       {error && (
-        <div data-testid="suggested-edit-error" className="text-xs text-red-700 mt-1">
+        <div data-testid="suggested-edit-error" className="text-xs text-danger-text mt-1">
           {error}
         </div>
       )}
@@ -87,7 +87,7 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
             disabled={readOnly}
             title={readOnly ? `READ-ONLY MODE: ${readOnlyReason}` : undefined}
             className={`text-xs font-bold tracking-widest px-3 py-1 ${
-              readOnly ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-panel-dark-bg text-panel-dark-fg"
+              readOnly ? "bg-disabled-bg text-disabled-fg cursor-not-allowed" : "bg-panel-dark-bg text-panel-dark-fg"
             }`}
           >
             {edit.type === "clipboard" ? "COPY" : "APPLY"}

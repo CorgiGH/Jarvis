@@ -91,7 +91,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         <span>JARVIS · TASK {taskId}</span>
         {readOnly && (
           <span data-testid="read-only-badge"
-                className="bg-red-600 text-white px-2 py-0.5 text-xs"
+                className="bg-danger-bg text-danger-fg px-2 py-0.5 text-xs"
                 title={readOnlyReason}>
             READ-ONLY MODE
           </span>
@@ -106,7 +106,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
           <div key={i} className="min-w-0">
             <div className={`inline-block px-2 py-0.5 text-xs font-bold tracking-widest ${
               m.role === "you" ? "bg-accent text-page-fg"
-              : m.role === "sensor" ? "bg-blue-200 text-page-fg"
+              : m.role === "sensor" ? "bg-info-bg text-page-fg"
               : "bg-panel-dark-bg text-page-bg"
             }`}>
               {m.role.toUpperCase()}

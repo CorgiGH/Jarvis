@@ -115,21 +115,21 @@ export function App() {
           <Link
             to="/?pick=1"
             aria-current={here.pathname === "/" ? "page" : undefined}
-            className="hover:underline"
+            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
           >
             workspace
           </Link>
           <Link
             to="/tasks"
             aria-current={here.pathname === "/tasks" ? "page" : undefined}
-            className="hover:underline"
+            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
           >
             tasks
           </Link>
           <Link
             to="/settings/trust"
             aria-current={here.pathname === "/settings/trust" ? "page" : undefined}
-            className="hover:underline"
+            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
           >
             trust
           </Link>

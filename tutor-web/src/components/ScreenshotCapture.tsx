@@ -97,7 +97,7 @@ export function ScreenshotCapture({ taskId, onResult }: ScreenshotCaptureProps) 
         <span>{statusText}</span>
       </button>
       {error && (
-        <span data-testid="screenshot-error" className="text-xs text-red-700">
+        <span data-testid="screenshot-error" className="text-xs text-danger-text">
           {error}
         </span>
       )}
