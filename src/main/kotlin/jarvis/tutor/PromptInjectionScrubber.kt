@@ -92,4 +92,18 @@ object PromptInjectionScrubber {
 
     private fun escapeAttr(s: String): String =
         s.replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;").take(120)
+
+    /**
+     * Phase 7.7 Layer 3 — sanitize user input before LLM round trip.
+     * Reuses [scrub] to strip control tokens + jailbreak prefixes;
+     * logs to stderr when role markers were present so red-team
+     * regressions surface in jarvis.log audit grep.
+     */
+    fun sanitizeInput(userMsg: String): String {
+        val cleaned = scrub(userMsg)
+        if (cleaned != userMsg) {
+            System.err.println("[scrubber] input had role markers / jailbreak prefix; sanitized")
+        }
+        return cleaned
+    }
 }
