@@ -1,0 +1,14 @@
+{
+  "name": "jarvis-tools",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "crawl": "node extract-fiimaterials.mjs",
+    "crawl:dry": "node extract-fiimaterials.mjs --dry-run",
+    "test:tools": "node --test extract-fiimaterials.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}
