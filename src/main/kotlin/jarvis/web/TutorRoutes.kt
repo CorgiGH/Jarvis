@@ -734,6 +734,32 @@ fun Application.installTutorRoutes() {
                 ))
             }
         }
+        // Slice 1.5 A2 — fetch cached task_prep for frontend bootstrap.
+        // Returns 401 with no session, 404 when prep is not yet cached.
+        get("/api/v1/tasks/{id}/prep") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
+            val sid = call.request.cookies["jarvis_session"]
+            val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
+            val taskId = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@get }
+            val task = TaskRepo(ctx.db).findById(taskId)
+                ?: run { call.respond(HttpStatusCode.NotFound, "task not found"); return@get }
+            if (task.userId != userId) {
+                call.respond(HttpStatusCode.Forbidden, "not your task"); return@get
+            }
+            val prep = jarvis.tutor.TaskPrepRepo(ctx.db).findByTaskId(taskId)
+                ?: run { call.respond(HttpStatusCode.NotFound, "no prep cached"); return@get }
+            call.respond(HttpStatusCode.OK, ApiTaskPrepReply(
+                taskId = prep.taskId,
+                generatedAt = prep.generatedAt.toString(),
+                version = prep.version,
+                problemsJson = prep.problemsJson,
+                drillsJson = prep.drillsJson,
+                railJson = prep.railJson,
+            ))
+        }
         // Audit MED closer: per-task delete so the user can prune dupes
         // from the UI instead of needing direct sqlite access. Cascades
         // any detected_task_mapping rows pointing at this task; refuses
@@ -1566,6 +1592,16 @@ private data class ApiTaskRepRepReply(
     val taskId: String,
     val problems: Int,
     val generatedAt: String,
+)
+
+@Serializable
+private data class ApiTaskPrepReply(
+    val taskId: String,
+    val generatedAt: String,
+    val version: Int,
+    val problemsJson: String,
+    val drillsJson: String,
+    val railJson: String,
 )
 
 @Serializable
