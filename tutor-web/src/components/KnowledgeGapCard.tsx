@@ -27,6 +27,23 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
   const [resolved, setResolved] = useState<GapResolved | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [contentExpanded, setContentExpanded] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
+  const [docs, setDocs] = useState<{ filename: string; snippet: string; lineRef: string | null }[] | null>(null);
+  const [docsError, setDocsError] = useState<string | null>(null);
+
+  async function loadDocs() {
+    if (docs != null) { setDocsOpen(o => !o); return; }
+    setDocsError(null);
+    try {
+      const r = await jarvisFetch(`/api/v1/gap/${encodeURIComponent(gap.id)}/search-docs`, { method: "POST" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setDocs(data.results ?? []);
+      setDocsOpen(true);
+    } catch (e) {
+      setDocsError((e as Error).message);
+    }
+  }
 
   async function postStatus(status: GapResolved) {
     setSyncError(null);
@@ -112,7 +129,28 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
                   className="text-xs tracking-widest bg-page-bg text-page-fg/60 px-3 py-1 border border-border-thin">
             FLAG WRONG
           </button>
+          <button onClick={loadDocs} data-testid="knowledge-gap-show-docs"
+                  className="text-xs tracking-widest bg-page-bg text-page-fg/80 px-3 py-1 border border-border-thin">
+            {docsOpen ? "HIDE DOCS" : "SHOW DOCS"}
+          </button>
         </div>
+      )}
+      {docsOpen && docs && (
+        <div data-testid="knowledge-gap-docs" className="mt-2 border-t border-border-thin pt-2 space-y-1">
+          {docs.length === 0 ? (
+            <div className="text-xs text-page-fg/60">no docs found</div>
+          ) : (
+            docs.map((d, i) => (
+              <div key={`${d.filename}-${i}`} className="text-xs">
+                <div className="font-bold">{d.filename}{d.lineRef ? ` :${d.lineRef}` : ""}</div>
+                <div className="text-page-fg/70 whitespace-pre-wrap">{d.snippet}</div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+      {docsError && (
+        <div className="text-xs text-danger-text mt-1">docs load failed: {docsError}</div>
       )}
       {syncError && (
         <div data-testid="knowledge-gap-sync-error" className="text-xs text-danger-text mt-1">
