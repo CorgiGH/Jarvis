@@ -538,6 +538,44 @@ fun Application.installTutorRoutes() {
                     "to a real archival/*.pdf at task creation")
         }
 
+        // Companion upload endpoint for the per-task PDF viewer. Frontend
+        // POSTs the raw PDF bytes (Content-Type: application/pdf) which we
+        // store at <ledgerDir>/task-pdfs/<id>.pdf — exactly where the GET
+        // handler above looks first. Limits + magic-byte check guard the
+        // disk so a 401/403 client can't write garbage.
+        put("/api/v1/tasks/{id}/pdf") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@put }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val id = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                if (!id.matches(Regex("^[0-9A-Za-z]{1,32}$"))) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed id"); return@csrfProtect
+                }
+                val task = TaskRepo(ctx.db).findById(id)
+                if (task == null || task.userId != userId) {
+                    call.respond(HttpStatusCode.NotFound, "task not found"); return@csrfProtect
+                }
+                val bytes = call.receive<ByteArray>()
+                if (bytes.size < 5 || !(bytes[0] == '%'.code.toByte() && bytes[1] == 'P'.code.toByte() &&
+                        bytes[2] == 'D'.code.toByte() && bytes[3] == 'F'.code.toByte() && bytes[4] == '-'.code.toByte())) {
+                    call.respond(HttpStatusCode.BadRequest, "not a PDF (missing %PDF- magic)")
+                    return@csrfProtect
+                }
+                if (bytes.size > 50 * 1024 * 1024) {
+                    call.respond(HttpStatusCode.PayloadTooLarge, "max 50 MB"); return@csrfProtect
+                }
+                val dir = ctx.ledgerDir.resolve("task-pdfs")
+                java.nio.file.Files.createDirectories(dir)
+                val target = dir.resolve("$id.pdf")
+                java.nio.file.Files.write(target, bytes)
+                call.respond(HttpStatusCode.OK, ApiPdfUploadReply(bytes = bytes.size))
+            }
+        }
+
         // Phase 3.4 — task scratchpad text persistence. Plain text only,
         // bound to a single task; the SPA debounces PUTs while the user
         // types and rehydrates from GET on workspace load.
@@ -683,20 +721,38 @@ fun Application.installTutorRoutes() {
                         jarvis.HybridRetriever.search(titleTrim, k = 5, semanticEmbed = null)
                     }.map { it.id }.distinct().take(5)
                 } catch (e: Exception) { emptyList() }
-                TaskRepo(ctx.db).insert(Task(
-                    id = id, userId = userId,
-                    subject = subjectTrim,
-                    title = titleTrim,
-                    deadline = deadline,
-                    problemRef = ContentRef(repo = req.repo.ifBlank { "user" }, path = req.problemPath, sha = "pending"),
-                    conceptRefs = emptyList(),
-                    rubricRef = ContentRef(repo = req.repo.ifBlank { "user" }, path = req.rubricPath.ifBlank { req.problemPath }, sha = "pending"),
-                    scratchpad = null, submission = null, grade = null,
-                    cardRefs = emptyList(),
-                    status = TaskStatus.ACTIVE,
-                    createdAt = now, updatedAt = now,
-                    materialPaths = materialPaths,
-                ))
+                try {
+                    TaskRepo(ctx.db).insert(Task(
+                        id = id, userId = userId,
+                        subject = subjectTrim,
+                        title = titleTrim,
+                        deadline = deadline,
+                        problemRef = ContentRef(repo = req.repo.ifBlank { "user" }, path = req.problemPath, sha = "pending"),
+                        conceptRefs = emptyList(),
+                        rubricRef = ContentRef(repo = req.repo.ifBlank { "user" }, path = req.rubricPath.ifBlank { req.problemPath }, sha = "pending"),
+                        scratchpad = null, submission = null, grade = null,
+                        cardRefs = emptyList(),
+                        status = TaskStatus.ACTIVE,
+                        createdAt = now, updatedAt = now,
+                        materialPaths = materialPaths,
+                    ))
+                } catch (e: Exception) {
+                    // Race-loser: idx_tasks_user_subject_title unique
+                    // constraint kicked in. Re-fetch + return the row
+                    // that won so caller treats it as idempotent.
+                    val winner = TaskRepo(ctx.db).listForUser(userId)
+                        .firstOrNull { it.subject == subjectTrim && it.title == titleTrim }
+                    if (winner != null) {
+                        call.respond(HttpStatusCode.OK, ApiTaskView(
+                            id = winner.id, subject = winner.subject, title = winner.title,
+                            deadline = winner.deadline.toString(), status = winner.status.name,
+                        ))
+                        return@csrfProtect
+                    }
+                    call.respond(HttpStatusCode.InternalServerError,
+                        "task insert failed: ${e.javaClass.simpleName}: ${e.message?.take(160)}")
+                    return@csrfProtect
+                }
                 jarvis.tutor.StateVersion.bump()
                 call.respond(HttpStatusCode.Created, ApiTaskView(
                     id = id, subject = subjectTrim, title = titleTrim,
@@ -1160,6 +1216,9 @@ private data class ApiTaskDetectReply(val inserted: Int, val existing: Int, val 
 
 @Serializable
 private data class ApiPromoteGapReply(val cardId: String, val createdNew: Boolean)
+
+@Serializable
+private data class ApiPdfUploadReply(val bytes: Int)
 
 @Serializable
 private data class ApiGwsStatusReply(

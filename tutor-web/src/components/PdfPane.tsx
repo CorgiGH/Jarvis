@@ -15,14 +15,41 @@ export interface PdfPaneProps {
   /** Phase 4.3: called when user highlights ≥3 chars in the text layer
    *  and clicks the "I don't know this" tooltip. Parent posts a gap. */
   onPdfSelectionGap?: (selection: { text: string; page: number }) => void;
+  /** Optional uploadUrl to PUT a fresh PDF to (matching the GET url shape).
+   *  When provided, the empty-state surface shows an upload button. */
+  uploadUrl?: string;
 }
 
-export function PdfPane({ url, onPdfSelectionGap }: PdfPaneProps) {
+export function PdfPane({ url, onPdfSelectionGap, uploadUrl }: PdfPaneProps) {
   const [error, setError] = useState<string | null>(null);
   const [size, setSize] = useState<number | null>(null);
   const [numPages, setNumPages] = useState<number | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; page: number } | null>(null);
+
+  async function uploadFile(f: File) {
+    if (!uploadUrl) return;
+    setUploading(true); setUploadError(null);
+    try {
+      const r = await jarvisFetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/pdf" },
+        body: await f.arrayBuffer(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
+      setError(null);
+      setSize(null);
+      setReloadKey(k => k + 1);
+    } catch (e) {
+      setUploadError((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -36,7 +63,7 @@ export function PdfPane({ url, onPdfSelectionGap }: PdfPaneProps) {
       })
       .catch(e => { if (!cancelled) setError((e as Error).message); });
     return () => { cancelled = true; };
-  }, [url]);
+  }, [url, reloadKey]);
 
   useEffect(() => {
     if (!onPdfSelectionGap) return;
@@ -85,11 +112,37 @@ export function PdfPane({ url, onPdfSelectionGap }: PdfPaneProps) {
           <div className="font-bold text-xs tracking-widest mb-1">PDF NOT VIEWABLE</div>
           <div className="text-xs text-page-fg/70">{error}</div>
         </div>
-        <p className="text-xs text-page-fg/60">
-          The PDF is empty or your browser can't render it inline. Drop a real
-          problem PDF in <code>tutor-web/public/</code> with the same filename
-          (or update the task to point at a different file).
+        <p className="text-xs text-page-fg/60 mb-3">
+          No PDF attached to this task yet.
         </p>
+        {uploadUrl && (
+          <div className="space-y-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              data-testid="pdf-upload-input"
+              className="hidden"
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) uploadFile(f);
+                e.currentTarget.value = "";
+              }}
+            />
+            <button
+              data-testid="pdf-upload-button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="text-xs font-bold tracking-widest bg-accent text-page-fg px-3 py-1 border border-border-strong disabled:opacity-50">
+              {uploading ? "UPLOADING…" : "UPLOAD PDF"}
+            </button>
+            {uploadError && (
+              <div data-testid="pdf-upload-error" className="text-xs text-danger-text">
+                upload failed: {uploadError}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }

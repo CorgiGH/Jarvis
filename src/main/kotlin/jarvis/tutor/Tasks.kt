@@ -72,6 +72,14 @@ object TasksTable : Table("tasks") {
     val scratchpadText = text("scratchpad_text").nullable()
     val materialPaths = text("material_paths").nullable()
     override val primaryKey = PrimaryKey(id)
+    init {
+        // Closes the Phase-6 deferred unique-index gap. Two concurrent
+        // POST /api/v1/tasks with the same (subject, title) slipped past
+        // the pre-INSERT lookup and both inserted; SQLite now rejects
+        // the second at the storage layer. Repo wraps the insert in
+        // try/catch so the API still returns the surviving row.
+        uniqueIndex("idx_tasks_user_subject_title", userId, subject, title)
+    }
 }
 
 class TaskRepo(private val db: Database) {
