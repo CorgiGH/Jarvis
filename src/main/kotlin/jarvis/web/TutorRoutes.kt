@@ -755,6 +755,29 @@ fun Application.installTutorRoutes() {
                     resolvedBy = null, reusedCount = 0, fsrsCardId = null,
                 )
                 val gapRepo = jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir)
+                // Phase 7.3: cross-task similarity reuse. If a similar gap exists
+                // in a DIFFERENT task at or above threshold, bump reusedCount on
+                // the existing gap and return it instead of creating a new row.
+                // Same-task duplicates already collapse via upsertByTriple below.
+                val simThreshold = System.getenv("JARVIS_GAP_SIMILARITY_THRESHOLD")?.toDoubleOrNull() ?: 0.75
+                val similar = gapRepo.findSimilar(userId, req.topic, threshold = simThreshold, k = 1).firstOrNull()
+                if (similar != null && similar.first.taskId != req.taskId) {
+                    gapRepo.incrementReused(similar.first.id)
+                    val refreshed = gapRepo.findById(similar.first.id)
+                    call.respond(HttpStatusCode.OK, ApiGapView(
+                        id = similar.first.id, taskId = refreshed?.taskId,
+                        topic = refreshed?.topic ?: req.topic,
+                        language = refreshed?.language,
+                        type = refreshed?.type?.name ?: req.type,
+                        trigger = refreshed?.trigger?.name ?: req.trigger,
+                        content = refreshed?.content ?: req.content,
+                        exampleCode = refreshed?.exampleCode,
+                        sourceCitation = refreshed?.sourceCitation,
+                        resolvedBy = refreshed?.resolvedBy?.name,
+                        reusedCount = refreshed?.reusedCount ?: 1,
+                    ))
+                    return@csrfProtect
+                }
                 val id = gapRepo.upsertByTriple(gap, taskId = req.taskId, content = req.content,
                     exampleCode = req.exampleCode, sourceCitation = req.sourceCitation, now = now)
                 val saved = gapRepo.findById(id)

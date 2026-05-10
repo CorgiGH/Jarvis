@@ -156,4 +156,30 @@ class GapsRouteTest {
         }
         assertEquals(HttpStatusCode.NotFound, r.status)
     }
+
+    @Test
+    fun `POST gap with similar topic from different task bumps reusedCount`(@TempDir tmp: Path) = testApplication {
+        var ctx: TutorContext? = null
+        application { freshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seed(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val r1 = client.post("/api/v1/gap") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"topic":"laplace transform","type":"CONCEPT","trigger":"EXPLICIT_ASK","content":"x","taskId":"T1"}""")
+        }
+        assertEquals(HttpStatusCode.Created, r1.status)
+        val r2 = client.post("/api/v1/gap") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"topic":"laplace transform","type":"CONCEPT","trigger":"EXPLICIT_ASK","content":"y","taskId":"T2"}""")
+        }
+        assertEquals(HttpStatusCode.OK, r2.status, r2.bodyAsText())
+        assertTrue(r2.bodyAsText().contains("\"reusedCount\":1"))
+    }
 }
