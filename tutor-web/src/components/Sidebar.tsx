@@ -29,12 +29,18 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    jarvisFetch("/api/v1/tasks")
-      .then(r => r.ok ? r.json() : { tasks: [] })
-      .then((data: { tasks: TaskView[] }) => setTasks(data.tasks ?? []))
-      .catch(() => setTasks([]))
-      .finally(() => setLoaded(true));
-  }, [activeTaskId]);
+    function fetchTasks() {
+      jarvisFetch("/api/v1/tasks")
+        .then(r => r.ok ? r.json() : { tasks: [] })
+        .then((data: { tasks: TaskView[] }) => setTasks(data.tasks ?? []))
+        .catch(() => setTasks([]))
+        .finally(() => setLoaded(true));
+    }
+    fetchTasks();
+    function onTaskCreated() { fetchTasks(); }
+    window.addEventListener("jarvis:task-created", onTaskCreated);
+    return () => window.removeEventListener("jarvis:task-created", onTaskCreated);
+  }, []);
 
   const grouped = useMemo(() => {
     const map = new Map<string, TaskView[]>();

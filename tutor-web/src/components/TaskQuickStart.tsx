@@ -78,6 +78,7 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
       const created: TaskView = await r.json();
       onCreated?.(created.id);
+      window.dispatchEvent(new CustomEvent("jarvis:task-created", { detail: { id: created.id } }));
       // 200 = server matched (subject,title) → existing task. 201 = fresh insert.
       // Pass `deduped=1` so the workspace can flash a banner; otherwise the user
       // sees no difference between "made a new task" and "re-opened an old one".
