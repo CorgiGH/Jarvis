@@ -54,6 +54,25 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
     setScratch(prev => prev.length === 0 ? text : `${prev}\n\n${text}`);
   }
 
+  // Phase 4.3: PdfPane selection-tooltip callback. POSTs gap directly + fires
+  // window event so ChatPane re-fetches its historical-gaps list.
+  async function emitPdfSelectionGap(selection: { text: string; page: number }) {
+    try {
+      await jarvisFetch("/api/v1/gap", {
+        method: "POST",
+        body: JSON.stringify({
+          topic: selection.text,
+          type: "CONCEPT",
+          trigger: "EXPLICIT_ASK",
+          content: selection.text,
+          sourceCitation: `pdf:page=${selection.page}`,
+          taskId,
+        }),
+      });
+      window.dispatchEvent(new CustomEvent("jarvis:gap-created", { detail: { taskId } }));
+    } catch (_) {}
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {dedupedNotice && (
@@ -69,7 +88,7 @@ export function TutorWorkspace({ pdfUrl, taskId, dedupedNotice = false }: { pdfU
       <div className="flex h-full min-h-0 flex-1 flex-col md:flex-row">
         <div className="flex flex-col h-full min-h-0 flex-1 min-w-0 md:w-1/2 border-b-4 md:border-b-0 md:border-r-4 border-border-strong">
           <div className="flex-1 min-h-[50vh] md:min-h-0 overflow-hidden">
-            <PdfPane url={pdfUrl} />
+            <PdfPane url={pdfUrl} onPdfSelectionGap={emitPdfSelectionGap} />
           </div>
           <Scratchpad value={scratch} onChange={setScratch} />
         </div>

@@ -11,8 +11,10 @@
   },
   "dependencies": {
     "katex": "^0.16.11",
+    "pdfjs-dist": "^5.7.284",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-pdf": "^10.4.1",
     "react-router-dom": "^7.1.0"
   },
   "devDependencies": {
