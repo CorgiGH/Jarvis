@@ -18,6 +18,7 @@ Pivot the tutor workspace into a chat-first **drill stack** that grounds every c
 6. **FSRS review surface** — `/tutor/review` route, flip card, AGAIN/HARD/GOOD/EASY with intervals, real card synth from completed drills, forecast counts.
 7. **Full motion language** — all 18 v5.1 animations + Bret-Victor-grade concept illustrations: drag-μ-on-the-line direct manipulation, sumplot marker tracks curve via RAF, slope-counter votes viz, Σ-decomposition stacked bar, plus Plotly frame morphs for distribution comparisons.
 8. **Tema A as the live test case** — Slice 1 ships against the real `_extras/PS/ps_hw/Tema_A.pdf`. Other tasks fall back to the legacy single-problem path until Slice 2 ports them.
+9. **Daemon PC-boot autostart** — Windows Task Scheduler installer for `jarvis-daemon` Rust binary + reverse SSH tunnel. Survives PC reboot/sleep. User runs the installer once with admin perms.
 
 ## What's out of scope (Slice 2, deferred)
 
@@ -35,8 +36,7 @@ Pivot the tutor workspace into a chat-first **drill stack** that grounds every c
 ## What's permanently out of scope
 
 - Telegram bot producer (user-blocked, awaiting token)
-- gws OAuth (user-blocked, interactive login)
-- Daemon PC-boot autostart (user-blocked, Windows admin)
+- ~~gws OAuth (user-blocked, interactive `gws auth login` on VPS)~~ **REVISED 2026-05-10:** the `@googleworkspace/cli` reference in earlier session memory + `GwsEffector.kt` was hallucinated — `gws` is not a real binary. Real path: replace `GwsEffector` subprocess approach with direct Google OAuth 2.0 + REST API client (Kotlin), or migrate to `gam` (Google Apps Manager). Demoted to Slice 2 backlog item rather than "user-blocked" — no user can fix what doesn't exist.
 
 ## Architecture
 
@@ -222,6 +222,29 @@ Fixed in `E` above: replace regex with LLM grader. `giveUp()` flow grades as AGA
 
 Replace placeholder `'(in the real app, the LLM answers here ...)'` with actual call to existing `JarvisToolset.chat` via `/api/v1/sidekick/ask` route. Free-tier OpenRouter chain + 5-layer prompt-injection scrubber already in place.
 
+### J. Daemon PC-boot autostart
+
+**Problem:** the Rust `jarvis-daemon` (HMAC-gated effector at 127.0.0.1:7331) + reverse SSH tunnel both die on PC reboot/sleep. Effector tools then fail with BadGateway. Currently manual `cargo run` after every boot.
+
+**Producer:** new `tools/install-daemon-autostart.ps1` PowerShell installer (admin-elevated):
+1. Verify `cargo build --release` artifact at `daemon\target\release\jarvis-daemon.exe`.
+2. Generate `tools/jarvis-daemon-task.xml` Windows Task Scheduler XML — triggers on user logon + system boot, runs as current user (not SYSTEM, so it inherits `~/.ssh/`), restart-on-failure 3× w/ 1-min delay.
+3. `schtasks.exe /Create /TN "Jarvis Daemon" /XML jarvis-daemon-task.xml /F`.
+4. Second task: `Jarvis Reverse SSH Tunnel` running `ssh -N -R 7331:127.0.0.1:7331 root@46.247.109.91 -i ~/.ssh/id_ed25519` with same triggers + restart policy.
+5. Health probe: writes `~/.jarvis/daemon-autostart.log` on each fire so user can `tail` if it fails silently.
+
+**Frontend surface:** new GET `/api/v1/daemon/health` polls the daemon via the tunnel; status pill in Tutor header turns green when reachable, amber when "tunnel up but daemon unresponsive", red when both dead. Single user, single PC — no multi-tenancy needed.
+
+**Uninstall:** `tools/uninstall-daemon-autostart.ps1` runs `schtasks /Delete /TN "Jarvis Daemon"` + tunnel task.
+
+**Caveat:** SSH key must already exist at `~/.ssh/id_ed25519` and be in VPS authorized_keys. If not present, installer fails fast with a clear error pointing user to setup. Not auto-generating keys (that requires another interactive trust step).
+
+**User actions required (one-time, admin):**
+1. `powershell -ExecutionPolicy Bypass -File tools\install-daemon-autostart.ps1`
+2. Confirm in Task Scheduler GUI that both tasks show "Ready"
+3. Reboot to verify auto-fire
+4. Tutor header pill should go green within ~30s of login
+
 ## Data flow
 
 ```
@@ -267,6 +290,7 @@ Backend (Kotlin):
 - `/api/v1/drill/grade` LLM-mocked: tests for misconception parsing branches
 - `/api/v1/fsrs/due` returns due cards, `/api/v1/fsrs/{id}/grade` updates state
 - Existing `GapPromotionTest` extended to mint multiple cards per problem
+- `/api/v1/daemon/health` returns reachable/tunnel-only/unreachable based on probe
 
 Frontend (Vitest):
 - `DrillStack` renders DRILL first, others locked
@@ -307,11 +331,12 @@ Implementation order (also the writing-plans task order):
 9. Frontend: real LLM grader call. Misconception → elaborated feedback strip.
 10. Frontend: `/tutor/review` route. Flip card + 4 grade buttons + forecast.
 11. Frontend: concept animations — direct-drag μ, sumplot RAF, slope-counter, Σ-stacked-bar, Plotly frame morphs.
-12. Wire end-to-end against Tema A. Manual dogfood pass. Bugfix.
-13. Backend tests. Frontend tests. axe.
-14. Deploy. Verify bundle hash. Backlog Slice 2 items.
+12. Daemon autostart: `tools/install-daemon-autostart.ps1` + `tools/jarvis-daemon-task.xml` + `tools/uninstall-daemon-autostart.ps1` + `GET /api/v1/daemon/health` route + Tutor header status pill.
+13. Wire end-to-end against Tema A. Manual dogfood pass. Bugfix.
+14. Backend tests. Frontend tests. axe.
+15. Deploy. Verify bundle hash. Backlog Slice 2 items.
 
-Estimated 8-12 hours for one Claude Code session running the writing-plans → subagent-driven-development pipeline.
+Estimated 9-13 hours for one Claude Code session running the writing-plans → subagent-driven-development pipeline.
 
 ## Self-review (per skill)
 
@@ -335,6 +360,7 @@ Lifted directly from the 19 specialist reports. Will be its own spec doc:
 - onboarding: 90s coachmark on first launch covering `FSRS DUE`, `PRIOR GAP %`, drill stack flow
 - Romanian register: `verifică`/`salvează`/`marchează rezolvată` for academic verbs, keep tech terms English
 - streak gamification opt-out toggle in settings
+- **Replace `GwsEffector` subprocess (non-existent `gws` binary) with direct OAuth 2.0 + REST API client.** Two options: (a) Kotlin client using `google-oauth-client` + raw HTTPS calls to `googleapis.com/calendar/v3/...`, `gmail/v1/...`, `drive/v3/...`. (b) Adapter for `gam` (Google Apps Manager) if installed on VPS. Either path needs OAuth client credentials JSON downloaded from Google Cloud Console + interactive consent step performed once on a browser-capable machine + refresh token persisted to VPS keyring. Recommend (a) for fewer moving parts.
 - Plotly Boeing → uPlot or featherweight alt
 - nav pills onclick wiring + free-chat surface + settings cog
 - inline-help context envelope schema documented for LLM-side
