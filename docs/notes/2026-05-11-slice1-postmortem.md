@@ -90,3 +90,28 @@ User interrupted to ask for status. **Next session: answer this question + resum
 - `/healthz` 200
 - Tests: 661 backend + 268 frontend + 16 daemon + 7 node = 952 green
 - Memory dir: `BRIDGE.md` canonical + `project_jarvis_overhaul_active.md` (2 verify pinned) + 3 feedback files + `user_identity.md`. Archive contains `project_jarvis_2026-05-09_session_wrap.md`. Verify report green on all 5 live files.
+
+## 2026-05-11 update — workflow fixes shipped (3 layers)
+
+### Layer 1: CLAUDE.md trust-but-verify extension
+
+Appended to `C:\Users\User\.claude\CLAUDE.md` — new "Spec-first clarification rule (load-bearing)". Two clauses:
+1. Brainstorm/spec/plan mode → grep existing artifacts before any clarifying question. Log "Spec-check: <q> → <result>" inline.
+2. Feature-shipped claims require live URL visual confirmation, not just bundle hash + green tests.
+
+### Layer 2: brainstorming SKILL.md grep gate
+
+Edited `C:\Users\User\.claude\plugins\cache\claude-plugins-official\superpowers\5.1.0\skills\brainstorming\SKILL.md` — added checklist item #3 "Spec/plan grep gate" before "Ask clarifying questions" (now item #4). Full gate section appended with the 4-step procedure: list candidates → grep per question → log result → only ask user on confirmed gaps.
+
+### Layer 3: brainstorming SKILL.md self-review extension
+
+Added two new self-review items to the existing 4-item list:
+- Item 5: clarification-questions audit (post-session retrospective; flag avoidable questions in BRIDGE.md)
+- Item 6: visual-presence acceptance criterion ("what user SHOULD see at URL X" subsection with data-testid selectors enforced at SDD final review)
+
+### Files touched (all user-global, NOT in repo)
+
+- `C:\Users\User\.claude\CLAUDE.md` (+15 lines)
+- `C:\Users\User\.claude\plugins\cache\claude-plugins-official\superpowers\5.1.0\skills\brainstorming\SKILL.md` (+30 lines across 2 edits)
+
+Repo-tracked note only — the actual rule files live outside the jarvis-kotlin repo.
