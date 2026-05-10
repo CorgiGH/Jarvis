@@ -84,4 +84,19 @@ class TasksTest {
         assertEquals(2, found.problemRefs.size)
         assertEquals("_extras/PS/ps_hw/Tema_A.pdf#page=4", found.problemRefs[0].path)
     }
+
+    @Test
+    fun `ProblemProgress serializes to JSON and back`() {
+        val pp = ProblemProgress(
+            problemId = "A1",
+            cards = mapOf(1 to CardState.COMPLETE, 2 to CardState.LOCKED),
+            completedAt = null,
+            hintsUsed = 1,
+        )
+        val json = TutorTypes.tutorJson.encodeToString(ProblemProgress.serializer(), pp)
+        val parsed = TutorTypes.tutorJson.decodeFromString(ProblemProgress.serializer(), json)
+        assertEquals("A1", parsed.problemId)
+        assertEquals(CardState.COMPLETE, parsed.cards[1])
+        assertEquals(1, parsed.hintsUsed)
+    }
 }

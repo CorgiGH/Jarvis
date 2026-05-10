@@ -17,6 +17,17 @@ import java.time.Instant
 enum class TaskStatus { TODO, ACTIVE, SUBMITTED, GRADED, ARCHIVED }
 
 @Serializable
+enum class CardState { LOCKED, OPEN, COMPLETE, ATTEMPTED_NOT_SOLVED }
+
+@Serializable
+data class ProblemProgress(
+    val problemId: String,
+    val cards: Map<Int, CardState> = emptyMap(),
+    @Serializable(InstantIso8601Serializer::class) val completedAt: Instant? = null,
+    val hintsUsed: Int = 0,
+)
+
+@Serializable
 data class ContentRef(val repo: String, val path: String, val sha: String)
 
 @Serializable
