@@ -161,3 +161,17 @@ code, pre, kbd, samp {
 @media (prefers-reduced-motion: reduce) {
   .sidekick-quote-pop-in { animation: none; }
 }
+
+/* ---------- Anim #7 · ResourceRail drawer slide-in (Slice 1.5 B3) ----------
+   Drawer slides in from the right over 220ms. Reduced-motion override
+   disables animation while keeping the element visible. */
+@keyframes railDrawerSlideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.rail-drawer-slide-in {
+  animation: railDrawerSlideIn 220ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-drawer-slide-in { animation: none; }
+}
