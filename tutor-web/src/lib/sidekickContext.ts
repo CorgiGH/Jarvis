@@ -1,10 +1,17 @@
 import { jarvisFetch } from "./api";
 import type { SidekickEnvelope } from "./inlineAsk";
 
+export interface Citation {
+  path: string;
+  snippet: string;
+  score: number;
+}
+
 export interface SidekickReply {
   text: string;
   model: string;
   quotedContext: string | null;
+  citations?: Citation[];
 }
 
 /** POST the envelope to /api/v1/sidekick/ask and return the reply.
