@@ -1147,6 +1147,24 @@ fun Application.installTutorRoutes() {
                     call.respond(HttpStatusCode.BadGateway, "LLM error: ${e.message?.take(160)}")
                     return@csrfProtect
                 }
+                // C5: populate conceptRefs via HybridRetriever (lexical; semantic skipped — no API key in prod)
+                val conceptRefs = mutableListOf<jarvis.tutor.ContentRef>()
+                for (p in problems) {
+                    val hits = kotlinx.coroutines.runBlocking {
+                        jarvis.HybridRetriever.search(p.statement, k = 3, semanticEmbed = null)
+                    }
+                    conceptRefs += hits.map { hit ->
+                        // Normalize path separators to forward-slash for cross-platform consistency
+                        jarvis.tutor.ContentRef(repo = "corpus", path = hit.id.replace('\\', '/'), sha = "")
+                    }
+                }
+                // Subject-scope: if ≥1 hit matches _extras/<subject>/ keep only those; full-corpus fallback otherwise
+                val subjectPrefix = "_extras/${task.subject}/"
+                val subjectScoped = conceptRefs.filter { it.path.startsWith(subjectPrefix) }
+                val finalConceptRefs = (if (subjectScoped.isNotEmpty()) subjectScoped else conceptRefs)
+                    .distinctBy { it.path }
+                jarvis.tutor.TaskRepo(ctx.db).updateConceptRefs(taskId, finalConceptRefs)
+
                 val now = java.time.Instant.now()
                 val problemsJson = jarvis.tutor.TutorTypes.tutorJson.encodeToString(
                     kotlinx.serialization.builtins.ListSerializer(

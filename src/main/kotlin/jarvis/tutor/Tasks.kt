@@ -131,6 +131,15 @@ class TaskRepo(private val db: Database) {
         }
     }
 
+    fun updateConceptRefs(taskId: String, refs: List<ContentRef>, now: Instant = Instant.now()): Boolean = transaction(db) {
+        val n = TasksTable.update({ TasksTable.id eq taskId }) {
+            it[conceptRefsJson] = TutorTypes.tutorJson.encodeToString(
+                ListSerializer(ContentRef.serializer()), refs)
+            it[updatedAt] = now
+        }
+        n > 0
+    }
+
     fun updateScratchpadText(taskId: String, text: String?, now: Instant = Instant.now()): Boolean = transaction(db) {
         val n = TasksTable.update({ TasksTable.id eq taskId }) {
             it[scratchpadText] = text
