@@ -1,4 +1,4 @@
-/**
+﻿/**
  * scratchpadServerPersist.test.tsx
  *
  * Prior to Slice 1.5 C1, TutorWorkspace owned scratchpad state directly and
@@ -15,7 +15,7 @@ import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { TutorWorkspace } from "../components/TutorWorkspace";
 
-// ── Mocks ──
+// â”€â”€ Mocks â”€â”€
 vi.mock("../components/PdfPane", () => ({ PdfPane: () => <div data-testid="mock-pdf-pane">PDF</div> }));
 vi.mock("../components/Scratchpad", () => ({ Scratchpad: ({ value, onChange }: any) => <textarea data-testid="mock-scratchpad" value={value} onChange={e => onChange((e.target as HTMLTextAreaElement).value)} /> }));
 vi.mock("../components/ConceptDrawer", () => ({ ConceptDrawer: () => <div data-testid="mock-concept">CONCEPT</div> }));
@@ -80,7 +80,7 @@ test("workspace GETs prep on mount (bootstrap replaces scratchpad server persist
         taskId: "T1",
         generatedAt: "2026-05-11T00:00:00Z",
         version: 1,
-        problemsJson: '[{"problem_id":"A1","page":1,"statement":"test"}]',
+        problemsJson: '[{"problemId":"A1","page":1,"statement":"test"}]',
         drillsJson: '{"A1":{"drill":"d","worked":"w","definition":"def","check":"c","expectedAnswerHint":"h"}}',
         railJson: '[]',
       };
@@ -98,8 +98,9 @@ test("workspace GETs prep on mount (bootstrap replaces scratchpad server persist
     expect(calls.length).toBeGreaterThan(0);
   });
 
-  // Workspace should NOT call /scratchpad directly — that's ResourceRail's job
+  // Workspace should NOT call /scratchpad directly â€” that's ResourceRail's job
   const scratchpadCalls = fetchMock.mock.calls.filter((c: any) =>
     typeof c[0] === "string" && (c[0] as string).includes("/scratchpad"));
   expect(scratchpadCalls.length).toBe(0);
 });
+

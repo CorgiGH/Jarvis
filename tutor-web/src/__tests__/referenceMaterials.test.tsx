@@ -1,9 +1,9 @@
-/**
+﻿/**
  * referenceMaterials.test.tsx
  *
  * Prior to Slice 1.5 C1, TutorWorkspace fetched GET /tasks/{id} and rendered
  * a `reference-materials` panel when materialPaths was non-empty. That panel
- * was removed in the C1 rewire — material paths are now surfaced via the
+ * was removed in the C1 rewire â€” material paths are now surfaced via the
  * ResourceRail (rail items built on the server in A3/reprep). These tests are
  * updated to verify the new bootstrap behaviour instead.
  */
@@ -12,7 +12,7 @@ import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { TutorWorkspace } from "../components/TutorWorkspace";
 
-// ── Mocks ──
+// â”€â”€ Mocks â”€â”€
 vi.mock("../components/PdfPane", () => ({ PdfPane: () => <div data-testid="mock-pdf-pane">PDF</div> }));
 vi.mock("../components/Scratchpad", () => ({ Scratchpad: ({ value, onChange }: any) => <textarea data-testid="mock-scratchpad" value={value} onChange={e => onChange((e.target as HTMLTextAreaElement).value)} /> }));
 vi.mock("../components/ConceptDrawer", () => ({ ConceptDrawer: () => <div data-testid="mock-concept">CONCEPT</div> }));
@@ -72,7 +72,7 @@ test("ResourceRail renders with rail items from prep when prep is present", asyn
     taskId: "T1",
     generatedAt: "2026-05-11T00:00:00Z",
     version: 1,
-    problemsJson: '[{"problem_id":"A1","page":1,"statement":"test"}]',
+    problemsJson: '[{"problemId":"A1","page":1,"statement":"test"}]',
     drillsJson: '{"A1":{"drill":"d","worked":"w","definition":"def","check":"c","expectedAnswerHint":"h"}}',
     railJson: '[{"type":"PDF","label":"laplace.pdf","action":"OPEN_DRAWER","payload":{"path":"laplace.pdf"}},{"type":"SCRATCHPAD","label":"draft","action":"OPEN_DRAWER","payload":{}}]',
   };
@@ -89,13 +89,13 @@ test("ResourceRail renders with rail items from prep when prep is present", asyn
 });
 
 test("reference-materials panel is absent in new layout (moved to ResourceRail)", async () => {
-  // The old `reference-materials` testid no longer exists — material paths
+  // The old `reference-materials` testid no longer exists â€” material paths
   // are surfaced via ResourceRail items built server-side. Assert it's gone.
   const prep = {
     taskId: "T2",
     generatedAt: "2026-05-11T00:00:00Z",
     version: 1,
-    problemsJson: '[{"problem_id":"A1","page":1,"statement":"test"}]',
+    problemsJson: '[{"problemId":"A1","page":1,"statement":"test"}]',
     drillsJson: '{"A1":{"drill":"d","worked":"w","definition":"def","check":"c","expectedAnswerHint":"h"}}',
     railJson: '[]',
   };
@@ -109,3 +109,4 @@ test("reference-materials panel is absent in new layout (moved to ResourceRail)"
   await waitFor(() => expect(screen.getByTestId("resource-rail")).toBeInTheDocument());
   expect(screen.queryByTestId("reference-materials")).toBeNull();
 });
+

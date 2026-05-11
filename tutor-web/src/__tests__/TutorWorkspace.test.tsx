@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+﻿import { render, screen, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { TutorWorkspace } from "../components/TutorWorkspace";
 
-// ── Mock heavy sub-components to avoid full render chains ──
+// â”€â”€ Mock heavy sub-components to avoid full render chains â”€â”€
 vi.mock("../components/PdfPane", () => ({ PdfPane: () => <div data-testid="mock-pdf-pane">PDF</div> }));
 vi.mock("../components/Scratchpad", () => ({ Scratchpad: ({ value, onChange }: any) => <textarea data-testid="mock-scratchpad" value={value} onChange={e => onChange((e.target as HTMLTextAreaElement).value)} /> }));
 vi.mock("../components/ConceptDrawer", () => ({ ConceptDrawer: () => <div data-testid="mock-concept">CONCEPT</div> }));
@@ -64,7 +64,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
-// ── Existing tests (updated to new layout) ──
+// â”€â”€ Existing tests (updated to new layout) â”€â”€
 
 test("deduped banner renders only when dedupedNotice prop is true", async () => {
   // Provide prep so the component renders the full layout (not skeleton)
@@ -72,7 +72,7 @@ test("deduped banner renders only when dedupedNotice prop is true", async () => 
     taskId: "T1",
     generatedAt: "2026-05-11T00:00:00Z",
     version: 1,
-    problemsJson: '[{"problem_id":"A1","page":1,"statement":"test"}]',
+    problemsJson: '[{"problemId":"A1","page":1,"statement":"test"}]',
     drillsJson: '{"A1":{"drill":"d","worked":"w","definition":"def","check":"c","expectedAnswerHint":"h"}}',
     railJson: '[]',
   };
@@ -101,7 +101,7 @@ test("deduped banner renders only when dedupedNotice prop is true", async () => 
   expect(banner.textContent).toMatch(/OPENED EXISTING TASK/);
 });
 
-// ── New bootstrap-path tests ──
+// â”€â”€ New bootstrap-path tests â”€â”€
 
 test("TutorWorkspace renders skeleton + fires reprep when prep is missing (404)", async () => {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
@@ -132,7 +132,7 @@ test("TutorWorkspace renders 7 spec-acceptance selectors when prep is present", 
     taskId: "task-01",
     generatedAt: "2026-05-11T00:00:00Z",
     version: 1,
-    problemsJson: '[{"problem_id":"A1","page":4,"statement":"derive MLE"}]',
+    problemsJson: '[{"problemId":"A1","page":4,"statement":"derive MLE"}]',
     drillsJson: '{"A1":{"drill":"d","worked":"w","definition":"def","check":"c","expectedAnswerHint":"h"}}',
     railJson: '[{"type":"PDF","label":"Tema_A.pdf","action":"OPEN_DRAWER","payload":{"path":"x.pdf"}},{"type":"SCRATCHPAD","label":"draft","action":"OPEN_DRAWER","payload":{}}]',
   };
@@ -162,3 +162,4 @@ test("TutorWorkspace renders 7 spec-acceptance selectors when prep is present", 
   expect(screen.getByTestId("resource-rail")).toBeInTheDocument();
   expect(screen.getByTestId("sidekick-panel")).toBeInTheDocument();
 });
+

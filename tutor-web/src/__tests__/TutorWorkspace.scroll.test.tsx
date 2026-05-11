@@ -1,9 +1,9 @@
-/**
+﻿/**
  * TutorWorkspace layout / scroll tests.
  *
  * Prior to Slice 1.5 C1, these tests targeted the old PdfPane + ChatPane layout.
- * That layout is gone — TutorWorkspace now renders:
- *   header → ProblemStepper → ProgressStrip → flex(main + ResourceRail) → StatusBar
+ * That layout is gone â€” TutorWorkspace now renders:
+ *   header â†’ ProblemStepper â†’ ProgressStrip â†’ flex(main + ResourceRail) â†’ StatusBar
  *
  * Scroll behaviour for the DrillStack main column is tested here.
  * The equivalent Playwright visual gate (7 selectors) lives in the E2E suite.
@@ -13,7 +13,7 @@ import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { TutorWorkspace } from "../components/TutorWorkspace";
 
-// ── Mock all heavy sub-components (same set as TutorWorkspace.test.tsx) ──
+// â”€â”€ Mock all heavy sub-components (same set as TutorWorkspace.test.tsx) â”€â”€
 vi.mock("../components/PdfPane", () => ({ PdfPane: () => <div data-testid="mock-pdf-pane">PDF</div> }));
 vi.mock("../components/Scratchpad", () => ({ Scratchpad: ({ value, onChange }: any) => <textarea data-testid="mock-scratchpad" value={value} onChange={e => onChange((e.target as HTMLTextAreaElement).value)} /> }));
 vi.mock("../components/ConceptDrawer", () => ({ ConceptDrawer: () => <div data-testid="mock-concept">CONCEPT</div> }));
@@ -65,7 +65,7 @@ const PREP_FIXTURE = {
   taskId: "T1",
   generatedAt: "2026-05-11T00:00:00Z",
   version: 1,
-  problemsJson: '[{"problem_id":"A1","page":1,"statement":"test"}]',
+  problemsJson: '[{"problemId":"A1","page":1,"statement":"test"}]',
   drillsJson: '{"A1":{"drill":"d","worked":"w","definition":"def","check":"c","expectedAnswerHint":"h"}}',
   railJson: '[]',
 };
@@ -125,3 +125,4 @@ test("main scroll column uses overflow-y-auto for content overflow", async () =>
   expect(scrollCol, "expected overflow-y-auto scroll column").not.toBeNull();
   expect(scrollCol!.className).toMatch(/\boverflow-y-auto\b/);
 });
+

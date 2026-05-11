@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+﻿import { render, screen, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../App";
@@ -28,7 +28,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 test("default route shows ActiveTaskDashboard (no real task pinned)", async () => {
   render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("active-task-dashboard")).toBeInTheDocument());
-  // Header doesn't show task chip or × close button when on dashboard.
+  // Header doesn't show task chip or Ã— close button when on dashboard.
   expect(screen.queryByTestId("pick-another-task-btn")).toBeNull();
 });
 
@@ -38,7 +38,7 @@ test("pick=1 query param forces dashboard even with last-task in localStorage", 
   await waitFor(() => expect(screen.getByTestId("active-task-dashboard")).toBeInTheDocument());
 });
 
-test("× close button clears last-task and returns to dashboard", async () => {
+test("Ã— close button clears last-task and returns to dashboard", async () => {
   render(<MemoryRouter initialEntries={["/?taskId=T-REAL"]}><App /></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("pick-another-task-btn")).toBeInTheDocument());
   // Persisted by the cold-start effect.
@@ -62,7 +62,7 @@ test("real taskId pinned in URL renders TutorWorkspace", async () => {
         taskId: "T-REAL",
         generatedAt: "2026-05-11T00:00:00Z",
         version: 1,
-        problemsJson: '[{"problem_id":"A1","page":1,"statement":"test"}]',
+        problemsJson: '[{"problemId":"A1","page":1,"statement":"test"}]',
         drillsJson: '{"A1":{"drill":"d","worked":"w","definition":"def","check":"c","expectedAnswerHint":"h"}}',
         railJson: '[]',
       };
@@ -71,7 +71,7 @@ test("real taskId pinned in URL renders TutorWorkspace", async () => {
     return new Response("{}", { status: 200 });
   }));
   render(<MemoryRouter initialEntries={["/?taskId=T-REAL"]}><App /></MemoryRouter>);
-  // Wait for the drill stack to render (skeleton exits → full layout).
+  // Wait for the drill stack to render (skeleton exits â†’ full layout).
   await waitFor(() => expect(screen.getByTestId("tutor-header")).toBeInTheDocument(), { timeout: 5000 });
   expect(screen.getAllByText(/T-REAL/).length).toBeGreaterThan(0);
 });
@@ -109,3 +109,4 @@ test("review nav pill has aria-current=page when on /review", async () => {
   const pill = screen.getByRole("link", { name: /review/i });
   expect(pill.getAttribute("aria-current")).toBe("page");
 });
+
