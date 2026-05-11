@@ -599,9 +599,17 @@ object JarvisToolDefs {
 
         // Optional subject post-filter — HybridRetriever.search doesn't
         // accept a subject param in V1, so we filter on the returned ids
-        // by path prefix when subject is supplied.
+        // by path prefix when subject is supplied. Per-subject corpus
+        // lives under `_extras/<subject>/` (Slice 2 corpus layout); the
+        // bare `<subject>/` prefix never matches because archivalRoot is
+        // the parent of `_extras/`, so relativize yields `_extras/...`.
+        // Cross-platform: id may be `_extras/PS/...` or `_extras\PS\...`
+        // depending on OS native separator (Windows local dev / Linux VPS).
         val filtered = if (subject.isNullOrBlank()) hits
-            else hits.filter { it.id.startsWith("$subject/", ignoreCase = true) }
+            else hits.filter {
+                val norm = it.id.replace('\\', '/')
+                norm.startsWith("_extras/$subject/", ignoreCase = true)
+            }
 
         if (filtered.isEmpty()) return DispatchOut("search_archival: no matches for \"$query\" in subject $subject", hits = hits)
 
