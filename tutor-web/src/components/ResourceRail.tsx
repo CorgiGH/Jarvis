@@ -66,11 +66,11 @@ export function ResourceRail({ taskId, items }: ResourceRailProps) {
   function renderDrawerContent(item: RailItem) {
     switch (item.type) {
       case "PDF": {
-        const path = (item.payload.path as string) || "";
+        const pdfUrl = `/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`;
         return (
           <PdfPane
-            url={`/static/${path}`}
-            uploadUrl={`/static/${path}`}
+            url={pdfUrl}
+            uploadUrl={pdfUrl}
             onPdfSelectionGap={async () => {}}
           />
         );

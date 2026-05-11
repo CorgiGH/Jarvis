@@ -157,7 +157,7 @@ class OpenRouterChatLlm(
         }
         val parsed: ChatResponse = resp.body()
         val choice = parsed.choices.firstOrNull() ?: error("openrouter returned no choices")
-        return choice.message.content to (parsed.model.ifBlank { defaultModel })
+        return (choice.message.content ?: "") to (parsed.model.ifBlank { defaultModel })
     }
 
     /**
@@ -225,6 +225,10 @@ class OpenRouterChatLlm(
     @Serializable
     private data class AssistantMessage(
         val role: String = "assistant",
-        val content: String = "",
+        // Some OpenRouter models (refusal filters, certain free-tier models)
+        // return `content: null`. Default to empty string + nullable so
+        // kotlinx.serialization doesn't blow up at parse time. The caller
+        // collapses null/blank to "" via `?: ""`.
+        val content: String? = "",
     )
 }

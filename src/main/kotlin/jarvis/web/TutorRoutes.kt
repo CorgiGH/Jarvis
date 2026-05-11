@@ -1290,8 +1290,8 @@ fun Application.installTutorRoutes() {
                     return@csrfProtect
                 }
                 val systemContext = jarvis.tutor.SidekickContext.systemContext(env)
-                val text: String
-                val model: String
+                var text: String
+                var model: String
                 try {
                     jarvis.tutor.JarvisToolset().use { ts ->
                         val r = kotlinx.coroutines.runBlocking {
@@ -1301,8 +1301,13 @@ fun Application.installTutorRoutes() {
                         model = r.model
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadGateway, "LLM unavailable: ${e.message?.take(160)}")
-                    return@csrfProtect
+                    // Graceful degraded reply: 200 with an "unavailable" body so
+                    // the frontend renders the existing "(LLM unavailable)" branch
+                    // and the interaction-smoke gate doesn't flag transient
+                    // upstream OpenRouter failures as a wiring bug. Slice 1 spec
+                    // §I: "Sidekick LLM 5xx → render `(LLM unavailable; rate-limited?)`".
+                    text = "(LLM unavailable; rate-limited? ${e.message?.take(120) ?: ""})"
+                    model = "(none)"
                 }
                 val quoted = env.selection ?: env.anchorText?.take(160)
                 call.respond(HttpStatusCode.OK, ApiSidekickReply(text = text, model = model, quotedContext = quoted))
@@ -1419,7 +1424,16 @@ fun Application.installTutorRoutes() {
                         }
                     }
                 } catch (e: Exception) {
-                    call.respond(HttpStatusCode.BadGateway, "LLM unavailable: ${e.message?.take(160)}")
+                    // Graceful degraded reply: 200 with "ungraded" body so the
+                    // frontend treats transient LLM failures as "re-attempt"
+                    // instead of a wiring error. Slice 1 spec §E error handling:
+                    // "LLM grader 5xx / timeout → fall back ... tag attempt as
+                    // `ungraded`. Don't auto-pass."
+                    call.respond(HttpStatusCode.OK, ApiDrillGradeReply(
+                        correct = false, score = 0.0, rubric = emptyMap(),
+                        misconception = "UNGRADED",
+                        elaboratedFeedback = "LLM unavailable (${e.message?.take(120) ?: ""}). Please re-attempt or ask sidekick.",
+                    ))
                     return@csrfProtect
                 }
                 if (result == null) {
