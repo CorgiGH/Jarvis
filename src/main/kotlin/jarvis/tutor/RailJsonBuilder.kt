@@ -14,8 +14,17 @@ object RailJsonBuilder {
     /**
      * Returns rail items as a list of plain maps for ergonomic test assertions.
      * Callers that need the JSON string should encode via [toJsonArrayString].
+     *
+     * @param gapRepo optional KnowledgeGapRepo for emitting PRIOR_GAP items.
+     *   Production callers should supply `KnowledgeGapRepo(db, ledgerDir)`.
+     *   Tests pass a pre-configured instance; null skips gap emission.
      */
-    fun buildForTask(db: Database, taskId: String, userId: String): List<Map<String, Any?>> {
+    fun buildForTask(
+        db: Database,
+        taskId: String,
+        userId: String,
+        gapRepo: KnowledgeGapRepo? = null,
+    ): List<Map<String, Any?>> {
         val task = TaskRepo(db).findById(taskId) ?: return emptyList()
         val items = mutableListOf<Map<String, Any?>>()
 
@@ -56,6 +65,20 @@ object RailJsonBuilder {
                 "action" to "NAVIGATE",
                 "payload" to mapOf("count" to due, "route" to "/tutor/review"),
             ))
+        }
+
+        // PRIOR_GAP items — unresolved knowledge gaps for this task
+        if (gapRepo != null) {
+            val gaps = gapRepo.listForTask(userId, taskId)
+                .filter { it.resolvedBy == null }
+            gaps.forEach { gap ->
+                items.add(mapOf(
+                    "type" to "PRIOR_GAP",
+                    "label" to gap.topic,
+                    "action" to "OPEN_DRAWER",
+                    "payload" to mapOf("gapId" to gap.id),
+                ))
+            }
         }
 
         return items

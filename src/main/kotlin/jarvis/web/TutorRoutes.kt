@@ -1153,7 +1153,10 @@ fun Application.installTutorRoutes() {
                         jarvis.tutor.Problem.serializer()),
                     problems,
                 )
-                val railItems = jarvis.tutor.RailJsonBuilder.buildForTask(ctx.db, taskId, userId)
+                val railItems = jarvis.tutor.RailJsonBuilder.buildForTask(
+                    ctx.db, taskId, userId,
+                    jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir),
+                )
                 val railJsonStr = jarvis.tutor.RailJsonBuilder.toJsonArrayString(railItems)
                 jarvis.tutor.TaskPrepRepo(ctx.db).upsert(jarvis.tutor.TaskPrep(
                     taskId = taskId,
