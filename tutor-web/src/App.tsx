@@ -51,9 +51,13 @@ export function App() {
 
   // Phase 4.4 cross-device sync: read jarvis_last_task server cookie on
   // cold mount. Server cookie wins over localStorage when both present.
+  // Gate on sessionReady: /api/v1/last-task requires jarvis_session cookie.
+  // Without the gate, the GET fires before ensureTutorSession() completes
+  // and gets a 401 (harmless but noisy — breaks the ?debug=1 gate check).
   const [serverLastTask, setServerLastTask] = useState<string | null>(null);
   const [serverLastTaskLoaded, setServerLastTaskLoaded] = useState(false);
   useEffect(() => {
+    if (!sessionReady) return;
     let cancelled = false;
     jarvisFetch("/api/v1/last-task")
       .then(r => r.ok ? r.json() : null)
@@ -64,7 +68,7 @@ export function App() {
       })
       .catch(() => { if (!cancelled) setServerLastTaskLoaded(true); });
     return () => { cancelled = true; };
-  }, []);
+  }, [sessionReady]);
 
   // Cold-start: restore last-used taskId. Explicit URL params don't gate on
   // /last-task (so direct ?taskId= still persists immediately). When no
@@ -103,13 +107,16 @@ export function App() {
   }, [explicitTaskId]);
 
   // POST cookie when explicit task id changes so other devices sync.
+  // Gate on sessionReady: CSRF token only exists after ensureTutorSession()
+  // completes (auto-session sets the csrf cookie). Without this gate the POST
+  // fires on first render without the csrf header and gets a 403.
   useEffect(() => {
-    if (!explicitTaskId || explicitTaskId === "TEST-TASK-A") return;
+    if (!sessionReady || !explicitTaskId || explicitTaskId === "TEST-TASK-A") return;
     jarvisFetch("/api/v1/last-task", {
       method: "POST",
       body: JSON.stringify({ taskId: explicitTaskId }),
     }).catch(() => {});
-  }, [explicitTaskId]);
+  }, [sessionReady, explicitTaskId]);
 
   const taskId = explicitTaskId ?? "TEST-TASK-A";
   const isDefault = taskId === "TEST-TASK-A" || pickMode;
@@ -117,6 +124,10 @@ export function App() {
   const [taskExists, setTaskExists] = useState<boolean | null>(null);
   useEffect(() => {
     if (isDefault) { setTaskExists(false); return; }
+    // Gate on sessionReady: /api/v1/tasks requires jarvis_session cookie which is
+    // minted by ensureTutorSession(). Without the gate the request fires before
+    // the session cookie lands, gets 401, and permanently shows QuickStart.
+    if (!sessionReady) return;
     let cancelled = false;
     jarvisFetch("/api/v1/tasks")
       .then(async r => {
@@ -127,7 +138,7 @@ export function App() {
       })
       .catch(() => { if (!cancelled) setTaskExists(false); });
     return () => { cancelled = true; };
-  }, [taskId, isDefault]);
+  }, [taskId, isDefault, sessionReady]);
 
   const showQuickStart = isDefault || taskExists === false;
 

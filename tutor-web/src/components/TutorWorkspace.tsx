@@ -16,11 +16,11 @@ import type { TaskPrepReply, RailItem } from "../lib/taskPrep";
 import { useSearchParams } from "react-router-dom";
 
 interface Problem {
-  problem_id: string;
+  problemId: string;  // camelCase matches the JSON produced by the Kotlin serializer
   page: number;
   statement: string;
-  equation_refs?: string[];
-  data_givens?: string[];
+  equationRefs?: string[];
+  dataGivens?: string[];
 }
 
 const POLL_INTERVAL_MS = 2000;
@@ -120,6 +120,7 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
   const [pendingDrawerPath, setPendingDrawerPath] = useState<string | null>(null);
 
   const allDone = problems.length > 0 && completedProblems.size >= problems.length;
+  const debugMode = searchParams.get("debug") === "1";
 
   // ── Skeleton when prep is loading ──
   if (!prep && !prepError) {
@@ -128,7 +129,7 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
         <header data-testid="tutor-header"
                 className="flex items-center justify-between px-4 py-1 border-b-4 border-border-strong bg-panel-dark-bg text-panel-dark-fg text-[10px] font-mono tracking-widest">
           <span className="font-bold">JARVIS · TUTOR</span>
-          <DaemonHealthPill />
+          {debugMode && <DaemonHealthPill />}
         </header>
         <div data-testid="workspace-skeleton" aria-busy="true"
              className="flex-1 flex flex-col items-center justify-center gap-4 p-12 font-mono text-page-fg/60 tracking-widest">
@@ -154,7 +155,7 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
       <header data-testid="tutor-header"
               className="flex items-center justify-between px-4 py-1 border-b-4 border-border-strong bg-panel-dark-bg text-panel-dark-fg text-[10px] font-mono tracking-widest">
         <span className="font-bold">JARVIS · TUTOR · {taskId}</span>
-        <DaemonHealthPill />
+        {debugMode && <DaemonHealthPill />}
       </header>
 
       {dedupedNotice && (
@@ -167,7 +168,7 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
       )}
 
       <ProblemStepper
-        problems={problems.map(p => ({ problemId: p.problem_id, label: p.problem_id }))}
+        problems={problems.map(p => ({ problemId: p.problemId, label: p.problemId ?? "—" }))}
         activeProblemIndex={activeIndex}
       />
 
@@ -177,17 +178,17 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
           done: 0,  // Slice 1.5: drill-stack-internal phase doesn't lift up yet
           total: 4, // DRILL + WORKED + DEFINITION + CHECK
         }}
-        currentProblemLabel={activeProblem?.problem_id ?? "—"}
+        currentProblemLabel={activeProblem?.problemId ?? "—"}
       />
 
       <div className="flex-1 min-h-0 flex">
         <main className="flex-1 min-w-0 flex flex-col overflow-y-auto p-4 gap-4">
-          {activeProblem && drillsByProblem[activeProblem.problem_id] && (
+          {activeProblem && drillsByProblem[activeProblem.problemId] && (
             <DrillStack
-              key={activeProblem.problem_id}
+              key={activeProblem.problemId}
               taskId={taskId}
-              problemId={activeProblem.problem_id}
-              content={drillsByProblem[activeProblem.problem_id]}
+              problemId={activeProblem.problemId}
+              content={drillsByProblem[activeProblem.problemId]}
               onProblemComplete={handleProblemComplete}
             />
           )}
@@ -201,8 +202,8 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
             <CompileSubmitCard
               taskId={taskId}
               answers={problems.map(p => ({
-                problemId: p.problem_id,
-                attempt: drillsByProblem[p.problem_id]?.drill ?? "",
+                problemId: p.problemId,
+                attempt: drillsByProblem[p.problemId]?.drill ?? "",
               }))}
               onSubmitted={() => { /* no-op for Slice 1.5; tasks page reflects status */ }}
             />
