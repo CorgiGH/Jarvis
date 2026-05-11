@@ -4,6 +4,7 @@ import { TutorWorkspace } from "./components/TutorWorkspace";
 import { TaskQuickStart } from "./components/TaskQuickStart";
 import { ActiveTaskDashboard } from "./components/ActiveTaskDashboard";
 import { FsrsReview } from "./components/FsrsReview";
+import { DaemonHealthPill } from "./components/DaemonHealthPill";
 import { jarvisFetch } from "./lib/api";
 
 const LAST_TASK_KEY = "jarvis.lastTaskId";
@@ -25,6 +26,7 @@ export function App() {
   const explicitTaskId = params.get("taskId");
   const pickMode = params.get("pick") === "1";  // explicit "go to QuickStart" flag
   const dedupedFlag = params.get("deduped") === "1";  // surfaced when POST /tasks deduped
+  const debug = params.get("debug") === "1";  // ?debug=1 shows DaemonHealthPill + full domain footer
   const [sessionReady, setSessionReady] = useState(false);
 
   // Strip ?deduped=1 after a tick so a refresh doesn't re-flash the banner.
@@ -181,6 +183,16 @@ export function App() {
           >
             trust
           </Link>
+          {debug ? (
+            <>
+              <DaemonHealthPill />
+              <span data-testid="domain-footer" className="text-[9px] tracking-widest text-panel-dark-fg/60">
+                READY · CTRL+ENTER · CORGFLIX.DUCKDNS.ORG
+              </span>
+            </>
+          ) : (
+            <span className="text-[9px] tracking-widest text-panel-dark-fg/60">READY</span>
+          )}
         </nav>
       </header>
       <main className="flex-1 min-h-0 overflow-hidden bg-page-bg">
