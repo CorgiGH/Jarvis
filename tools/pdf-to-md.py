@@ -38,6 +38,9 @@ GLYPH_FIXES = [
     ("˘a", "ă"), ("˘A", "Ă"),
     ("¸s", "ș"), ("¸S", "Ș"),
     ("¸t", "ț"), ("¸T", "Ț"),
+    # No-space post-base variants (diacritic floats directly AFTER base letter):
+    ("t¸", "ț"), ("T¸", "Ț"),
+    ("s¸", "ș"), ("S¸", "Ș"),
 ]
 
 
@@ -49,6 +52,8 @@ def normalize_text(raw: str) -> str:
         s = s.replace(src, dst)
     # Unicode NFC normalize (composes any remaining decomposed forms)
     s = unicodedata.normalize("NFC", s)
+    # Join hyphenated line-breaks: word-char + hyphen + newline + word-char
+    s = re.sub(r"(\w)-\n(\w)", r"\1\2", s)
     # Collapse runs of whitespace to single space, preserve paragraph breaks
     # (two or more newlines collapse to exactly two).
     s = re.sub(r"[ \t]+", " ", s)

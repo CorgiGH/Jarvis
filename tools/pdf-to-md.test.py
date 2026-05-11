@@ -36,6 +36,17 @@ class TestNormalizeText(unittest.TestCase):
         self.assertIn("ș", normalize_text("e¸s antion"))
         self.assertIn("ț", normalize_text("func¸t ie"))
 
+    def test_hyphenation_joined(self):
+        # Soft hyphen at column edge: word-char + hyphen + newline + word-char
+        # should be joined. Also verifies glyph-fix fires before hyphenation.
+        raw = "Distribut¸ia hipergeo-\nmetric˘ a"
+        self.assertIn("Distribuția hipergeometrică", normalize_text(raw))
+
+    def test_letter_break_no_hyphen(self):
+        # Plain newline (no hyphen) collapses to a space, not a join.
+        raw = "foo\nbar"
+        self.assertIn("foo bar", normalize_text(raw))
+
 
 if __name__ == "__main__":
     unittest.main()
