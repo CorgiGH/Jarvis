@@ -42,6 +42,7 @@ fun main(args: Array<String>) {
                     "  by edge kind: ${graph.edges.groupingBy { it.kind }.eachCount()}",
             )
         }
+        "migrate-concept-refs" -> runMigrateConceptRefs()
         "import-anki" -> {
             val subject = args.getOrNull(1)
             val path = args.getOrNull(2)
