@@ -18,3 +18,5 @@ test_output.txt
 .playwright-mcp/
 tutor-after-fix.png
 tutor-quickstart.png
+# Slice 2 corpus conversion output (regenerated via tools/pdf-to-md.py)
+tmp-md/
