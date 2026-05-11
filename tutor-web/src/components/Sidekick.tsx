@@ -3,6 +3,7 @@ import { askSidekick } from "../lib/sidekickContext";
 import type { Citation } from "../lib/sidekickContext";
 import type { SidekickEnvelope } from "../lib/inlineAsk";
 import { CitationPill } from "./CitationPill";
+import { MathText } from "./MathText";
 
 interface SidekickProps {
   envelope?: SidekickEnvelope;
@@ -76,7 +77,9 @@ export function Sidekick({ envelope, onCitationClick }: SidekickProps) {
                   {`> quoted: "${fetchState.quotedContext}"`}
                 </div>
               )}
-              <div data-testid="sidekick-reply" style={{ whiteSpace: "pre-wrap" }}>{fetchState.text}</div>
+              <div data-testid="sidekick-reply">
+                <MathText text={fetchState.text} className="text-sm" />
+              </div>
               {fetchState.citations.length > 0 && (
                 <div
                   data-testid="sidekick-citations-strip"
