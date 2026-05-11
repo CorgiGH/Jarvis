@@ -119,3 +119,21 @@ Repo-tracked note only — the actual rule files live outside the jarvis-kotlin 
 ## Trust-but-verify rule extended (this fix)
 
 User-global `C:\Users\User\.claude\CLAUDE.md` extended with "Feature-shipped verification rule" appended after the existing memory-verification rule. See post-mortem fix list above.
+
+## 2026-05-11 Slice 1.5 interaction-gap update — 3 more workflow layers shipped
+
+Slice 1.5 declared complete with selector-painted Playwright gate green. User opened live URL, clicked PDF rail item → drawer showed "HTTP 404 No PDF attached at /static/<path>". Selectors visible but content broken. Same anti-pattern as ghost-components, one layer deeper.
+
+**Layer 4: Interaction-smoke gate** — appended to user-global `C:\Users\User\.claude\CLAUDE.md` (section "Interaction-smoke gate (load-bearing, post 2026-05-11 Slice 1.5 PDF-404 lesson)"). Playwright must (1) assert selectors visible, (2) capture ZERO 4xx/5xx on first paint, (3) click every spec-listed interactive element, (4) assert no error text + no new 4xx/5xx after each click. Any of (2-4) fail = slice NOT shipped.
+
+**Layer 5: Component-reuse contract rule** — appended to CLAUDE.md (section "Component-reuse contract rule"). When plan task says "mount existing component X in new site Y", task body must: paste X's prop signature, show Y's wire-up JSX explicitly, run `tsc --noEmit`, add unit test mocking X's external dep with URL/payload shape assertion. Same rule mirrored in `superpowers:writing-plans` SKILL.md self-review #5 + `superpowers:subagent-driven-development` SKILL.md implementer prompt.
+
+**Layer 6: Underscore-dead-prop rule** — CLAUDE.md section "Underscore-dead-prop rule". `_propName` destructure in production component = workflow smell. Either use the prop or remove from parent's pass-down + interface. Manual check until ESLint config lands. `TutorWorkspace.tsx:28` `pdfUrl: _pdfUrl` was the load-bearing lesson — parent passed the correct `/api/v1/tasks/{id}/pdf` URL; component dropped it on the floor at the underscore; ResourceRail built its own wrong URL from `rail_json.payload.path`.
+
+### Files touched (all user-global, NOT in repo)
+
+- `C:\Users\User\.claude\CLAUDE.md` (+45 lines across 3 new sections)
+- `C:\Users\User\.claude\plugins\cache\claude-plugins-official\superpowers\5.1.0\skills\subagent-driven-development\SKILL.md` (+35 lines: interaction-smoke gate + component-reuse contract)
+- `C:\Users\User\.claude\plugins\cache\claude-plugins-official\superpowers\5.1.0\skills\writing-plans\SKILL.md` (+25 lines: self-review #4 #5 #6)
+
+Slice 1.5 interaction-smoke retrofit handed off to next session via copy-paste prompt; this postmortem will gain a "Slice 1.5 interaction-smoke retrofit" subsection once the bugs are audited + fixed + smoke gate passes.
