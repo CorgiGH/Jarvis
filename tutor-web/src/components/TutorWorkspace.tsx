@@ -115,6 +115,10 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
     setCompletedProblems(prev => new Set(prev).add(problemId));
   }
 
+  // CitationPill → ResourceRail drawer bridge.
+  // Set by Sidekick.onCitationClick; cleared when the drawer is closed.
+  const [pendingDrawerPath, setPendingDrawerPath] = useState<string | null>(null);
+
   const allDone = problems.length > 0 && completedProblems.size >= problems.length;
 
   // ── Skeleton when prep is loading ──
@@ -188,7 +192,10 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
             />
           )}
 
-          <Sidekick envelope={sidekickEnvelope} />
+          <Sidekick
+            envelope={sidekickEnvelope}
+            onCitationClick={(c) => setPendingDrawerPath(c.path)}
+          />
 
           {allDone && (
             <CompileSubmitCard
@@ -202,7 +209,12 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
           )}
         </main>
 
-        <ResourceRail taskId={taskId} items={railItems} />
+        <ResourceRail
+          taskId={taskId}
+          items={railItems}
+          forceOpenPath={pendingDrawerPath}
+          onDrawerClosed={() => setPendingDrawerPath(null)}
+        />
       </div>
 
       <StatusBar />

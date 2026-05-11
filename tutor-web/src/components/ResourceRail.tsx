@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { RailDrawer } from "./RailDrawer";
 import { PdfPane } from "./PdfPane";
@@ -12,6 +12,12 @@ import type { KnowledgeGap } from "../lib/knowledgeGap";
 interface ResourceRailProps {
   taskId: string;
   items: RailItem[];
+  /** When set, the rail immediately opens the drawer for this archival path.
+   *  If the path matches a known rail item it uses that item; otherwise a
+   *  transient CONCEPT drawer-only item is synthesised (not shown in the rail list). */
+  forceOpenPath?: string | null;
+  /** Fired when the drawer opened via forceOpenPath is closed. */
+  onDrawerClosed?: () => void;
 }
 
 /**
@@ -49,10 +55,44 @@ function PriorGapAdapter({ gapId }: { gapId: string }) {
  * - KnowledgeGapCard: requires a full KnowledgeGap object; PRIOR_GAP slot uses
  *   PriorGapAdapter (defined above) to fetch and pass the object.
  */
-export function ResourceRail({ taskId, items }: ResourceRailProps) {
+export function ResourceRail({ taskId, items, forceOpenPath, onDrawerClosed }: ResourceRailProps) {
   const [openDrawer, setOpenDrawer] = useState<RailItem | null>(null);
+  // Tracks whether the current openDrawer was triggered by forceOpenPath,
+  // so we know to fire onDrawerClosed when it's closed.
+  const [forcedOpen, setForcedOpen] = useState(false);
   const [scratch, setScratch] = useState<string>("");
   const navigate = useNavigate();
+
+  // When forceOpenPath changes to a non-null value, open the matching drawer.
+  useEffect(() => {
+    if (!forceOpenPath) return;
+    // Find the matching rail item by path in payload
+    const match = items.find(
+      (it) => (it.payload.path as string | undefined) === forceOpenPath,
+    );
+    if (match) {
+      setOpenDrawer(match);
+    } else {
+      // Synthesise a transient CONCEPT drawer item — NOT added to the rail list.
+      const basename = forceOpenPath.split("/").pop() ?? forceOpenPath;
+      const synthetic: RailItem = {
+        type: "CONCEPT",
+        label: basename,
+        action: "OPEN_DRAWER",
+        payload: { path: forceOpenPath, conceptId: basename },
+      };
+      setOpenDrawer(synthetic);
+    }
+    setForcedOpen(true);
+  }, [forceOpenPath]); // items intentionally omitted — only re-run when the path itself changes
+
+  function closeDrawer() {
+    setOpenDrawer(null);
+    if (forcedOpen) {
+      setForcedOpen(false);
+      onDrawerClosed?.();
+    }
+  }
 
   function handleClick(item: RailItem) {
     if (item.action === "NAVIGATE") {
@@ -60,6 +100,7 @@ export function ResourceRail({ taskId, items }: ResourceRailProps) {
       navigate(route);
       return;
     }
+    setForcedOpen(false);
     setOpenDrawer(item);
   }
 
@@ -106,7 +147,7 @@ export function ResourceRail({ taskId, items }: ResourceRailProps) {
         return (
           <ConceptDrawer
             concept={conceptTerm}
-            onClose={() => setOpenDrawer(null)}
+            onClose={closeDrawer}
           />
         );
       }
@@ -143,7 +184,7 @@ export function ResourceRail({ taskId, items }: ResourceRailProps) {
         ))}
       </aside>
       {openDrawer && (
-        <RailDrawer item={openDrawer} onClose={() => setOpenDrawer(null)}>
+        <RailDrawer item={openDrawer} onClose={closeDrawer}>
           {renderDrawerContent(openDrawer)}
         </RailDrawer>
       )}
