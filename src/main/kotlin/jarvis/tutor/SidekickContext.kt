@@ -30,6 +30,16 @@ data class SidekickReply(
 )
 
 object SidekickContext {
+
+    private const val CITATION_INSTRUCTION = """
+# Source citation
+When you use information from the corpus (lecture notes, lab sheets, themes),
+cite the source filename inline using the format `(src: <path>)` where <path>
+is the relative archival path returned by the search tool.
+Do not invent filenames. Only cite paths the search tool actually returned.
+If no source supports a claim, do not add a citation for it.
+"""
+
     fun systemContext(env: SidekickEnvelope): String {
         val sb = StringBuilder()
         sb.append("# Sidekick context\n")
@@ -44,6 +54,7 @@ object SidekickContext {
             sb.append("specific selection inside that paragraph:\n  \"")
             sb.append(it.take(200)).append("\"\n")
         }
+        sb.append(CITATION_INSTRUCTION)
         return PromptInjectionScrubber.wrap(
             source = "sidekick_context",
             trust = "user_anchor",
