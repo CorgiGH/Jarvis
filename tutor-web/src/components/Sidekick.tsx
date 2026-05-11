@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 import { askSidekick } from "../lib/sidekickContext";
+import type { Citation } from "../lib/sidekickContext";
 import type { SidekickEnvelope } from "../lib/inlineAsk";
+import { CitationPill } from "./CitationPill";
 
 interface SidekickProps {
   envelope?: SidekickEnvelope;
+  onCitationClick?: (citation: Citation) => void;
 }
 
 type FetchState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ok"; text: string; quotedContext: string | null }
+  | { status: "ok"; text: string; quotedContext: string | null; citations: Citation[] }
   | { status: "error" };
 
-export function Sidekick({ envelope }: SidekickProps) {
+export function Sidekick({ envelope, onCitationClick }: SidekickProps) {
   const [expanded, setExpanded] = useState(false);
   const [fetchState, setFetchState] = useState<FetchState>({ status: "idle" });
 
@@ -25,7 +28,7 @@ export function Sidekick({ envelope }: SidekickProps) {
     askSidekick(envelope)
       .then((reply) => {
         if (cancelled) return;
-        setFetchState({ status: "ok", text: reply.text, quotedContext: reply.quotedContext });
+        setFetchState({ status: "ok", text: reply.text, quotedContext: reply.quotedContext, citations: reply.citations ?? [] });
       })
       .catch(() => {
         if (!cancelled) setFetchState({ status: "error" });
@@ -73,7 +76,17 @@ export function Sidekick({ envelope }: SidekickProps) {
                   {`> quoted: "${fetchState.quotedContext}"`}
                 </div>
               )}
-              <div style={{ whiteSpace: "pre-wrap" }}>{fetchState.text}</div>
+              <div data-testid="sidekick-reply" style={{ whiteSpace: "pre-wrap" }}>{fetchState.text}</div>
+              {fetchState.citations.length > 0 && (
+                <div
+                  data-testid="sidekick-citations-strip"
+                  style={{ marginTop: "10px", display: "flex", flexWrap: "wrap" }}
+                >
+                  {fetchState.citations.map((c, i) => (
+                    <CitationPill key={i} citation={c} onClick={(cit) => onCitationClick?.(cit)} />
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
