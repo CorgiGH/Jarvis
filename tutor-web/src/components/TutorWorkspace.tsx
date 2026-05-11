@@ -180,6 +180,7 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
         <main className="flex-1 min-w-0 flex flex-col overflow-y-auto p-4 gap-4">
           {activeProblem && drillsByProblem[activeProblem.problem_id] && (
             <DrillStack
+              key={activeProblem.problem_id}
               taskId={taskId}
               problemId={activeProblem.problem_id}
               content={drillsByProblem[activeProblem.problem_id]}

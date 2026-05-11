@@ -1,17 +1,25 @@
 package jarvis.tutor
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/**
+ * Wire shape uses snake_case per Slice 1 spec §C — the frontend's
+ * `lib/inlineAsk.ts` `buildSidekickEnvelope` emits `task_id`, `user_question`,
+ * etc. Match exactly with @SerialName so kotlinx.serialization doesn't 400
+ * on decode. The 2026-05-11 Slice 1.5 lesson: camelCase/snake_case mismatch
+ * between TS and Kotlin sides silently shipped → InlineAskChip flow 400'd.
+ */
 @Serializable
 data class SidekickEnvelope(
-    val taskId: String? = null,
-    val problemId: String? = null,
-    val cardId: String? = null,
-    val cardTitle: String? = null,
-    val anchorId: String? = null,
-    val anchorText: String? = null,
+    @SerialName("task_id") val taskId: String? = null,
+    @SerialName("problem_id") val problemId: String? = null,
+    @SerialName("card_id") val cardId: String? = null,
+    @SerialName("card_title") val cardTitle: String? = null,
+    @SerialName("anchor_id") val anchorId: String? = null,
+    @SerialName("anchor_text") val anchorText: String? = null,
     val selection: String? = null,
-    val userQuestion: String,
+    @SerialName("user_question") val userQuestion: String,
 )
 
 @Serializable
