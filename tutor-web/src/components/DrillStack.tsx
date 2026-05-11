@@ -3,6 +3,7 @@ import { DrillCard } from "./DrillCard";
 import type { DrillCardState } from "./DrillCard";
 import { gradeDrill } from "../lib/drillGrader";
 import type { GradeResult } from "../lib/drillGrader";
+import { MathText } from "./MathText";
 
 export interface DrillContent {
   drill: string;
@@ -128,7 +129,7 @@ export function DrillStack({
         state={drillState()}
         staggerIndex={0}
       >
-        <p className="mb-4 leading-relaxed">{content.drill}</p>
+        <MathText text={content.drill} className="mb-4 text-sm" />
         <textarea
           data-testid="drill-attempt-input"
           value={attempt}
@@ -188,7 +189,7 @@ export function DrillStack({
         state={secondaryState()}
         staggerIndex={1}
       >
-        <p className="leading-relaxed">{content.worked}</p>
+        <MathText text={content.worked} className="text-sm" />
       </DrillCard>
 
       {/* 3. DEFINITION card — locked until drill graded */}
@@ -198,7 +199,7 @@ export function DrillStack({
         state={secondaryState()}
         staggerIndex={2}
       >
-        <p className="leading-relaxed">{content.definition}</p>
+        <MathText text={content.definition} className="text-sm" />
       </DrillCard>
 
       {/* 4. CHECK card — locked until drill graded */}
@@ -208,7 +209,7 @@ export function DrillStack({
         state={checkState()}
         staggerIndex={3}
       >
-        <p className="mb-4 leading-relaxed">{content.check}</p>
+        <MathText text={content.check} className="mb-4 text-sm" />
         {unlocked && phase !== "check-done" && (
           <button
             onClick={handleCheckDone}
