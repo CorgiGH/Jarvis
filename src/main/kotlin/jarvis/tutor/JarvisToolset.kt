@@ -58,8 +58,12 @@ class JarvisToolset(
     private val maxToolRounds: Int = 3,
 ) : AutoCloseable {
 
-    @Serializable
-    data class ToolReply(val text: String, val model: String, val toolRounds: Int)
+    data class ToolReply(
+        val text: String,
+        val model: String,
+        val toolRounds: Int,
+        val hits: List<jarvis.HybridRetriever.HybridHit> = emptyList(),
+    )
 
     /** Chat with the LLM; allow it to invoke tools. Returns the
      *  final text after at most [maxToolRounds] tool round-trips.
@@ -97,6 +101,7 @@ class JarvisToolset(
 
         var rounds = 0
         var lastModel = ""
+        val accumulatedHits = mutableListOf<jarvis.HybridRetriever.HybridHit>()
         // Pinned model for the rest of this tool loop. Risk Analyst council
         // R5 HIGH: round 1 may land on model A and round 2 on model B because
         // OR's `models:` array routes around 404/429 — but the conversation
@@ -138,7 +143,7 @@ class JarvisToolset(
                 if (content.isBlank()) {
                     error("openrouter empty response: model=$lastModel rounds=$rounds — caller should retry via legacy chat")
                 }
-                return ToolReply(text = content, model = lastModel, toolRounds = rounds)
+                return ToolReply(text = content, model = lastModel, toolRounds = rounds, hits = accumulatedHits.toList())
             }
             // Append the assistant message AS-IS so the model sees its own
             // tool_calls in the next turn (OpenAI requires this).
@@ -149,11 +154,13 @@ class JarvisToolset(
                 val function = callObj["function"] as? JsonObject ?: continue
                 val name = (function["name"] as? JsonPrimitive)?.contentOrNull.orEmpty()
                 val argsRaw = (function["arguments"] as? JsonPrimitive)?.contentOrNull.orEmpty()
-                val result = try {
+                val out = try {
                     JarvisToolDefs.dispatch(name, argsRaw)
                 } catch (e: Exception) {
-                    "tool error: ${e.javaClass.simpleName}: ${e.message?.take(200)}"
+                    JarvisToolDefs.DispatchOut("tool error: ${e.javaClass.simpleName}: ${e.message?.take(200)}")
                 }
+                accumulatedHits += out.hits
+                val result = out.text
                 val wrapped = PromptInjectionScrubber.wrap(
                     source = "tool_result:$name",
                     trust = "indexed_data",
@@ -365,22 +372,27 @@ object JarvisToolDefs {
         if (required) put("__required__", true)
     }
 
-    fun dispatch(toolName: String, argsJson: String): String {
+    data class DispatchOut(
+        val text: String,
+        val hits: List<HybridRetriever.HybridHit> = emptyList(),
+    )
+
+    fun dispatch(toolName: String, argsJson: String): DispatchOut {
         return when (toolName) {
             "search_archival" -> dispatchSearchArchival(argsJson)
-            "query_graph" -> dispatchQueryGraph(argsJson)
-            "get_node" -> dispatchGetNode(argsJson)
-            "get_neighbors" -> dispatchGetNeighbors(argsJson)
-            "shortest_path" -> dispatchShortestPath(argsJson)
-            "wiki_read" -> dispatchWikiRead(argsJson)
-            "wiki_append" -> dispatchWikiAppend(argsJson)
-            "calendar_create_event" -> dispatchCalendarCreate(argsJson)
-            "drive_search" -> dispatchDriveSearch(argsJson)
-            "gmail_create_draft" -> dispatchGmailDraft(argsJson)
-            "search_subject_corpus" -> dispatchSubjectCorpus(argsJson)
-            "list_subject_kinds" -> dispatchListSubjectKinds(argsJson)
-            "symbolic_math" -> dispatchSymbolicMath(argsJson)
-            else -> "unknown tool: $toolName"
+            "query_graph" -> DispatchOut(dispatchQueryGraph(argsJson))
+            "get_node" -> DispatchOut(dispatchGetNode(argsJson))
+            "get_neighbors" -> DispatchOut(dispatchGetNeighbors(argsJson))
+            "shortest_path" -> DispatchOut(dispatchShortestPath(argsJson))
+            "wiki_read" -> DispatchOut(dispatchWikiRead(argsJson))
+            "wiki_append" -> DispatchOut(dispatchWikiAppend(argsJson))
+            "calendar_create_event" -> DispatchOut(dispatchCalendarCreate(argsJson))
+            "drive_search" -> DispatchOut(dispatchDriveSearch(argsJson))
+            "gmail_create_draft" -> DispatchOut(dispatchGmailDraft(argsJson))
+            "search_subject_corpus" -> DispatchOut(dispatchSubjectCorpus(argsJson))
+            "list_subject_kinds" -> DispatchOut(dispatchListSubjectKinds(argsJson))
+            "symbolic_math" -> DispatchOut(dispatchSymbolicMath(argsJson))
+            else -> DispatchOut("unknown tool: $toolName")
         }
     }
 
@@ -560,14 +572,14 @@ object JarvisToolDefs {
         return "path (${path.size - 1} hops):\n  " + path.joinToString("\n  → ")
     }
 
-    private fun dispatchSearchArchival(argsJson: String): String {
+    private fun dispatchSearchArchival(argsJson: String): DispatchOut {
         val obj = try {
-            Json.parseToJsonElement(argsJson) as? JsonObject ?: return "bad args: not an object"
+            Json.parseToJsonElement(argsJson) as? JsonObject ?: return DispatchOut("bad args: not an object")
         } catch (e: Exception) {
-            return "bad args json: ${e.message?.take(120)}"
+            return DispatchOut("bad args json: ${e.message?.take(120)}")
         }
         val query = (obj["query"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
-        if (query.isEmpty()) return "search_archival: query required"
+        if (query.isEmpty()) return DispatchOut("search_archival: query required")
         val k = ((obj["k"] as? JsonPrimitive)?.intOrNull ?: 3).coerceIn(1, 5)
         val subject = (obj["subject"] as? JsonPrimitive)?.contentOrNull?.trim()
 
@@ -581,9 +593,9 @@ object JarvisToolDefs {
         val hits = try {
             runBlocking { HybridRetriever.search(query, k = k, semanticEmbed = embedFn) }
         } catch (e: Exception) {
-            return "search_archival: ${e.javaClass.simpleName}: ${e.message?.take(160)}"
+            return DispatchOut("search_archival: ${e.javaClass.simpleName}: ${e.message?.take(160)}")
         }
-        if (hits.isEmpty()) return "search_archival: no matches for \"$query\""
+        if (hits.isEmpty()) return DispatchOut("search_archival: no matches for \"$query\"")
 
         // Optional subject post-filter — HybridRetriever.search doesn't
         // accept a subject param in V1, so we filter on the returned ids
@@ -591,11 +603,12 @@ object JarvisToolDefs {
         val filtered = if (subject.isNullOrBlank()) hits
             else hits.filter { it.id.startsWith("$subject/", ignoreCase = true) }
 
-        if (filtered.isEmpty()) return "search_archival: no matches for \"$query\" in subject $subject"
+        if (filtered.isEmpty()) return DispatchOut("search_archival: no matches for \"$query\" in subject $subject", hits = hits)
 
-        return filtered.joinToString("\n\n") { hit ->
+        val text = filtered.joinToString("\n\n") { hit ->
             "[${hit.source} score=${"%.3f".format(hit.score)}] ${hit.id}\n${hit.snippet.take(600)}"
         }
+        return DispatchOut(text = text, hits = hits)
     }
 }
 

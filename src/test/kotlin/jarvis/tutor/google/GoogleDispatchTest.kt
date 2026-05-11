@@ -36,7 +36,7 @@ class GoogleDispatchTest {
         // containing "google-auth-bootstrap" so the LLM can relay the fix to the user.
         val result = jarvis.tutor.JarvisToolDefs.dispatch(
             "calendar_create_event", calendarArgsJson()
-        )
+        ).text
         // Either success (if token somehow present) or meaningful error
         assertTrue(result.isNotEmpty())
         // If it failed, it must mention the bootstrap command, not "gws"
@@ -49,7 +49,7 @@ class GoogleDispatchTest {
     fun `drive_search dispatch returns Google error message when token absent`() {
         val result = jarvis.tutor.JarvisToolDefs.dispatch(
             "drive_search", driveArgsJson()
-        )
+        ).text
         assertTrue(result.isNotEmpty())
         if (result.contains("error") || result.contains("disabled") || result.contains("token")) {
             assertFalse(result.contains("gws "), "result must not mention old gws binary: $result")
@@ -60,7 +60,7 @@ class GoogleDispatchTest {
     fun `gmail_create_draft dispatch returns Google error message when token absent`() {
         val result = jarvis.tutor.JarvisToolDefs.dispatch(
             "gmail_create_draft", gmailArgsJson()
-        )
+        ).text
         assertTrue(result.isNotEmpty())
         if (result.contains("error") || result.contains("disabled") || result.contains("token")) {
             assertFalse(result.contains("gws "), "result must not mention old gws binary: $result")

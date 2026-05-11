@@ -15,25 +15,25 @@ class JarvisToolDefsTest {
 
     @Test
     fun unknownToolReturnsExplicitMessage() {
-        val r = JarvisToolDefs.dispatch("not_a_tool", "{}")
+        val r = JarvisToolDefs.dispatch("not_a_tool", "{}").text
         assertEquals("unknown tool: not_a_tool", r)
     }
 
     @Test
     fun searchArchivalRejectsBadJsonArgs() {
-        val r = JarvisToolDefs.dispatch("search_archival", "not json")
+        val r = JarvisToolDefs.dispatch("search_archival", "not json").text
         assertTrue(r.startsWith("bad args json"), "expected json error: $r")
     }
 
     @Test
     fun searchArchivalRejectsNonObject() {
-        val r = JarvisToolDefs.dispatch("search_archival", "[]")
+        val r = JarvisToolDefs.dispatch("search_archival", "[]").text
         assertTrue(r.contains("bad args"), r)
     }
 
     @Test
     fun searchArchivalRejectsBlankQuery() {
-        val r = JarvisToolDefs.dispatch("search_archival", """{"query":""}""")
+        val r = JarvisToolDefs.dispatch("search_archival", """{"query":""}""").text
         assertEquals("search_archival: query required", r)
     }
 
@@ -45,7 +45,7 @@ class JarvisToolDefsTest {
         val r = JarvisToolDefs.dispatch(
             "search_archival",
             """{"query":"zzzunlikelytohitanythingzzz","k":3}""",
-        )
+        ).text
         assertTrue(
             r.contains("no matches") || r.contains("[lexical") || r.contains("[semantic") || r.contains("[entity"),
             "graceful response: ${r.take(200)}",

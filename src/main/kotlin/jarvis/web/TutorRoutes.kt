@@ -1292,6 +1292,7 @@ fun Application.installTutorRoutes() {
                 val systemContext = jarvis.tutor.SidekickContext.systemContext(env)
                 var text: String
                 var model: String
+                var retrievalHits: List<jarvis.HybridRetriever.HybridHit> = emptyList()
                 try {
                     jarvis.tutor.JarvisToolset().use { ts ->
                         val r = kotlinx.coroutines.runBlocking {
@@ -1299,6 +1300,7 @@ fun Application.installTutorRoutes() {
                         }
                         text = r.text
                         model = r.model
+                        retrievalHits = r.hits
                     }
                 } catch (e: Exception) {
                     // Graceful degraded reply: 200 with an "unavailable" body so
@@ -1310,7 +1312,8 @@ fun Application.installTutorRoutes() {
                     model = "(none)"
                 }
                 val quoted = env.selection ?: env.anchorText?.take(160)
-                call.respond(HttpStatusCode.OK, ApiSidekickReply(text = text, model = model, quotedContext = quoted))
+                val citations = jarvis.tutor.CitationExtractor.extract(text, retrievalHits)
+                call.respond(HttpStatusCode.OK, ApiSidekickReply(text = text, model = model, quotedContext = quoted, citations = citations))
             }
         }
 
@@ -1621,7 +1624,7 @@ private data class ApiTaskPrepReply(
 )
 
 @Serializable
-internal data class ApiCitation(
+data class ApiCitation(
     val path: String,
     val snippet: String,
     val score: Double,
