@@ -1621,10 +1621,18 @@ private data class ApiTaskPrepReply(
 )
 
 @Serializable
-private data class ApiSidekickReply(
+internal data class ApiCitation(
+    val path: String,
+    val snippet: String,
+    val score: Double,
+)
+
+@Serializable
+internal data class ApiSidekickReply(
     val text: String,
     val model: String,
     val quotedContext: String?,
+    val citations: List<ApiCitation> = emptyList(),
 )
 
 @Serializable
