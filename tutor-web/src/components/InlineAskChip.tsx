@@ -12,6 +12,7 @@ export function InlineAskChip({ selectionRect, envelope, onAsk }: InlineAskChipP
 
   return (
     <button
+      data-testid="inline-ask-chip"
       className="ask-chip-fade-in"
       style={{
         position: "fixed",
