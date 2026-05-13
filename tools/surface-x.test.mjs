@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { writeFileSync, readFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gradeOne, majorityVote, ofN, gradeSession } from "./surface-x.mjs";
+import { gradeOne, majorityVote, ofN, gradeSession, calibrateAgainstFixture } from "./surface-x.mjs";
 
 test("gradeOne returns PASS/FAIL/N_A from LLM JSON", async () => {
   const fakeCallLlm = async () => ({
@@ -80,4 +80,44 @@ test("gradeSession runs each invariant, writes finding doc with provenance", asy
   assert.match(text, /git_head:/);
   assert.match(text, /INV-01.*PASS/);
   assert.match(text, /INV-08.*FAIL/);
+});
+
+test("calibrateAgainstFixture reports agreement against gold labels", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "x-calib-"));
+  const fixturePath = join(tmp, "fixture.md");
+  writeFileSync(fixturePath, [
+    "# Bootstrap fixture",
+    "",
+    "### Trace 1",
+    "```yaml",
+    "events:",
+    "  - {event_id: e1, event_type: drill_grade, task_id: t1, ts_utc: '2026-05-13T10:00:00Z'}",
+    "labels:",
+    "  INV-01: PASS",
+    "  INV-08: FAIL",
+    "```",
+    "",
+    "### Trace 2",
+    "```yaml",
+    "events:",
+    "  - {event_id: e2, event_type: sidekick_ask, task_id: t1, ts_utc: '2026-05-13T10:01:00Z'}",
+    "labels:",
+    "  INV-05: PASS",
+    "```",
+  ].join("\n"));
+
+  const fakeCallLlm = async () => ({
+    text: '{"status":"PASS","evidence":{},"reason":"test"}',
+    model_resolved: "fake", prompt_sha256: "x".repeat(64),
+    tokens_in: 10, tokens_out: 5, latency_ms: 100,
+  });
+  const r = await calibrateAgainstFixture({
+    fixturePath,
+    callLlm: fakeCallLlm,
+    runsPerInvariant: 1,
+    thresholdPct: 0.80,
+  });
+  assert.equal(r.total, 3);
+  assert.equal(r.matched, 2);
+  assert.equal(r.passed, false);
 });

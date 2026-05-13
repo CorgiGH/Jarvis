@@ -16,7 +16,7 @@
 import { callLlm as defaultCallLlm } from "./lib/openrouter.mjs";
 import { INVARIANTS } from "./surface-x-invariants.mjs";
 import { getStamp } from "./lib/provenance.mjs";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const GRADER_SYSTEM = `You are an invariant judge. Given a session trace and one invariant statement, return strict JSON:
@@ -169,6 +169,75 @@ export async function gradeSession({
   return docPath;
 }
 
+export function parseFixture(text) {
+  const traces = [];
+  const sections = text.split(/^### Trace /m).slice(1);
+  for (const sec of sections) {
+    const yamlMatch = sec.match(/```yaml\n([\s\S]+?)\n```/);
+    if (!yamlMatch) continue;
+    const yamlText = yamlMatch[1];
+    const events = [];
+    const labels = {};
+    let inEvents = false, inLabels = false;
+    for (const line of yamlText.split("\n")) {
+      if (line.startsWith("events:")) { inEvents = true; inLabels = false; continue; }
+      if (line.startsWith("labels:")) { inEvents = false; inLabels = true; continue; }
+      if (inEvents && line.trim().startsWith("- ")) {
+        const flow = line.trim().slice(2).trim();
+        const m = flow.match(/^\{([\s\S]+)\}$/);
+        if (m) {
+          const obj = {};
+          for (const pair of m[1].split(",")) {
+            const [k, v] = pair.split(":").map(s => s.trim().replace(/^['"]|['"]$/g, ""));
+            obj[k] = v;
+          }
+          events.push(obj);
+        }
+      }
+      if (inLabels && /^\s+INV-\d{2}:/.test(line)) {
+        const m = line.match(/^\s+(INV-\d{2}):\s*(\w+)\s*$/);
+        if (m) labels[m[1]] = m[2];
+      }
+    }
+    traces.push({ events, labels });
+  }
+  return traces;
+}
+
+export async function calibrateAgainstFixture({
+  fixturePath,
+  callLlm,
+  apiKey,
+  model,
+  runsPerInvariant = 3,
+  thresholdPct = 0.80,
+}) {
+  const text = readFileSync(fixturePath, "utf8");
+  const traces = parseFixture(text);
+  const pairs = [];
+  for (const t of traces) {
+    for (const [invId, goldStatus] of Object.entries(t.labels)) {
+      const inv = INVARIANTS.find(i => i.id === invId);
+      if (!inv) continue;
+      const bracketed = inv.scope(t.events);
+      const runs = [];
+      for (let i = 0; i < runsPerInvariant; i++) {
+        const r = await gradeOne({
+          invariantId: invId,
+          invariantStatement: inv.statement,
+          events: bracketed,
+          callLlm, apiKey, model,
+        });
+        runs.push(r);
+      }
+      const voted = majorityVote(runs);
+      pairs.push({ invariantId: invId, judge: voted.status, gold: goldStatus });
+    }
+  }
+  const gate = ofN(pairs, thresholdPct);
+  return { ...gate, pairs };
+}
+
 function parseArgs() {
   const out = {};
   for (const a of process.argv.slice(2)) {
@@ -181,6 +250,17 @@ function parseArgs() {
 
 if (process.argv[1]?.endsWith("surface-x.mjs")) {
   const args = parseArgs();
+  if (args["from-fixture"]) {
+    const r = await calibrateAgainstFixture({
+      fixturePath: args["from-fixture"],
+      runsPerInvariant: args.calibrate ? 3 : 1,
+      thresholdPct: Number(args.threshold ?? 0.80),
+    });
+    console.log(`Calibration: ${r.matched}/${r.total} match (K=${r.k}). Threshold=${r.threshold_pct}. Passed: ${r.passed}`);
+    console.log("Per-pair:");
+    for (const p of r.pairs) console.log(`  ${p.invariantId}: judge=${p.judge} gold=${p.gold} ${p.judge === p.gold ? "OK" : "MISS"}`);
+    process.exit(r.passed ? 0 : 1);
+  }
   const { readEvents, filterEvents } = await import("./lib/event-log-reader.mjs");
   const all = await readEvents({ sshTarget: args["ssh"] ?? "root@46.247.109.91" });
   const filtered = filterEvents(all, {
