@@ -91,6 +91,7 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         language: String? = null,
         referenceSolution: String? = null,
         rubricItems: List<String>? = null,
+        prediction: String? = null,
     ): GradeResult? {
         val isCode = !language.isNullOrBlank() && language.lowercase() != "text"
         val systemPrompt = if (isCode) GRADE_PROMPT_CODE else GRADE_PROMPT_TEXT
@@ -101,10 +102,13 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
             referenceSolution = referenceSolution,
             rubricItems = rubricItems.orEmpty(),
             userAttempt = userAttempt,
-        ) else """Problem: $problemStatement
-Expected answer hint: $expectedHint
-Student's attempt: $userAttempt
-"""
+            prediction = prediction,
+        ) else buildTextUserMessage(
+            problemStatement = problemStatement,
+            expectedHint = expectedHint,
+            userAttempt = userAttempt,
+            prediction = prediction,
+        )
         val (raw, _) = llm.complete(
             listOf(
                 ChatMessage("system", systemPrompt),
@@ -126,6 +130,7 @@ Student's attempt: $userAttempt
         referenceSolution: String?,
         rubricItems: List<String>,
         userAttempt: String,
+        prediction: String?,
     ): String {
         val sb = StringBuilder()
         sb.append("Language: ").append(language).append('\n')
@@ -142,7 +147,29 @@ Student's attempt: $userAttempt
             for (item in rubricItems) sb.append("- ").append(item).append('\n')
             sb.append('\n')
         }
+        if (!prediction.isNullOrBlank()) {
+            sb.append("Student's prior prediction (plain-language commitment BEFORE they wrote code — testing-effect / generation-effect anchor):\n")
+                .append(prediction.trim()).append("\n\n")
+            sb.append("In your elaborated_feedback, briefly name how the student's prediction aligns or diverges from what their code actually does — recognize the commitment first, then evaluate the code against the rubric.\n\n")
+        }
         sb.append("Student's code:\n```").append(language).append('\n').append(userAttempt).append("\n```\n")
+        return sb.toString()
+    }
+
+    private fun buildTextUserMessage(
+        problemStatement: String,
+        expectedHint: String,
+        userAttempt: String,
+        prediction: String?,
+    ): String {
+        val sb = StringBuilder()
+        sb.append("Problem: ").append(problemStatement).append('\n')
+        sb.append("Expected answer hint: ").append(expectedHint).append('\n')
+        if (!prediction.isNullOrBlank()) {
+            sb.append("Student's prior prediction (committed before final attempt): ")
+                .append(prediction.trim()).append('\n')
+        }
+        sb.append("Student's attempt: ").append(userAttempt).append('\n')
         return sb.toString()
     }
 }

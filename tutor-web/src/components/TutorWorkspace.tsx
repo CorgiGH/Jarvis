@@ -31,6 +31,12 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [chipState, setChipState] = useState<{ rect: DOMRect; envelope: SidekickEnvelope } | null>(null);
   const [sidekickEnvelope, setSidekickEnvelope] = useState<SidekickEnvelope | undefined>(undefined);
+  // Refreshed every render with the currently-active drill statement. The chip
+  // listener reads this via ref so the envelope always carries the live drill
+  // text for the SelectionQueryBuilder Jaccard self-paste gate (council 2026-
+  // 05-13 mitigation B). Ref keeps the listener attach/detach stable across
+  // problem switches.
+  const activeDrillRef = useRef<string | null>(null);
 
   const [prep, setPrep] = useState<TaskPrepReply | null>(null);
   const [prepError, setPrepError] = useState<string | null>(null);
@@ -82,7 +88,12 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
     const root = workspaceRef.current;
     if (!root) return;
     const detach = attachSelectionListener(root, (selectedText, rect) => {
-      const env = buildSidekickEnvelope({ taskId, selection: selectedText, userQuestion: selectedText });
+      const env = buildSidekickEnvelope({
+        taskId,
+        selection: selectedText,
+        userQuestion: selectedText,
+        drillStatement: activeDrillRef.current ?? undefined,
+      });
       setChipState({ rect, envelope: env });
     });
     function handlePointerDown(e: PointerEvent) {
@@ -109,6 +120,13 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
 
   const activeIndex = parseProblemParam(searchParams.get("problem"));
   const activeProblem = problems[activeIndex] ?? problems[0];
+
+  // Mirror the active drill statement into the ref the chip-listener reads.
+  // Drives the SelectionQueryBuilder.drillSelfPaste gate (council 2026-05-13 B).
+  const activeDrillText = activeProblem
+    ? drillsByProblem[activeProblem.problemId]?.drill ?? null
+    : null;
+  activeDrillRef.current = activeDrillText;
 
   const [completedProblems, setCompletedProblems] = useState<Set<string>>(new Set());
   function handleProblemComplete(problemId: string) {

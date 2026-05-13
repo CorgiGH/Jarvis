@@ -20,6 +20,14 @@ data class SidekickEnvelope(
     @SerialName("anchor_text") val anchorText: String? = null,
     val selection: String? = null,
     @SerialName("user_question") val userQuestion: String,
+    /**
+     * The active DRILL card's statement text (the question Alex is supposed to
+     * be solving). Used by SelectionQueryBuilder to reject sidekick queries
+     * whose `selection` is a near-verbatim paste of the drill statement —
+     * testing-effect guardrail per the 2026-05-13 UX-reframe council. Optional;
+     * when null/blank the Jaccard gate is skipped.
+     */
+    @SerialName("drill_statement") val drillStatement: String? = null,
 )
 
 @Serializable

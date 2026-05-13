@@ -32,6 +32,13 @@ export interface GradeDrillArgs {
   language?: "r" | "python" | "cpp" | "text";
   referenceSolution?: string;
   rubricItems?: string[];
+  /**
+   * Plain-language prediction the user committed BEFORE typing the actual
+   * answer. Slamecka & Graf 1978 generation-effect anchor. Optional; when
+   * non-empty the grader is asked to recognize the commitment first and then
+   * evaluate the attempt against the rubric.
+   */
+  prediction?: string;
 }
 
 export async function gradeDrill(args: GradeDrillArgs): Promise<GradeResult> {
@@ -47,6 +54,7 @@ export async function gradeDrill(args: GradeDrillArgs): Promise<GradeResult> {
       ...(args.language ? { language: args.language } : {}),
       ...(args.referenceSolution ? { referenceSolution: args.referenceSolution } : {}),
       ...(args.rubricItems ? { rubricItems: args.rubricItems } : {}),
+      ...(args.prediction ? { prediction: args.prediction } : {}),
     }),
   });
   if (!res.ok) {

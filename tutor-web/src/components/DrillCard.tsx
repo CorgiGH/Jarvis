@@ -51,6 +51,7 @@ export function DrillCard({
     <article
       data-testid="drill-card"
       data-state={state}
+      data-card-type={cardType}
       data-stagger-index={staggerIndex}
       className={`border-4 border-border-strong bg-page-bg font-mono text-xs ${animClass}`}
       style={

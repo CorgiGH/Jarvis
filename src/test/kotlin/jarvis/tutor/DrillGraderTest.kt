@@ -55,6 +55,15 @@ class DrillGraderTest {
     }
 
     @Test
+    fun `parseGradeJson handles missing misconception as null`() {
+        val raw = """{"correct":true,"rubric":{"a":true,"b":true},"score":1.0,
+            "misconception":"null","elaborated_feedback":"ok"}"""
+        val r = DrillGrader.parseGradeJson(raw)
+        assertNotNull(r)
+        assertNull(r.misconception, "literal string 'null' should map to null misconception")
+    }
+
+    @Test
     fun `parseGradeJson handles dynamic rubric keys for code grading`() {
         val raw = """{"correct":false,
             "rubric":{"uses_rlaplace":true,"n_eq_10000":false,"hist_overlay_pdf":false,"iterates_b":true},

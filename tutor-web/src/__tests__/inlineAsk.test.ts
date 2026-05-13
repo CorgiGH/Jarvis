@@ -38,6 +38,25 @@ describe("buildSidekickEnvelope", () => {
     expect(env.selection).toBeUndefined();
     expect(env.user_question).toBe("explain this");
   });
+
+  test("plumbs drillStatement -> drill_statement (snake_case wire)", () => {
+    const drill = "Scrie codul R pentru a simula 10000 observatii din distributia Laplace.";
+    const env = buildSidekickEnvelope({
+      taskId: "task-03",
+      selection: "Laplace",
+      userQuestion: "Laplace",
+      drillStatement: drill,
+    });
+    expect(env.drill_statement).toBe(drill);
+  });
+
+  test("omits drill_statement when drillStatement undefined", () => {
+    const env = buildSidekickEnvelope({
+      taskId: "task-04",
+      userQuestion: "explain",
+    });
+    expect(env.drill_statement).toBeUndefined();
+  });
 });
 
 // ─── attachSelectionListener ──────────────────────────────────────────────────
@@ -120,6 +139,73 @@ describe("attachSelectionListener", () => {
 
     root.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     expect(onAsk).not.toHaveBeenCalled();
+  });
+
+  test("does NOT call onAsk when selection sits inside an active DRILL card", () => {
+    // Wrap the existing card-body in a drill-card article with the active-DRILL attrs.
+    const article = document.createElement("article");
+    article.setAttribute("data-testid", "drill-card");
+    article.setAttribute("data-card-type", "DRILL");
+    article.setAttribute("data-state", "open");
+    cardBody.parentNode?.insertBefore(article, cardBody);
+    article.appendChild(cardBody);
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      getRangeAt: () => ({
+        toString: () => "MLE",
+        getBoundingClientRect: () => ({ top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0 } as DOMRect),
+        commonAncestorContainer: cardBody.firstChild as Node,
+      } as unknown as Range),
+      toString: () => "MLE",
+    } as unknown as Selection);
+
+    root.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    expect(onAsk).not.toHaveBeenCalled();
+  });
+
+  test("DOES call onAsk when selection sits inside a WORKED (non-DRILL) card", () => {
+    const article = document.createElement("article");
+    article.setAttribute("data-testid", "drill-card");
+    article.setAttribute("data-card-type", "WORKED");
+    article.setAttribute("data-state", "open");
+    cardBody.parentNode?.insertBefore(article, cardBody);
+    article.appendChild(cardBody);
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      getRangeAt: () => ({
+        toString: () => "MLE",
+        getBoundingClientRect: () => ({ top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0 } as DOMRect),
+        commonAncestorContainer: cardBody.firstChild as Node,
+      } as unknown as Range),
+      toString: () => "MLE",
+    } as unknown as Selection);
+
+    root.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    expect(onAsk).toHaveBeenCalledOnce();
+  });
+
+  test("DOES call onAsk when DRILL card is complete (not actively-open)", () => {
+    const article = document.createElement("article");
+    article.setAttribute("data-testid", "drill-card");
+    article.setAttribute("data-card-type", "DRILL");
+    article.setAttribute("data-state", "complete");
+    cardBody.parentNode?.insertBefore(article, cardBody);
+    article.appendChild(cardBody);
+
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      rangeCount: 1,
+      getRangeAt: () => ({
+        toString: () => "MLE",
+        getBoundingClientRect: () => ({ top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0 } as DOMRect),
+        commonAncestorContainer: cardBody.firstChild as Node,
+      } as unknown as Range),
+      toString: () => "MLE",
+    } as unknown as Selection);
+
+    root.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    expect(onAsk).toHaveBeenCalledOnce();
   });
 
   test("detach removes the mouseup listener", () => {

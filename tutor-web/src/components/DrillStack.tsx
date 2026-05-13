@@ -58,6 +58,7 @@ export function DrillStack({
   onProblemComplete,
 }: DrillStackProps) {
   const [attempt, setAttempt] = useState("");
+  const [prediction, setPrediction] = useState("");
   const [phase, setPhase] = useState<StackPhase>("idle");
   const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +98,7 @@ export function DrillStack({
         language: content.language,
         referenceSolution: content.referenceSolution,
         rubricItems: content.rubricItems,
+        prediction: prediction.trim() || undefined,
       });
       setGradeResult(result);
       setPhase(result.correct ? "correct" : "incorrect");
@@ -121,6 +123,7 @@ export function DrillStack({
         language: content.language,
         referenceSolution: content.referenceSolution,
         rubricItems: content.rubricItems,
+        prediction: prediction.trim() || undefined,
       });
       setGradeResult(result);
       setPhase("given-up");
@@ -147,6 +150,28 @@ export function DrillStack({
         staggerIndex={0}
       >
         <MathText text={content.drill} className="mb-4 text-sm" />
+        <div className="mb-3">
+          <label
+            htmlFor="drill-prediction-input"
+            data-testid="drill-prediction-label"
+            className="block mb-1 font-mono text-[10px] uppercase tracking-widest text-page-fg/70"
+          >
+            predict in plain language (optional) — what should the answer look like, before you write it?
+          </label>
+          <textarea
+            id="drill-prediction-input"
+            data-testid="drill-prediction-input"
+            value={prediction}
+            onChange={(e) => setPrediction(e.target.value)}
+            disabled={unlocked || phase === "grading"}
+            rows={2}
+            placeholder="e.g., the histogram should look symmetric around 0, peaked, with heavier tails as b grows"
+            className="w-full border-2 border-border-thin bg-page-bg font-mono text-xs p-2 resize-none focus:outline-none focus:border-accent disabled:opacity-50"
+          />
+          <div className="mt-1 text-[9px] uppercase tracking-widest text-page-fg/40">
+            generation-effect: even a wrong guess BEFORE attempting locks in better than passive reading (Slamecka 1978).
+          </div>
+        </div>
         {isCode && content.rubricItems && content.rubricItems.length > 0 && (
           <div
             data-testid="drill-rubric"

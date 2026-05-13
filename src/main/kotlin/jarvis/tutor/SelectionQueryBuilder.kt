@@ -14,25 +14,67 @@ package jarvis.tutor
  */
 object SelectionQueryBuilder {
 
-    data class Query(val text: String, val shouldFetch: Boolean)
+    /**
+     * Outcome shape:
+     *  - text: the sanitized + truncated query text (may be empty)
+     *  - shouldFetch: true when the query is well-formed enough for retrieval
+     *  - drillSelfPaste: true when the user's selection is a near-verbatim paste
+     *    of the active drill statement — caller MUST short-circuit the LLM call
+     *    and return a "use the drill answer textarea instead" reply per the
+     *    2026-05-13 UX-reframe council's testing-effect guardrail.
+     */
+    data class Query(
+        val text: String,
+        val shouldFetch: Boolean,
+        val drillSelfPaste: Boolean = false,
+    )
 
     private const val MIN_LEN = 12
     private const val MAX_LEN = 300
     private const val MIN_WORD_RUNS = 2
     private const val MIN_WORD_LEN = 3
+    private const val DRILL_PASTE_JACCARD = 0.7
     private val WORD_RUN = Regex("[A-Za-z]{$MIN_WORD_LEN,}")
+    private val NON_ALNUM = Regex("[^a-z0-9 ]")
+    private val WHITESPACE = Regex("\\s+")
 
     fun build(env: SidekickEnvelope): Query {
         val raw = env.selection?.trim().orEmpty()
         val sanitized = sanitize(raw)
+
+        // Drill-self-paste gate (council mitigation B): if the user selected
+        // (close to) the drill statement itself, refuse retrieval — the
+        // testing-effect rule requires Alex to attempt the drill, not have
+        // the LLM clarify it back at him.
+        val drillRef = env.drillStatement?.trim().orEmpty()
+        val pasteHit = drillRef.isNotBlank() && raw.isNotBlank() &&
+            jaccard(raw, drillRef) >= DRILL_PASTE_JACCARD
 
         val candidate = if (sanitized.length < MIN_LEN) {
             env.anchorText?.trim()?.let { sanitize(it) }.orEmpty()
         } else sanitized
 
         val truncated = candidate.take(MAX_LEN)
-        val ok = truncated.length in MIN_LEN..MAX_LEN && hasContentChars(truncated)
-        return Query(text = truncated, shouldFetch = ok)
+        val ok = !pasteHit &&
+            truncated.length in MIN_LEN..MAX_LEN &&
+            hasContentChars(truncated)
+        return Query(text = truncated, shouldFetch = ok, drillSelfPaste = pasteHit)
+    }
+
+    private fun tokens(s: String): Set<String> =
+        s.lowercase()
+            .replace(NON_ALNUM, " ")
+            .split(WHITESPACE)
+            .filter { it.length >= 2 }
+            .toSet()
+
+    private fun jaccard(a: String, b: String): Double {
+        val ta = tokens(a)
+        val tb = tokens(b)
+        if (ta.isEmpty() || tb.isEmpty()) return 0.0
+        val inter = ta.intersect(tb).size
+        val union = ta.union(tb).size
+        return inter.toDouble() / union.toDouble()
     }
 
     private fun sanitize(s: String): String =

@@ -1314,6 +1314,21 @@ fun Application.installTutorRoutes() {
                 // a usable query. Mirrors RAG pre-retrieval pattern; closes
                 // GAP-1 (chip-flow never triggered search_archival on its own).
                 val selectionQuery = jarvis.tutor.SelectionQueryBuilder.build(env)
+                // Drill-self-paste guardrail (council 2026-05-13 mitigation B):
+                // if the user selected the drill statement itself, short-circuit
+                // the LLM call and return a coaching reply that redirects them
+                // to the drill answer textarea. Preserves Roediger/Karpicke
+                // testing-effect by refusing to let the LLM clarify the drill
+                // itself back at the user.
+                if (selectionQuery.drillSelfPaste) {
+                    call.respond(HttpStatusCode.OK, ApiSidekickReply(
+                        text = "That looks like the drill question itself — work it out in the answer textarea below and hit CHECK ANSWER. The sidekick is for clarifying specific concepts in the worked example or definition, not for solving the drill.",
+                        model = "(drill-self-paste-guard)",
+                        quotedContext = env.selection ?: env.anchorText?.take(160),
+                        citations = emptyList(),
+                    ))
+                    return@csrfProtect
+                }
                 val prefetchedHits: List<jarvis.HybridRetriever.HybridHit> = if (selectionQuery.shouldFetch) {
                     val subject = env.taskId
                         ?.let { jarvis.tutor.TaskRepo(ctx.db).findById(it)?.subject }
@@ -1479,6 +1494,7 @@ fun Application.installTutorRoutes() {
                                 language = req.language,
                                 referenceSolution = req.referenceSolution,
                                 rubricItems = req.rubricItems,
+                                prediction = req.prediction,
                             )
                         }
                     }
@@ -1745,6 +1761,7 @@ private data class ApiDrillGradeRequest(
     val language: String? = null,
     val referenceSolution: String? = null,
     val rubricItems: List<String>? = null,
+    val prediction: String? = null,
 )
 
 @Serializable
