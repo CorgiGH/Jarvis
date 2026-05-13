@@ -43,6 +43,9 @@ import jarvis.tutor.TrustGrantsTable
 import jarvis.tutor.TutorContext
 import jarvis.tutor.TutorContextKey
 import jarvis.tutor.TutorDb
+import jarvis.tutor.TutorEvent
+import jarvis.tutor.TutorEventLog
+import jarvis.tutor.RcodeRedacted
 import jarvis.tutor.UsersTable
 import jarvis.tutor.csrfProtect
 import kotlinx.serialization.Serializable
@@ -54,6 +57,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
 
@@ -1498,6 +1502,7 @@ fun Application.installTutorRoutes() {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
             call.csrfProtect {
+                val t0 = System.currentTimeMillis()
                 val sid = call.request.cookies["jarvis_session"]
                 sid?.let { SessionRepo(ctx.db).findUserId(it) }
                     ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
@@ -1507,8 +1512,20 @@ fun Application.installTutorRoutes() {
                     call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
                     return@csrfProtect
                 }
-                val result = try {
-                    jarvis.OpenRouterChatLlm().use { llm ->
+
+                // Student-stand-in Task 0.5: capture every grade outcome to the
+                // tutor-event log for downstream Surface X (curriculum
+                // sufficiency) + Surface Y (synthetic learner) audits. We pick
+                // the per-path status + reply, respond once, then append a
+                // single envelope before returning. Envelope build uses
+                // placeholders for fields DrillGrader does not yet expose
+                // (model id, token counts, real system-prompt text).
+                val isSynthetic = call.request.headers["X-Standin-Run"] == "1"
+                val sessionId: String = sid ?: "anon"
+
+                // Compute reply + status across all three code paths.
+                val (reply, status) = try {
+                    val result = jarvis.OpenRouterChatLlm().use { llm ->
                         kotlinx.coroutines.runBlocking {
                             jarvis.tutor.DrillGrader.grade(
                                 problemStatement = req.problemStatement,
@@ -1522,40 +1539,95 @@ fun Application.installTutorRoutes() {
                             )
                         }
                     }
+                    if (result == null) {
+                        // Grader returned null = malformed LLM output.
+                        ApiDrillGradeReply(
+                            correct = false, score = 0.0, rubric = emptyMap(),
+                            misconception = "OTHER",
+                            elaboratedFeedback = "LLM grader returned malformed output; please re-attempt or ask sidekick.",
+                        ) to "parse_error"
+                    } else {
+                        ApiDrillGradeReply(
+                            correct = result.correct,
+                            score = result.score,
+                            rubric = result.rubric,
+                            misconception = result.misconception,
+                            elaboratedFeedback = result.elaboratedFeedback,
+                        ) to "ok"
+                    }
                 } catch (e: Exception) {
                     // Graceful degraded reply: 200 with "ungraded" body so the
                     // frontend treats transient LLM failures as "re-attempt"
                     // instead of a wiring error. Slice 1 spec §E error handling:
                     // "LLM grader 5xx / timeout → fall back ... tag attempt as
                     // `ungraded`. Don't auto-pass."
-                    call.respond(HttpStatusCode.OK, ApiDrillGradeReply(
+                    ApiDrillGradeReply(
                         correct = false, score = 0.0, rubric = emptyMap(),
                         misconception = "UNGRADED",
                         elaboratedFeedback = "LLM unavailable (${e.message?.take(120) ?: ""}). Please re-attempt or ask sidekick.",
-                    ))
-                    return@csrfProtect
+                    ) to "error"
                 }
-                if (result == null) {
-                    call.respond(HttpStatusCode.OK, ApiDrillGradeReply(
-                        correct = false, score = 0.0, rubric = emptyMap(),
-                        misconception = "OTHER",
-                        elaboratedFeedback = "LLM grader returned malformed output; please re-attempt or ask sidekick.",
-                    ))
-                    return@csrfProtect
+
+                call.respond(HttpStatusCode.OK, reply)
+
+                // Build + enqueue the envelope (non-blocking via the bounded
+                // channel inside TutorEventLog). If serialization or hashing
+                // throws, swallow it — log telemetry must never break the
+                // user-facing response.
+                runCatching {
+                    val llmOutputFull = sensorJson.encodeToString(
+                        ApiDrillGradeReply.serializer(),
+                        reply,
+                    )
+                    // TODO(standin-task-0.5): expose real system-prompt text from DrillGrader.
+                    val systemPromptSha256 = sha256Hex("drill-grader-v3")
+                    val redacted = RcodeRedacted(
+                        rcode_sha256 = sha256Hex(req.userAttempt),
+                        preview_head = req.userAttempt.take(40),
+                        preview_tail = req.userAttempt.takeLast(40),
+                        length_chars = req.userAttempt.length,
+                    )
+                    val evt = TutorEvent(
+                        event_type = "drill_grade",
+                        event_id = java.util.UUID.randomUUID().toString().replace("-", ""),
+                        ts_utc = Instant.now().toString(),
+                        task_id = req.taskId,
+                        session_id = sessionId,
+                        prompt_template_id = "drill-grader-v3",
+                        system_prompt_sha256 = systemPromptSha256,
+                        retrieved_context_summary = emptyList(),
+                        llm_input_full = null,
+                        llm_input_redacted = redacted,
+                        llm_output_full = llmOutputFull,
+                        model_resolved = null, // TODO(standin-task-0.5): expose model id from DrillGrader.
+                        tokens_in = null,      // TODO(standin-task-0.5): expose token counts from DrillGrader.
+                        tokens_out = null,     // TODO(standin-task-0.5): expose token counts from DrillGrader.
+                        latency_ms = System.currentTimeMillis() - t0,
+                        status = status,
+                        is_synthetic = isSynthetic,
+                    )
+                    TutorEventLog.GLOBAL.append(evt)
+                }.onFailure { e ->
+                    System.err.println("[drill-grade] envelope append failed: ${e.message?.take(160)}")
                 }
-                call.respond(HttpStatusCode.OK, ApiDrillGradeReply(
-                    correct = result.correct,
-                    score = result.score,
-                    rubric = result.rubric,
-                    misconception = result.misconception,
-                    elaboratedFeedback = result.elaboratedFeedback,
-                ))
             }
         }
     }
 }
 
 private val sensorJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+/**
+ * SHA-256 of a UTF-8 string, lowercase hex (64 chars). Used by the drill-grade
+ * envelope writer to hash R-code attempts before logging — keeps raw student
+ * code out of `tutor_events.*.jsonl` while still letting Surface X group
+ * repeated attempts by identity.
+ */
+private fun sha256Hex(s: String): String {
+    val md = MessageDigest.getInstance("SHA-256")
+    return md.digest(s.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+}
 
 @Serializable
 private data class ScreenshotRequest(

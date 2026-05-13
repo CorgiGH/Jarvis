@@ -91,6 +91,20 @@ class TutorEventLog(
     }
 
     companion object {
-        val GLOBAL: TutorEventLog by lazy { TutorEventLog() }
+        /**
+         * Singleton used by route handlers. Lazily reads the private-data
+         * directory from the `jarvis.tutor.event_log.dir` JVM system property,
+         * falling back to the production `/opt/jarvis/data/private` path.
+         *
+         * Tests inject a temp dir by setting the system property BEFORE the
+         * first access (i.e. before any /api/v1/drill/grade call). Once the
+         * lazy value initializes, the path is frozen for the JVM lifetime.
+         */
+        val GLOBAL: TutorEventLog by lazy {
+            val dir = System.getProperty("jarvis.tutor.event_log.dir")
+                ?.let { File(it) }
+                ?: File("/opt/jarvis/data/private")
+            TutorEventLog(privateDir = dir)
+        }
     }
 }
