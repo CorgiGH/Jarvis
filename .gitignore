@@ -25,3 +25,4 @@ tmp-md/
 /opt/jarvis/data/private/
 docs/standin-findings/screenshots/
 docs/standin-findings/DRAFT-*.md
+tools/.fixtures-cache/
