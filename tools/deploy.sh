@@ -99,4 +99,11 @@ echo "[deploy] verifying $HEALTH_URL"
 curl -s -m 10 "$HEALTH_URL" && echo
 ssh "$VPS" "tail -25 /var/log/jarvis.log | grep -Ev '^SLF4J|^Picked up|^Jarvis web|^Auth required' | head -20"
 
+# === SURFACE X ADVISORY (opt-in, never blocks) ===
+if [[ "${RUN_LLM_EVAL:-0}" == "1" ]]; then
+    echo "[deploy] RUN_LLM_EVAL=1 — running Surface X advisory grader on smoke trace..."
+    ( cd tools && node surface-x.mjs --task=01KR6K07T6PATPRR5KH1JXYF8E --invariants=INV-01,INV-02,INV-08 ) \
+        || echo "[deploy] Surface X advisory: non-zero exit ($?). Findings written. Deploy continues."
+fi
+
 echo "[deploy] done. rollback: bash tools/deploy.sh rollback"

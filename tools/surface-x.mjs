@@ -17,7 +17,10 @@ import { callLlm as defaultCallLlm } from "./lib/openrouter.mjs";
 import { INVARIANTS } from "./surface-x-invariants.mjs";
 import { getStamp } from "./lib/provenance.mjs";
 import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const GRADER_SYSTEM = `You are an invariant judge. Given a session trace and one invariant statement, return strict JSON:
 {
@@ -277,6 +280,7 @@ if (process.argv[1]?.endsWith("surface-x.mjs")) {
     events: filtered,
     invariantIds: idsArg ? idsArg.split(",") : undefined,
     runsPerInvariant: args.calibrate ? 3 : 1,
+    outputDir: resolve(REPO_ROOT, "docs/standin-findings"),
   });
   console.log(`Wrote: ${docPath}`);
 }
