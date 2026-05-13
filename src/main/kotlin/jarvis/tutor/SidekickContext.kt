@@ -35,9 +35,14 @@ object SidekickContext {
 # Source citation
 When you use information from the corpus (lecture notes, lab sheets, themes),
 cite the source filename inline using the format `(src: <path>)` where <path>
-is the relative archival path returned by the search tool.
-Do not invent filenames. Only cite paths the search tool actually returned.
-If no source supports a claim, do not add a citation for it.
+is the relative archival path. Eligible paths come from two places:
+  - any path appearing in a retrieved-context block above (marked with the
+    `[prefetched score=...]` header), AND
+  - any path returned by the search_archival tool when you call it.
+If you draw on a prefetched snippet to answer, you MUST attach the
+`(src: <path>)` marker citing its exact path.
+Do not invent filenames. Only cite paths that actually appear in one of the
+two sources above. If no source supports a claim, do not add a citation for it.
 """
 
     private const val PREFETCH_SNIPPET_CAP = 200

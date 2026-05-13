@@ -1331,9 +1331,11 @@ fun Application.installTutorRoutes() {
                         // subsequent CitationExtractor regex match share one canonical
                         // form (Risk Analyst MEDIUM, also matches /reprep convention).
                         val normalized = raw.map { it.copy(id = it.id.replace('\\', '/')) }
-                        if (!subject.isNullOrBlank()) {
+                        val filtered = if (!subject.isNullOrBlank()) {
                             normalized.filter { it.id.startsWith("_extras/$subject/", ignoreCase = true) }
                         } else normalized
+                        System.err.println("[sidekick prefetch] q='${selectionQuery.text.take(60)}' subject=$subject raw=${raw.size} kept=${filtered.size}")
+                        filtered
                     } catch (e: Exception) {
                         // Spec §6 critical invariant — pre-fetch failure must
                         // degrade to empty hits, NEVER 500. Mirror the LLM

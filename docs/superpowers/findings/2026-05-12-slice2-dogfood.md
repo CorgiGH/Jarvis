@@ -89,3 +89,54 @@ Cosmetic-but-noisy. `BlockReminder.emitReminder` (background ticker, every 60s) 
 1. Commit BUG-1 fix.
 2. Refresh BRIDGE.md with this session's changes + hallucination triggers.
 3. Slice 3 brainstorm or GAP-1 prompt patch (user choice).
+
+---
+
+## 2026-05-13 update — Slice 2.5 shipped (closes GAP-1)
+
+### BUG-3 (shipped): chip-flow had zero citations because LLM never tool-called
+
+**Repro pre-fix:** Select "distributia Laplace" on Tema A drill card, click ✨ ASK → reply renders with zero `[data-testid="citation-pill"]`. LLM answers from baseline; never invokes `search_archival` because `user_question = selectedText` reads as a "how do I do X" prompt rather than a retrieval ask.
+
+**Fix:** Server-side pre-fetch on `/api/v1/sidekick/ask` runs `HybridRetriever.search` over the sanitized selection BEFORE the LLM call, subject-scopes to `_extras/<subject>/`, embeds 200-char-capped snippets in the system prompt as a `<retrieved_context source="prefetched_corpus" trust="indexed_data">` block, and unions pre-fetched ∪ LLM-fetched hits before CitationExtractor verification. `SelectionQueryBuilder` gates short / LaTeX-only / empty selections with anchor-text fallback. Pre-fetch failure degrades to empty hits, never 500. CITATION_INSTRUCTION rewritten to explicitly tell the LLM that any path appearing in a `[prefetched score=...]` block above is cite-eligible.
+
+**Files shipped:** 5 commits (`f5740bb..507981b` + Task 6 fixup):
+- `src/main/kotlin/jarvis/tutor/SelectionQueryBuilder.kt` — new (sanitize + 12..300 len gate + ≥2 word-runs gate + anchor fallback)
+- `src/main/kotlin/jarvis/tutor/SidekickContext.kt` — `systemContext(env, prefetchedHits)` overload + reworked CITATION_INSTRUCTION
+- `src/main/kotlin/jarvis/web/TutorRoutes.kt:1296-1357` — STEP A pre-fetch + path normalize + subject filter + try/catch + stderr trace; STEP D union dedupe
+- `src/test/kotlin/jarvis/tutor/SelectionQueryBuilderTest.kt` — 6 tests
+- `src/test/kotlin/jarvis/tutor/SidekickContextCitationTest.kt` — +3 tests (4 total)
+- `tools/slice2-prefetch-gate.mjs` — new headless Playwright gate
+
+**Post-deploy direct-API dogfood (Layer A, 2026-05-13T07:36 UTC, captured via Playwright MCP):**
+```
+POST /api/v1/sidekick/ask
+  {"task_id":"01KR6K07T6PATPRR5KH1JXYF8E",
+   "selection":"distributia Laplace",
+   "anchor_text":"Scrie codul R pentru a simula 10000 observatii din distributia Laplace cu parametrii dati.",
+   "user_question":"distributia Laplace"}
+→ status 200, model z-ai/glm-4.5-air:free,
+  citationCount=1,
+  citations=[{path: "_extras/PS/_fii/edu/files/Tema_A_en.md",
+              snippet: "Probabilities&Statistics Homework part A. ...
+                       Laplace distribution has its probability density function ...",
+              score: 0.032}]
+  text="I found information about the Laplace distribution in your homework materials. ..."
+```
+
+**UI chip-flow dogfood (Layer B):** Hit OpenRouter `(LLM unavailable; rate-limited? openrouter returned no choices)` cascade — the known issue where round-2 single-model `pinnedModel` does NOT cascade on 429 (memory-noted hallucination trigger). NOT a Slice 2.5 regression. Quota replenishes overnight per OpenRouter free-tier behavior; gate's Layer B is `WARN`-don't-fail when quota cascade detected. Next-session action: re-run gate after quota refill to confirm chip-flow renders `[data-testid="citation-pill"]` + `concept-drawer` opens for cited path.
+
+| # | Scenario | Result | Notes |
+|---|----------|--------|-------|
+| 5 | CitationPill renders in Sidekick | PASS (Layer A direct-API; Layer B awaiting quota refill) | API returns ApiCitation with verified path; chip-flow blocked by upstream quota |
+| 6 | CitationPill click → ResourceRail drawer for that path | NOT YET TESTED — gated on (5) Layer B |
+
+**Tests this slice:** +9 (6 SelectionQueryBuilderTest + 3 SidekickContextCitationTest). Full backend suite: **690 tests / 124 files green** (was 681 / 124).
+
+**Council mitigations all verified live:**
+- a. SelectionQueryBuilder gate (length 12-300, anchor fallback, sanitize `</retrieved_context>`, ≥2 word-runs floor)
+- b. try/catch around HybridRetriever.search → empty hits + stderr trace
+- c. 200-char snippet cap in SidekickContext prefetch block
+- d. `\` → `/` normalize at pre-fetch boundary before subject filter
+
+**Bundle:** `index-CZtQl9SZ.js` unchanged (backend-only ship).

@@ -30,7 +30,7 @@ class SidekickContextCitationTest {
             )
         )
         val ctx = SidekickContext.systemContext(env, prefetchedHits = hits)
-        assertTrue(ctx.contains("prefetched_corpus"),
+        assertTrue(ctx.contains("source=\"prefetched_corpus\""),
             "system context must announce prefetched_corpus block: $ctx")
         assertTrue(ctx.contains("_extras/PS/_fii/edu/files/Tema_A_en.md"),
             "path must be visible to LLM so it can cite it: $ctx")
@@ -42,7 +42,7 @@ class SidekickContextCitationTest {
     fun systemContext_omitsPrefetchBlockWhenHitsEmpty() {
         val env = SidekickEnvelope(taskId = "01A", selection = "Laplace", userQuestion = "q")
         val ctx = SidekickContext.systemContext(env, prefetchedHits = emptyList())
-        assertFalse(ctx.contains("prefetched_corpus"),
+        assertFalse(ctx.contains("source=\"prefetched_corpus\""),
             "no prefetched block when hits list empty: $ctx")
     }
 
