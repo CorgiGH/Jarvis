@@ -40,7 +40,24 @@ Do not invent filenames. Only cite paths the search tool actually returned.
 If no source supports a claim, do not add a citation for it.
 """
 
-    fun systemContext(env: SidekickEnvelope): String {
+    private const val PREFETCH_SNIPPET_CAP = 200
+
+    /**
+     * Build the sidekick system prompt for [env]. When [prefetchedHits] is
+     * non-empty, embed them as a <retrieved_context source="prefetched_corpus"
+     * trust="indexed_data"> block BEFORE the citation instruction — the LLM
+     * sees them as already-fetched corpus material and can cite their paths
+     * directly via (src: <path>) without invoking search_archival.
+     *
+     * Snippets are capped at PREFETCH_SNIPPET_CAP chars to keep the system
+     * prompt budget bounded (~600 tokens at k=3 vs. ~1800 uncapped). Per
+     * council Pragmatist KEY CONCERN, this gates token blow-up on long
+     * Tema A sessions.
+     */
+    fun systemContext(
+        env: SidekickEnvelope,
+        prefetchedHits: List<jarvis.HybridRetriever.HybridHit> = emptyList(),
+    ): String {
         val sb = StringBuilder()
         sb.append("# Sidekick context\n")
         env.taskId?.let { sb.append("task: ").append(it).append('\n') }
@@ -53,6 +70,27 @@ If no source supports a claim, do not add a citation for it.
         env.selection?.let {
             sb.append("specific selection inside that paragraph:\n  \"")
             sb.append(it.take(200)).append("\"\n")
+        }
+        if (prefetchedHits.isNotEmpty()) {
+            val body = buildString {
+                for (h in prefetchedHits) {
+                    append("[prefetched score=")
+                    append("%.3f".format(h.score))
+                    append("] ")
+                    append(h.id)
+                    append('\n')
+                    append(h.snippet.replace('\n', ' ').take(PREFETCH_SNIPPET_CAP))
+                    append("\n\n")
+                }
+            }.trimEnd()
+            sb.append(
+                PromptInjectionScrubber.wrap(
+                    source = "prefetched_corpus",
+                    trust = "indexed_data",
+                    content = body,
+                )
+            )
+            sb.append('\n')
         }
         sb.append(CITATION_INSTRUCTION)
         return PromptInjectionScrubber.wrap(
