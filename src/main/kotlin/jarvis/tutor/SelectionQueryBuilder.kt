@@ -18,7 +18,9 @@ object SelectionQueryBuilder {
 
     private const val MIN_LEN = 12
     private const val MAX_LEN = 300
-    private const val MIN_CONTENT_CHARS = 4
+    private const val MIN_WORD_RUNS = 2
+    private const val MIN_WORD_LEN = 3
+    private val WORD_RUN = Regex("[A-Za-z]{$MIN_WORD_LEN,}")
 
     fun build(env: SidekickEnvelope): Query {
         val raw = env.selection?.trim().orEmpty()
@@ -38,6 +40,11 @@ object SelectionQueryBuilder {
             .replace("</retrieved_context>", "&lt;/retrieved_context&gt;", ignoreCase = true)
             .replace("```", "` ``")
 
+    /**
+     * Require ≥2 alphabetic word-runs of ≥3 chars. Filters out LaTeX salad
+     * like `\frac{1}{2b} e^{-|x-\mu|/b}` (1 run: "frac") while admitting
+     * prose like "Laplace distribution" (2+ runs).
+     */
     private fun hasContentChars(s: String): Boolean =
-        s.count { it.isLetterOrDigit() } >= MIN_CONTENT_CHARS
+        WORD_RUN.findAll(s).count() >= MIN_WORD_RUNS
 }
