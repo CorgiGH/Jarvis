@@ -7,6 +7,7 @@ import jarvis.tutor.TaskRepo
 import jarvis.tutor.TasksTable
 import jarvis.tutor.TutorDb
 import jarvis.tutor.TutorTypes
+import kotlin.io.path.exists
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.builtins.ListSerializer
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -52,19 +53,33 @@ fun runMigrateConceptRefs() {
             } catch (_: Exception) { emptyList() }
         } else emptyList()
 
+        // Drop the subject token from fallback query — it leaks into the
+        // entity-pass as a generic 2-letter substring (e.g. "PA" matches "pa"
+        // in any Romanian text) and floods hits with cross-subject material.
+        // The subject-scoped search below already enforces the boundary.
         val queries: List<String> = when {
             problems.isNotEmpty() -> problems.map { it.statement }
-            else -> listOf("${cand.subject} ${cand.title}")
+            else -> listOf(cand.title)
         }
 
+        // Subject-scoped search: confine archival root to `_extras/<subject>/`
+        // so we never need to filter cross-subject hits out post-hoc. Within
+        // that root HybridRetriever gives us entity-pass tokenization (the
+        // whole-string substring lex pass would 0-match a title like
+        // "Tema 5 — dynamic programming"). Falls back to corpus-wide
+        // HybridRetriever only when subject dir is missing.
+        val subjectDir = Config.archivalDir.resolve("_extras/${cand.subject}")
         val hits = mutableListOf<ContentRef>()
         for (q in queries) {
-            val results = runBlocking {
-                HybridRetriever.search(q, k = 3, semanticEmbed = null)
+            val rawHits = if (subjectDir.exists()) {
+                runBlocking {
+                    HybridRetriever.search(q, k = 5, archivalRoot = subjectDir, semanticEmbed = null)
+                }.map { "_extras/${cand.subject}/${it.id.replace('\\', '/')}" }
+            } else {
+                runBlocking { HybridRetriever.search(q, k = 5, semanticEmbed = null) }
+                    .map { it.id.replace('\\', '/') }
             }
-            hits += results.map { hit ->
-                ContentRef(repo = "corpus", path = hit.id.replace('\\', '/'), sha = "")
-            }
+            hits += rawHits.map { path -> ContentRef(repo = "corpus", path = path, sha = "") }
         }
 
         val subjectPrefix = "_extras/${cand.subject}/"
