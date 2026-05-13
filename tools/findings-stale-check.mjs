@@ -1,12 +1,28 @@
 import { readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 export async function checkStaleness(filepath, opts = {}) {
   const text = readFileSync(filepath, "utf8");
   const match = text.match(/^---\n([\s\S]+?)\n---/);
   if (!match) throw new Error(`No frontmatter in ${filepath}`);
   const fm = match[1];
-  const parseField = (name) => fm.match(new RegExp(`^\\s+${name}:\\s+(.+)$`, "m"))?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
+  // Extract only the lines under `provenance:` (indented by 2+ spaces) until the
+  // next un-indented frontmatter key (or end of frontmatter). This prevents fields
+  // with the same name in unrelated blocks (e.g. `description:`) from leaking in.
+  const lines = fm.split(/\r?\n/);
+  const provStart = lines.findIndex((l) => /^provenance:\s*$/.test(l));
+  let provBlock = "";
+  if (provStart !== -1) {
+    const provLines = [];
+    for (let i = provStart + 1; i < lines.length; i++) {
+      const ln = lines[i];
+      if (/^[A-Za-z_][\w-]*:/.test(ln)) break; // next un-indented key
+      provLines.push(ln);
+    }
+    provBlock = provLines.join("\n");
+  }
+  const parseField = (name) => provBlock.match(new RegExp(`^\\s{2,}${name}:\\s*(.+)$`, "m"))?.[1]?.trim().replace(/^["']|["']$/g, "") ?? null;
   const stamp = {
     git_head: parseField("git_head"),
     bundle_hash: parseField("bundle_hash"),
@@ -67,7 +83,7 @@ async function fetchBundleHash() {
 }
 
 // CLI entrypoint
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("findings-stale-check.mjs")) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const fp = process.argv[2];
   if (!fp) { console.error("Usage: findings-stale-check.mjs <path>"); process.exit(2); }
   const r = await checkStaleness(fp);

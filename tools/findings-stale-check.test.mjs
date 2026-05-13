@@ -45,4 +45,29 @@ test("checkStaleness reports OK when everything matches", async () => {
   assert.equal(result.fields.git_head.status, "OK");
 });
 
+test("checkStaleness parser is not fooled by same-named key in another frontmatter block", async () => {
+  // A fake `git_head` inside a `description:` block above provenance must NOT leak.
+  // The real `git_head` inside `provenance:` is `dead000` (stale vs. current HEAD).
+  // If the parser leaked, it would pick up `cafe123` from the description block first
+  // and we could not predict the status; the scoped parser must see only `dead000`.
+  const fp = join(tmp, "doc3.md");
+  writeFileSync(fp, [
+    "---",
+    "surface: X",
+    "description:",
+    "  git_head: cafe123",
+    "  notes: this is not real provenance",
+    "provenance:",
+    "  git_head: dead000",
+    "  bundle_hash: B-Xy35Ve",
+    "  ts_utc: 2026-05-13T17:55:55Z",
+    "---",
+    "# Findings",
+  ].join("\n"));
+  const result = await checkStaleness(fp, { currentBundleHash: "B-Xy35Ve" });
+  assert.equal(result.fields.git_head.stamped, "dead000",
+    "parser must read git_head from the provenance: block only, not from description:");
+  assert.equal(result.fields.git_head.status, "STALE");
+});
+
 process.on("exit", () => rmSync(tmp, { recursive: true, force: true }));
