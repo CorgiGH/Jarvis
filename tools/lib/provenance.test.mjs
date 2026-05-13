@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { normalizeDomForFingerprint, getStamp } from "./provenance.mjs";
 
 test("normalizeDomForFingerprint strips ULIDs", () => {
@@ -52,4 +53,11 @@ test("getStamp threads judge fields from opts", async () => {
   });
   assert.equal(stamp.judge_model_resolved, "qwen/qwen-2.5-7b:free");
   assert.equal(stamp.judge_prompt_sha256.length, 64);
+});
+
+test("normalized hash is stable across volatile-only changes (Council #4 RA-1)", () => {
+  const a = '<div data-event-id="evt-1" id="01KR6K07T6PATPRR5KH1JXYF8E">2026-05-13T17:55:55Z</div>';
+  const b = '<div data-event-id="evt-2" id="01KR6K07T6XXXXXXXXXXXXXXXX">2026-05-13T18:01:22Z</div>';
+  const h = s => createHash("sha256").update(normalizeDomForFingerprint(s)).digest("hex").slice(0,16);
+  assert.equal(h(a), h(b));
 });
