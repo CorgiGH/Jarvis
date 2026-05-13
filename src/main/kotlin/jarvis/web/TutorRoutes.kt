@@ -1301,19 +1301,32 @@ fun Application.installTutorRoutes() {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
             call.csrfProtect {
+                val t0 = System.currentTimeMillis()
                 val sid = call.request.cookies["jarvis_session"]
                 sid?.let { SessionRepo(ctx.db).findUserId(it) }
                     ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
                 val env = try {
                     sensorJson.decodeFromString(jarvis.tutor.SidekickEnvelope.serializer(), call.receiveText())
                 } catch (e: Exception) {
+                    // Student-stand-in Task 0.6: skip envelope on malformed JSON
+                    // — no useful Surface X/Y signal in a 400 path, and we
+                    // don't have an env object to populate task_id from.
                     call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}")
                     return@csrfProtect
                 }
                 if (env.userQuestion.isBlank()) {
+                    // Same reasoning as malformed — 400 has no LLM signal.
                     call.respond(HttpStatusCode.BadRequest, "userQuestion required")
                     return@csrfProtect
                 }
+                // Student-stand-in Task 0.6: capture sidekick outcomes to the
+                // tutor-event log. is_synthetic flips when X-Standin-Run:1 is
+                // present so Surface Y runs partition cleanly. Unlike Task 0.5
+                // (drill-grade redacts R-code), sidekick raw input is not
+                // credential-grade — we log it whole in llm_input_full.
+                val isSynthetic = call.request.headers["X-Standin-Run"] == "1"
+                val sessionId: String = sid ?: "anon"
+                val llmInputFull = "${env.selection ?: env.anchorText ?: ""}\n${env.userQuestion}"
                 // Spec §3 STEP A — pre-fetch corpus material when selection is
                 // a usable query. Mirrors RAG pre-retrieval pattern; closes
                 // GAP-1 (chip-flow never triggered search_archival on its own).
@@ -1325,12 +1338,44 @@ fun Application.installTutorRoutes() {
                 // testing-effect by refusing to let the LLM clarify the drill
                 // itself back at the user.
                 if (selectionQuery.drillSelfPaste) {
+                    val guardText = "That looks like the drill question itself — work it out in the answer textarea below and hit CHECK ANSWER. The sidekick is for clarifying specific concepts in the worked example or definition, not for solving the drill."
                     call.respond(HttpStatusCode.OK, ApiSidekickReply(
-                        text = "That looks like the drill question itself — work it out in the answer textarea below and hit CHECK ANSWER. The sidekick is for clarifying specific concepts in the worked example or definition, not for solving the drill.",
+                        text = guardText,
                         model = "(drill-self-paste-guard)",
                         quotedContext = env.selection ?: env.anchorText?.take(160),
                         citations = emptyList(),
                     ))
+                    // Student-stand-in Task 0.6: log the guard hit so Surface X
+                    // can flag drill-self-paste rate per task (high rate = the
+                    // drill statement is too long to teach against, or the UI
+                    // chip-flow is mis-anchored).
+                    runCatching {
+                        val evt = TutorEvent(
+                            event_type = "sidekick_ask",
+                            event_id = java.util.UUID.randomUUID().toString().replace("-", ""),
+                            ts_utc = Instant.now().toString(),
+                            task_id = env.taskId,
+                            session_id = sessionId,
+                            prompt_template_id = "sidekick-v1",
+                            // No LLM call → no real system prompt to hash. Use
+                            // the template id as a stable identity so Surface X
+                            // can still group guard events by prompt version.
+                            system_prompt_sha256 = sha256Hex("sidekick-v1"),
+                            retrieved_context_summary = emptyList(),
+                            llm_input_full = llmInputFull,
+                            llm_input_redacted = null,
+                            llm_output_full = guardText,
+                            model_resolved = "(drill-self-paste-guard)",
+                            tokens_in = null,
+                            tokens_out = null,
+                            latency_ms = System.currentTimeMillis() - t0,
+                            status = "guard",
+                            is_synthetic = isSynthetic,
+                        )
+                        TutorEventLog.GLOBAL.append(evt)
+                    }.onFailure { e ->
+                        System.err.println("[sidekick-ask] guard envelope append failed: ${e.message?.take(160)}")
+                    }
                     return@csrfProtect
                 }
                 val prefetchedHits: List<jarvis.HybridRetriever.HybridHit> = if (selectionQuery.shouldFetch) {
@@ -1410,6 +1455,40 @@ fun Application.installTutorRoutes() {
                 val quoted = env.selection ?: env.anchorText?.take(160)
                 val citations = jarvis.tutor.CitationExtractor.extract(text, unionedHits)
                 call.respond(HttpStatusCode.OK, ApiSidekickReply(text = text, model = model, quotedContext = quoted, citations = citations))
+
+                // Student-stand-in Task 0.6: log every LLM-touching sidekick
+                // call (success and graceful-degraded). status=="error" when
+                // model is "(none)" — i.e. JarvisToolset construction or
+                // ts.chat() threw and we returned the rate-limited fallback.
+                runCatching {
+                    val ctxSummary = unionedHits.map { "${it.id}:${it.snippet.take(80)}" }
+                    val evt = TutorEvent(
+                        event_type = "sidekick_ask",
+                        event_id = java.util.UUID.randomUUID().toString().replace("-", ""),
+                        ts_utc = Instant.now().toString(),
+                        task_id = env.taskId,
+                        session_id = sessionId,
+                        prompt_template_id = "sidekick-v1",
+                        // Hash the REAL prompt text (not just the template id)
+                        // so Surface X can detect when prefetched-corpus drift
+                        // changes the prompt body even though template_id is
+                        // unchanged. Matches the spec's "real prompt" note.
+                        system_prompt_sha256 = sha256Hex(systemContext),
+                        retrieved_context_summary = ctxSummary,
+                        llm_input_full = llmInputFull,
+                        llm_input_redacted = null,
+                        llm_output_full = text,
+                        model_resolved = model,
+                        tokens_in = null,
+                        tokens_out = null,
+                        latency_ms = System.currentTimeMillis() - t0,
+                        status = if (model == "(none)") "error" else "ok",
+                        is_synthetic = isSynthetic,
+                    )
+                    TutorEventLog.GLOBAL.append(evt)
+                }.onFailure { e ->
+                    System.err.println("[sidekick-ask] envelope append failed: ${e.message?.take(160)}")
+                }
             }
         }
 

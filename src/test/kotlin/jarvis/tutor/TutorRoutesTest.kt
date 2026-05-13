@@ -19,6 +19,7 @@ import io.ktor.server.testing.testApplication
 import jarvis.web.installTutorContext
 import jarvis.web.installTutorRoutes
 import kotlinx.serialization.json.Json
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import java.time.Instant
@@ -27,6 +28,36 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TutorRoutesTest {
+    companion object {
+        // The TutorEventLog.GLOBAL singleton's privateDir is frozen on first
+        // access via `by lazy`. To let MULTIPLE @Test methods exercise it,
+        // all event-log tests must point at the SAME dir. We allocate one
+        // shared temp dir per class (static @TempDir = JUnit lifecycle PER
+        // CLASS) and pin the system property in @BeforeAll BEFORE any test
+        // runs. Each test then filters the shared JSONL file by its own
+        // session_id (each testApplication creates a fresh session).
+        @JvmStatic
+        @TempDir
+        lateinit var sharedEventLogDir: Path
+
+        @JvmStatic
+        @BeforeAll
+        fun pinEventLogDir() {
+            java.nio.file.Files.createDirectories(sharedEventLogDir)
+            System.setProperty("jarvis.tutor.event_log.dir", sharedEventLogDir.toString())
+        }
+    }
+
+    private fun readSharedEventLogLines(): List<String> {
+        val today = java.time.LocalDate.now().toString()
+        val logFile = sharedEventLogDir.resolve("tutor_events.$today.jsonl").toFile()
+        val deadline = System.currentTimeMillis() + 2000
+        while (System.currentTimeMillis() < deadline && (!logFile.exists() || logFile.readLines().isEmpty())) {
+            Thread.sleep(50)
+        }
+        return if (logFile.exists()) logFile.readLines() else emptyList()
+    }
+
     @Test
     fun `GET tutor returns index html`() = testApplication {
         application { installTutorRoutes() }
@@ -71,15 +102,10 @@ class TutorRoutesTest {
 
     @Test
     fun `POST drill grade writes a redacted TutorEvent`(@TempDir tmp: Path) = testApplication {
-        // Point the TutorEventLog.GLOBAL lazy singleton at our temp dir. This
-        // must happen BEFORE the first /api/v1/drill/grade call (which is the
-        // first access to GLOBAL). Once the lazy initializer fires, the path
-        // is frozen for the JVM, so a previous test in this run could have
-        // captured a different dir — but no other test currently triggers
-        // GLOBAL, so this property win.
-        val eventLogDir = tmp.resolve("eventlog")
-        java.nio.file.Files.createDirectories(eventLogDir)
-        System.setProperty("jarvis.tutor.event_log.dir", eventLogDir.toString())
+        // sharedEventLogDir is pinned in @BeforeAll — TutorEventLog.GLOBAL
+        // is frozen the first time any of these tests calls into a route
+        // that writes an envelope. We filter the shared log by session_id
+        // so this test only inspects its own line.
 
         var ctx: TutorContext? = null
         application {
@@ -121,21 +147,117 @@ class TutorRoutesTest {
         // The route returns 200 even on LLM error (graceful degraded reply).
         assertEquals(HttpStatusCode.OK, resp.status)
 
-        // Async writer needs a beat — wait up to 2s for the line to land.
-        val today = java.time.LocalDate.now().toString()
-        val logFile = eventLogDir.resolve("tutor_events.$today.jsonl").toFile()
-        val deadline = System.currentTimeMillis() + 2000
-        while (System.currentTimeMillis() < deadline && (!logFile.exists() || logFile.readLines().isEmpty())) {
-            Thread.sleep(50)
-        }
-        assertTrue(logFile.exists(), "envelope log not written at ${logFile.absolutePath}")
-        val lines = logFile.readLines()
-        assertTrue(lines.isNotEmpty(), "envelope log is empty")
-        val tail = lines.last()
+        // Filter the shared log by this test's session_id.
+        val mine = readSharedEventLogLines().filter { it.contains("\"session_id\":\"$sid\"") }
+        assertTrue(mine.isNotEmpty(), "no envelope for session_id=$sid in shared log")
+        val tail = mine.last()
         assertTrue(tail.contains("\"event_type\":\"drill_grade\""), "missing event_type: $tail")
         assertTrue(tail.contains("\"is_synthetic\":true"), "missing is_synthetic=true: $tail")
         assertTrue(tail.contains("\"rcode_sha256\":"), "missing rcode_sha256: $tail")
         assertTrue(!tail.contains("RAW_RCODE_MIDDLE_MARKER"),
             "raw rcode middle slice must NOT appear in envelope: $tail")
+    }
+
+    // --- Student-stand-in Task 0.6 -----------------------------------------
+    // The sidekick-ask endpoint must also append TutorEvent envelopes for the
+    // two LLM-touching exit paths (drill-self-paste guard and LLM call). The
+    // guardrail differs from drill-grade: sidekick stores the raw
+    // selection+question in `llm_input_full` (no R-code redaction), and the
+    // system_prompt_sha256 hashes the REAL prompt text returned by
+    // SidekickContext.systemContext(), not just a template id.
+    //
+    // Both tests rely on the same temp-dir TutorEventLog wiring as Task 0.5.
+
+    @Test
+    fun `POST sidekick ask writes a synthetic-flagged TutorEvent`(@TempDir tmp: Path) = testApplication {
+        var ctx: TutorContext? = null
+        application {
+            installFreshTutor(tmp)
+            ctx = attributes[TutorContextKey]
+        }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        val csrf = "test-csrf-sidekick"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+
+        // Selection long enough (≥12 chars) and non-paste to take the LLM
+        // path. No OPENROUTER_API_KEY in test env → JarvisToolset() throws at
+        // construction → handler falls through the catch arm with
+        // model="(none)" and status="error". The envelope must still land.
+        val body = """{
+            "task_id":"task-1",
+            "selection":"the Laplace distribution density",
+            "user_question":"What is the Laplace distribution density formula?"
+        }""".trimIndent()
+
+        val resp = client.post("/api/v1/sidekick/ask") {
+            cookie("jarvis_session", sid)
+            cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            header("X-Standin-Run", "1")
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+
+        val mine = readSharedEventLogLines().filter { it.contains("\"session_id\":\"$sid\"") }
+        assertTrue(mine.isNotEmpty(), "no envelope for session_id=$sid in shared log")
+        val tail = mine.last()
+        assertTrue(tail.contains("\"event_type\":\"sidekick_ask\""), "missing event_type: $tail")
+        assertTrue(tail.contains("\"is_synthetic\":true"), "missing is_synthetic=true: $tail")
+        assertTrue(tail.contains("\"prompt_template_id\":\"sidekick-v1\""),
+            "missing prompt_template_id=sidekick-v1: $tail")
+        // Unlike drill_grade, sidekick stores the RAW input — assert the
+        // user's selection + question text round-trip into llm_input_full.
+        assertTrue(tail.contains("Laplace"), "raw selection text should be present in llm_input_full: $tail")
+        assertTrue(tail.contains("llm_input_full"), "missing llm_input_full field: $tail")
+    }
+
+    @Test
+    fun `POST sidekick ask drill-self-paste path writes a guard envelope`(@TempDir tmp: Path) = testApplication {
+        var ctx: TutorContext? = null
+        application {
+            installFreshTutor(tmp)
+            ctx = attributes[TutorContextKey]
+        }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        val csrf = "test-csrf-sidekick-guard"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+
+        // Selection ≈ drill_statement → Jaccard ≥ 0.7 → drillSelfPaste=true.
+        // Handler short-circuits with model="(drill-self-paste-guard)". The
+        // envelope must record status="guard" and the synthetic model token.
+        val drill = "Generate 10000 samples from the Laplace distribution with location 0 and scale 1"
+        val body = """{
+            "task_id":"task-2",
+            "selection":"Generate 10000 samples from the Laplace distribution with location 0 and scale 1",
+            "user_question":"can you explain what to do?",
+            "drill_statement":"$drill"
+        }""".trimIndent()
+
+        val resp = client.post("/api/v1/sidekick/ask") {
+            cookie("jarvis_session", sid)
+            cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+
+        val mine = readSharedEventLogLines().filter { it.contains("\"session_id\":\"$sid\"") }
+        assertTrue(mine.isNotEmpty(), "no envelope for session_id=$sid in shared log")
+        val tail = mine.last()
+        assertTrue(tail.contains("\"event_type\":\"sidekick_ask\""), "missing event_type: $tail")
+        assertTrue(tail.contains("\"model_resolved\":\"(drill-self-paste-guard)\""),
+            "missing drill-self-paste-guard model token: $tail")
+        assertTrue(tail.contains("\"status\":\"guard\""), "missing status=guard: $tail")
+        // No X-Standin-Run header → is_synthetic should default to false.
+        assertTrue(tail.contains("\"is_synthetic\":false"),
+            "expected is_synthetic=false when X-Standin-Run absent: $tail")
     }
 }
