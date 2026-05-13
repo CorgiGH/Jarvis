@@ -1476,6 +1476,9 @@ fun Application.installTutorRoutes() {
                                 userAttempt = req.userAttempt,
                                 expectedHint = req.expectedAnswerHint,
                                 llm = llm,
+                                language = req.language,
+                                referenceSolution = req.referenceSolution,
+                                rubricItems = req.rubricItems,
                             )
                         }
                     }
@@ -1739,6 +1742,9 @@ private data class ApiDrillGradeRequest(
     val problemStatement: String,
     val userAttempt: String,
     val expectedAnswerHint: String,
+    val language: String? = null,
+    val referenceSolution: String? = null,
+    val rubricItems: List<String>? = null,
 )
 
 @Serializable

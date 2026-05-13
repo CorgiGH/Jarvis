@@ -11,6 +11,15 @@ export interface DrillContent {
   definition: string;
   check: string;
   expectedAnswerHint: string;
+  /**
+   * Slice 3 spike: code-grading mode. When set, the DRILL input renders as a
+   * monospace code textarea and `gradeDrill` is invoked with `language` +
+   * `referenceSolution` + `rubricItems` so the backend uses the code-grading
+   * prompt path. NO execution server-side; pure LLM-as-judge.
+   */
+  language?: "r" | "python" | "cpp" | "text";
+  referenceSolution?: string;
+  rubricItems?: string[];
 }
 
 interface DrillStackProps {
@@ -72,6 +81,8 @@ export function DrillStack({
     return "open";
   }
 
+  const isCode = !!content.language && content.language !== "text";
+
   async function handleCheckAnswer() {
     if (phase === "grading") return;
     setPhase("grading");
@@ -83,6 +94,9 @@ export function DrillStack({
         problemStatement: content.drill,
         userAttempt: attempt,
         expectedAnswerHint: content.expectedAnswerHint,
+        language: content.language,
+        referenceSolution: content.referenceSolution,
+        rubricItems: content.rubricItems,
       });
       setGradeResult(result);
       setPhase(result.correct ? "correct" : "incorrect");
@@ -104,6 +118,9 @@ export function DrillStack({
         userAttempt: "ATTEMPTED_NOT_SOLVED",
         expectedAnswerHint: content.expectedAnswerHint,
         giveUp: true,
+        language: content.language,
+        referenceSolution: content.referenceSolution,
+        rubricItems: content.rubricItems,
       });
       setGradeResult(result);
       setPhase("given-up");
@@ -130,25 +147,72 @@ export function DrillStack({
         staggerIndex={0}
       >
         <MathText text={content.drill} className="mb-4 text-sm" />
+        {isCode && content.rubricItems && content.rubricItems.length > 0 && (
+          <div
+            data-testid="drill-rubric"
+            className="mb-3 border-l-4 border-border-strong bg-page-bg/40 px-3 py-2 text-[10px] font-mono leading-relaxed text-page-fg/80"
+          >
+            <div className="mb-1 font-bold uppercase tracking-wider text-page-fg/60">
+              rubric — must satisfy all
+            </div>
+            <ul className="list-disc pl-4">
+              {content.rubricItems.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <textarea
           data-testid="drill-attempt-input"
+          data-language={content.language ?? "text"}
           value={attempt}
           onChange={(e) => setAttempt(e.target.value)}
           disabled={unlocked || phase === "grading"}
-          rows={3}
-          placeholder="Type your answer here…"
-          className="w-full border-2 border-border-strong bg-page-bg font-mono text-xs p-2 resize-none focus:outline-none focus:border-accent disabled:opacity-50"
+          rows={isCode ? 14 : 3}
+          spellCheck={isCode ? false : undefined}
+          placeholder={
+            isCode
+              ? `# ${content.language?.toUpperCase()} code — write a complete script, no execution server-side`
+              : "Type your answer here…"
+          }
+          className={
+            isCode
+              ? "w-full border-2 border-border-strong bg-page-bg font-mono text-xs leading-relaxed p-3 resize-y focus:outline-none focus:border-accent disabled:opacity-50 whitespace-pre"
+              : "w-full border-2 border-border-strong bg-page-bg font-mono text-xs p-2 resize-none focus:outline-none focus:border-accent disabled:opacity-50"
+          }
         />
         {gradeResult && (
           <div
             data-testid="grade-feedback"
-            className={`mt-3 px-3 py-2 border-l-4 font-mono text-xs leading-relaxed ${
+            className={`mt-3 px-3 py-2 border-l-4 font-mono text-xs leading-relaxed whitespace-pre-wrap ${
               gradeResult.correct
                 ? "border-accent bg-accent/10 text-page-fg"
                 : "border-danger-text bg-danger-text/10 text-page-fg"
             }`}
           >
             {gradeResult.elaboratedFeedback}
+          </div>
+        )}
+        {gradeResult && isCode && Object.keys(gradeResult.rubric).length > 0 && (
+          <div
+            data-testid="rubric-grade"
+            className="mt-2 px-3 py-2 border-2 border-border-thin font-mono text-[10px] leading-relaxed"
+          >
+            <div className="mb-1 font-bold uppercase tracking-wider text-page-fg/60">
+              rubric grade
+            </div>
+            <ul>
+              {Object.entries(gradeResult.rubric).map(([k, v]) => (
+                <li
+                  key={k}
+                  className={v ? "text-accent" : "text-danger-text"}
+                  data-rubric-key={k}
+                  data-rubric-pass={v}
+                >
+                  {v ? "[✓]" : "[✗]"} {k.replace(/_/g, " ")}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         {gradeResult && !gradeResult.correct && gradeResult.misconception && (

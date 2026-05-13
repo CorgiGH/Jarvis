@@ -22,6 +22,16 @@ export interface GradeDrillArgs {
   userAttempt: string;
   expectedAnswerHint: string;
   giveUp?: boolean;
+  /**
+   * Code-grading extension (Slice 3 spike). When `language` is "r" / "python"
+   * / "cpp", the backend uses the GRADE_PROMPT_CODE prompt path with the
+   * `referenceSolution` + `rubricItems` baked into the LLM request. When
+   * omitted or "text", the original one-line-answer grading path is used.
+   * No code is ever executed server-side; grading is judge-from-reading.
+   */
+  language?: "r" | "python" | "cpp" | "text";
+  referenceSolution?: string;
+  rubricItems?: string[];
 }
 
 export async function gradeDrill(args: GradeDrillArgs): Promise<GradeResult> {
@@ -34,6 +44,9 @@ export async function gradeDrill(args: GradeDrillArgs): Promise<GradeResult> {
       userAttempt: args.userAttempt,
       expectedAnswerHint: args.expectedAnswerHint,
       ...(args.giveUp ? { giveUp: true } : {}),
+      ...(args.language ? { language: args.language } : {}),
+      ...(args.referenceSolution ? { referenceSolution: args.referenceSolution } : {}),
+      ...(args.rubricItems ? { rubricItems: args.rubricItems } : {}),
     }),
   });
   if (!res.ok) {

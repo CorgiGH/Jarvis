@@ -20,7 +20,7 @@ data class GradeResult(
 )
 
 object DrillGrader {
-    private const val GRADE_PROMPT = """You are grading a student's one-line answer to a homework problem.
+    private const val GRADE_PROMPT_TEXT = """You are grading a student's one-line answer to a homework problem.
 
 Return STRICT JSON of this shape:
   {
@@ -40,9 +40,35 @@ Misconception codes (use only when the answer is wrong AND matches the pattern):
 correct=true requires the numeric answer is correct. score reflects the rubric (1/3 per dimension).
 Output ONLY the JSON object. No code fences."""
 
+    /**
+     * Code-grading prompt for R / Python / C++. Score = fraction of rubric items
+     * satisfied. correct=true ⟺ all items pass. NO EXECUTION: judge from code
+     * alone — read the user's code against the reference + statement + rubric.
+     */
+    private const val GRADE_PROMPT_CODE = """You are grading a student's code answer to a homework problem.
+
+You do NOT execute the code. Judge from reading the code: would it compile/run
+correctly, and does it satisfy each rubric item?
+
+Return STRICT JSON of this shape:
+  {
+    "correct": true|false,
+    "rubric": {"<rubric_item_name>": true|false, ...},
+    "score": 0.0..1.0,
+    "misconception": null | "<short_code_like_OFF_BY_ONE>" | "OTHER",
+    "elaborated_feedback": "1-3 short paragraphs — name what works, what doesn't, what to fix next"
+  }
+
+The rubric keys MUST match exactly the rubric item names supplied in the user
+message. score = (# rubric items true) / (# rubric items total). correct=true
+iff every rubric item is true AND the code is free of syntax errors that would
+prevent it from running. Output ONLY the JSON object. No code fences."""
+
     fun parseGradeJson(raw: String): GradeResult? {
         return try {
-            val obj = Json { ignoreUnknownKeys = true }.parseToJsonElement(raw) as? JsonObject
+            val cleaned = raw.trim()
+                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+            val obj = Json { ignoreUnknownKeys = true }.parseToJsonElement(cleaned) as? JsonObject
                 ?: return null
             val correct = (obj["correct"] as? JsonPrimitive)?.boolean ?: return null
             val rubricObj = obj["rubric"] as? JsonObject ?: return null
@@ -62,18 +88,61 @@ Output ONLY the JSON object. No code fences."""
         userAttempt: String,
         expectedHint: String,
         llm: OpenRouterChatLlm,
+        language: String? = null,
+        referenceSolution: String? = null,
+        rubricItems: List<String>? = null,
     ): GradeResult? {
-        val userMsg = """Problem: $problemStatement
+        val isCode = !language.isNullOrBlank() && language.lowercase() != "text"
+        val systemPrompt = if (isCode) GRADE_PROMPT_CODE else GRADE_PROMPT_TEXT
+        val userMsg = if (isCode) buildCodeUserMessage(
+            language = language!!,
+            problemStatement = problemStatement,
+            expectedHint = expectedHint,
+            referenceSolution = referenceSolution,
+            rubricItems = rubricItems.orEmpty(),
+            userAttempt = userAttempt,
+        ) else """Problem: $problemStatement
 Expected answer hint: $expectedHint
 Student's attempt: $userAttempt
 """
         val (raw, _) = llm.complete(
             listOf(
-                ChatMessage("system", GRADE_PROMPT),
+                ChatMessage("system", systemPrompt),
                 ChatMessage("user", userMsg),
             ),
-            maxTokens = 400,
+            maxTokens = 600,
         )
-        return parseGradeJson(raw.trim())
+        val parsed = parseGradeJson(raw.trim())
+        if (parsed == null) {
+            System.err.println("[drill grader] parse-fail lang=$language raw=${raw.take(600).replace('\n', ' ')}")
+        }
+        return parsed
+    }
+
+    private fun buildCodeUserMessage(
+        language: String,
+        problemStatement: String,
+        expectedHint: String,
+        referenceSolution: String?,
+        rubricItems: List<String>,
+        userAttempt: String,
+    ): String {
+        val sb = StringBuilder()
+        sb.append("Language: ").append(language).append('\n')
+        sb.append("Problem:\n").append(problemStatement).append("\n\n")
+        if (expectedHint.isNotBlank()) {
+            sb.append("Expected answer hint:\n").append(expectedHint).append("\n\n")
+        }
+        if (!referenceSolution.isNullOrBlank()) {
+            sb.append("Reference solution (one correct shape — alternative valid solutions exist):\n```")
+                .append(language).append('\n').append(referenceSolution).append("\n```\n\n")
+        }
+        if (rubricItems.isNotEmpty()) {
+            sb.append("Rubric items (return one boolean per item under these exact keys):\n")
+            for (item in rubricItems) sb.append("- ").append(item).append('\n')
+            sb.append('\n')
+        }
+        sb.append("Student's code:\n```").append(language).append('\n').append(userAttempt).append("\n```\n")
+        return sb.toString()
     }
 }
