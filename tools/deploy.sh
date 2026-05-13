@@ -83,6 +83,11 @@ scp -rq "$DIST_LOCAL" "$VPS:/opt/jarvis/"
 ssh "$VPS" "mkdir -p /opt/jarvis/android/build/outputs/apk/debug"
 scp -q "$APK_LOCAL" "$VPS:/opt/jarvis/android/build/outputs/apk/debug/android-debug.apk"
 
+# 2026-05-13 non-root migration: scp lands as root-owned by default. Chown
+# the fresh dist + APK to jarvis:jarvis so the User=jarvis service can
+# actually read/execute them on restart.
+ssh "$VPS" "chown -R jarvis:jarvis $DIST_REMOTE /opt/jarvis/android"
+
 ssh "$VPS" "
     systemctl start jarvis &&
     sleep 4 &&

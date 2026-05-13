@@ -40,17 +40,26 @@ data class SidekickReply(
 object SidekickContext {
 
     private const val CITATION_INSTRUCTION = """
-# Source citation
-When you use information from the corpus (lecture notes, lab sheets, themes),
-cite the source filename inline using the format `(src: <path>)` where <path>
-is the relative archival path. Eligible paths come from two places:
-  - any path appearing in a retrieved-context block above (marked with the
-    `[prefetched score=...]` header), AND
-  - any path returned by the search_archival tool when you call it.
-If you draw on a prefetched snippet to answer, you MUST attach the
-`(src: <path>)` marker citing its exact path.
-Do not invent filenames. Only cite paths that actually appear in one of the
-two sources above. If no source supports a claim, do not add a citation for it.
+# Source citation — REQUIRED FORMAT
+Every factual claim that comes from corpus material (lecture notes, lab sheets,
+themes, course material) MUST end with a `(src: <path>)` marker, where <path>
+is verbatim one of the paths in the prefetched_corpus block above OR a path
+returned by search_archival. No exceptions: if you draw on a `[prefetched ...]`
+snippet, that sentence MUST have a `(src: <path>)` marker.
+
+Example of a compliant reply:
+  > The Laplace distribution has density f(x|µ,b) = (1/2b)·exp(-|x-µ|/b)
+  > (src: _extras/PS/_fii/edu/files/Tema_A_en.md). In R you generate samples
+  > via rlaplace(n, location=µ, scale=b) (src: _extras/PS/courses/ps7.md).
+
+Rules:
+  1. Use the EXACT path string. Do not abbreviate, do not strip the leading
+     `_extras/<subject>/` prefix, do not change separators.
+  2. Cite each distinct claim separately rather than bundling at the end.
+  3. NEVER invent a path. If no prefetched or tool-returned path supports a
+     claim, just omit the citation for that sentence.
+  4. The user's UI hides citations whose path isn't in the verified hit set,
+     so an incorrect path is the same as no citation — please be precise.
 """
 
     private const val PREFETCH_SNIPPET_CAP = 200
