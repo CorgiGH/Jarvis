@@ -14,6 +14,10 @@
 // reports whether the catalog meets the agreement threshold.
 
 import { callLlm as defaultCallLlm } from "./lib/openrouter.mjs";
+import { INVARIANTS } from "./surface-x-invariants.mjs";
+import { getStamp } from "./lib/provenance.mjs";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 const GRADER_SYSTEM = `You are an invariant judge. Given a session trace and one invariant statement, return strict JSON:
 {
@@ -70,4 +74,129 @@ export function ofN(pairs, thresholdPct = 0.80) {
   const matched = pairs.filter(p => p.judge === p.gold).length;
   const k = Math.ceil(thresholdPct * total);
   return { matched, total, k, threshold_pct: thresholdPct, passed: matched >= k };
+}
+
+export async function gradeSession({
+  sessionId,
+  events,
+  invariantIds = INVARIANTS.map(i => i.id),
+  outputDir = "docs/standin-findings",
+  callLlm,
+  apiKey,
+  model,
+  runsPerInvariant = 3,
+}) {
+  process.env.SURFACE_VERSION = "x-v1.0";
+  const results = [];
+  let lastJudgeModel = null;
+  let lastPromptSha = null;
+  for (const id of invariantIds) {
+    const inv = INVARIANTS.find(i => i.id === id);
+    if (!inv) continue;
+    const bracketed = inv.scope(events);
+    if (bracketed.length === 0) {
+      results.push({ id, classification: inv.classification, status: "N_A", reason: "no in-scope events", evidence: {} });
+      continue;
+    }
+    const runs = [];
+    for (let i = 0; i < runsPerInvariant; i++) {
+      const r = await gradeOne({
+        invariantId: id,
+        invariantStatement: inv.statement,
+        events: bracketed,
+        callLlm, apiKey, model,
+      });
+      runs.push(r);
+      lastJudgeModel = r.model_resolved;
+      lastPromptSha = r.prompt_sha256;
+    }
+    const voted = majorityVote(runs);
+    const final = {
+      id,
+      classification: inv.classification,
+      status: inv.classification === "INFO" ? "INFO" : voted.status,
+      evidence: voted.evidence,
+      reason: voted.reason,
+      latencies_ms: runs.map(r => r.latency_ms),
+    };
+    if (inv.classification === "INFO") {
+      const sorted = bracketed.map(e => e.latency_ms ?? 0).filter(Boolean).sort((a, b) => a - b);
+      final.latency_p95_ms = sorted[Math.floor(sorted.length * 0.95)] ?? null;
+    }
+    results.push(final);
+  }
+
+  const stamp = await getStamp(null, {
+    judge_model_resolved: lastJudgeModel,
+    judge_prompt_sha256: lastPromptSha,
+  });
+  const ts = stamp.ts_utc.replace(/[:.]/g, "-");
+  mkdirSync(outputDir, { recursive: true });
+  const docPath = join(outputDir, `DRAFT-X-${sessionId}-${ts}.md`);
+  const fm = [
+    "---",
+    "surface: X",
+    `session_id: ${sessionId}`,
+    "provenance:",
+    `  git_head: ${stamp.git_head}`,
+    `  bundle_hash: ${stamp.bundle_hash}`,
+    `  live_dom_fingerprint: ${stamp.live_dom_fingerprint ?? "null"}`,
+    `  ts_utc: ${stamp.ts_utc}`,
+    `  surface_version: ${stamp.surface_version}`,
+    `  judge_model_resolved: ${stamp.judge_model_resolved ?? "null"}`,
+    `  judge_prompt_sha256: ${stamp.judge_prompt_sha256 ?? "null"}`,
+    `invariants_run: ${results.length}`,
+    "---",
+    "",
+    `# Surface X findings — session ${sessionId}`,
+    "",
+    "| Invariant | Status | Reason |",
+    "|-----------|--------|--------|",
+    ...results.map(r => `| ${r.id} | ${r.status} | ${(r.reason || "").slice(0, 120)} |`),
+    "",
+    "## Per-invariant detail",
+    ...results.flatMap(r => [
+      "",
+      `### ${r.id} — ${r.status}`,
+      `- classification: ${r.classification}`,
+      r.evidence?.event_ids ? `- evidence event_ids: ${JSON.stringify(r.evidence.event_ids)}` : "",
+      r.evidence?.excerpt ? `- excerpt: ${r.evidence.excerpt.slice(0, 200)}` : "",
+      `- reason: ${r.reason ?? ""}`,
+      r.latency_p95_ms !== undefined ? `- latency_p95_ms: ${r.latency_p95_ms}` : "",
+    ].filter(Boolean)),
+  ].join("\n");
+  writeFileSync(docPath, fm);
+  return docPath;
+}
+
+function parseArgs() {
+  const out = {};
+  for (const a of process.argv.slice(2)) {
+    const m = a.match(/^--([^=]+)=(.+)$/);
+    if (m) out[m[1]] = m[2];
+    else if (a.startsWith("--")) out[a.slice(2)] = true;
+  }
+  return out;
+}
+
+if (process.argv[1]?.endsWith("surface-x.mjs")) {
+  const args = parseArgs();
+  const { readEvents, filterEvents } = await import("./lib/event-log-reader.mjs");
+  const all = await readEvents({ sshTarget: args["ssh"] ?? "root@46.247.109.91" });
+  const filtered = filterEvents(all, {
+    task_id: args.task,
+    session_id: args.session,
+    from_ts: args.from,
+    to_ts: args.to,
+    include_synthetic: !!args["include-synthetic"],
+  });
+  const sessionId = args.session ?? `auto-${Date.now()}`;
+  const idsArg = args.invariants === "all" ? null : (args.invariants ?? "INV-01,INV-02,INV-03,INV-04,INV-05,INV-06,INV-07,INV-08,INV-09,INV-10");
+  const docPath = await gradeSession({
+    sessionId,
+    events: filtered,
+    invariantIds: idsArg ? idsArg.split(",") : undefined,
+    runsPerInvariant: args.calibrate ? 3 : 1,
+  });
+  console.log(`Wrote: ${docPath}`);
 }
