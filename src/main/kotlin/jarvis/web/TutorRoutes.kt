@@ -1310,10 +1310,43 @@ fun Application.installTutorRoutes() {
                     call.respond(HttpStatusCode.BadRequest, "userQuestion required")
                     return@csrfProtect
                 }
-                val systemContext = jarvis.tutor.SidekickContext.systemContext(env)
+                // Spec §3 STEP A — pre-fetch corpus material when selection is
+                // a usable query. Mirrors RAG pre-retrieval pattern; closes
+                // GAP-1 (chip-flow never triggered search_archival on its own).
+                val selectionQuery = jarvis.tutor.SelectionQueryBuilder.build(env)
+                val prefetchedHits: List<jarvis.HybridRetriever.HybridHit> = if (selectionQuery.shouldFetch) {
+                    val subject = env.taskId
+                        ?.let { jarvis.tutor.TaskRepo(ctx.db).findById(it)?.subject }
+                        ?.takeIf { it.isNotBlank() }
+                    try {
+                        val key = jarvis.resolveOpenRouterKey()
+                        val embedFn: (suspend (String) -> kotlin.FloatArray)? = if (!key.isNullOrBlank()) {
+                            { q -> jarvis.embeddings.EmbeddingsClient(key).use { c -> c.embed(q) } }
+                        } else null
+                        val raw = kotlinx.coroutines.runBlocking {
+                            jarvis.HybridRetriever.search(selectionQuery.text, k = 3, semanticEmbed = embedFn)
+                        }
+                        // Spec §4.4 — normalize OS-native separators to '/' at the
+                        // pre-fetch boundary so the union with LLM-fetched hits and
+                        // subsequent CitationExtractor regex match share one canonical
+                        // form (Risk Analyst MEDIUM, also matches /reprep convention).
+                        val normalized = raw.map { it.copy(id = it.id.replace('\\', '/')) }
+                        if (!subject.isNullOrBlank()) {
+                            normalized.filter { it.id.startsWith("_extras/$subject/", ignoreCase = true) }
+                        } else normalized
+                    } catch (e: Exception) {
+                        // Spec §6 critical invariant — pre-fetch failure must
+                        // degrade to empty hits, NEVER 500. Mirror the LLM
+                        // exception handler's graceful pattern.
+                        System.err.println("[sidekick prefetch] ${e.javaClass.simpleName}: ${e.message?.take(160)}")
+                        emptyList()
+                    }
+                } else emptyList()
+
+                val systemContext = jarvis.tutor.SidekickContext.systemContext(env, prefetchedHits = prefetchedHits)
                 var text: String
                 var model: String
-                var retrievalHits: List<jarvis.HybridRetriever.HybridHit> = emptyList()
+                var llmHits: List<jarvis.HybridRetriever.HybridHit> = emptyList()
                 try {
                     jarvis.tutor.JarvisToolset().use { ts ->
                         val r = kotlinx.coroutines.runBlocking {
@@ -1321,19 +1354,16 @@ fun Application.installTutorRoutes() {
                         }
                         text = r.text
                         model = r.model
-                        retrievalHits = r.hits
+                        llmHits = r.hits
                     }
                 } catch (e: Exception) {
-                    // Graceful degraded reply: 200 with an "unavailable" body so
-                    // the frontend renders the existing "(LLM unavailable)" branch
-                    // and the interaction-smoke gate doesn't flag transient
-                    // upstream OpenRouter failures as a wiring bug. Slice 1 spec
-                    // §I: "Sidekick LLM 5xx → render `(LLM unavailable; rate-limited?)`".
                     text = "(LLM unavailable; rate-limited? ${e.message?.take(120) ?: ""})"
                     model = "(none)"
                 }
+                // Spec §3 STEP D — union pre-fetched ∪ LLM-fetched, dedupe by id.
+                val unionedHits = (prefetchedHits + llmHits).distinctBy { it.id }
                 val quoted = env.selection ?: env.anchorText?.take(160)
-                val citations = jarvis.tutor.CitationExtractor.extract(text, retrievalHits)
+                val citations = jarvis.tutor.CitationExtractor.extract(text, unionedHits)
                 call.respond(HttpStatusCode.OK, ApiSidekickReply(text = text, model = model, quotedContext = quoted, citations = citations))
             }
         }
