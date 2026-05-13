@@ -1334,23 +1334,47 @@ fun Application.installTutorRoutes() {
                         ?.let { jarvis.tutor.TaskRepo(ctx.db).findById(it)?.subject }
                         ?.takeIf { it.isNotBlank() }
                     try {
-                        val key = jarvis.resolveOpenRouterKey()
-                        val embedFn: (suspend (String) -> kotlin.FloatArray)? = if (!key.isNullOrBlank()) {
-                            { q -> jarvis.embeddings.EmbeddingsClient(key).use { c -> c.embed(q) } }
-                        } else null
+                        // Subject-scoped retrieval: walk only `_extras/$subject/` so
+                        // we never pull in second-brain council transcripts or
+                        // cross-subject hits. Mirrors MigrateConceptRefs.kt:65 —
+                        // 2026-05-13 dogfood revealed entity-pass for "Laplace"
+                        // returned second-brain/.claude/council-cache/* as top hit
+                        // (more raw "laplace" mentions than any single _extras/PS
+                        // course file), wiping the entire `kept=` set after the
+                        // legacy post-hoc filter.
+                        //
+                        // Semantic disabled: VectorStore is wiki/conversation-seeded
+                        // only (79 entries, 0 archival), so semantic hits are always
+                        // `conversation (...)` ids that fail any path-based filter
+                        // AND aren't cite-eligible. Saving the embed call also saves
+                        // the OpenRouter quota when it matters most.
+                        val subjectRoot = subject?.let {
+                            jarvis.Config.archivalDir.resolve("_extras").resolve(it)
+                        }
                         val raw = kotlinx.coroutines.runBlocking {
-                            jarvis.HybridRetriever.search(selectionQuery.text, k = 3, semanticEmbed = embedFn)
+                            if (subjectRoot != null && java.nio.file.Files.isDirectory(subjectRoot)) {
+                                jarvis.HybridRetriever.search(
+                                    selectionQuery.text, k = 3,
+                                    archivalRoot = subjectRoot, semanticEmbed = null,
+                                )
+                            } else {
+                                jarvis.HybridRetriever.search(selectionQuery.text, k = 3, semanticEmbed = null)
+                            }
                         }
                         // Spec §4.4 — normalize OS-native separators to '/' at the
-                        // pre-fetch boundary so the union with LLM-fetched hits and
-                        // subsequent CitationExtractor regex match share one canonical
-                        // form (Risk Analyst MEDIUM, also matches /reprep convention).
-                        val normalized = raw.map { it.copy(id = it.id.replace('\\', '/')) }
-                        val filtered = if (!subject.isNullOrBlank()) {
-                            normalized.filter { it.id.startsWith("_extras/$subject/", ignoreCase = true) }
-                        } else normalized
-                        System.err.println("[sidekick prefetch] q='${selectionQuery.text.take(60)}' subject=$subject raw=${raw.size} kept=${filtered.size}")
-                        filtered
+                        // pre-fetch boundary. When we scoped to subjectRoot, also
+                        // re-prefix `_extras/$subject/` so the prefetched_corpus
+                        // block paths match what CitationExtractor expects when the
+                        // LLM emits `(src: _extras/PS/...)` markers.
+                        val normalized = raw.map { hit ->
+                            val cleaned = hit.id.replace('\\', '/')
+                            val prefixed = if (subjectRoot != null) {
+                                "_extras/$subject/$cleaned"
+                            } else cleaned
+                            hit.copy(id = prefixed)
+                        }
+                        System.err.println("[sidekick prefetch] q='${selectionQuery.text.take(60)}' subject=$subject raw=${raw.size} kept=${normalized.size} rawIds=${normalized.take(5).joinToString("|") { "${it.source}:${it.id.take(60)}" }}")
+                        normalized
                     } catch (e: Exception) {
                         // Spec §6 critical invariant — pre-fetch failure must
                         // degrade to empty hits, NEVER 500. Mirror the LLM
