@@ -48,6 +48,12 @@ ${confusionLine}
 CURRENT DOM (visible to you):
 ${currentDom.slice(0, 4000)}
 
+ACTION RULES (basic UI literacy — you have this even as a confused beginner):
+- Pick "target" from the INTERACTIVE ELEMENTS list — use the css-selector shown (the part before the —), not the label text.
+- After you "type" into a field it will show [current value: "..."] next turn. That means it is FILLED. Do NOT type into it again — move on.
+- To submit or check an answer, "click" the relevant button (e.g. one labelled CHECK / SUBMIT / ANSWER). A button only works when it is NOT marked [disabled].
+- If an action changed nothing, do not repeat it — try a different element.
+
 Decide ONE next action. Reply STRICT JSON:
 {
   "thinking": "<2-3 sentences internal monologue>",
