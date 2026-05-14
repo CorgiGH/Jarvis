@@ -225,6 +225,11 @@ export async function runStandin({
             const evt = new CustomEvent("standin-sidekick-ask", { detail: { question: q } });
             window.dispatchEvent(evt);
           }, action.payload).catch(() => {});
+        } else if (action.action === "submit") {
+          // Deterministic submit: the persona CHOSE `submit`; the controller resolves
+          // CHECK ANSWER and clicks it. Role+name selector — the button has no
+          // data-testid (see tutor-web/src/components/DrillStack.tsx:256-262).
+          await page.getByRole("button", { name: /^check answer$/i }).click();
         }
       } catch (e) {
         transcript[transcript.length - 1].error = String(e).slice(0, 200);

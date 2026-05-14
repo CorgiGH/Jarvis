@@ -184,3 +184,52 @@ test("runStandin breaks out of an action loop instead of burning all calls", asy
   const text = readFileSync(docPath, "utf8");
   assert.match(text, /stuck/);
 });
+
+test("submit action resolves CHECK ANSWER and clicks it", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "y-"));
+  const schemaPath = join(tmp, "schema.yaml");
+  writeFileSync(schemaPath, [
+    "task_id: t1",
+    "subject: PS",
+    "concepts:",
+    "  - {id: laplace_distribution, aliases: [Laplace]}",
+    "confusion_tuples: []",
+  ].join("\n"));
+  let submitClicked = false;
+  const fakeCallLlm = async () => ({
+    text: '{"thinking":"x","action":"submit","target":"","payload":"","observation":"ready to submit"}',
+    model_resolved: "fake", prompt_sha256: "z".repeat(64),
+    tokens_in: 50, tokens_out: 20, latency_ms: 200,
+  });
+  const fakeBrowser = {
+    newContext: async () => ({
+      newPage: async () => ({
+        goto: async () => {},
+        waitForLoadState: async () => {},
+        content: async () => "<html><body>hi</body></html>",
+        screenshot: async ({ path }) => writeFileSync(path, "PNG"),
+        evaluate: async (scriptOrFn) => {
+          if (typeof scriptOrFn === "function") return 'button: "CHECK ANSWER"';
+          if (typeof scriptOrFn === "string" && scriptOrFn.startsWith("document.body")) return "page text";
+          return { snake_case: [], low_contrast: [], small_font: [], h_overflow: false };
+        },
+        getByRole: (_role, _opts) => ({
+          count: async () => 1,
+          click: async () => { submitClicked = true; },
+        }),
+        click: async () => {},
+        fill: async () => {},
+        close: async () => {},
+      }),
+      close: async () => {},
+    }),
+    close: async () => {},
+  };
+  const docPath = await runStandin({
+    taskId: "t1", schemaPath, browser: fakeBrowser, callLlm: fakeCallLlm,
+    maxCallsPerSession: 1, outputDir: tmp, sessionId: "test-y-submit",
+    baseUrl: "https://corgflix.duckdns.org", authCookie: "test", piggybackZ: false,
+  });
+  assert.ok(submitClicked, "submit action must resolve + click CHECK ANSWER");
+  assert.match(readFileSync(docPath, "utf8"), /surface: Y/);
+});
