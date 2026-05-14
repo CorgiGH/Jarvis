@@ -238,7 +238,7 @@ if (process.argv[1]?.endsWith("surface-y.mjs")) {
     const m = a.match(/^--([^=]+)=(.+)$/); return m ? [m[1], m[2]] : [a.replace(/^--/, ""), true];
   }));
   if (!args.task || !args.schema) {
-    console.error("Usage: surface-y.mjs --task=<id> --schema=<path> [--model=<m>] [--no-piggyback-z]");
+    console.error("Usage: surface-y.mjs --task=<id> --schema=<path> [--model=<m>] [--max-calls=<n>] [--no-piggyback-z]");
     process.exit(2);
   }
   const docPath = await runStandin({
@@ -247,6 +247,8 @@ if (process.argv[1]?.endsWith("surface-y.mjs")) {
     model: args.model,
     piggybackZ: !args["no-piggyback-z"],
     sessionId: args.session ?? `y-${Date.now()}`,
+    // --max-calls bounds the OpenRouter spend for a controlled run; omitted = runStandin's 50 default.
+    ...(args["max-calls"] ? { maxCallsPerSession: Number(args["max-calls"]) } : {}),
     outputDir: resolve(REPO_ROOT, "docs/standin-findings"),
     screenshotDir: resolve(REPO_ROOT, "docs/standin-findings/screenshots"),
   });
