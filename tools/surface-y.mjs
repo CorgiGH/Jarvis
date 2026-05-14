@@ -15,11 +15,11 @@ function parseYaml(text) {
   // Minimal YAML parser for the schema shape we use (flow style only).
   const schema = { concepts: [], confusion_tuples: [] };
   let inConcepts = false, inTuples = false;
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine;
-    if (line.startsWith("task_id:")) schema.task_id = line.split(":")[1].trim();
-    else if (line.startsWith("subject:")) schema.subject = line.split(":")[1].trim();
-    else if (line.startsWith("title:")) schema.title = line.split(":")[1].trim();
+  const scalar = (l, key) => l.slice(key.length).trim().replace(/^['"]|['"]$/g, "");
+  for (const line of text.split("\n")) {
+    if (line.startsWith("task_id:")) schema.task_id = scalar(line, "task_id:");
+    else if (line.startsWith("subject:")) schema.subject = scalar(line, "subject:");
+    else if (line.startsWith("title:")) schema.title = scalar(line, "title:");
     else if (line.startsWith("concepts:")) { inConcepts = true; inTuples = false; }
     else if (line.startsWith("confusion_tuples:")) { inConcepts = false; inTuples = true; }
     else if (inConcepts && /^\s+- /.test(line)) {
@@ -30,6 +30,8 @@ function parseYaml(text) {
         for (const pair of m[1].split(/,\s*(?![^\[\]]*\])/)) {
           const [k, v] = pair.split(":").map(s => s.trim());
           if (v && v.startsWith("[")) obj[k] = v.replace(/[\[\]]/g, "").split(",").map(s => s.trim().replace(/^['"]|['"]$/g, ""));
+          // Scalars stay strings — `generic: true` becomes the string "true",
+          // which is truthy, matching every `if (c.generic)` consumer check.
           else obj[k] = v?.replace(/^['"]|['"]$/g, "");
         }
         schema.concepts.push(obj);
@@ -88,6 +90,8 @@ export async function runStandin({
     const page = await ctx.newPage();
     const t0 = Date.now();
     let ledger = new Set();
+    // Fixed seed 0 → always confusion_tuples[0] for the whole session. V1 choice;
+    // Task 3.5 findings reflect only that one tuple being active.
     const activeConfusion = sampleConfusionTuple(schema, 0);
     const transcript = [];
     const gateViolations = [];
@@ -126,6 +130,8 @@ export async function runStandin({
         transcript.push({ action: "error", target: "", observation: `llm_error: ${String(e).slice(0, 150)}`, ts: new Date().toISOString() });
         break;
       }
+      // Soft cap: checked before each iteration, but gateLoop can spend up to
+      // maxRegens+1 calls, so callsUsed may overshoot maxCallsPerSession by ≤maxRegens.
       callsUsed += r.tries.length;
       if (r.leaked) gateViolations.push({ step: transcript.length, violations: r.finalCheck.violations });
       if (r.llmMeta) {
@@ -158,10 +164,14 @@ export async function runStandin({
       await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
 
       if (piggybackZ) {
-        const lints = await page.evaluate(LINT_EVAL_SCRIPT);
-        const screenshotPath = join(screenshotDir, `Y-Zpiggy-${sessionId}-${transcript.length}.png`);
-        await page.screenshot({ path: screenshotPath, fullPage: true });
-        zPiggyFindings.push({ step: transcript.length, lints, screenshot: screenshotPath });
+        try {
+          const lints = await page.evaluate(LINT_EVAL_SCRIPT);
+          const screenshotPath = join(screenshotDir, `Y-Zpiggy-${sessionId}-${transcript.length}.png`);
+          await page.screenshot({ path: screenshotPath, fullPage: true });
+          zPiggyFindings.push({ step: transcript.length, lints, screenshot: screenshotPath });
+        } catch (e) {
+          zPiggyFindings.push({ step: transcript.length, lints: null, screenshot: null, error: String(e).slice(0, 150) });
+        }
       }
     }
 
@@ -205,8 +215,12 @@ export async function runStandin({
       "|------|--------|--------|-------------|",
       ...transcript.map((t, i) => `| ${i + 1} | ${t.action} | ${(t.target || "").slice(0, 40)} | ${(t.observation || "").slice(0, 80)} |`),
       "",
-      piggybackZ ? `## Z piggyback (${zPiggyFindings.length} captures)` : "",
-      ...zPiggyFindings.map(z => `- step ${z.step}: snake_case=${z.lints.snake_case.length}, low_contrast=${z.lints.low_contrast.length}, screenshot=\`${z.screenshot}\``),
+      ...(piggybackZ ? [
+        `## Z piggyback (${zPiggyFindings.length} captures)`,
+        ...zPiggyFindings.map(z => z.lints
+          ? `- step ${z.step}: snake_case=${z.lints.snake_case.length}, low_contrast=${z.lints.low_contrast.length}, screenshot=\`${z.screenshot}\``
+          : `- step ${z.step}: piggyback failed — ${z.error}`),
+      ] : []),
     ].join("\n");
     writeFileSync(docPath, md);
     return docPath;
