@@ -30,8 +30,11 @@ export const LINT_EVAL_SCRIPT = `
     return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
   }
   function parseRgb(str) {
-    const m = str.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
-    return m ? [+m[1], +m[2], +m[3]] : null;
+    const m = str.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\s*\\)/);
+    if (!m) return null;
+    const alpha = m[4] !== undefined ? parseFloat(m[4]) : 1;
+    if (alpha === 0) return null;
+    return [+m[1], +m[2], +m[3]];
   }
   const textEls = [...document.querySelectorAll('p, span, li, h1, h2, h3, h4, button, a, label')].slice(0, 50);
   for (const el of textEls) {

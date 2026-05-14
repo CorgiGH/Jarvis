@@ -13,8 +13,15 @@ test("detectSnakeCase ignores single-word lowercase", () => {
   assert.deepEqual(detectSnakeCase("foo bar baz"), []);
 });
 
-test("detectSnakeCase ignores text inside code/pre tag markers", () => {
+test("detectSnakeCase scans plain text only — caller strips code/pre tags", () => {
   // Caller is responsible for stripping <code>/<pre> before passing to detector
   // This test confirms the detector itself only scans plain text.
   assert.deepEqual(detectSnakeCase("hello_world test"), ["hello_world"]);
+});
+
+test("detectSnakeCase returns all matches in order", () => {
+  assert.deepEqual(
+    detectSnakeCase("foo_bar and baz_qux end"),
+    ["foo_bar", "baz_qux"],
+  );
 });
