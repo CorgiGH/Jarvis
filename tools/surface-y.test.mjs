@@ -365,3 +365,42 @@ test("controller error steps do not pollute the Discovered unknown-unknowns sect
   const uuSection = doc.split("## Discovered unknown-unknowns")[1].split("\n## ")[0];
   assert.doesNotMatch(uuSection, /submit_failed/);
 });
+
+test("a successful submit step is marked controller-executed in the finding doc", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "y-"));
+  const schemaPath = join(tmp, "schema.yaml");
+  writeFileSync(schemaPath, [
+    "task_id: t1", "subject: PS", "concepts:",
+    "  - {id: laplace_distribution, aliases: [Laplace]}",
+    "confusion_tuples: []",
+  ].join("\n"));
+  const fakeCallLlm = async () => ({
+    text: '{"thinking":"x","action":"submit","target":"","payload":"","observation":"ready to submit"}',
+    model_resolved: "fake", prompt_sha256: "z".repeat(64),
+    tokens_in: 50, tokens_out: 20, latency_ms: 200,
+  });
+  const fakeBrowser = {
+    newContext: async () => ({
+      newPage: async () => ({
+        goto: async () => {}, waitForLoadState: async () => {},
+        content: async () => "<html><body>hi</body></html>",
+        screenshot: async ({ path }) => writeFileSync(path, "PNG"),
+        evaluate: async (s) => {
+          if (typeof s === "function") return 'button: "CHECK ANSWER"';
+          if (typeof s === "string" && s.startsWith("document.body")) return "page text";
+          return { snake_case: [], low_contrast: [], small_font: [], h_overflow: false };
+        },
+        getByRole: () => ({ count: async () => 1, click: async () => {} }),
+        click: async () => {}, fill: async () => {}, close: async () => {},
+      }),
+      close: async () => {},
+    }),
+    close: async () => {},
+  };
+  const docPath = await runStandin({
+    taskId: "t1", schemaPath, browser: fakeBrowser, callLlm: fakeCallLlm,
+    maxCallsPerSession: 1, outputDir: tmp, sessionId: "test-y-submitmark",
+    baseUrl: "https://corgflix.duckdns.org", authCookie: "test", piggybackZ: false,
+  });
+  assert.match(readFileSync(docPath, "utf8"), /\[exec: controller-deterministic\]/);
+});

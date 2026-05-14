@@ -244,6 +244,7 @@ export async function runStandin({
             break;
           }
           await submitBtn.click();
+          transcript[transcript.length - 1].executor = "controller-deterministic";
         }
       } catch (e) {
         transcript[transcript.length - 1].error = String(e).slice(0, 200);
@@ -303,7 +304,9 @@ export async function runStandin({
       "|------|--------|--------|---------|-------------|",
       ...transcript.map((t, i) => {
         const payload = (t.payload || "").replace(/\s+/g, " ").replace(/\|/g, "\\|").trim().slice(0, 60);
-        return `| ${i + 1} | ${t.action} | ${(t.target || "").slice(0, 40)} | ${payload} | ${(t.observation || "").slice(0, 80)} |`;
+        const obs = (t.observation || "").slice(0, 80);
+        const obsCell = t.executor ? `${obs} [exec: ${t.executor}]` : obs;
+        return `| ${i + 1} | ${t.action} | ${(t.target || "").slice(0, 40)} | ${payload} | ${obsCell} |`;
       }),
       "",
       ...(piggybackZ ? [
