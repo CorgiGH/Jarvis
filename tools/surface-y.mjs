@@ -268,9 +268,12 @@ export async function runStandin({
       ...gateViolations.map(v => `- step ${v.step}: referenced off-ledger concepts: ${v.violations.join(", ")}`),
       "",
       "## Session transcript",
-      "| Step | Action | Target | Observation |",
-      "|------|--------|--------|-------------|",
-      ...transcript.map((t, i) => `| ${i + 1} | ${t.action} | ${(t.target || "").slice(0, 40)} | ${(t.observation || "").slice(0, 80)} |`),
+      "| Step | Action | Target | Payload | Observation |",
+      "|------|--------|--------|---------|-------------|",
+      ...transcript.map((t, i) => {
+        const payload = (t.payload || "").replace(/\s+/g, " ").replace(/\|/g, "\\|").trim().slice(0, 60);
+        return `| ${i + 1} | ${t.action} | ${(t.target || "").slice(0, 40)} | ${payload} | ${(t.observation || "").slice(0, 80)} |`;
+      }),
       "",
       ...(piggybackZ ? [
         `## Z piggyback (${zPiggyFindings.length} captures)`,
