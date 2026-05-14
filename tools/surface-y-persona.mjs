@@ -4,6 +4,8 @@ export function updateLedger(ledger, schema, domText) {
   const lower = domText.toLowerCase();
   for (const c of schema.concepts) {
     if (c.generic) continue;
+    // NOTE: substring match — a single-word concept id (e.g. "pdf", "plot")
+    // would false-positive on nav/footer text. Keep concept ids multi-word.
     const aliases = [c.id.replace(/_/g, " "), ...(c.aliases ?? [])];
     if (aliases.some(a => lower.includes(a.toLowerCase()))) {
       next.add(c.id);
@@ -12,12 +14,17 @@ export function updateLedger(ledger, schema, domText) {
   return next;
 }
 
+// Deterministic given `seed`: tuples[seed % length]. The default Date.now()
+// just gives call-site variety across runs — two calls in the same ms return
+// the same tuple, so callers that need a specific tuple should pass an explicit seed.
 export function sampleConfusionTuple(schema, seed = Date.now()) {
   const tuples = schema.confusion_tuples ?? [];
   if (tuples.length === 0) return null;
   return tuples[seed % tuples.length];
 }
 
+// `currentDom` is expected to be document.body.innerText (visible text), not
+// raw HTML — the 4000-char cap is safe on text but would cut mid-tag on markup.
 export function buildPersonaPrompt({ schema, ledger, sessionHistory, activeConfusionTuple, currentDom }) {
   const unknownConcepts = schema.concepts
     .filter(c => !c.generic && !ledger.has(c.id))

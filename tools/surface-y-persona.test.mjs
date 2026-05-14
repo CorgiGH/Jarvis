@@ -26,6 +26,14 @@ test("updateLedger does not add concepts whose aliases aren't present", () => {
   assert.equal(newLedger.size, 0);
 });
 
+test("updateLedger preserves pre-existing ledger entries", () => {
+  const ledger = new Set(["inverse_cdf_sampling"]);
+  const newLedger = updateLedger(ledger, schema, "Distribuția Laplace appears here.");
+  assert.ok(newLedger.has("inverse_cdf_sampling"), "pre-existing entry must survive");
+  assert.ok(newLedger.has("laplace_distribution"), "newly-seen concept must be added");
+  assert.equal(ledger.size, 1, "input ledger must NOT be mutated");
+});
+
 test("buildPersonaPrompt lists UNKNOWN concepts (schema minus ledger minus generic)", () => {
   const ledger = new Set(["laplace_distribution"]);
   const prompt = buildPersonaPrompt({
@@ -44,6 +52,23 @@ test("sampleConfusionTuple picks one tuple at random from schema", () => {
   const t = sampleConfusionTuple(schema, 0);  // seeded
   assert.ok(t);
   assert.deepEqual(t.between, ["laplace_distribution", "normal_distribution"]);
+});
+
+test("sampleConfusionTuple returns null when schema has no confusion_tuples", () => {
+  assert.equal(sampleConfusionTuple({ concepts: [] }, 0), null);
+  assert.equal(sampleConfusionTuple({ concepts: [], confusion_tuples: [] }, 0), null);
+});
+
+test("buildPersonaPrompt shows (none) when every concept is known or generic", () => {
+  const ledger = new Set(["laplace_distribution", "inverse_cdf_sampling"]);
+  const prompt = buildPersonaPrompt({
+    schema,
+    ledger,
+    sessionHistory: [],
+    activeConfusionTuple: null,
+    currentDom: "<p>x</p>",
+  });
+  assert.match(prompt, /You do NOT know.*\(none\)/);
 });
 
 test("buildPersonaPrompt includes active confusion-tuple text", () => {
