@@ -1,0 +1,27 @@
+{
+  "template": {
+    "taskId": "01KR6K07T6PATPRR5KH1JXYF8E",
+    "problemId": "A1",
+    "problemStatement": "Scrie codul R pentru a simula 10000 observatii din distributia Laplace cu parametrii dati.",
+    "expectedAnswerHint": "obs = rlaplace(10000, mu=0, b=1)",
+    "referenceSolution": "# Reference solution — two valid shapes shown:\n# A) Inverse-CDF sampler (no VGAM needed):\nrlaplace <- function(n, mu = 0, b = 1) {\n  u <- runif(n) - 0.5\n  mu - b * sign(u) * log(1 - 2 * abs(u))\n}\n\n# B) Same with VGAM (if installed):\n# library(VGAM)\n# rlaplace_vgam <- function(n, mu, b) VGAM::rlaplace(n, location = mu, scale = b)\n\nn <- 10000\nmu <- 0\npar(mfrow = c(2, 2))\nfor (b in c(0.5, 1, 2, 4)) {\n  x <- rlaplace(n, mu, b)\n  hist(x, breaks = 60, freq = FALSE, main = paste(\"Laplace mu=0, b=\", b))\n  # Theoretical PDF overlay:\n  xs <- seq(min(x), max(x), length.out = 400)\n  ys <- (1 / (2 * b)) * exp(-abs(xs - mu) / b)\n  lines(xs, ys, col = \"red\", lwd = 2)\n}\n",
+    "rubricItems": [
+      "uses_rlaplace_or_inverse_cdf_sampler",
+      "n_equals_10000",
+      "iterates_over_b_in_half_one_two_four",
+      "plots_histogram_AND_theoretical_pdf_overlay"
+    ],
+    "prediction": null,
+    "language": "r"
+  },
+  "attempts": [
+    {
+      "label": "known-good",
+      "userAttempt": "library(VGAM)\nn <- 10000\nfor (b in c(0.5, 1, 2, 4)) {\n  x <- rlaplace(n, location = 0, scale = b)\n  hist(x, breaks = 60, freq = FALSE, main = paste('Laplace b =', b), xlab = 'x')\n  curve(dlaplace(x, location = 0, scale = b), add = TRUE, col = 'red', lwd = 2)\n}"
+    },
+    {
+      "label": "known-bad",
+      "userAttempt": "n <- 10000\nx <- rnorm(n, mean = 0, sd = 1)\nhist(x, main = 'samples')"
+    }
+  ]
+}
