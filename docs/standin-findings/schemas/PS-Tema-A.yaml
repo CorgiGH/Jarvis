@@ -1,0 +1,38 @@
+# docs/standin-findings/schemas/PS-Tema-A.yaml
+#
+# Surface Y concept schema for PS Tema A (Laplace distribution sampling).
+# Consumed by tools/surface-y-persona.mjs + tools/surface-y-gate.mjs via the
+# minimal flow-style parser in tools/surface-y.mjs (parseYaml).
+#
+# FORMAT CONTRACT — flow style only, one concept/tuple per line:
+#   - {id: <id>, aliases: [a, b, "c d"]}        (block style is NOT parsed)
+#   - {id: <id>, generic: true}
+#   - {between: [x, y], why: "..."}
+# Avoid `:` inside any concept line — parseYaml splits key/value on the first
+# colon, so an alias like "VGAM::rlaplace" would corrupt the parse. `introduced_in`
+# provenance is kept as comments below (parser ignores non-matching lines).
+#
+# confusion_tuples may reference concepts NOT in the `concepts` list
+# (normal_distribution, rejection_sampling, mean_variance) — those are the
+# *wrong* things a novice reaches for; only the `concepts` list gates leakage.
+
+task_id: 01KR6K07T6PATPRR5KH1JXYF8E
+subject: PS
+title: "Tema A — Laplace distribution sampling + visualization"
+concepts:
+  # introduced_in: A1.pdf:page=2, _extras/PS/_fii/edu/files/Tema_A_en.md, _extras/PS/_fii/gdrive/Curs/curs_2019-2020/En/probability8_en.md
+  - {id: laplace_distribution, aliases: [Laplace, "distribuția Laplace", double-exponential, "double exponential"]}
+  # introduced_in: A1.pdf:page=4
+  - {id: inverse_cdf_sampling, aliases: [inverse-CDF, "quantile transform", "inverse transform", "inverse transform sampling"]}
+  # introduced_in: A1.pdf:page=3
+  - {id: location_scale_parameters, aliases: [mu, "parameter mu", "parameter b", location, scale]}
+  # generic R skill — no course page introduces it; novice may already know plotting
+  - {id: histogram_overlay, generic: true}
+  # introduced_in: A1.pdf:page=3
+  - {id: theoretical_pdf, aliases: [PDF, "density function", "probability density"]}
+  # introduced_in: A1.pdf:page=4 — the VGAM rlaplace() sampler function
+  - {id: rlaplace_function, aliases: [rlaplace, "rlaplace function", "rlaplace sampler"]}
+confusion_tuples:
+  - {between: [laplace_distribution, normal_distribution], why: "Both are symmetric around the mean; a novice confuses their kurtosis — Laplace has fatter tails and a sharper peak than the normal"}
+  - {between: [inverse_cdf_sampling, rejection_sampling], why: "Both are sampling methods that consume uniform random variables; the underlying mechanisms differ"}
+  - {between: [location_scale_parameters, mean_variance], why: "Mu IS both the location parameter and the mean here, but b is the scale parameter and is NOT the variance"}
