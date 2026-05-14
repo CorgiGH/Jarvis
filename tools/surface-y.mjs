@@ -229,7 +229,21 @@ export async function runStandin({
           // Deterministic submit: the persona CHOSE `submit`; the controller resolves
           // CHECK ANSWER and clicks it. Role+name selector — the button has no
           // data-testid (see tutor-web/src/components/DrillStack.tsx:256-262).
-          await page.getByRole("button", { name: /^check answer$/i }).click();
+          const submitBtn = page.getByRole("button", { name: /^check answer$/i });
+          const matches = await submitBtn.count();
+          if (matches !== 1) {
+            // Loud hard-fail: CHECK ANSWER ambiguous or missing — never guess which
+            // button to click on the live site. Record a visible error step and end
+            // the run. `break` exits the while loop; the surrounding catch does not
+            // fire on a break.
+            transcript.push({
+              action: "error", target: "",
+              observation: `submit_failed: CHECK ANSWER resolved to ${matches} matches (expected exactly 1)`,
+              ts: new Date().toISOString(),
+            });
+            break;
+          }
+          await submitBtn.click();
         }
       } catch (e) {
         transcript[transcript.length - 1].error = String(e).slice(0, 200);
