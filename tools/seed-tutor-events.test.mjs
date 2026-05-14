@@ -118,3 +118,20 @@ test("seedOne: a 401 from the server -> hard auth_error (even if body is not JSO
   assert.equal(r.outcome, "auth_error");
   assert.equal(r.hard, true);
 });
+
+import { seedAll } from "./seed-tutor-events.mjs";
+
+test("seedAll: loops every attempt and returns one result per attempt, in order", async () => {
+  const transport = async () => ({ status: 200, json: async () => ({ misconception: "NONE", correct: true, score: 1 }) });
+  const attempts = [
+    { label: "a", userAttempt: "1" },
+    { label: "b", userAttempt: "2" },
+  ];
+  const results = await seedAll({
+    template: FAKE_TEMPLATE, attempts,
+    baseUrl: "https://x.test", sessionCookie: "S", transport,
+  });
+  assert.equal(results.length, 2);
+  assert.deepEqual(results.map(r => r.label), ["a", "b"]);
+  assert.equal(results.every(r => r.outcome === "success"), true);
+});
