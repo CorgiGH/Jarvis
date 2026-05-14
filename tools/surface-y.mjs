@@ -189,7 +189,9 @@ export async function runStandin({
 
       let action;
       try { action = JSON.parse(r.finalText); } catch { action = { action: "give_up", observation: "parse-error" }; }
-      transcript.push({ ...action, ts: new Date().toISOString() });
+      // Log the affordance list the persona was shown this step — diagnostic for whether
+      // the type-loop is an affordance-exposure bug vs. a model action-selection floor.
+      transcript.push({ ...action, affordancesShown: affordances, ts: new Date().toISOString() });
 
       // Loop-detection: a real naive student stops banging on the same dead element.
       // 3 identical (action,target) in a row → record a "stuck" finding and end the session.
@@ -291,6 +293,13 @@ export async function runStandin({
           ? `- step ${z.step}: snake_case=${z.lints.snake_case.length}, low_contrast=${z.lints.low_contrast.length}, screenshot=\`${z.screenshot}\``
           : `- step ${z.step}: piggyback failed — ${z.error}`),
       ] : []),
+      "",
+      "## Affordances shown to persona (per step)",
+      "_Diagnostic: the INTERACTIVE ELEMENTS block fed to the persona each step. Inspect whether CHECK ANSWER appeared as a clean, non-[disabled] clickable at the steps where the persona looped `type`._",
+      "",
+      ...transcript.flatMap((t, i) => t.affordancesShown
+        ? [`### Step ${i + 1} — ${t.action} \`${(t.target || "").slice(0, 40)}\``, "```", t.affordancesShown, "```", ""]
+        : []),
     ].join("\n");
     writeFileSync(docPath, md);
     return docPath;
