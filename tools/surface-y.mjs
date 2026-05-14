@@ -126,18 +126,28 @@ export async function runStandin({
           const sibs = [...document.querySelectorAll(tag)];
           return `${tag}:nth-of-type(${sibs.indexOf(el) + 1})`;
         };
+        const clean = (s) => (s || "").replace(/\s+/g, " ").trim();
         return [...document.querySelectorAll('button, a[href], input, textarea, select, [role="button"], [contenteditable="true"]')]
           .map((el) => {
-            const label = (el.getAttribute("aria-label") || el.textContent || el.placeholder || el.getAttribute("title") || "")
-              .replace(/\s+/g, " ").trim().slice(0, 70);
+            const tag = el.tagName.toLowerCase();
+            const isField = tag === "input" || tag === "textarea" || tag === "select" || el.getAttribute("contenteditable") === "true";
             const disabled = (el.disabled || el.getAttribute("aria-disabled") === "true") ? " [disabled]" : "";
-            // Surface the current input value so the persona has feedback on its
-            // own typing — otherwise it types blind (innerText omits input values)
-            // and loops re-typing into a box it can't tell it already filled.
-            const raw = typeof el.value === "string" ? el.value : "";
-            const val = raw.replace(/\s+/g, " ").trim();
-            const current = val ? ` [current value: "${val.slice(0, 60)}"]` : "";
-            return `${sel(el)} — "${label}"${disabled}${current}`;
+            if (isField) {
+              // A FIELD you type into. The placeholder is a HINT, not content —
+              // do NOT echo it back. Show current value separately so the persona
+              // has feedback on its own typing (innerText omits input values).
+              const aria = clean(el.getAttribute("aria-label"));
+              const ph = clean(el.getAttribute("placeholder"));
+              const desc = aria
+                ? `"${aria.slice(0, 70)}"`
+                : ph ? `placeholder hint (do NOT type this back): "${ph.slice(0, 70)}"` : `${tag} field`;
+              const raw = typeof el.value === "string" ? clean(el.value) : "";
+              const state = raw ? `[current value: "${raw.slice(0, 60)}"]` : "[EMPTY — type your OWN content here]";
+              return `${sel(el)} — ${desc} ${state}${disabled}`;
+            }
+            // A BUTTON/LINK — its visible text IS the label.
+            const label = clean(el.getAttribute("aria-label") || el.textContent || el.getAttribute("title")).slice(0, 70);
+            return `${sel(el)} — "${label}"${disabled}`;
           })
           .slice(0, 40)
           .join("\n");
