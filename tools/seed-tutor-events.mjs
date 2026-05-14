@@ -60,3 +60,21 @@ export function classifyOutcome(httpStatus, reply) {
   }
   return { outcome: "success", hard: false, detail: `correct=${reply?.correct} score=${reply?.score}` };
 }
+
+// One authenticated POST for one attempt. transport defaults to fetch and is
+// injectable for tests. A thrown transport error is a hard network_error; a
+// non-JSON body is tolerated (reply stays null, classifyOutcome handles it).
+export async function seedOne({ template, attempt, baseUrl, sessionCookie, csrfToken = CSRF_TOKEN, transport = globalThis.fetch }) {
+  const body = JSON.stringify(buildRequest(template, attempt));
+  const headers = buildHeaders(sessionCookie, csrfToken);
+  let httpStatus, reply = null;
+  try {
+    const resp = await transport(`${baseUrl}/api/v1/drill/grade`, { method: "POST", headers, body });
+    httpStatus = resp.status;
+    try { reply = await resp.json(); } catch { reply = null; }
+  } catch (e) {
+    return { label: attempt.label, httpStatus: null, reply: null, outcome: "network_error", hard: true, detail: String(e).slice(0, 160) };
+  }
+  const c = classifyOutcome(httpStatus, reply);
+  return { label: attempt.label, httpStatus, reply, ...c };
+}

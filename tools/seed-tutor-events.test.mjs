@@ -75,3 +75,46 @@ test("classifyOutcome: 200 + real grade -> success", () => {
   assert.equal(c.outcome, "success");
   assert.equal(c.hard, false);
 });
+
+import { seedOne } from "./seed-tutor-events.mjs";
+
+test("seedOne: POSTs to the grade endpoint with the right URL, method, body, headers", async () => {
+  let captured;
+  const transport = async (url, opts) => {
+    captured = { url, opts };
+    return { status: 200, json: async () => ({ misconception: "NONE", correct: true, score: 0.9 }) };
+  };
+  const r = await seedOne({
+    template: FAKE_TEMPLATE, attempt: FAKE_ATTEMPT,
+    baseUrl: "https://x.test", sessionCookie: "S", csrfToken: "TOK", transport,
+  });
+  assert.equal(captured.url, "https://x.test/api/v1/drill/grade");
+  assert.equal(captured.opts.method, "POST");
+  assert.equal(JSON.parse(captured.opts.body).userAttempt, "x <- 1");
+  assert.equal(captured.opts.headers["X-Standin-Run"], "1");
+  assert.equal(captured.opts.headers["Cookie"], "jarvis_session=S; csrf=TOK");
+  assert.equal(r.label, "good");
+  assert.equal(r.outcome, "success");
+  assert.equal(r.hard, false);
+});
+
+test("seedOne: a network throw -> hard network_error", async () => {
+  const transport = async () => { throw new Error("ECONNREFUSED"); };
+  const r = await seedOne({
+    template: FAKE_TEMPLATE, attempt: FAKE_ATTEMPT,
+    baseUrl: "https://x.test", sessionCookie: "S", transport,
+  });
+  assert.equal(r.outcome, "network_error");
+  assert.equal(r.hard, true);
+  assert.equal(r.httpStatus, null);
+});
+
+test("seedOne: a 401 from the server -> hard auth_error (even if body is not JSON)", async () => {
+  const transport = async () => ({ status: 401, json: async () => { throw new Error("not json"); } });
+  const r = await seedOne({
+    template: FAKE_TEMPLATE, attempt: FAKE_ATTEMPT,
+    baseUrl: "https://x.test", sessionCookie: "S", transport,
+  });
+  assert.equal(r.outcome, "auth_error");
+  assert.equal(r.hard, true);
+});
