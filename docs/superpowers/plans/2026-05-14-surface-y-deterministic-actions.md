@@ -516,7 +516,7 @@ No code change — confirms the whole tool suite is green and documents the acce
 - [ ] **Step 1: Run the full tool test suite**
 
 Run: `cd tools && npm run test:tools`
-Expected: `tests 62 / pass 62 / fail 0` (57 prior + 5 new: 1 persona, 1 submit happy-path, 2 submit failure-mode, 1 executor-marking).
+Expected: `tests 63 / pass 63 / fail 0` (57 prior + 6 new: 1 persona vocab, 1 submit happy-path, 1 hard-fail ambiguity, 1 loop-detection regression, 1 doc-filter exclusion [Task 4b, added mid-execution after Task 4's code review], 1 executor-marking).
 
 - [ ] **Step 2: Confirm no regressions in the existing tests**
 
