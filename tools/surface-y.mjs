@@ -131,7 +131,13 @@ export async function runStandin({
             const label = (el.getAttribute("aria-label") || el.textContent || el.placeholder || el.getAttribute("title") || "")
               .replace(/\s+/g, " ").trim().slice(0, 70);
             const disabled = (el.disabled || el.getAttribute("aria-disabled") === "true") ? " [disabled]" : "";
-            return `${sel(el)} — "${label}"${disabled}`;
+            // Surface the current input value so the persona has feedback on its
+            // own typing — otherwise it types blind (innerText omits input values)
+            // and loops re-typing into a box it can't tell it already filled.
+            const raw = typeof el.value === "string" ? el.value : "";
+            const val = raw.replace(/\s+/g, " ").trim();
+            const current = val ? ` [current value: "${val.slice(0, 60)}"]` : "";
+            return `${sel(el)} — "${label}"${disabled}${current}`;
           })
           .slice(0, 40)
           .join("\n");
