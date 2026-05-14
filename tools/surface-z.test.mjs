@@ -80,7 +80,9 @@ test("sweepPages sanitizes query-string page paths into filesystem-safe screensh
     model_resolved: "m", prompt_sha256: "z".repeat(64), tokens_in: 1, tokens_out: 1, latency_ms: 1,
   });
   await sweepPages({
-    pages: ["/tutor/?taskId=01KR6K07T6PATPRR5KH1JXYF8E"],
+    // Two distinct paths that sanitize to the SAME safePath — the page-index
+    // prefix must still keep their screenshot filenames distinct.
+    pages: ["/tutor/?a=b_c", "/tutor/?a=b&c"],
     viewports: [{ width: 1280, height: 800, name: "desktop" }],
     browser: fakeBrowser,
     callLlm: fakeCallLlm,
@@ -88,8 +90,10 @@ test("sweepPages sanitizes query-string page paths into filesystem-safe screensh
     screenshotDir: tmp,
     sessionId: "test-z-2",
   });
-  assert.equal(screenshotPaths.length, 1);
+  assert.equal(screenshotPaths.length, 2);
   // Filename (not the full path — drive letters legitimately carry ':') must
   // not contain characters Windows rejects: ? : = etc.
-  assert.doesNotMatch(basename(screenshotPaths[0]), /[?:=]/);
+  for (const p of screenshotPaths) assert.doesNotMatch(basename(p), /[?:=]/);
+  // Colliding sanitized paths must NOT overwrite each other.
+  assert.notEqual(screenshotPaths[0], screenshotPaths[1]);
 });

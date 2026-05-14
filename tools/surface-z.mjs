@@ -64,7 +64,7 @@ export async function sweepPages({
 
       // Fix 1: try/finally so ctx always closes
       try {
-        for (const path of pages) {
+        for (const [pageIdx, path] of pages.entries()) {
           const page = await ctx.newPage();
 
           // Fix 1: try/finally so page always closes
@@ -72,8 +72,12 @@ export async function sweepPages({
             await page.goto(`${baseUrl}${path}`);
             await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
             const lints = await page.evaluate(LINT_EVAL_SCRIPT);
+            // Page-index prefix keeps screenshot names unique even when two
+            // distinct page paths sanitize to the same safePath (e.g.
+            // /tutor/?a=b_c and /tutor/?a=b&c both → _tutor_a_b_c).
             const safePath = path.replace(/[^a-zA-Z0-9]+/g, "_");
-            const screenshotPath = join(screenshotDir, `Z-${sessionId}-${vp.name}-${safePath}.png`);
+            const idx = String(pageIdx).padStart(2, "0");
+            const screenshotPath = join(screenshotDir, `Z-${sessionId}-${vp.name}-${idx}-${safePath}.png`);
             await page.screenshot({ path: screenshotPath, fullPage: true });
 
             // Fix 2: use buildUserPrompt helper instead of .replace() chains
