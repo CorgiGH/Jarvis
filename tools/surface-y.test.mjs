@@ -32,7 +32,17 @@ test("runStandin enforces hard cap on LLM calls", async () => {
         waitForLoadState: async () => {},
         content: async () => "<html><body>hi</body></html>",
         screenshot: async ({ path }) => writeFileSync(path, "PNG"),
-        evaluate: async () => "page text",
+        evaluate: async (scriptOrFn) => {
+          if (typeof scriptOrFn === "function") {
+            // affordances scan
+            return 'button: "CHECK ANSWER" [disabled]\ntextarea: "R code"';
+          }
+          if (typeof scriptOrFn === "string" && scriptOrFn.startsWith("document.body")) {
+            return "page text";
+          }
+          // LINT_EVAL_SCRIPT (piggyback)
+          return { snake_case: [], low_contrast: [], small_font: [], h_overflow: false };
+        },
         click: async () => {},
         fill: async () => {},
         url: () => "https://corgflix.duckdns.org/tutor/?taskId=t1",
@@ -85,6 +95,10 @@ test("runStandin survives a piggyback screenshot failure and still writes the do
         waitForLoadState: async () => {},
         screenshot: async () => { throw new Error("screenshot boom"); },
         evaluate: async (scriptOrExpr) => {
+          if (typeof scriptOrExpr === "function") {
+            // affordances scan
+            return 'button: "CHECK ANSWER" [disabled]\ntextarea: "R code"';
+          }
           if (typeof scriptOrExpr === "string" && scriptOrExpr.startsWith("document.body")) return "page text";
           return { snake_case: [], low_contrast: [], small_font: [], h_overflow: false };
         },
@@ -111,4 +125,61 @@ test("runStandin survives a piggyback screenshot failure and still writes the do
   const text = readFileSync(docPath, "utf8");
   assert.match(text, /surface: Y/);
   assert.match(text, /piggyback failed/);
+});
+
+test("runStandin breaks out of an action loop instead of burning all calls", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "y-"));
+  const schemaPath = join(tmp, "schema.yaml");
+  writeFileSync(schemaPath, [
+    "task_id: t1",
+    "subject: PS",
+    "concepts:",
+    "  - {id: laplace_distribution, aliases: [Laplace]}",
+    "confusion_tuples: []",
+  ].join("\n"));
+  let callsMade = 0;
+  // Always returns the SAME click action — a stuck loop.
+  const fakeCallLlm = async () => {
+    callsMade++;
+    return {
+      text: '{"thinking":"x","action":"click","target":"locked card","payload":"","observation":"trying to unlock"}',
+      model_resolved: "fake", prompt_sha256: "z".repeat(64),
+      tokens_in: 50, tokens_out: 20, latency_ms: 200,
+    };
+  };
+  const fakeBrowser = {
+    newContext: async () => ({
+      newPage: async () => ({
+        goto: async () => {},
+        waitForLoadState: async () => {},
+        screenshot: async ({ path }) => writeFileSync(path, "PNG"),
+        evaluate: async (scriptOrFn) => {
+          if (typeof scriptOrFn === "function") return 'button: "CHECK ANSWER" [disabled]';
+          if (typeof scriptOrFn === "string" && scriptOrFn.startsWith("document.body")) return "page text";
+          return { snake_case: [], low_contrast: [], small_font: [], h_overflow: false };
+        },
+        click: async () => {},
+        fill: async () => {},
+        close: async () => {},
+      }),
+      close: async () => {},
+    }),
+    close: async () => {},
+  };
+  const docPath = await runStandin({
+    taskId: "t1",
+    schemaPath,
+    browser: fakeBrowser,
+    callLlm: fakeCallLlm,
+    maxCallsPerSession: 20,        // generous cap — loop-detection should stop us WELL before this
+    outputDir: tmp,
+    sessionId: "test-y-3",
+    baseUrl: "https://corgflix.duckdns.org",
+    authCookie: "test",
+    piggybackZ: false,
+  });
+  // 3 identical clicks trip the detector; we must NOT have burned all 20 calls.
+  assert.ok(callsMade <= 5, `loop-detection should stop early, got ${callsMade} calls`);
+  const text = readFileSync(docPath, "utf8");
+  assert.match(text, /stuck/);
 });

@@ -109,12 +109,25 @@ export async function runStandin({
 
     while (callsUsed < maxCallsPerSession && Date.now() - t0 < maxDurationMin * 60_000) {
       const bodyText = await page.evaluate("document.body.innerText").catch(() => "");
+      // Persona is otherwise blind to inputs/buttons — innerText flattens them away.
+      // Give it an explicit interactive-element list so it can choose real affordances.
+      const affordances = await page.evaluate(() => {
+        return [...document.querySelectorAll('button, a[href], input, textarea, select, [role="button"], [contenteditable="true"]')]
+          .map((el) => {
+            const label = (el.getAttribute("aria-label") || el.textContent || el.placeholder || el.getAttribute("title") || "")
+              .replace(/\s+/g, " ").trim().slice(0, 70);
+            const disabled = el.disabled ? " [disabled]" : "";
+            return `${el.tagName.toLowerCase()}: "${label}"${disabled}`;
+          })
+          .slice(0, 40)
+          .join("\n");
+      }).catch(() => "");
       ledger = updateLedger(ledger, schema, bodyText);
       const prompt = buildPersonaPrompt({
         schema, ledger,
         sessionHistory: transcript.slice(-5),
         activeConfusionTuple: activeConfusion,
-        currentDom: bodyText,
+        currentDom: `INTERACTIVE ELEMENTS (things you can click or type into — prefer these over plain text labels):\n${affordances}\n\nVISIBLE TEXT:\n${bodyText}`,
       });
 
       let r;
@@ -147,6 +160,20 @@ export async function runStandin({
       let action;
       try { action = JSON.parse(r.finalText); } catch { action = { action: "give_up", observation: "parse-error" }; }
       transcript.push({ ...action, ts: new Date().toISOString() });
+
+      // Loop-detection: a real naive student stops banging on the same dead element.
+      // 3 identical (action,target) in a row → record a "stuck" finding and end the session.
+      const recent = transcript.slice(-3);
+      if (recent.length === 3 &&
+          recent.every((t) => t.action === action.action && t.target === action.target)) {
+        transcript.push({
+          action: "stuck",
+          target: action.target ?? "",
+          observation: `Gave up — repeated "${action.action} ${action.target}" 3× with no progress.`,
+          ts: new Date().toISOString(),
+        });
+        break;
+      }
 
       if (action.action === "give_up") break;
       try {
