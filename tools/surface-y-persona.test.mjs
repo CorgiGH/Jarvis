@@ -81,3 +81,18 @@ test("buildPersonaPrompt includes active confusion-tuple text", () => {
   });
   assert.match(prompt, /You frequently confuse laplace_distribution with normal_distribution/);
 });
+
+test("buildPersonaPrompt exposes the submit action and instructs using it over click", () => {
+  const prompt = buildPersonaPrompt({
+    schema,
+    ledger: new Set(),
+    sessionHistory: [],
+    activeConfusionTuple: null,
+    currentDom: "<p>x</p>",
+  });
+  // `submit` is in the JSON action enum
+  assert.match(prompt, /"action":.*\| "submit" \|/);
+  // the ACTION RULES instruct using `submit`, not clicking CHECK ANSWER
+  assert.match(prompt, /use action "submit"/);
+  assert.doesNotMatch(prompt, /To submit or check an answer, "click"/);
+});
