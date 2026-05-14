@@ -34,6 +34,7 @@ export function buildRequest(template, attempt) {
 // tags the event is_synthetic=true (TutorRoutes.kt:1602,1686). The csrf
 // cookie + X-CSRF-Token header are the self-issued double-submit pair.
 export function buildHeaders(sessionCookie, csrfToken = CSRF_TOKEN) {
+  if (!sessionCookie) throw new Error("buildHeaders: sessionCookie is required");
   return {
     "Content-Type": "application/json",
     "X-Standin-Run": "1",
@@ -45,11 +46,15 @@ export function buildHeaders(sessionCookie, csrfToken = CSRF_TOKEN) {
 // Map (httpStatus, reply) -> { outcome, hard, detail }. `hard` true means the
 // run should exit non-zero. A 200 always means an event landed; UNGRADED is a
 // soft warning (server OpenRouter was down — event still appended, status:error).
+// A 200 with a null reply (non-JSON body) is also soft — the event still landed.
 export function classifyOutcome(httpStatus, reply) {
   if (httpStatus === 401) return { outcome: "auth_error", hard: true, detail: "401 — invalid/missing jarvis_session cookie" };
   if (httpStatus === 403) return { outcome: "csrf_error", hard: true, detail: "403 — CSRF check failed (unexpected; seeder self-issues the pair)" };
   if (httpStatus === 400) return { outcome: "bad_request", hard: true, detail: "400 — payload no longer matches ApiDrillGradeRequest" };
   if (httpStatus !== 200) return { outcome: "http_error", hard: true, detail: `HTTP ${httpStatus}` };
+  if (reply === null) {
+    return { outcome: "ungraded", hard: false, detail: "200 but reply body was not JSON — event still landed" };
+  }
   if (reply?.misconception === "UNGRADED") {
     return { outcome: "ungraded", hard: false, detail: "server OpenRouter unavailable — event still landed with status:error" };
   }

@@ -17,6 +17,7 @@ test("buildRequest merges userAttempt into the template, leaves other fields int
   assert.equal(req.problemId, "P1");
   assert.equal(req.taskId, "T1");
   assert.equal(req.problemStatement, "PS");
+  assert.equal("label" in req, false);
 });
 
 test("buildHeaders self-issues a matching CSRF pair + X-Standin-Run + jarvis_session cookie", () => {
@@ -25,6 +26,12 @@ test("buildHeaders self-issues a matching CSRF pair + X-Standin-Run + jarvis_ses
   assert.equal(h["X-Standin-Run"], "1");
   assert.equal(h["X-CSRF-Token"], "TOK");
   assert.equal(h["Cookie"], "jarvis_session=SESS123; csrf=TOK");
+  assert.equal(buildHeaders("S")["X-CSRF-Token"], "seed-tutor-events-csrf");
+});
+
+test("buildHeaders throws when sessionCookie is falsy", () => {
+  assert.throws(() => buildHeaders(""), /sessionCookie is required/);
+  assert.throws(() => buildHeaders(undefined), /sessionCookie is required/);
 });
 
 test("classifyOutcome: 401 -> hard auth_error", () => {
@@ -49,6 +56,12 @@ test("classifyOutcome: other non-200 -> hard http_error", () => {
   const c = classifyOutcome(500, null);
   assert.equal(c.outcome, "http_error");
   assert.equal(c.hard, true);
+});
+
+test("classifyOutcome: 200 + null reply -> soft ungraded (non-JSON body)", () => {
+  const c = classifyOutcome(200, null);
+  assert.equal(c.outcome, "ungraded");
+  assert.equal(c.hard, false);
 });
 
 test("classifyOutcome: 200 + misconception UNGRADED -> soft ungraded warning", () => {
