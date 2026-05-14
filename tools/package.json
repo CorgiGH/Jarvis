@@ -6,7 +6,7 @@
   "scripts": {
     "crawl": "node extract-fiimaterials.mjs",
     "crawl:dry": "node extract-fiimaterials.mjs --dry-run",
-    "test:tools": "node --test extract-fiimaterials.test.mjs lib/openrouter.test.mjs lib/provenance.test.mjs lib/event-log-reader.test.mjs findings-stale-check.test.mjs surface-x-invariants.test.mjs surface-x.test.mjs surface-z-lints.test.mjs surface-z.test.mjs surface-y-persona.test.mjs surface-y-gate.test.mjs surface-y.test.mjs",
+    "test:tools": "node --test extract-fiimaterials.test.mjs lib/openrouter.test.mjs lib/provenance.test.mjs lib/event-log-reader.test.mjs findings-stale-check.test.mjs surface-x-invariants.test.mjs surface-x.test.mjs surface-z-lints.test.mjs surface-z.test.mjs surface-y-persona.test.mjs surface-y-gate.test.mjs surface-y.test.mjs seed-tutor-events.test.mjs",
     "surface:x": "node surface-x.mjs",
     "surface:z": "node surface-z.mjs",
     "surface:y": "node surface-y.mjs",
