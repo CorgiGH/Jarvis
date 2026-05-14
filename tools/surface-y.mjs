@@ -293,7 +293,7 @@ export async function runStandin({
       `# Surface Y findings — task ${taskId}, session ${sessionId}`,
       "",
       "## Discovered unknown-unknowns",
-      ...transcript.filter(t => t.observation).map(t => `- step ${transcript.indexOf(t) + 1}: ${t.observation}`),
+      ...transcript.filter(t => t.observation && t.action !== "error" && t.action !== "stuck").map(t => `- step ${transcript.indexOf(t) + 1}: ${t.observation}`),
       "",
       "## Schema-gate violations (naivety leakage)",
       ...gateViolations.map(v => `- step ${v.step}: referenced off-ledger concepts: ${v.violations.join(", ")}`),
