@@ -55,10 +55,15 @@ export async function checkStaleness(filepath, opts = {}) {
       ageMs: stamp.ts_utc ? Date.now() - Date.parse(stamp.ts_utc) : null,
       status: stamp.ts_utc ? (Date.now() - Date.parse(stamp.ts_utc) < 86400_000 ? "FRESH" : "AGED") : "MISSING",
     },
+    // surface_version records which surface tool + version wrote this doc.
+    // It's a historical fact, not a drift signal — a doc written by z-v1.0
+    // was written by z-v1.0 forever. Recorded-only, like the judge_* fields.
+    // (The old logic compared it against process.env.SURFACE_VERSION, which
+    // is unset when this checker runs as its own process — so every doc
+    // false-flagged as DRIFT.)
     surface_version: {
       stamped: stamp.surface_version,
-      current: process.env.SURFACE_VERSION ?? "unknown",
-      status: stamp.surface_version === (process.env.SURFACE_VERSION ?? "unknown") ? "OK" : "DRIFT",
+      status: stamp.surface_version ? "PRESENT" : "MISSING",
     },
     judge_model_resolved: {
       stamped: stamp.judge_model_resolved,

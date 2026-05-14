@@ -45,6 +45,31 @@ test("checkStaleness reports OK when everything matches", async () => {
   assert.equal(result.fields.git_head.status, "OK");
 });
 
+test("checkStaleness reports overall OK for a fully-fresh doc incl. surface_version", async () => {
+  // Regression: surface_version used to be drift-checked against
+  // process.env.SURFACE_VERSION (unset in this process) — every doc
+  // false-flagged DRIFT → STALE. It is now a recorded-only PRESENT field.
+  const currentGit = (await import("node:child_process")).execSync("git rev-parse --short HEAD").toString().trim();
+  const fp = join(tmp, "doc4.md");
+  writeFileSync(fp, [
+    "---",
+    "surface: Z",
+    "provenance:",
+    `  git_head: ${currentGit}`,
+    "  bundle_hash: B-Xy35Ve",
+    `  ts_utc: ${new Date().toISOString()}`,
+    "  surface_version: z-v1.0",
+    "  judge_model_resolved: openai/gpt-oss-120b:free",
+    "  judge_prompt_sha256: abc123",
+    "---",
+    "# Findings",
+  ].join("\n"));
+  const result = await checkStaleness(fp, { currentBundleHash: "B-Xy35Ve" });
+  assert.equal(result.fields.surface_version.status, "PRESENT");
+  assert.equal(result.fields.surface_version.stamped, "z-v1.0");
+  assert.equal(result.overall, "OK");
+});
+
 test("checkStaleness parser is not fooled by same-named key in another frontmatter block", async () => {
   // A fake `git_head` inside a `description:` block above provenance must NOT leak.
   // The real `git_head` inside `provenance:` is `dead000` (stale vs. current HEAD).
