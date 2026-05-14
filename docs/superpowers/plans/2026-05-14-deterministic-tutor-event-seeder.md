@@ -115,6 +115,7 @@ test("buildRequest merges userAttempt into the template, leaves other fields int
   assert.equal(req.problemId, "P1");
   assert.equal(req.taskId, "T1");
   assert.equal(req.problemStatement, "PS");
+  assert.equal("label" in req, false);
 });
 
 test("buildHeaders self-issues a matching CSRF pair + X-Standin-Run + jarvis_session cookie", () => {
@@ -123,6 +124,12 @@ test("buildHeaders self-issues a matching CSRF pair + X-Standin-Run + jarvis_ses
   assert.equal(h["X-Standin-Run"], "1");
   assert.equal(h["X-CSRF-Token"], "TOK");
   assert.equal(h["Cookie"], "jarvis_session=SESS123; csrf=TOK");
+  assert.equal(buildHeaders("S")["X-CSRF-Token"], "seed-tutor-events-csrf");
+});
+
+test("buildHeaders throws when sessionCookie is falsy", () => {
+  assert.throws(() => buildHeaders(""), /sessionCookie is required/);
+  assert.throws(() => buildHeaders(undefined), /sessionCookie is required/);
 });
 
 test("classifyOutcome: 401 -> hard auth_error", () => {
@@ -147,6 +154,12 @@ test("classifyOutcome: other non-200 -> hard http_error", () => {
   const c = classifyOutcome(500, null);
   assert.equal(c.outcome, "http_error");
   assert.equal(c.hard, true);
+});
+
+test("classifyOutcome: 200 + null reply -> soft ungraded (non-JSON body)", () => {
+  const c = classifyOutcome(200, null);
+  assert.equal(c.outcome, "ungraded");
+  assert.equal(c.hard, false);
 });
 
 test("classifyOutcome: 200 + misconception UNGRADED -> soft ungraded warning", () => {
@@ -208,6 +221,7 @@ export function buildRequest(template, attempt) {
 // tags the event is_synthetic=true (TutorRoutes.kt:1602,1686). The csrf
 // cookie + X-CSRF-Token header are the self-issued double-submit pair.
 export function buildHeaders(sessionCookie, csrfToken = CSRF_TOKEN) {
+  if (!sessionCookie) throw new Error("buildHeaders: sessionCookie is required");
   return {
     "Content-Type": "application/json",
     "X-Standin-Run": "1",
@@ -219,11 +233,15 @@ export function buildHeaders(sessionCookie, csrfToken = CSRF_TOKEN) {
 // Map (httpStatus, reply) -> { outcome, hard, detail }. `hard` true means the
 // run should exit non-zero. A 200 always means an event landed; UNGRADED is a
 // soft warning (server OpenRouter was down — event still appended, status:error).
+// A 200 with a null reply (non-JSON body) is also soft — the event still landed.
 export function classifyOutcome(httpStatus, reply) {
   if (httpStatus === 401) return { outcome: "auth_error", hard: true, detail: "401 — invalid/missing jarvis_session cookie" };
   if (httpStatus === 403) return { outcome: "csrf_error", hard: true, detail: "403 — CSRF check failed (unexpected; seeder self-issues the pair)" };
   if (httpStatus === 400) return { outcome: "bad_request", hard: true, detail: "400 — payload no longer matches ApiDrillGradeRequest" };
   if (httpStatus !== 200) return { outcome: "http_error", hard: true, detail: `HTTP ${httpStatus}` };
+  if (reply === null) {
+    return { outcome: "ungraded", hard: false, detail: "200 but reply body was not JSON — event still landed" };
+  }
   if (reply?.misconception === "UNGRADED") {
     return { outcome: "ungraded", hard: false, detail: "server OpenRouter unavailable — event still landed with status:error" };
   }
@@ -234,7 +252,7 @@ export function classifyOutcome(httpStatus, reply) {
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cd tools && node --test seed-tutor-events.test.mjs`
-Expected: PASS — 8 tests passing.
+Expected: PASS — 10 tests passing.
 
 - [ ] **Step 5: Commit**
 
@@ -332,7 +350,7 @@ export async function seedOne({ template, attempt, baseUrl, sessionCookie, csrfT
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cd tools && node --test seed-tutor-events.test.mjs`
-Expected: PASS — 11 tests passing.
+Expected: PASS — 13 tests passing.
 
 - [ ] **Step 5: Commit**
 
@@ -439,7 +457,7 @@ if (process.argv[1]?.endsWith("seed-tutor-events.mjs")) {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd tools && node --test seed-tutor-events.test.mjs`
-Expected: PASS — 12 tests passing.
+Expected: PASS — 14 tests passing.
 
 - [ ] **Step 5: Commit**
 
@@ -466,7 +484,7 @@ In `tools/package.json`, the `test:tools` script currently ends with `... surfac
 - [ ] **Step 2: Run the full tools test suite**
 
 Run: `cd tools && npm run test:tools`
-Expected: PASS — the prior 63 tests + the 12 new seeder tests, all green. No failures.
+Expected: PASS — the prior 63 tests + the 14 new seeder tests, all green. No failures.
 
 - [ ] **Step 3: Commit**
 
