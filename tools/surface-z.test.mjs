@@ -14,10 +14,16 @@ test("sweepPages emits findings doc with lint output per page", async () => {
         goto: async () => {},
         waitForLoadState: async () => {},
         screenshot: async ({ path }) => { writeFileSync(path, "PNG"); },
-        evaluate: async () => ({
-          snake_case: [{ text: "uses_rlaplace_or_inverse", selector: "div.rubric-chip" }],
-          low_contrast: [], small_font: [], h_overflow: false,
-        }),
+        // Fix 4: differentiate the two evaluate calls by argument
+        evaluate: async (scriptOrExpr) => {
+          if (typeof scriptOrExpr === "string" && scriptOrExpr.startsWith("document.body")) {
+            return "Sample DOM text for testing";
+          }
+          return {
+            snake_case: [{ text: "uses_rlaplace_or_inverse", selector: "div.rubric-chip" }],
+            low_contrast: [], small_font: [], h_overflow: false,
+          };
+        },
         close: async () => {},
       }),
       close: async () => {},
@@ -44,4 +50,8 @@ test("sweepPages emits findings doc with lint output per page", async () => {
   assert.match(text, /surface: Z/);
   assert.match(text, /uses_rlaplace_or_inverse/);
   assert.match(text, /chip labels look like code/);
+  // Fix 5b: provenance frontmatter present
+  assert.match(text, /git_head:/);
+  // Fix 5b: BOTH pages processed, not just the first
+  assert.match(text, /tutor\/review/);
 });
