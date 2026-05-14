@@ -1,0 +1,52 @@
+// tools/surface-y-persona.mjs
+export function updateLedger(ledger, schema, domText) {
+  const next = new Set(ledger);
+  const lower = domText.toLowerCase();
+  for (const c of schema.concepts) {
+    if (c.generic) continue;
+    const aliases = [c.id.replace(/_/g, " "), ...(c.aliases ?? [])];
+    if (aliases.some(a => lower.includes(a.toLowerCase()))) {
+      next.add(c.id);
+    }
+  }
+  return next;
+}
+
+export function sampleConfusionTuple(schema, seed = Date.now()) {
+  const tuples = schema.confusion_tuples ?? [];
+  if (tuples.length === 0) return null;
+  return tuples[seed % tuples.length];
+}
+
+export function buildPersonaPrompt({ schema, ledger, sessionHistory, activeConfusionTuple, currentDom }) {
+  const unknownConcepts = schema.concepts
+    .filter(c => !c.generic && !ledger.has(c.id))
+    .map(c => c.id);
+  const historyText = sessionHistory.slice(-5).map(e => `- ${e.action} ${e.target ?? ""}: ${e.observation ?? ""}`).join("\n");
+  const confusionLine = activeConfusionTuple
+    ? `\nYou frequently confuse ${activeConfusionTuple.between[0]} with ${activeConfusionTuple.between[1]} because ${activeConfusionTuple.why}.`
+    : "";
+
+  return `SYSTEM: You are Alex, a first-year FII Iași AI student. You have NEVER seen this course material before this session. You know basic high-school math and some R syntax. You do NOT know any of the following unless this session's history shows you've read about them: ${unknownConcepts.join(", ") || "(none)"}
+
+If a concept name appears unfamiliar, stay confused — say so, ask sidekick, or stare at it. NEVER reason from knowledge you haven't been shown this session. If you find yourself "remembering" something off-ledger, mark [LEAK?] and explain.
+
+SESSION HISTORY (last 5 events):
+${historyText || "  (none)"}
+
+SEEN-CONCEPTS LEDGER:
+  ${[...ledger].join(", ") || "(empty)"}
+${confusionLine}
+
+CURRENT DOM (visible to you):
+${currentDom.slice(0, 4000)}
+
+Decide ONE next action. Reply STRICT JSON:
+{
+  "thinking": "<2-3 sentences internal monologue>",
+  "action": "click" | "type" | "navigate" | "ask_sidekick" | "give_up",
+  "target": "<CSS selector or text label>",
+  "payload": "<typed text if action=type/ask_sidekick>",
+  "observation": "<what I'm confused about or noticed>"
+}`;
+}
