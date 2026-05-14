@@ -59,6 +59,9 @@ export async function runStandin({
   schemaPath,
   browser = null,
   callLlm = defaultCallLlm,
+  // Standin key only — NO fallback to OPENROUTER_API_KEY (unlike Surface X/Z).
+  // Surface Y can burn (maxRegens+1) * maxCallsPerSession calls in one run;
+  // never let that land on the production key by accident.
   apiKey = process.env.OPENROUTER_API_KEY_STANDIN,
   model = "openai/gpt-oss-120b:free",
   maxCallsPerSession = 50,
@@ -134,6 +137,8 @@ export async function runStandin({
       // maxRegens+1 calls, so callsUsed may overshoot maxCallsPerSession by ≤maxRegens.
       callsUsed += r.tries.length;
       if (r.leaked) gateViolations.push({ step: transcript.length, violations: r.finalCheck.violations });
+      // gateLoop always returns llmMeta on both ok + leaked paths — guard kept
+      // as a safety net if callLlm's return contract ever changes.
       if (r.llmMeta) {
         lastJudgeModel = r.llmMeta.model_resolved;
         lastPromptSha = r.llmMeta.prompt_sha256;
@@ -150,7 +155,10 @@ export async function runStandin({
         } else if (action.action === "type" && action.target) {
           await page.fill(action.target, action.payload ?? "");
         } else if (action.action === "navigate" && action.target) {
-          await page.goto(action.target.startsWith("http") ? action.target : `${baseUrl}${action.target}`);
+          const navTarget = action.target.startsWith("http")
+            ? action.target
+            : `${baseUrl}${action.target.startsWith("/") ? "" : "/"}${action.target}`;
+          await page.goto(navTarget);
         } else if (action.action === "ask_sidekick") {
           await page.evaluate((q) => {
             const evt = new CustomEvent("standin-sidekick-ask", { detail: { question: q } });
