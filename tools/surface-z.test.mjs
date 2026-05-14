@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import { sweepPages } from "./surface-z.mjs";
 
 test("sweepPages emits findings doc with lint output per page", async () => {
@@ -54,4 +54,42 @@ test("sweepPages emits findings doc with lint output per page", async () => {
   assert.match(text, /git_head:/);
   // Fix 5b: BOTH pages processed, not just the first
   assert.match(text, /tutor\/review/);
+});
+
+test("sweepPages sanitizes query-string page paths into filesystem-safe screenshot names", async () => {
+  const tmp = mkdtempSync(join(tmpdir(), "z-"));
+  const screenshotPaths = [];
+  const fakeBrowser = {
+    newContext: async () => ({
+      newPage: async () => ({
+        goto: async () => {},
+        waitForLoadState: async () => {},
+        screenshot: async ({ path }) => { screenshotPaths.push(path); writeFileSync(path, "PNG"); },
+        evaluate: async (scriptOrExpr) => {
+          if (typeof scriptOrExpr === "string" && scriptOrExpr.startsWith("document.body")) return "dom";
+          return { snake_case: [], low_contrast: [], small_font: [], h_overflow: false };
+        },
+        close: async () => {},
+      }),
+      close: async () => {},
+    }),
+    close: async () => {},
+  };
+  const fakeCallLlm = async () => ({
+    text: '{"severity":"none","observations":[],"one_liner":"ok"}',
+    model_resolved: "m", prompt_sha256: "z".repeat(64), tokens_in: 1, tokens_out: 1, latency_ms: 1,
+  });
+  await sweepPages({
+    pages: ["/tutor/?taskId=01KR6K07T6PATPRR5KH1JXYF8E"],
+    viewports: [{ width: 1280, height: 800, name: "desktop" }],
+    browser: fakeBrowser,
+    callLlm: fakeCallLlm,
+    outputDir: tmp,
+    screenshotDir: tmp,
+    sessionId: "test-z-2",
+  });
+  assert.equal(screenshotPaths.length, 1);
+  // Filename (not the full path — drive letters legitimately carry ':') must
+  // not contain characters Windows rejects: ? : = etc.
+  assert.doesNotMatch(basename(screenshotPaths[0]), /[?:=]/);
 });

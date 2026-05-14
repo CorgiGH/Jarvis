@@ -72,7 +72,8 @@ export async function sweepPages({
             await page.goto(`${baseUrl}${path}`);
             await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
             const lints = await page.evaluate(LINT_EVAL_SCRIPT);
-            const screenshotPath = join(screenshotDir, `Z-${sessionId}-${vp.name}-${path.replace(/\//g, "_")}.png`);
+            const safePath = path.replace(/[^a-zA-Z0-9]+/g, "_");
+            const screenshotPath = join(screenshotDir, `Z-${sessionId}-${vp.name}-${safePath}.png`);
             await page.screenshot({ path: screenshotPath, fullPage: true });
 
             // Fix 2: use buildUserPrompt helper instead of .replace() chains
