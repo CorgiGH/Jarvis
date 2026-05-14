@@ -178,8 +178,9 @@ test("runStandin breaks out of an action loop instead of burning all calls", asy
     authCookie: "test",
     piggybackZ: false,
   });
-  // 3 identical clicks trip the detector; we must NOT have burned all 20 calls.
-  assert.ok(callsMade <= 5, `loop-detection should stop early, got ${callsMade} calls`);
+  // 3 identical clicks trip the detector — fakeCallLlm passes the gate in 1 call
+  // each iteration, so the loop breaks at exactly 3 (not the 20-call cap).
+  assert.equal(callsMade, 3, `loop-detection should break at exactly 3 calls, got ${callsMade}`);
   const text = readFileSync(docPath, "utf8");
   assert.match(text, /stuck/);
 });

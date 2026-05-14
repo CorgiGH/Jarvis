@@ -116,7 +116,7 @@ export async function runStandin({
           .map((el) => {
             const label = (el.getAttribute("aria-label") || el.textContent || el.placeholder || el.getAttribute("title") || "")
               .replace(/\s+/g, " ").trim().slice(0, 70);
-            const disabled = el.disabled ? " [disabled]" : "";
+            const disabled = (el.disabled || el.getAttribute("aria-disabled") === "true") ? " [disabled]" : "";
             return `${el.tagName.toLowerCase()}: "${label}"${disabled}`;
           })
           .slice(0, 40)
@@ -163,6 +163,8 @@ export async function runStandin({
 
       // Loop-detection: a real naive student stops banging on the same dead element.
       // 3 identical (action,target) in a row → record a "stuck" finding and end the session.
+      // `action` is the just-pushed transcript[-1]; comparing every recent entry to it
+      // is equivalent to "all 3 are identical" (recent[-1] IS action).
       const recent = transcript.slice(-3);
       if (recent.length === 3 &&
           recent.every((t) => t.action === action.action && t.target === action.target)) {
