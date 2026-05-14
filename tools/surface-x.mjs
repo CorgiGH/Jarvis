@@ -36,7 +36,7 @@ export async function gradeOne({
   events,
   callLlm = defaultCallLlm,
   apiKey = process.env.OPENROUTER_API_KEY_STANDIN ?? process.env.OPENROUTER_API_KEY,
-  model = "google/gemma-4-26b-a4b-it:free",
+  model = "openai/gpt-oss-120b:free",
   temperature = 0,
   seed = 42,
 }) {
@@ -258,6 +258,7 @@ if (process.argv[1]?.endsWith("surface-x.mjs")) {
       fixturePath: args["from-fixture"],
       runsPerInvariant: args.calibrate ? 3 : 1,
       thresholdPct: Number(args.threshold ?? 0.80),
+      model: args.model,
     });
     console.log(`Calibration: ${r.matched}/${r.total} match (K=${r.k}). Threshold=${r.threshold_pct}. Passed: ${r.passed}`);
     console.log("Per-pair:");
@@ -281,6 +282,7 @@ if (process.argv[1]?.endsWith("surface-x.mjs")) {
     invariantIds: idsArg ? idsArg.split(",") : undefined,
     runsPerInvariant: args.calibrate ? 3 : 1,
     outputDir: resolve(REPO_ROOT, "docs/standin-findings"),
+    model: args.model,
   });
   console.log(`Wrote: ${docPath}`);
 }
