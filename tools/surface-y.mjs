@@ -112,12 +112,26 @@ export async function runStandin({
       // Persona is otherwise blind to inputs/buttons — innerText flattens them away.
       // Give it an explicit interactive-element list so it can choose real affordances.
       const affordances = await page.evaluate(() => {
+        // Build a UNIQUE, copy-pasteable selector per element — the page has
+        // multiple <textarea>/<button>, so a bare tag selector is ambiguous and
+        // page.fill/click would throw strict-mode. Prefer #id, then a stable
+        // attribute, else tag:nth-of-type(N).
+        const sel = (el) => {
+          if (el.id) return `#${CSS.escape(el.id)}`;
+          const tag = el.tagName.toLowerCase();
+          const ph = el.getAttribute("placeholder");
+          if (ph) return `${tag}[placeholder="${ph.replace(/"/g, '\\"')}"]`;
+          const al = el.getAttribute("aria-label");
+          if (al) return `${tag}[aria-label="${al.replace(/"/g, '\\"')}"]`;
+          const sibs = [...document.querySelectorAll(tag)];
+          return `${tag}:nth-of-type(${sibs.indexOf(el) + 1})`;
+        };
         return [...document.querySelectorAll('button, a[href], input, textarea, select, [role="button"], [contenteditable="true"]')]
           .map((el) => {
             const label = (el.getAttribute("aria-label") || el.textContent || el.placeholder || el.getAttribute("title") || "")
               .replace(/\s+/g, " ").trim().slice(0, 70);
             const disabled = (el.disabled || el.getAttribute("aria-disabled") === "true") ? " [disabled]" : "";
-            return `${el.tagName.toLowerCase()}: "${label}"${disabled}`;
+            return `${sel(el)} — "${label}"${disabled}`;
           })
           .slice(0, 40)
           .join("\n");
@@ -127,7 +141,7 @@ export async function runStandin({
         schema, ledger,
         sessionHistory: transcript.slice(-5),
         activeConfusionTuple: activeConfusion,
-        currentDom: `INTERACTIVE ELEMENTS (things you can click or type into — prefer these over plain text labels):\n${affordances}\n\nVISIBLE TEXT:\n${bodyText}`,
+        currentDom: `INTERACTIVE ELEMENTS — format is "<css-selector> — <label>". To click/type, set "target" to the css-selector EXACTLY (the part before the —), not the label:\n${affordances}\n\nVISIBLE TEXT:\n${bodyText}`,
       });
 
       let r;
