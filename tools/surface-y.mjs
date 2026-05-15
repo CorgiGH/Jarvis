@@ -8,6 +8,7 @@ import { buildPersonaPrompt, updateLedger, sampleConfusionTuple } from "./surfac
 import { gateLoop } from "./surface-y-gate.mjs";
 import { LINT_EVAL_SCRIPT } from "./surface-z-lints.mjs";
 import { getStamp } from "./lib/provenance.mjs";
+import { flagSuspectRun } from "./surface-y-tripwire.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -264,9 +265,11 @@ export async function runStandin({
       }
     }
 
+    const tripwire = flagSuspectRun(transcript);
     const stamp = await getStamp(null, {
       judge_model_resolved: lastJudgeModel,
       judge_prompt_sha256: lastPromptSha,
+      provider_name: "openrouter",
     });
     const ts = stamp.ts_utc.replace(/[:.]/g, "-");
     mkdirSync(outputDir, { recursive: true });
@@ -289,6 +292,7 @@ export async function runStandin({
       `calls_used: ${callsUsed}`,
       `duration_min: ${((Date.now() - t0) / 60000).toFixed(1)}`,
       `gate_violations: ${gateViolations.length}`,
+      `tripwire_status: ${tripwire.suspect ? "suspect" : "clean"}`,
       "---",
       "",
       `# Surface Y findings — task ${taskId}, session ${sessionId}`,
@@ -308,6 +312,19 @@ export async function runStandin({
         const obsCell = t.executor ? `${obs} [exec: ${t.executor}]` : obs;
         return `| ${i + 1} | ${t.action} | ${(t.target || "").slice(0, 40)} | ${payload} | ${obsCell} |`;
       }),
+      "",
+      "## Behavioral-competence tripwire",
+      `**Status:** ${tripwire.suspect ? "suspect" : "clean"}`,
+      "",
+      "**Signals:**",
+      `- ask_sidekick_count: ${tripwire.signals.ask_sidekick_count}`,
+      `- confusion_step_count: ${tripwire.signals.confusion_step_count}`,
+      "",
+      "**Thresholds:**",
+      ...Object.entries(tripwire.thresholds).map(([k, v]) => `- ${k}: ${v}`),
+      "",
+      "**Rationale:**",
+      ...(tripwire.rationale.length ? tripwire.rationale.map(r => `- ${r}`) : ["- (none — run is clean)"]),
       "",
       ...(piggybackZ ? [
         `## Z piggyback (${zPiggyFindings.length} captures)`,

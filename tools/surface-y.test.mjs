@@ -366,6 +366,96 @@ test("controller error steps do not pollute the Discovered unknown-unknowns sect
   assert.doesNotMatch(uuSection, /submit_failed/);
 });
 
+test("DRAFT-Y emits tripwire_status: clean for a give_up-only short run", async () => {
+  // Mirrors the very first test's shape: persona immediately gives up, so the
+  // run is 1 step long — below min_steps_for_zero_confusion_flag (6) and never
+  // submits, so neither tripwire path fires → status MUST be `clean`.
+  const tmp = mkdtempSync(join(tmpdir(), "y-"));
+  const schemaPath = join(tmp, "schema.yaml");
+  writeFileSync(schemaPath, [
+    "task_id: t1", "subject: PS", "concepts:",
+    "  - {id: laplace_distribution, aliases: [Laplace]}",
+    "confusion_tuples: []",
+  ].join("\n"));
+  const fakeCallLlm = async () => ({
+    text: '{"thinking":"x","action":"give_up","target":"","payload":"","observation":"stuck"}',
+    model_resolved: "fake", prompt_sha256: "z".repeat(64),
+    tokens_in: 50, tokens_out: 20, latency_ms: 200,
+  });
+  const fakeBrowser = {
+    newContext: async () => ({
+      newPage: async () => ({
+        goto: async () => {}, waitForLoadState: async () => {},
+        content: async () => "<html><body>hi</body></html>",
+        screenshot: async ({ path }) => writeFileSync(path, "PNG"),
+        evaluate: async (s) => {
+          if (typeof s === "function") return 'button: "CHECK ANSWER"';
+          if (typeof s === "string" && s.startsWith("document.body")) return "page text";
+          return { snake_case: [], low_contrast: [], small_font: [], h_overflow: false };
+        },
+        click: async () => {}, fill: async () => {}, close: async () => {},
+      }),
+      close: async () => {},
+    }),
+    close: async () => {},
+  };
+  const docPath = await runStandin({
+    taskId: "t1", schemaPath, browser: fakeBrowser, callLlm: fakeCallLlm,
+    maxCallsPerSession: 3, outputDir: tmp, sessionId: "test-y-tripwire-clean",
+    baseUrl: "https://corgflix.duckdns.org", authCookie: "test", piggybackZ: false,
+  });
+  const text = readFileSync(docPath, "utf8");
+  assert.match(text, /tripwire_status: clean/);
+  assert.match(text, /## Behavioral-competence tripwire/);
+  assert.match(text, /\*\*Status:\*\* clean/);
+});
+
+test("DRAFT-Y emits tripwire_status: suspect for an instant-submit hyper-competent run", async () => {
+  // The persona submits on step 1 with no prior friction → Path B fires
+  // (submit at step <=3 with no ask_sidekick/give_up/error) → status MUST be `suspect`.
+  const tmp = mkdtempSync(join(tmpdir(), "y-"));
+  const schemaPath = join(tmp, "schema.yaml");
+  writeFileSync(schemaPath, [
+    "task_id: t1", "subject: PS", "concepts:",
+    "  - {id: laplace_distribution, aliases: [Laplace]}",
+    "confusion_tuples: []",
+  ].join("\n"));
+  const fakeCallLlm = async () => ({
+    text: '{"thinking":"x","action":"submit","target":"","payload":"","observation":"ready"}',
+    model_resolved: "fake", prompt_sha256: "z".repeat(64),
+    tokens_in: 50, tokens_out: 20, latency_ms: 200,
+  });
+  const fakeBrowser = {
+    newContext: async () => ({
+      newPage: async () => ({
+        goto: async () => {}, waitForLoadState: async () => {},
+        content: async () => "<html><body>hi</body></html>",
+        screenshot: async ({ path }) => writeFileSync(path, "PNG"),
+        evaluate: async (s) => {
+          if (typeof s === "function") return 'button: "CHECK ANSWER"';
+          if (typeof s === "string" && s.startsWith("document.body")) return "page text";
+          return { snake_case: [], low_contrast: [], small_font: [], h_overflow: false };
+        },
+        getByRole: () => ({ count: async () => 1, click: async () => {} }),
+        click: async () => {}, fill: async () => {}, close: async () => {},
+      }),
+      close: async () => {},
+    }),
+    close: async () => {},
+  };
+  const docPath = await runStandin({
+    taskId: "t1", schemaPath, browser: fakeBrowser, callLlm: fakeCallLlm,
+    maxCallsPerSession: 1, outputDir: tmp, sessionId: "test-y-tripwire-suspect",
+    baseUrl: "https://corgflix.duckdns.org", authCookie: "test", piggybackZ: false,
+  });
+  const text = readFileSync(docPath, "utf8");
+  assert.match(text, /tripwire_status: suspect/);
+  assert.match(text, /## Behavioral-competence tripwire/);
+  assert.match(text, /\*\*Status:\*\* suspect/);
+  // Rationale must reference Path B's wording.
+  assert.match(text, /submit at step \d+ with no prior/);
+});
+
 test("a successful submit step is marked controller-executed in the finding doc", async () => {
   const tmp = mkdtempSync(join(tmpdir(), "y-"));
   const schemaPath = join(tmp, "schema.yaml");
