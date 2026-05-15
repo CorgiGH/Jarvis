@@ -12,6 +12,50 @@ import { flagSuspectRun } from "./surface-y-tripwire.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+// --- Fallback-model parsing + routing (Spec B Task 7) ---
+// :free-band enforcement is load-bearing per council 1778839098: NEVER let Y's
+// runaway-loop spend land on a paid/up-banded model by accident.
+
+export function parseFallbackModels(csv) {
+  if (!csv || !csv.trim()) return [];
+  const entries = csv.split(",").map(s => s.trim()).filter(Boolean);
+  for (const e of entries) {
+    if (!e.endsWith(":free")) {
+      throw new Error(
+        `fallback list contains non-:free model: ${e} — only :free band allowed (council 1778839098)`,
+      );
+    }
+  }
+  return entries;
+}
+
+const DAILY_QUOTA_MARKERS = ["free-models-per-day", "daily limit", "quota exhausted"];
+
+function isDailyQuotaError(err) {
+  const msg = (err?.message || "").toLowerCase();
+  return DAILY_QUOTA_MARKERS.some(m => msg.includes(m));
+}
+
+export async function callLlmWithFallback({ primary, fallbacks, callLlm, ...callArgs }) {
+  const models = [primary, ...fallbacks];
+  let lastErr;
+  for (const model of models) {
+    try {
+      return await callLlm({ ...callArgs, model });
+    } catch (e) {
+      lastErr = e;
+      const msg = e?.message || "";
+      // Only retry on daily-quota markers or HTTP 5xx (502/503). Anything else
+      // (auth, schema, network, parse) surfaces immediately — fail loud.
+      if (!isDailyQuotaError(e) && !msg.includes("503") && !msg.includes("502")) {
+        throw e;
+      }
+      // fallthrough: try next model
+    }
+  }
+  throw new Error(`all models failed (last error: ${lastErr?.message || "(unknown)"})`);
+}
+
 function parseYaml(text) {
   // Minimal YAML parser for the schema shape we use (flow style only).
   const schema = { concepts: [], confusion_tuples: [] };
@@ -65,6 +109,7 @@ export async function runStandin({
   // never let that land on the production key by accident.
   apiKey = process.env.OPENROUTER_API_KEY_STANDIN,
   model = "openai/gpt-oss-120b:free",
+  fallbackModels = [],
   maxCallsPerSession = 50,
   maxDurationMin = 10,
   maxRegens = 2,
@@ -77,6 +122,18 @@ export async function runStandin({
 }) {
   process.env.SURFACE_VERSION = "y-v1.0";
   if (!apiKey && callLlm === defaultCallLlm) throw new Error("runStandin: OPENROUTER_API_KEY_STANDIN required");
+
+  // When a fallback list is provided, wrap the raw callLlm with the fallback
+  // router. The wrapper preserves the call shape (the wrapped fn still accepts
+  // `{model, ...}`), so gateLoop and any other caller need not change.
+  const effectiveCallLlm = fallbackModels.length > 0
+    ? (args) => callLlmWithFallback({
+        primary: args.model ?? model,
+        fallbacks: fallbackModels,
+        callLlm,
+        ...args,
+      })
+    : callLlm;
 
   const schema = parseYaml(readFileSync(schemaPath, "utf8"));
   const ownsBrowser = !browser;
@@ -167,7 +224,7 @@ export async function runStandin({
           initialUserPrompt: "Decide next action.",
           systemPrompt: prompt,
           schema, ledger,
-          callLlm, apiKey, model,
+          callLlm: effectiveCallLlm, apiKey, model,
           maxRegens,
         });
       } catch (e) {
@@ -356,13 +413,16 @@ if (process.argv[1]?.endsWith("surface-y.mjs")) {
     const m = a.match(/^--([^=]+)=(.+)$/); return m ? [m[1], m[2]] : [a.replace(/^--/, ""), true];
   }));
   if (!args.task || !args.schema) {
-    console.error("Usage: surface-y.mjs --task=<id> --schema=<path> [--model=<m>] [--max-calls=<n>] [--no-piggyback-z]");
+    console.error("Usage: surface-y.mjs --task=<id> --schema=<path> [--model=<m>] [--fallback-models=<csv-of-:free-models>] [--max-calls=<n>] [--no-piggyback-z]");
     process.exit(2);
   }
+  // parseFallbackModels throws loudly on any non-:free entry (council 1778839098).
+  const fallbackModels = parseFallbackModels(args["fallback-models"] || "");
   const docPath = await runStandin({
     taskId: args.task,
     schemaPath: args.schema,
     model: args.model,
+    fallbackModels,
     piggybackZ: !args["no-piggyback-z"],
     sessionId: args.session ?? `y-${Date.now()}`,
     // --max-calls bounds the OpenRouter spend for a controlled run; omitted = runStandin's 50 default.

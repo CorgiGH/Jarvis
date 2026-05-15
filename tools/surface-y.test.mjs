@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runStandin } from "./surface-y.mjs";
+import { runStandin, parseFallbackModels, callLlmWithFallback } from "./surface-y.mjs";
 
 test("runStandin enforces hard cap on LLM calls", async () => {
   const tmp = mkdtempSync(join(tmpdir(), "y-"));
@@ -493,4 +493,76 @@ test("a successful submit step is marked controller-executed in the finding doc"
     baseUrl: "https://corgflix.duckdns.org", authCookie: "test", piggybackZ: false,
   });
   assert.match(readFileSync(docPath, "utf8"), /\[exec: controller-deterministic\]/);
+});
+
+// --- Task 7: --fallback-models parsing + :free-band enforcement ---
+
+test("parseFallbackModels: empty string returns []", () => {
+  assert.deepEqual(parseFallbackModels(""), []);
+});
+
+test("parseFallbackModels: valid :free csv returns array", () => {
+  assert.deepEqual(
+    parseFallbackModels("openai/gpt-oss-120b:free,deepseek/deepseek-chat:free"),
+    ["openai/gpt-oss-120b:free", "deepseek/deepseek-chat:free"],
+  );
+});
+
+test("parseFallbackModels: rejects non-:free entry with clear error", () => {
+  assert.throws(
+    () => parseFallbackModels("anthropic/claude-opus-4-7,openai/gpt-oss-120b:free"),
+    /fallback list contains non-:free model: anthropic\/claude-opus-4-7/i,
+  );
+});
+
+test("parseFallbackModels: trims whitespace", () => {
+  assert.deepEqual(
+    parseFallbackModels(" openai/gpt-oss-120b:free , x/y:free "),
+    ["openai/gpt-oss-120b:free", "x/y:free"],
+  );
+});
+
+// --- Task 7: callLlmWithFallback routing ---
+
+test("callLlmWithFallback: succeeds on primary when primary succeeds", async () => {
+  const calls = [];
+  const fakeCallLlm = async ({ model }) => {
+    calls.push(model);
+    return { text: "ok", model_resolved: model, prompt_sha256: "x", tokens_in: 0, tokens_out: 0, latency_ms: 1 };
+  };
+  const r = await callLlmWithFallback({
+    primary: "openai/gpt-oss-120b:free",
+    fallbacks: ["other:free"],
+    callLlm: fakeCallLlm,
+    apiKey: "k", systemPrompt: "s", userPrompt: "u",
+  });
+  assert.equal(r.model_resolved, "openai/gpt-oss-120b:free");
+  assert.deepEqual(calls, ["openai/gpt-oss-120b:free"]);
+});
+
+test("callLlmWithFallback: advances on daily-quota error from primary", async () => {
+  const fakeCallLlm = async ({ model }) => {
+    if (model === "primary:free") throw new Error("free-models-per-day exceeded");
+    return { text: "ok", model_resolved: model, prompt_sha256: "x", tokens_in: 0, tokens_out: 0, latency_ms: 1 };
+  };
+  const r = await callLlmWithFallback({
+    primary: "primary:free",
+    fallbacks: ["fallback1:free"],
+    callLlm: fakeCallLlm,
+    apiKey: "k", systemPrompt: "s", userPrompt: "u",
+  });
+  assert.equal(r.model_resolved, "fallback1:free");
+});
+
+test("callLlmWithFallback: all models failing surfaces final error", async () => {
+  const fakeCallLlm = async () => { throw new Error("free-models-per-day exhausted"); };
+  await assert.rejects(
+    () => callLlmWithFallback({
+      primary: "p:free",
+      fallbacks: ["f1:free", "f2:free"],
+      callLlm: fakeCallLlm,
+      apiKey: "k", systemPrompt: "s", userPrompt: "u",
+    }),
+    /all models failed|exhausted/i,
+  );
 });
