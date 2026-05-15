@@ -161,3 +161,44 @@ test("loadAuthToken: throws JARVIS_AUTH_UNRESOLVED when neither env nor file is 
     /JARVIS_AUTH_UNRESOLVED/,
   );
 });
+
+import { mintSession } from "./seed-tutor-events.mjs";
+
+// Mock transport for mintSession: GET auto-session returns a mint response
+// shaped like Node's fetch Response (status, json(), headers.getSetCookie()).
+function mockMintTransport({ status = 200, body = { ok: true, userId: "owner", csrf: "C32" }, setCookie = ["jarvis_session=S64; Max-Age=1209600; Path=/; Secure; HttpOnly"] } = {}) {
+  return async (url) => {
+    if (url.endsWith("/api/v1/tutor/auto-session")) {
+      return { status, json: async () => body, headers: { getSetCookie: () => setCookie } };
+    }
+    throw new Error(`unexpected url ${url}`);
+  };
+}
+
+test("mintSession: 200 -> parses jarvisSession from Set-Cookie and csrf from the body", async () => {
+  const r = await mintSession({ jarvisAuth: "A", baseUrl: "https://x.test", transport: mockMintTransport() });
+  assert.equal(r.ok, true);
+  assert.equal(r.jarvisSession, "S64");
+  assert.equal(r.csrf, "C32");
+});
+
+test("mintSession: 401 -> hard auth_error telling the user to refresh the token", async () => {
+  const r = await mintSession({ jarvisAuth: "A", baseUrl: "https://x.test", transport: mockMintTransport({ status: 401 }) });
+  assert.equal(r.ok, false);
+  assert.equal(r.outcome, "auth_error");
+  assert.equal(r.hard, true);
+  assert.match(r.detail, /AUTH_TOKEN\.txt/);
+});
+
+test("mintSession: non-200/non-401 -> hard mint_error", async () => {
+  const r = await mintSession({ jarvisAuth: "A", baseUrl: "https://x.test", transport: mockMintTransport({ status: 503 }) });
+  assert.equal(r.ok, false);
+  assert.equal(r.outcome, "mint_error");
+  assert.equal(r.hard, true);
+});
+
+test("mintSession: 200 but missing csrf body field -> hard mint_error", async () => {
+  const r = await mintSession({ jarvisAuth: "A", baseUrl: "https://x.test", transport: mockMintTransport({ body: { ok: true } }) });
+  assert.equal(r.ok, false);
+  assert.equal(r.outcome, "mint_error");
+});

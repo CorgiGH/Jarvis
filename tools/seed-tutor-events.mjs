@@ -77,6 +77,39 @@ export function classifyOutcome(httpStatus, reply) {
   return { outcome: "success", hard: false, detail: `correct=${reply?.correct} score=${reply?.score}` };
 }
 
+// GET /api/v1/tutor/auto-session with the jarvis_auth cookie mints a fresh
+// jarvis_session + csrf pair (verified 2026-05-15). jarvis_session is parsed
+// from Set-Cookie; csrf is read from the JSON response body. transport is
+// injectable for tests. Returns { ok:true, jarvisSession, csrf } on success,
+// or a hard-failure shape { ok:false, outcome, hard:true, detail }.
+export async function mintSession({ jarvisAuth, baseUrl, transport = globalThis.fetch }) {
+  let resp;
+  try {
+    resp = await transport(`${baseUrl}/api/v1/tutor/auto-session`, {
+      method: "GET",
+      headers: { "Cookie": `jarvis_auth=${jarvisAuth}` },
+    });
+  } catch (e) {
+    return { ok: false, outcome: "network_error", hard: true, detail: String(e).slice(0, 160) };
+  }
+  if (resp.status === 401) {
+    return { ok: false, outcome: "auth_error", hard: true, detail: "401 from auto-session — jarvis_auth invalid/expired; refresh tools/AUTH_TOKEN.txt" };
+  }
+  if (resp.status !== 200) {
+    return { ok: false, outcome: "mint_error", hard: true, detail: `auto-session HTTP ${resp.status}` };
+  }
+  let body = null;
+  try { body = await resp.json(); } catch { body = null; }
+  const setCookies = resp.headers?.getSetCookie?.() ?? [];
+  const pair = setCookies.find((c) => c.startsWith("jarvis_session="));
+  const jarvisSession = pair ? pair.slice("jarvis_session=".length).split(";")[0] : null;
+  const csrf = body?.csrf ?? null;
+  if (!jarvisSession || !csrf) {
+    return { ok: false, outcome: "mint_error", hard: true, detail: "auto-session 200 but missing jarvis_session Set-Cookie or csrf body field" };
+  }
+  return { ok: true, jarvisSession, csrf };
+}
+
 // One authenticated POST for one attempt. transport defaults to fetch and is
 // injectable for tests. A thrown transport error is a hard network_error; a
 // non-JSON body is tolerated (reply stays null, classifyOutcome handles it).
