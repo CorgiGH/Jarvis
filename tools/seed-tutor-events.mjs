@@ -1,11 +1,16 @@
 // tools/seed-tutor-events.mjs
 //
 // Deterministic, non-LLM seeder for drill_grade events. POSTs hardcoded
-// attempts to POST /api/v1/drill/grade (TutorRoutes.kt:1580) so the Surface X
-// golden fixture has real events to draw from. The seeder controls WHAT is
-// submitted; the server grades each attempt server-side.
+// attempts to POST /api/v1/drill/grade so the Surface X golden fixture has
+// real events to draw from. The seeder controls WHAT is submitted; the server
+// grades each attempt server-side.
 //
-// Spec: docs/superpowers/specs/2026-05-14-deterministic-tutor-event-seeder-design.md
+// Auth (verified 2026-05-15): jarvis_auth (env || tools/AUTH_TOKEN.txt) is the
+// outer auth-token interceptor gating all /api/v1/* routes; GET
+// /api/v1/tutor/auto-session mints a jarvis_session + csrf pair; POST
+// /api/v1/drill/grade needs all three cookies + an X-CSRF-Token matching csrf.
+//
+// Spec: docs/superpowers/specs/2026-05-15-deterministic-tutor-event-seeder-v2-design.md
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -16,10 +21,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_BASE_URL = "https://corgflix.duckdns.org";
 export const DEFAULT_TASK_ID = "01KR6K07T6PATPRR5KH1JXYF8E";
 export const AUTH_TOKEN_PATH = join(HERE, "AUTH_TOKEN.txt");
-// Csrf.kt:8-16 is a double-submit cookie check — the server only verifies
-// header("X-CSRF-Token") === cookie("csrf"), both non-blank. A first-party
-// tool legitimately controls both sides, so any constant works.
-export const CSRF_TOKEN = "seed-tutor-events-csrf";
 
 export function loadFixture() {
   return JSON.parse(readFileSync(join(HERE, "seed-tutor-events.fixture.json"), "utf8"));
@@ -36,26 +37,30 @@ export function loadAuthToken({ env = process.env, authTokenPath = AUTH_TOKEN_PA
   try {
     const fromFile = readFileSync(authTokenPath, "utf8").trim();
     if (fromFile) return fromFile;
-  } catch { /* fall through to the throw */ }
+  } catch (e) {
+    if (e.code !== "ENOENT") {
+      throw new Error(`JARVIS_AUTH_UNRESOLVED: could not read ${authTokenPath}: ${e.message}`);
+    }
+    // ENOENT (file missing) is the expected "not configured" case — fall through.
+  }
   throw new Error("JARVIS_AUTH_UNRESOLVED: set $JARVIS_AUTH_COOKIE or create tools/AUTH_TOKEN.txt");
 }
 
-// Merge one attempt's userAttempt into the captured ApiDrillGradeRequest
-// template (TutorRoutes.kt:1930-1940).
+// Merge one attempt's userAttempt into the captured ApiDrillGradeRequest template.
 export function buildRequest(template, attempt) {
   return { ...template, userAttempt: attempt.userAttempt };
 }
 
-// jarvis_session cookie authenticates (TutorRoutes.kt:1585). X-Standin-Run:1
-// tags the event is_synthetic=true (TutorRoutes.kt:1602,1686). The csrf
-// cookie + X-CSRF-Token header are the self-issued double-submit pair.
-export function buildHeaders(sessionCookie, csrfToken = CSRF_TOKEN) {
-  if (!sessionCookie) throw new Error("buildHeaders: sessionCookie is required");
+// POST /api/v1/drill/grade requires all three cookies (verified 2026-05-15):
+// jarvis_auth (outer gate), jarvis_session + csrf (minted via auto-session).
+// X-CSRF-Token must equal the csrf cookie. X-Standin-Run:1 is intended to tag
+// the appended event is_synthetic=true — to be confirmed on the first live run.
+export function buildHeaders({ jarvisAuth, jarvisSession, csrf }) {
   return {
     "Content-Type": "application/json",
     "X-Standin-Run": "1",
-    "X-CSRF-Token": csrfToken,
-    "Cookie": `jarvis_session=${sessionCookie}; csrf=${csrfToken}`,
+    "X-CSRF-Token": csrf,
+    "Cookie": `jarvis_auth=${jarvisAuth}; jarvis_session=${jarvisSession}; csrf=${csrf}`,
   };
 }
 
@@ -64,8 +69,8 @@ export function buildHeaders(sessionCookie, csrfToken = CSRF_TOKEN) {
 // soft warning (server OpenRouter was down — event still appended, status:error).
 // A 200 with a null reply (non-JSON body) is also soft — the event still landed.
 export function classifyOutcome(httpStatus, reply) {
-  if (httpStatus === 401) return { outcome: "auth_error", hard: true, detail: "401 — invalid/missing jarvis_session cookie" };
-  if (httpStatus === 403) return { outcome: "csrf_error", hard: true, detail: "403 — CSRF check failed (unexpected; seeder self-issues the pair)" };
+  if (httpStatus === 401) return { outcome: "auth_error", hard: true, detail: "401 — auth rejected (jarvis_auth or jarvis_session invalid)" };
+  if (httpStatus === 403) return { outcome: "csrf_error", hard: true, detail: "403 — CSRF check failed (csrf contract changed)" };
   if (httpStatus === 400) return { outcome: "bad_request", hard: true, detail: "400 — payload no longer matches ApiDrillGradeRequest" };
   if (httpStatus !== 200) return { outcome: "http_error", hard: true, detail: `HTTP ${httpStatus}` };
   if (reply === null) {
@@ -104,8 +109,11 @@ export async function mintSession({ jarvisAuth, baseUrl, transport = globalThis.
   const pair = setCookies.find((c) => c.startsWith("jarvis_session="));
   const jarvisSession = pair ? pair.slice("jarvis_session=".length).split(";")[0] : null;
   const csrf = body?.csrf ?? null;
-  if (!jarvisSession || !csrf) {
-    return { ok: false, outcome: "mint_error", hard: true, detail: "auto-session 200 but missing jarvis_session Set-Cookie or csrf body field" };
+  if (!jarvisSession) {
+    return { ok: false, outcome: "mint_error", hard: true, detail: "auto-session 200 but Set-Cookie did not include jarvis_session" };
+  }
+  if (!csrf) {
+    return { ok: false, outcome: "mint_error", hard: true, detail: "auto-session 200 but JSON body missing csrf field" };
   }
   return { ok: true, jarvisSession, csrf };
 }
@@ -113,9 +121,9 @@ export async function mintSession({ jarvisAuth, baseUrl, transport = globalThis.
 // One authenticated POST for one attempt. transport defaults to fetch and is
 // injectable for tests. A thrown transport error is a hard network_error; a
 // non-JSON body is tolerated (reply stays null, classifyOutcome handles it).
-export async function seedOne({ template, attempt, baseUrl, sessionCookie, csrfToken = CSRF_TOKEN, transport = globalThis.fetch }) {
+export async function seedOne({ template, attempt, baseUrl, jarvisAuth, jarvisSession, csrf, transport = globalThis.fetch }) {
   const body = JSON.stringify(buildRequest(template, attempt));
-  const headers = buildHeaders(sessionCookie, csrfToken);
+  const headers = buildHeaders({ jarvisAuth, jarvisSession, csrf });
   let httpStatus, reply = null;
   try {
     const resp = await transport(`${baseUrl}/api/v1/drill/grade`, { method: "POST", headers, body });
@@ -128,12 +136,23 @@ export async function seedOne({ template, attempt, baseUrl, sessionCookie, csrfT
   return { label: attempt.label, httpStatus, reply, ...c };
 }
 
-// Seed every attempt sequentially. Sequential, not parallel: the server's
-// TutorEventLog append is the point — keep it simple and ordered.
-export async function seedAll({ template, attempts, baseUrl, sessionCookie, csrfToken = CSRF_TOKEN, transport = globalThis.fetch }) {
+// Mint once, then seed every attempt sequentially reusing the minted session.
+// If the mint fails, every attempt hard-fails with the mint's detail and
+// nothing is POSTed.
+export async function seedAll({ template, attempts, baseUrl, jarvisAuth, transport = globalThis.fetch }) {
+  const minted = await mintSession({ jarvisAuth, baseUrl, transport });
+  if (!minted.ok) {
+    return attempts.map((a) => ({
+      label: a.label, httpStatus: null, reply: null,
+      outcome: minted.outcome, hard: true, detail: minted.detail,
+    }));
+  }
   const results = [];
   for (const attempt of attempts) {
-    results.push(await seedOne({ template, attempt, baseUrl, sessionCookie, csrfToken, transport }));
+    results.push(await seedOne({
+      template, attempt, baseUrl, jarvisAuth,
+      jarvisSession: minted.jarvisSession, csrf: minted.csrf, transport,
+    }));
   }
   return results;
 }
@@ -141,14 +160,16 @@ export async function seedAll({ template, attempts, baseUrl, sessionCookie, csrf
 // CLI entrypoint — follows the tools/ convention (process.argv[1] guard +
 // --key=value parsing) used in surface-z.mjs / surface-y.mjs.
 if (process.argv[1]?.endsWith("seed-tutor-events.mjs")) {
-  const args = Object.fromEntries(process.argv.slice(2).map(a => {
+  const args = Object.fromEntries(process.argv.slice(2).map((a) => {
     const m = a.match(/^--([^=]+)=(.+)$/);
     return m ? [m[1], m[2]] : [a.replace(/^--/, ""), true];
   }));
 
-  const sessionCookie = process.env.JARVIS_SESSION_COOKIE;
-  if (!sessionCookie) {
-    console.error("ERR: JARVIS_SESSION_COOKIE unset. Copy a valid jarvis_session cookie value from browser devtools (Application > Cookies) and export it.");
+  let jarvisAuth;
+  try {
+    jarvisAuth = loadAuthToken();
+  } catch {
+    console.error("ERR: jarvis_auth unresolved. Set $JARVIS_AUTH_COOKIE or create tools/AUTH_TOKEN.txt with a valid jarvis_auth value.");
     process.exit(2);
   }
 
@@ -162,16 +183,28 @@ if (process.argv[1]?.endsWith("seed-tutor-events.mjs")) {
   const { template, attempts } = loadFixture();
 
   if (args["dry-run"]) {
+    const minted = await mintSession({ jarvisAuth, baseUrl });
+    if (!minted.ok) {
+      console.error(`ERR: --dry-run mint failed: ${minted.detail}`);
+      process.exit(1);
+    }
+    const mask = (v) => `<redacted:${String(v).length}-chars>`;
     for (const attempt of attempts) {
+      const headers = buildHeaders({ jarvisAuth, jarvisSession: minted.jarvisSession, csrf: minted.csrf });
+      const maskedHeaders = {
+        ...headers,
+        "X-CSRF-Token": mask(headers["X-CSRF-Token"]),
+        "Cookie": `jarvis_auth=${mask(jarvisAuth)}; jarvis_session=${mask(minted.jarvisSession)}; csrf=${mask(minted.csrf)}`,
+      };
       console.log(`--- ${attempt.label} ---`);
       console.log("POST", `${baseUrl}/api/v1/drill/grade`);
-      console.log("headers:", JSON.stringify(buildHeaders(sessionCookie), null, 2));
+      console.log("headers:", JSON.stringify(maskedHeaders, null, 2));
       console.log("body:", JSON.stringify(buildRequest(template, attempt), null, 2));
     }
     process.exit(0);
   }
 
-  const results = await seedAll({ template, attempts, baseUrl, sessionCookie });
+  const results = await seedAll({ template, attempts, baseUrl, jarvisAuth });
   let hardFail = false;
   for (const r of results) {
     const tag = r.hard ? "FAIL" : (r.outcome === "ungraded" ? "WARN" : "OK");
