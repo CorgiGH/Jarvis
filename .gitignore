@@ -26,3 +26,10 @@ tmp-md/
 docs/standin-findings/screenshots/
 docs/standin-findings/DRAFT-*.md
 tools/.fixtures-cache/
+
+# Dev/review screenshots + tooling artifacts (ephemeral; regenerated on demand)
+/*.png
+review-screens/
+tools/*.png
+tools/node_modules/
+.claude/scheduled_tasks.lock
