@@ -35,7 +35,13 @@ export async function callLlm({
     .digest("hex");
 
   const args = ["--print"];
-  if (model) args.push("--model", model);
+  if (model) {
+    // Claude CLI only accepts Claude-shaped model IDs (`claude-*`). Callers may
+    // pass an OpenRouter-shaped default (`openai/gpt-oss-120b:free`) via the
+    // shared callLlm signature — drop those silently so the CLI uses its own
+    // default instead of exiting 1 with the error on stdout.
+    if (/^claude-/.test(model)) args.push("--model", model);
+  }
   // System+user join — Claude CLI --print takes prompt from stdin or arg;
   // we use stdin to avoid arg-size limits and shell escaping.
   const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
@@ -58,12 +64,20 @@ export async function callLlm({
     throw new Error(`callLlm: claude CLI timeout (${timeoutMs}ms) or signal ${signal}`);
   }
   if (exitCode !== 0) {
-    throw new Error(`callLlm: claude CLI exit ${exitCode} — ${stderrBuf.slice(0, 200) || "(no stderr)"}`);
+    // Claude CLI writes some errors (e.g. "invalid model") to stdout, not stderr —
+    // include both buffers in the message so debugging doesn't require strace.
+    const detail = stderrBuf.trim() || stdoutBuf.trim().slice(0, 300) || "(no output)";
+    throw new Error(`callLlm: claude CLI exit ${exitCode} — ${detail}`);
   }
 
+  // model_resolved reflects what was ACTUALLY passed to the CLI — if the caller's
+  // model didn't match `claude-*` we dropped it above and ran with the CLI default.
+  const modelResolved = (model && /^claude-/.test(model))
+    ? model
+    : `claude-cli@${cli_version}`;
   return {
     text: stdoutBuf,
-    model_resolved: model ?? `claude-cli@${cli_version}`,
+    model_resolved: modelResolved,
     prompt_sha256,
     tokens_in: null,
     tokens_out: null,

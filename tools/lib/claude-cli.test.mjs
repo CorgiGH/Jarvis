@@ -83,3 +83,35 @@ test("callLlm: rejects when CLAUDE_CLI_BIN does not resolve (versionImpl throws)
     /claude.*not.*found|ENOENT/i,
   );
 });
+
+test("callLlm: non-Claude model name is dropped, CLI runs with its default", async () => {
+  // Surface X+Z share a callLlm signature with OpenRouter; their default model
+  // is an OpenRouter-shaped name (e.g. openai/gpt-oss-120b:free). Claude CLI
+  // rejects non-claude-* model IDs with exit 1 (error on stdout). Drop them
+  // silently so the CLI uses its own default, and reflect the substitution
+  // in model_resolved.
+  let observedArgs;
+  const r = await callLlm({
+    systemPrompt: "sys",
+    userPrompt: "hi",
+    model: "openai/gpt-oss-120b:free",
+    spawnImpl: (_bin, args) => { observedArgs = args; return makeMockChild({ stdout: "ok" }); },
+    versionImpl: () => "2.1.141",
+  });
+  assert.ok(!observedArgs.includes("--model"), "non-claude model should NOT pass --model");
+  assert.equal(r.model_resolved, "claude-cli@2.1.141");
+});
+
+test("callLlm: error message includes stdout when stderr is empty", async () => {
+  // Some Claude CLI errors (e.g. "invalid model") write to stdout, not stderr.
+  // Plain "claude CLI exit 1 — (no stderr)" gave callers nothing to debug.
+  await assert.rejects(
+    () => callLlm({
+      systemPrompt: "sys",
+      userPrompt: "hi",
+      spawnImpl: () => makeMockChild({ stdout: "There's an issue with the selected model", stderr: "", exitCode: 1 }),
+      versionImpl: () => "2.1.141",
+    }),
+    /claude CLI exit 1.*issue with the selected model/,
+  );
+});
