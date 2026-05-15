@@ -266,7 +266,9 @@ git commit -m "feat(standin): mintSession — GET /auto-session mints jarvis_ses
 
 This is the cascade: `buildHeaders`'s signature change forces `seedOne` → `seedAll` → the CLI. They must change together to keep the file consistent, so this is one task. Both files are overwritten with their complete final content (this absorbs Tasks 1-2's additions verbatim and presents every function in final position). Test count stays **21** (the old `buildHeaders`/`seedOne`/`seedAll` tests are replaced 1:1-ish by new-signature versions).
 
-> **Note — intentional change to a Task-1 function:** the `loadAuthToken` catch block in the overwrite below is *deliberately* hardened vs. Task 1's version — it now distinguishes `ENOENT` (file missing → fall through) from other fs errors like `EACCES` (file unreadable → throw with the real cause). This folds in the Task-1 code-review finding; it is not an accidental drift. The existing `loadAuthToken` tests still pass (a nonexistent path is `ENOENT` → still falls through to the generic throw).
+> **Note — intentional changes to Task-1/Task-2 functions, folding in their code-review findings (not accidental drift):**
+> - `loadAuthToken`'s catch block is hardened vs. Task 1's version — it now distinguishes `ENOENT` (file missing → fall through) from other fs errors like `EACCES` (file unreadable → throw with the real cause). The existing `loadAuthToken` tests still pass (a nonexistent path is `ENOENT` → still falls through to the generic throw).
+> - `mintSession`'s single `!jarvisSession || !csrf` guard is split into two separate guards with distinct `detail` strings — so a hard failure tells you *which* field the `auto-session` 200 was missing (Set-Cookie session vs. body csrf), since those have different root causes. The existing `mintSession` "missing csrf body field" test still passes (`jarvisSession` is present → first guard skipped → second guard fires → `mint_error`).
 
 - [ ] **Step 1: Overwrite the test file**
 
@@ -633,8 +635,11 @@ export async function mintSession({ jarvisAuth, baseUrl, transport = globalThis.
   const pair = setCookies.find((c) => c.startsWith("jarvis_session="));
   const jarvisSession = pair ? pair.slice("jarvis_session=".length).split(";")[0] : null;
   const csrf = body?.csrf ?? null;
-  if (!jarvisSession || !csrf) {
-    return { ok: false, outcome: "mint_error", hard: true, detail: "auto-session 200 but missing jarvis_session Set-Cookie or csrf body field" };
+  if (!jarvisSession) {
+    return { ok: false, outcome: "mint_error", hard: true, detail: "auto-session 200 but Set-Cookie did not include jarvis_session" };
+  }
+  if (!csrf) {
+    return { ok: false, outcome: "mint_error", hard: true, detail: "auto-session 200 but JSON body missing csrf field" };
   }
   return { ok: true, jarvisSession, csrf };
 }
