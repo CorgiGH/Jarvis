@@ -39,5 +39,6 @@ export async function getStamp(page, opts = {}) {
     surface_version: process.env.SURFACE_VERSION ?? "unknown",
     judge_model_resolved: opts.judge_model_resolved ?? null,
     judge_prompt_sha256: opts.judge_prompt_sha256 ?? null,
+    provider_name: opts.provider_name ?? null,
   };
 }

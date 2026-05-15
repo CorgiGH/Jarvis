@@ -61,3 +61,13 @@ test("normalized hash is stable across volatile-only changes (Council #4 RA-1)",
   const h = s => createHash("sha256").update(normalizeDomForFingerprint(s)).digest("hex").slice(0,16);
   assert.equal(h(a), h(b));
 });
+
+test("getStamp: provider_name defaults to null when not provided", async () => {
+  const s = await getStamp(null, {});
+  assert.equal(s.provider_name, null);
+});
+
+test("getStamp: provider_name flows through from overrides", async () => {
+  const s = await getStamp(null, { provider_name: "claude-cli" });
+  assert.equal(s.provider_name, "claude-cli");
+});
