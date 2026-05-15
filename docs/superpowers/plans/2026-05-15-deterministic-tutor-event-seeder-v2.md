@@ -266,6 +266,8 @@ git commit -m "feat(standin): mintSession — GET /auto-session mints jarvis_ses
 
 This is the cascade: `buildHeaders`'s signature change forces `seedOne` → `seedAll` → the CLI. They must change together to keep the file consistent, so this is one task. Both files are overwritten with their complete final content (this absorbs Tasks 1-2's additions verbatim and presents every function in final position). Test count stays **21** (the old `buildHeaders`/`seedOne`/`seedAll` tests are replaced 1:1-ish by new-signature versions).
 
+> **Note — intentional change to a Task-1 function:** the `loadAuthToken` catch block in the overwrite below is *deliberately* hardened vs. Task 1's version — it now distinguishes `ENOENT` (file missing → fall through) from other fs errors like `EACCES` (file unreadable → throw with the real cause). This folds in the Task-1 code-review finding; it is not an accidental drift. The existing `loadAuthToken` tests still pass (a nonexistent path is `ENOENT` → still falls through to the generic throw).
+
 - [ ] **Step 1: Overwrite the test file**
 
 Overwrite `tools/seed-tutor-events.test.mjs` with EXACTLY this complete content:
@@ -559,7 +561,12 @@ export function loadAuthToken({ env = process.env, authTokenPath = AUTH_TOKEN_PA
   try {
     const fromFile = readFileSync(authTokenPath, "utf8").trim();
     if (fromFile) return fromFile;
-  } catch { /* fall through to the throw */ }
+  } catch (e) {
+    if (e.code !== "ENOENT") {
+      throw new Error(`JARVIS_AUTH_UNRESOLVED: could not read ${authTokenPath}: ${e.message}`);
+    }
+    // ENOENT (file missing) is the expected "not configured" case — fall through.
+  }
   throw new Error("JARVIS_AUTH_UNRESOLVED: set $JARVIS_AUTH_COOKIE or create tools/AUTH_TOKEN.txt");
 }
 
