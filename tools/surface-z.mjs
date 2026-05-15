@@ -4,10 +4,17 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { callLlm as defaultCallLlm } from "./lib/openrouter.mjs";
+import { callLlm as claudeCliCallLlm } from "./lib/claude-cli.mjs";
 import { LINT_EVAL_SCRIPT } from "./surface-z-lints.mjs";
 import { getStamp } from "./lib/provenance.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+export function resolveProvider({ provider = "openrouter" } = {}) {
+  if (provider === "openrouter") return { name: "openrouter", callLlm: defaultCallLlm };
+  if (provider === "claude-cli") return { name: "claude-cli", callLlm: claudeCliCallLlm };
+  throw new Error(`unknown provider: ${provider} (expected: openrouter | claude-cli)`);
+}
 
 // Fix 2: Clean system prompt — persona + JSON schema only, no <INSERT> placeholders
 const LAYPERSON_SYSTEM_PROMPT = `You are a non-designer Romanian uni student opening this study site for the first time. You're judging ONLY whether things look right to your eyes — not technical correctness.
@@ -40,6 +47,7 @@ export async function sweepPages({
   authCookie = process.env.JARVIS_AUTH_COOKIE,
   model = "openai/gpt-oss-120b:free",
   textFallbackModel = "deepseek/deepseek-v4-flash:free",
+  providerName = null,
 } = {}) {
   process.env.SURFACE_VERSION = "z-v1.0";
   const ownsBrowser = !browser;
@@ -145,6 +153,7 @@ export async function sweepPages({
     const stamp = await getStamp(null, {
       judge_model_resolved: lastJudgeModel,
       judge_prompt_sha256: lastPromptSha,
+      provider_name: providerName,
     });
     const ts = stamp.ts_utc.replace(/[:.]/g, "-");
     const docPath = join(outputDir, `DRAFT-Z-${sessionId}-${ts}.md`);
@@ -161,6 +170,7 @@ export async function sweepPages({
       `  surface_version: ${stamp.surface_version}`,
       `  judge_model_resolved: ${stamp.judge_model_resolved ?? "null"}`,
       `  judge_prompt_sha256: ${stamp.judge_prompt_sha256 ?? "null"}`,
+      `  provider_name: ${stamp.provider_name ?? "null"}`,
       `pages_visited: ${allFindings.length}`,
       "---",
       "",
@@ -206,12 +216,15 @@ if (process.argv[1]?.endsWith("surface-z.mjs")) {
         return { width, height: 800, name: `vp-${w}` };
       })
     : [{ width: 1280, height: 800, name: "desktop" }];
+  const provider = resolveProvider({ provider: args.provider ?? "openrouter" });
   const docPath = await sweepPages({
     pages,
     viewports,
     sessionId: args.session ?? `auto-${Date.now()}`,
     outputDir: resolve(REPO_ROOT, "docs/standin-findings"),
     screenshotDir: resolve(REPO_ROOT, "docs/standin-findings/screenshots"),
+    callLlm: provider.callLlm,
+    providerName: provider.name,
   });
   console.log(`Wrote: ${docPath}`);
 }

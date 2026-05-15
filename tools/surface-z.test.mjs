@@ -4,7 +4,26 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
-import { sweepPages } from "./surface-z.mjs";
+import { sweepPages, resolveProvider } from "./surface-z.mjs";
+
+test("resolveProvider: default returns openrouter callLlm", () => {
+  const p = resolveProvider({ provider: "openrouter" });
+  assert.equal(p.name, "openrouter");
+  assert.equal(typeof p.callLlm, "function");
+});
+
+test("resolveProvider: 'claude-cli' returns the CLI callLlm", () => {
+  const p = resolveProvider({ provider: "claude-cli" });
+  assert.equal(p.name, "claude-cli");
+  assert.equal(typeof p.callLlm, "function");
+});
+
+test("resolveProvider: invalid value throws with clear error", () => {
+  assert.throws(
+    () => resolveProvider({ provider: "groq" }),
+    /unknown provider: groq.*openrouter|claude-cli/i,
+  );
+});
 
 test("sweepPages emits findings doc with lint output per page", async () => {
   const tmp = mkdtempSync(join(tmpdir(), "z-"));
