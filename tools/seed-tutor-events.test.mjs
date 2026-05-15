@@ -31,7 +31,7 @@ function mockTransport({
       return { status: mintStatus, json: async () => mintBody, headers: { getSetCookie: () => mintSetCookie } };
     }
     if (url.endsWith("/api/v1/drill/grade")) {
-      return { status: gradeStatus, json: async () => gradeBody };
+      return { status: gradeStatus, json: async () => gradeBody, headers: { getSetCookie: () => [] } };
     }
     throw new Error(`unexpected url ${url}`);
   };
@@ -214,6 +214,8 @@ test("seedAll: mints once then seeds every attempt in order, reusing the minted 
   assert.equal(results.length, 2);
   assert.deepEqual(results.map((r) => r.label), ["a", "b"]);
   assert.equal(results.every((r) => r.outcome === "success"), true);
+  assert.equal(results[0].httpStatus, 200);
+  assert.equal(results[0].reply.correct, true);
   assert.equal(calls.filter((c) => c.url.endsWith("/auto-session")).length, 1);
   assert.equal(calls.filter((c) => c.url.endsWith("/drill/grade")).length, 2);
   for (const c of calls.filter((c) => c.url.endsWith("/drill/grade"))) {

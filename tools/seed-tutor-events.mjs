@@ -56,6 +56,9 @@ export function buildRequest(template, attempt) {
 // X-CSRF-Token must equal the csrf cookie. X-Standin-Run:1 is intended to tag
 // the appended event is_synthetic=true — to be confirmed on the first live run.
 export function buildHeaders({ jarvisAuth, jarvisSession, csrf }) {
+  if (!jarvisAuth || !jarvisSession || !csrf) {
+    throw new Error("buildHeaders: jarvisAuth, jarvisSession, and csrf are all required");
+  }
   return {
     "Content-Type": "application/json",
     "X-Standin-Run": "1",
