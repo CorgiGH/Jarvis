@@ -707,7 +707,7 @@ if (process.argv[1]?.endsWith("seed-tutor-events.mjs")) {
   const baseUrl = args["base-url"] ?? DEFAULT_BASE_URL;
   const taskId = args.task ?? DEFAULT_TASK_ID;
   if (taskId !== DEFAULT_TASK_ID) {
-    console.error(`ERR: --task=${taskId} has no hardcoded payloads. V1 only supports ${DEFAULT_TASK_ID}.`);
+    console.error(`ERR: --task=${taskId} has no hardcoded payloads. This tool only supports ${DEFAULT_TASK_ID}.`);
     process.exit(2);
   }
 
