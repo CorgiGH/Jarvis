@@ -15,6 +15,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 export const DEFAULT_BASE_URL = "https://corgflix.duckdns.org";
 export const DEFAULT_TASK_ID = "01KR6K07T6PATPRR5KH1JXYF8E";
+export const AUTH_TOKEN_PATH = join(HERE, "AUTH_TOKEN.txt");
 // Csrf.kt:8-16 is a double-submit cookie check — the server only verifies
 // header("X-CSRF-Token") === cookie("csrf"), both non-blank. A first-party
 // tool legitimately controls both sides, so any constant works.
@@ -22,6 +23,21 @@ export const CSRF_TOKEN = "seed-tutor-events-csrf";
 
 export function loadFixture() {
   return JSON.parse(readFileSync(join(HERE, "seed-tutor-events.fixture.json"), "utf8"));
+}
+
+// jarvis_auth is the outer auth-token interceptor gating all /api/v1/* routes.
+// Same source pattern as slice2-prefetch-gate.mjs / surface-y.mjs: the env var
+// first, then the gitignored tools/AUTH_TOKEN.txt fallback. Inputs are
+// injectable so the resolution logic is unit-testable without touching the
+// real environment or file.
+export function loadAuthToken({ env = process.env, authTokenPath = AUTH_TOKEN_PATH } = {}) {
+  const fromEnv = env.JARVIS_AUTH_COOKIE?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const fromFile = readFileSync(authTokenPath, "utf8").trim();
+    if (fromFile) return fromFile;
+  } catch { /* fall through to the throw */ }
+  throw new Error("JARVIS_AUTH_UNRESOLVED: set $JARVIS_AUTH_COOKIE or create tools/AUTH_TOKEN.txt");
 }
 
 // Merge one attempt's userAttempt into the captured ApiDrillGradeRequest

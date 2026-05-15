@@ -135,3 +135,29 @@ test("seedAll: loops every attempt and returns one result per attempt, in order"
   assert.deepEqual(results.map(r => r.label), ["a", "b"]);
   assert.equal(results.every(r => r.outcome === "success"), true);
 });
+
+import { loadAuthToken } from "./seed-tutor-events.mjs";
+import { writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+test("loadAuthToken: returns the env var value when set", () => {
+  assert.equal(loadAuthToken({ env: { JARVIS_AUTH_COOKIE: "ENVTOK" } }), "ENVTOK");
+});
+
+test("loadAuthToken: falls back to AUTH_TOKEN.txt when env is unset", () => {
+  const p = join(tmpdir(), `att-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+  writeFileSync(p, "  FILETOK\n");
+  try {
+    assert.equal(loadAuthToken({ env: {}, authTokenPath: p }), "FILETOK");
+  } finally {
+    rmSync(p, { force: true });
+  }
+});
+
+test("loadAuthToken: throws JARVIS_AUTH_UNRESOLVED when neither env nor file is available", () => {
+  assert.throws(
+    () => loadAuthToken({ env: {}, authTokenPath: join(tmpdir(), "nonexistent-att-file-xyz.txt") }),
+    /JARVIS_AUTH_UNRESOLVED/,
+  );
+});
