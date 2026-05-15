@@ -3,7 +3,26 @@ import assert from "node:assert/strict";
 import { writeFileSync, readFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gradeOne, majorityVote, ofN, gradeSession, calibrateAgainstFixture } from "./surface-x.mjs";
+import { gradeOne, majorityVote, ofN, gradeSession, calibrateAgainstFixture, resolveProvider } from "./surface-x.mjs";
+
+test("resolveProvider: default returns openrouter callLlm", () => {
+  const p = resolveProvider({ provider: "openrouter" });
+  assert.equal(p.name, "openrouter");
+  assert.equal(typeof p.callLlm, "function");
+});
+
+test("resolveProvider: 'claude-cli' returns the CLI callLlm", () => {
+  const p = resolveProvider({ provider: "claude-cli" });
+  assert.equal(p.name, "claude-cli");
+  assert.equal(typeof p.callLlm, "function");
+});
+
+test("resolveProvider: invalid value throws with clear error", () => {
+  assert.throws(
+    () => resolveProvider({ provider: "groq" }),
+    /unknown provider: groq.*openrouter|claude-cli/i,
+  );
+});
 
 test("gradeOne returns PASS/FAIL/N_A from LLM JSON", async () => {
   const fakeCallLlm = async () => ({

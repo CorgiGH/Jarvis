@@ -14,6 +14,7 @@
 // reports whether the catalog meets the agreement threshold.
 
 import { callLlm as defaultCallLlm } from "./lib/openrouter.mjs";
+import { callLlm as claudeCliCallLlm } from "./lib/claude-cli.mjs";
 import { INVARIANTS } from "./surface-x-invariants.mjs";
 import { getStamp } from "./lib/provenance.mjs";
 import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
@@ -21,6 +22,12 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+export function resolveProvider({ provider = "openrouter" } = {}) {
+  if (provider === "openrouter") return { name: "openrouter", callLlm: defaultCallLlm };
+  if (provider === "claude-cli") return { name: "claude-cli", callLlm: claudeCliCallLlm };
+  throw new Error(`unknown provider: ${provider} (expected: openrouter | claude-cli)`);
+}
 
 const GRADER_SYSTEM = `You are an invariant judge. Given a session trace and one invariant statement, return strict JSON:
 {
@@ -88,6 +95,7 @@ export async function gradeSession({
   apiKey,
   model,
   runsPerInvariant = 3,
+  providerName = null,
 }) {
   process.env.SURFACE_VERSION = "x-v1.0";
   const results = [];
@@ -132,6 +140,7 @@ export async function gradeSession({
   const stamp = await getStamp(null, {
     judge_model_resolved: lastJudgeModel,
     judge_prompt_sha256: lastPromptSha,
+    provider_name: providerName,
   });
   const ts = stamp.ts_utc.replace(/[:.]/g, "-");
   mkdirSync(outputDir, { recursive: true });
@@ -148,6 +157,7 @@ export async function gradeSession({
     `  surface_version: ${stamp.surface_version}`,
     `  judge_model_resolved: ${stamp.judge_model_resolved ?? "null"}`,
     `  judge_prompt_sha256: ${stamp.judge_prompt_sha256 ?? "null"}`,
+    `  provider_name: ${stamp.provider_name ?? "null"}`,
     `invariants_run: ${results.length}`,
     "---",
     "",
@@ -251,14 +261,36 @@ function parseArgs() {
   return out;
 }
 
+const USAGE = `Usage: node surface-x.mjs [options]
+Options:
+  --task=<id>                     Task ID filter for event log.
+  --session=<id>                  Session ID filter for event log.
+  --from=<ts>                     Lower-bound timestamp filter.
+  --to=<ts>                       Upper-bound timestamp filter.
+  --include-synthetic             Include synthetic events in the slice.
+  --invariants=<csv|all>          Subset of invariant IDs to grade.
+  --calibrate                     Use 3 runs/invariant (default 1 without).
+  --from-fixture=<path>           Calibrate against gold-labelled fixture.
+  --threshold=<float>             K-of-N agreement threshold (default 0.80).
+  --model=<id>                    Override judge model.
+  --provider=openrouter|claude-cli Provider routing (default openrouter).
+  --ssh=<user@host>               SSH target for event log (default root@46.247.109.91).
+`;
+
 if (process.argv[1]?.endsWith("surface-x.mjs")) {
   const args = parseArgs();
+  if (args.help || args.h) {
+    console.log(USAGE);
+    process.exit(0);
+  }
+  const provider = resolveProvider({ provider: args.provider ?? "openrouter" });
   if (args["from-fixture"]) {
     const r = await calibrateAgainstFixture({
       fixturePath: args["from-fixture"],
       runsPerInvariant: args.calibrate ? 3 : 1,
       thresholdPct: Number(args.threshold ?? 0.80),
       model: args.model,
+      callLlm: provider.callLlm,
     });
     console.log(`Calibration: ${r.matched}/${r.total} match (K=${r.k}). Threshold=${r.threshold_pct}. Passed: ${r.passed}`);
     console.log("Per-pair:");
@@ -283,6 +315,8 @@ if (process.argv[1]?.endsWith("surface-x.mjs")) {
     runsPerInvariant: args.calibrate ? 3 : 1,
     outputDir: resolve(REPO_ROOT, "docs/standin-findings"),
     model: args.model,
+    callLlm: provider.callLlm,
+    providerName: provider.name,
   });
   console.log(`Wrote: ${docPath}`);
 }
