@@ -119,3 +119,73 @@ Remaining gaps to cover:
 - More INV-08 snake_case cases beyond the motivating example.
 
 Pull tomorrow's envelopes via `scp root@46.247.109.91:/opt/jarvis/data/private/tutor_events.$(date -u +%Y-%m-%d).jsonl tools/.fixtures-cache/` and harvest real session shapes.
+
+---
+
+## CANDIDATE traces — Spec B scaffolding (Alex to label/promote)
+
+> **Status:** unlabeled scaffolding. This session (Claude, 2026-05-15) did NOT curate or label these.
+> Source: 2 synthetic `drill_grade` events produced by the Spec A v2 seeder live acceptance run.
+> Plan: Alex inspects the real envelope shapes (via SCP below), edits the YAML to fill in real
+> rubric chips / misconception codes, decides PASS/FAIL/N_A per applicable invariant, then promotes
+> the trace from this section up into the numbered set (Trace 9, Trace 10).
+
+**Provenance:**
+- VPS path: `/opt/jarvis/data/private/tutor_events.2026-05-15.jsonl`
+- Session: `607dbdbd3753`
+- Task: `01KR6K07T6PATPRR5KH1JXYF8E` (PS Tema A — Laplace sampling)
+- Timestamps: `2026-05-15T01:52:34Z` (known-good attempt — VGAM `rlaplace(1000)` solution) and `2026-05-15T01:52:57Z` (known-bad attempt — wrong sampler)
+- Header: `X-Standin-Run: 1` → both events carry `is_synthetic: true`
+- **Grader smell to investigate (flagged for Alex):** the v2 live run reported BOTH events as `correct=false score=0`, including the known-good `rlaplace` solution. Server-side grader (its own OpenRouter chain) may be degraded or model fallback misrouted. Read the `rubric_chip_text` + `misconception` fields from the real envelopes before labelling — if a true known-good was graded false, the trace is still usable as a **grader-regression** fixture but NOT as a "happy path" fixture.
+
+**Pull the real envelopes:**
+```bash
+scp root@46.247.109.91:/opt/jarvis/data/private/tutor_events.2026-05-15.jsonl tools/.fixtures-cache/
+# Then to extract just these 2 events:
+node -e "
+  const { readEvents, filterEvents } = await import('./tools/lib/event-log-reader.mjs');
+  const all = await readEvents({ dir: 'tools/.fixtures-cache' });
+  const filtered = filterEvents(all, {
+    task_id: '01KR6K07T6PATPRR5KH1JXYF8E',
+    session_id: '607dbdbd3753',
+    event_type: 'drill_grade',
+    include_synthetic: true,
+  });
+  console.log(JSON.stringify(filtered, null, 2));
+"
+```
+
+### CANDIDATE Trace 9 — synthetic known-good attempt graded false (grader-regression case)
+
+```yaml
+# UNLABELED SCAFFOLDING — Alex: fill in real rubric_chip_text + misconception from the envelope,
+# then pick INV-* labels. Suggested invariants to consider:
+# - INV-02 (named criterion present?) — depends on real rubric_chip_text
+# - INV-08 (snake_case in user-facing rubric?) — depends on real rubric_chip_text
+# - **NEW candidate INV**: "grader-regression" — known-good attempt graded false (open question whether
+#   to add a new invariant for grader sanity, or treat this as N_A across existing invariants)
+events:
+  - {event_id: e9, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: false, rubric_chip_text: TODO_FROM_ENVELOPE, misconception: TODO_FROM_ENVELOPE, is_synthetic: true}
+labels:
+  # INV-02: TODO
+  # INV-08: TODO
+```
+
+### CANDIDATE Trace 10 — synthetic known-bad attempt graded false (expected path)
+
+```yaml
+# UNLABELED SCAFFOLDING — same TODO shape as Trace 9.
+# This is the expected-failure path (wrong sampler) — labelling should be straightforward
+# once the real rubric_chip_text is in: INV-02 PASS if a criterion is named.
+events:
+  - {event_id: e10, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: false, rubric_chip_text: TODO_FROM_ENVELOPE, misconception: TODO_FROM_ENVELOPE, is_synthetic: true}
+labels:
+  # INV-02: TODO
+  # INV-08: TODO
+```
+
+### Decision points for Alex
+
+1. **Grader-regression vs N_A:** if e9's real `rubric_chip_text` is empty or generic ("OTHER"), the grader degraded — promote as INV-02 FAIL (no named criterion) AND flag the grader smell separately. If the chip names a real criterion despite the wrong verdict, it's still labellable as INV-02 PASS.
+2. **`is_synthetic: true` filter impact:** Surface X's `filterEvents` defaults `include_synthetic: false`. The judge currently won't see these traces unless invoked with `--include-synthetic`. Decide whether the golden fixture should mix synthetic with real (per existing Trace 1 which is `is_synthetic: true`, the precedent is yes) or hold them as a separate `golden-synthetic-` fixture.
+3. **Re-run the seeder if envelopes are insufficient:** `node tools/seed-tutor-events.mjs --task=01KR6K07T6PATPRR5KH1JXYF8E` will land 2 more events; might be needed if the 2026-05-15 events lack diversity.
