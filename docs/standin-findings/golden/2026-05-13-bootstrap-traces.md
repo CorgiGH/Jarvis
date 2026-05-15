@@ -136,7 +136,11 @@ Pull tomorrow's envelopes via `scp root@46.247.109.91:/opt/jarvis/data/private/t
 - Task: `01KR6K07T6PATPRR5KH1JXYF8E` (PS Tema A — Laplace sampling)
 - Timestamps: `2026-05-15T01:52:34Z` (known-good attempt — VGAM `rlaplace(1000)` solution) and `2026-05-15T01:52:57Z` (known-bad attempt — wrong sampler)
 - Header: `X-Standin-Run: 1` → both events carry `is_synthetic: true`
-- **Grader smell to investigate (flagged for Alex):** the v2 live run reported BOTH events as `correct=false score=0`, including the known-good `rlaplace` solution. Server-side grader (its own OpenRouter chain) may be degraded or model fallback misrouted. Read the `rubric_chip_text` + `misconception` fields from the real envelopes before labelling — if a true known-good was graded false, the trace is still usable as a **grader-regression** fixture but NOT as a "happy path" fixture.
+- **Grader smell — INVESTIGATED 2026-05-15T21Z:** the v2 live run caught **both** events in the grader's `parse_error` fallback path. Real envelopes from VPS (`/opt/jarvis/data/private/tutor_events.2026-05-15.jsonl`):
+  - Event 1: `status: "parse_error"`, `model_resolved: null`, `rubric: {}`, `elaboratedFeedback: "LLM grader returned malformed output; please re-attempt or ask sidekick."`, `misconception: "OTHER"`, latency 13864ms.
+  - Event 2: identical shape, latency 23040ms.
+  - The fallback string + empty rubric is hardcoded server-side when the grader's upstream LLM emits non-JSON. **The grader is FLAKY, not broken** — yesterday's last event (2026-05-14T23:43Z) was `status: "ok"` with full rubric populated (`uses_rlaplace_or_inverse_cdf_sampler: false`, `n_equals_10000: false`, etc.). The v2 seeder happened to catch 2 parse-error fallbacks back-to-back. Both events still carry `is_synthetic: true` and reach the log — they're useful as **parse-error-fallback fixtures** (proving the fallback path exists + has consistent shape) but NOT as positive/negative invariant fixtures (empty rubric ⇒ INV-02 FAIL by default; not a discriminating signal).
+  - Followup for Alex: investigate which model the grader chain uses + why parse fails on long-but-valid R answers. Possibly a `:free` model emits markdown fences (```) around the JSON. Add a json-strip fallback to the server before parse?
 
 **Pull the real envelopes:**
 ```bash
@@ -155,37 +159,35 @@ node -e "
 "
 ```
 
-### CANDIDATE Trace 9 — synthetic known-good attempt graded false (grader-regression case)
+### CANDIDATE Trace 9 — parse-error fallback (synthetic known-good VGAM rlaplace)
 
 ```yaml
-# UNLABELED SCAFFOLDING — Alex: fill in real rubric_chip_text + misconception from the envelope,
-# then pick INV-* labels. Suggested invariants to consider:
-# - INV-02 (named criterion present?) — depends on real rubric_chip_text
-# - INV-08 (snake_case in user-facing rubric?) — depends on real rubric_chip_text
-# - **NEW candidate INV**: "grader-regression" — known-good attempt graded false (open question whether
-#   to add a new invariant for grader sanity, or treat this as N_A across existing invariants)
+# REAL FIELDS pulled from VPS event 95acd374ff0d4a3384d798f80ac3c6d8.
+# Per the parse-error fallback rubric is {} → INV-02 FAIL (no named criterion);
+# INV-08 N_A (no chip text to snake_case-scan).
+# Alex: confirm/reject these labels — they follow mechanically from the rubric being empty.
 events:
-  - {event_id: e9, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: false, rubric_chip_text: TODO_FROM_ENVELOPE, misconception: TODO_FROM_ENVELOPE, is_synthetic: true}
+  - {event_id: e9, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: false, rubric_chip_text: empty, misconception: OTHER, is_synthetic: true, status: parse_error}
 labels:
-  # INV-02: TODO
-  # INV-08: TODO
+  INV-02: FAIL
+  INV-08: N_A
 ```
 
-### CANDIDATE Trace 10 — synthetic known-bad attempt graded false (expected path)
+### CANDIDATE Trace 10 — parse-error fallback (synthetic known-bad rnorm)
 
 ```yaml
-# UNLABELED SCAFFOLDING — same TODO shape as Trace 9.
-# This is the expected-failure path (wrong sampler) — labelling should be straightforward
-# once the real rubric_chip_text is in: INV-02 PASS if a criterion is named.
+# REAL FIELDS pulled from VPS event 31d5f308c1e9491bba215c04a0301fb7.
+# Same shape as Trace 9 — caught the same parse-error fallback.
 events:
-  - {event_id: e10, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: false, rubric_chip_text: TODO_FROM_ENVELOPE, misconception: TODO_FROM_ENVELOPE, is_synthetic: true}
+  - {event_id: e10, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: false, rubric_chip_text: empty, misconception: OTHER, is_synthetic: true, status: parse_error}
 labels:
-  # INV-02: TODO
-  # INV-08: TODO
+  INV-02: FAIL
+  INV-08: N_A
 ```
 
 ### Decision points for Alex
 
-1. **Grader-regression vs N_A:** if e9's real `rubric_chip_text` is empty or generic ("OTHER"), the grader degraded — promote as INV-02 FAIL (no named criterion) AND flag the grader smell separately. If the chip names a real criterion despite the wrong verdict, it's still labellable as INV-02 PASS.
+1. **Trace 9+10 are weak fixtures.** Both caught the parse-error fallback path; rubric is empty so both invariants land mechanically (INV-02 FAIL, INV-08 N_A). Useful for proving the fallback path is observable in the log but NOT discriminating. Consider keeping them as `parse-error-fallback` exemplars and re-running the seeder on a day when the grader returns `status: ok` to get richer fixtures.
 2. **`is_synthetic: true` filter impact:** Surface X's `filterEvents` defaults `include_synthetic: false`. The judge currently won't see these traces unless invoked with `--include-synthetic`. Decide whether the golden fixture should mix synthetic with real (per existing Trace 1 which is `is_synthetic: true`, the precedent is yes) or hold them as a separate `golden-synthetic-` fixture.
-3. **Re-run the seeder if envelopes are insufficient:** `node tools/seed-tutor-events.mjs --task=01KR6K07T6PATPRR5KH1JXYF8E` will land 2 more events; might be needed if the 2026-05-15 events lack diversity.
+3. **Re-run the seeder when grader is healthy:** `node tools/seed-tutor-events.mjs --task=01KR6K07T6PATPRR5KH1JXYF8E` lands 2 more events. After re-running, check `status: ok` vs `parse_error` before promoting — only `status: ok` events have populated rubric chips and are worth labelling for INV-02/INV-08 invariants.
+4. **Grader fix (out of band):** if Alex wants to fix the grader's parse-flakiness, candidate fixes: (a) prompt the grader's LLM with "Reply JSON only, no markdown fences" + add a markdown-fence-strip pass server-side before parse; (b) switch the grader to a non-`:free` model that's more JSON-reliable; (c) add an N=2 retry on parse_error before falling back to the hardcoded error string.
