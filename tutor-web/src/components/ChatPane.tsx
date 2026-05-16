@@ -252,7 +252,6 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.ctrlKey && e.key === "Enter") send(); }}
-          disabled={sending}
         />
         <button
           className="bg-accent px-6 font-bold tracking-widest text-sm disabled:opacity-50 border-l-4 border-border-strong"

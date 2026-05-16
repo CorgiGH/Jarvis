@@ -38,6 +38,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
   return (
     <div data-testid="knowledge-ledger"
          role="dialog"
+         aria-modal="true"
          aria-label="Knowledge ledger"
          className="fixed top-0 right-0 h-full w-96 bg-page-bg border-l-4 border-border-strong p-4 font-mono text-xs overflow-auto z-20">
       <div className="flex justify-between items-center mb-3">

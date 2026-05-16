@@ -35,13 +35,14 @@ export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: 
   return (
     <div data-testid="concept-drawer"
          role="dialog"
+         aria-modal="true"
          aria-label={`Concept reference: ${concept}`}
          className="fixed top-0 right-0 h-full w-80 bg-page-bg border-l-4 border-border-strong p-4 font-mono text-xs overflow-auto z-30">
       <div className="flex justify-between items-center mb-3">
         <div className="font-bold tracking-widest">CONCEPT · {concept}</div>
         <button onClick={onClose}
                 aria-label="Close concept drawer"
-                className="bg-accent text-page-fg px-2 py-1">×</button>
+                className="bg-accent text-page-fg px-2 py-2 sm:py-1">×</button>
       </div>
       {hits == null ? (
         <div className="text-page-fg/60">loading…</div>

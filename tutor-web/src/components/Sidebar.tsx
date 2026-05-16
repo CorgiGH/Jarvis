@@ -91,6 +91,8 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
         data-testid="sidebar-ledger-btn"
         onClick={() => setLedgerOpen(true)}
         aria-label="Open knowledge ledger"
+        aria-haspopup="dialog"
+        aria-expanded={ledgerOpen}
         className="border-b border-border-thin px-3 py-2 text-left hover:bg-accent-soft tracking-widest"
       >
         📒 LEDGER

@@ -41,6 +41,9 @@ export function ConceptInline({ name }: { name: string }) {
         data-testid="concept-inline"
         data-concept={name}
         onClick={() => setOpen(true)}
+        aria-label={`Open references for ${name}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         className="underline decoration-dotted text-page-fg hover:bg-accent-soft"
       >
         {name}
