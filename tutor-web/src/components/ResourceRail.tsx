@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { RailDrawer } from "./RailDrawer";
 import { PdfPane } from "./PdfPane";
-import { Scratchpad } from "./Scratchpad";
+import { ScratchpadDrawer } from "./ScratchpadDrawer";
 import { ConceptDrawer } from "./ConceptDrawer";
 import { KnowledgeGapCard } from "./KnowledgeGapCard";
 import { jarvisFetch } from "../lib/api";
@@ -60,7 +60,6 @@ export function ResourceRail({ taskId, items, forceOpenPath, onDrawerClosed }: R
   // Tracks whether the current openDrawer was triggered by forceOpenPath,
   // so we know to fire onDrawerClosed when it's closed.
   const [forcedOpen, setForcedOpen] = useState(false);
-  const [scratch, setScratch] = useState<string>("");
   const navigate = useNavigate();
 
   // When forceOpenPath changes to a non-null value, open the matching drawer.
@@ -117,27 +116,8 @@ export function ResourceRail({ taskId, items, forceOpenPath, onDrawerClosed }: R
         );
       }
       case "SCRATCHPAD": {
-        // Load from server on first open; persist via the existing PUT route.
-        if (scratch === "" && taskId) {
-          jarvisFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}/scratchpad`)
-            .then(r => r.ok ? r.json() : null)
-            .then((data: { text?: string } | null) => {
-              if (data?.text != null) setScratch(data.text);
-            })
-            .catch(() => { /* tolerate */ });
-        }
-        return (
-          <Scratchpad
-            value={scratch}
-            onChange={(next: string) => {
-              setScratch(next);
-              jarvisFetch(`/api/v1/tasks/${encodeURIComponent(taskId)}/scratchpad`, {
-                method: "PUT",
-                body: JSON.stringify({ text: next }),
-              }).catch(() => {});
-            }}
-          />
-        );
+        // ScratchpadDrawer owns hydration ref + debounced PUT + status pill.
+        return <ScratchpadDrawer taskId={taskId} />;
       }
       case "CONCEPT": {
         // ConceptDrawer takes `concept: string` (the term name) + `onClose`.

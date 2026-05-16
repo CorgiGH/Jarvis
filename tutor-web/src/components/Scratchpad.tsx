@@ -1,8 +1,12 @@
 import { useEffect, useRef } from "react";
 
+export type ScratchpadSaveStatus = "idle" | "saving" | "saved" | "error";
+
 export interface ScratchpadProps {
   value: string;
   onChange: (text: string) => void;
+  status?: ScratchpadSaveStatus;
+  errorMessage?: string | null;
 }
 
 /**
@@ -18,7 +22,7 @@ export interface ScratchpadProps {
  * Persisted client-side via localStorage; server persistence (per
  * task) lands in Layer B1 once the task slot exists.
  */
-export function Scratchpad({ value, onChange }: ScratchpadProps) {
+export function Scratchpad({ value, onChange, status, errorMessage }: ScratchpadProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -31,8 +35,23 @@ export function Scratchpad({ value, onChange }: ScratchpadProps) {
 
   return (
     <div data-testid="scratchpad" className="border-t-4 border-border-strong bg-page-bg">
-      <div className="bg-panel-dark-bg text-panel-dark-fg px-3 py-1 text-xs tracking-widest font-bold">
-        SCRATCHPAD
+      <div className="flex items-center justify-between bg-panel-dark-bg text-panel-dark-fg px-3 py-1 text-xs tracking-widest font-bold">
+        <span>SCRATCHPAD</span>
+        {status && status !== "idle" && (
+          <span
+            data-testid="scratchpad-status"
+            data-status={status}
+            aria-live="polite"
+            title={status === "error" ? (errorMessage ?? "save failed") : undefined}
+            className={
+              status === "saving" ? "text-page-bg/70 font-normal"
+              : status === "saved" ? "text-page-bg/70 font-normal"
+              : "text-danger-text font-bold"
+            }
+          >
+            {status === "saving" ? "saving…" : status === "saved" ? "saved" : "save failed"}
+          </span>
+        )}
       </div>
       <textarea
         ref={ref}
