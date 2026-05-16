@@ -40,6 +40,7 @@ data class TutorEvent(
     val tokens_in: Int?,
     val tokens_out: Int?,
     val latency_ms: Long?,
+    val llm_output_raw_truncated: String? = null,
     val status: String,
     val is_synthetic: Boolean = false
 )
