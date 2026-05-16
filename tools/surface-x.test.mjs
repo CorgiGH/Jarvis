@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { writeFileSync, readFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { gradeOne, majorityVote, ofN, gradeSession, calibrateAgainstFixture, resolveProvider } from "./surface-x.mjs";
+import { gradeOne, majorityVote, ofN, gradeSession, calibrateAgainstFixture, resolveProvider, parseFixture } from "./surface-x.mjs";
 
 test("resolveProvider: default returns openrouter callLlm", () => {
   const p = resolveProvider({ provider: "openrouter" });
@@ -139,4 +139,20 @@ test("calibrateAgainstFixture reports agreement against gold labels", async () =
   assert.equal(r.total, 3);
   assert.equal(r.matched, 2);
   assert.equal(r.passed, false);
+});
+
+test("parseFixture: label lines with trailing YAML comments still parse", () => {
+  const text = [
+    "### Trace 9 — comment-bearing labels",
+    "```yaml",
+    "events:",
+    "  - {event_id: e1, event_type: drill_grade}",
+    "labels:",
+    "  INV-02: N_A   # correct=true → invariant only applies when marked wrong.",
+    "  INV-08: FAIL  # trailing comment with arrow → and parens (etc).",
+    "```",
+  ].join("\n");
+  const traces = parseFixture(text);
+  assert.equal(traces.length, 1);
+  assert.deepEqual(traces[0].labels, { "INV-02": "N_A", "INV-08": "FAIL" });
 });

@@ -208,7 +208,8 @@ export function parseFixture(text) {
         }
       }
       if (inLabels && /^\s+INV-\d{2}:/.test(line)) {
-        const m = line.match(/^\s+(INV-\d{2}):\s*(\w+)\s*$/);
+        const stripped = line.replace(/\s+#.*$/, "");
+        const m = stripped.match(/^\s+(INV-\d{2}):\s*(\w+)\s*$/);
         if (m) labels[m[1]] = m[2];
       }
     }
