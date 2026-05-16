@@ -159,35 +159,35 @@ node -e "
 "
 ```
 
-### CANDIDATE Trace 9 — parse-error fallback (synthetic known-good VGAM rlaplace)
+### Trace 9 — synthetic known-good VGAM rlaplace (real-rubric, post-Phase-A re-seed)
 
 ```yaml
-# REAL FIELDS pulled from VPS event 95acd374ff0d4a3384d798f80ac3c6d8.
-# Per the parse-error fallback rubric is {} → INV-02 FAIL (no named criterion);
-# INV-08 N_A (no chip text to snake_case-scan).
-# Alex: confirm/reject these labels — they follow mechanically from the rubric being empty.
+# REAL FIELDS pulled from VPS event b4f54170c3d64b4fbb0b8250dce626fc.
+# Re-seeded 2026-05-16T13:40:57Z after Phase A grader hardening shipped (HEAD 8f7f34c).
+# Grader returned status: ok with full rubric — labels are now real-rubric-grounded.
 events:
-  - {event_id: e9, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: false, rubric_chip_text: empty, misconception: OTHER, is_synthetic: true, status: parse_error}
+  - {event_id: b4f54170c3d64b4fbb0b8250dce626fc, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: true, score: 1.0, rubric: {uses_rlaplace_or_inverse_cdf_sampler: true, n_equals_10000: true, iterates_over_b_in_half_one_two_four: true, plots_histogram_AND_theoretical_pdf_overlay: true}, misconception: null, is_synthetic: true, status: ok, model_resolved: z-ai/glm-4.5-air:free}
 labels:
-  INV-02: FAIL
-  INV-08: N_A
+  INV-02: N_A   # correct=true → invariant only applies when marked wrong.
+  INV-08: FAIL  # all 4 rubric chips are snake_case (uses_rlaplace_or_inverse_cdf_sampler etc.).
 ```
 
-### CANDIDATE Trace 10 — parse-error fallback (synthetic known-bad rnorm)
+### Trace 10 — synthetic known-bad rnorm (real-rubric, post-Phase-A re-seed)
 
 ```yaml
-# REAL FIELDS pulled from VPS event 31d5f308c1e9491bba215c04a0301fb7.
-# Same shape as Trace 9 — caught the same parse-error fallback.
+# REAL FIELDS pulled from VPS event 07ef6e481ffd43b997d71539f1528701.
+# Re-seeded 2026-05-16T13:41:18Z after Phase A grader hardening.
+# correct: false, 3 of 4 chips fail (only n_equals_10000 passes) → INV-02 PASS (criteria named).
 events:
-  - {event_id: e10, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: false, rubric_chip_text: empty, misconception: OTHER, is_synthetic: true, status: parse_error}
+  - {event_id: 07ef6e481ffd43b997d71539f1528701, event_type: drill_grade, task_id: 01KR6K07T6PATPRR5KH1JXYF8E, correct: false, score: 0.25, rubric: {uses_rlaplace_or_inverse_cdf_sampler: false, n_equals_10000: true, iterates_over_b_in_half_one_two_four: false, plots_histogram_AND_theoretical_pdf_overlay: false}, misconception: OTHER, is_synthetic: true, status: ok, model_resolved: z-ai/glm-4.5-air:free}
 labels:
-  INV-02: FAIL
-  INV-08: N_A
+  INV-02: PASS  # 3 failing rubric chips are named explicitly (not a vague "wrong" verdict).
+  INV-08: FAIL  # same snake_case chip names as Trace 9.
 ```
 
-### Decision points for Alex
+### Promotion notes (2026-05-16)
 
-1. **Trace 9+10 are weak fixtures.** Both caught the parse-error fallback path; rubric is empty so both invariants land mechanically (INV-02 FAIL, INV-08 N_A). Useful for proving the fallback path is observable in the log but NOT discriminating. Consider keeping them as `parse-error-fallback` exemplars and re-running the seeder on a day when the grader returns `status: ok` to get richer fixtures.
-2. **`is_synthetic: true` filter impact:** Surface X's `filterEvents` defaults `include_synthetic: false`. The judge currently won't see these traces unless invoked with `--include-synthetic`. Decide whether the golden fixture should mix synthetic with real (per existing Trace 1 which is `is_synthetic: true`, the precedent is yes) or hold them as a separate `golden-synthetic-` fixture.
-3. **Re-run the seeder when grader is healthy:** `node tools/seed-tutor-events.mjs --task=01KR6K07T6PATPRR5KH1JXYF8E` lands 2 more events. After re-running, check `status: ok` vs `parse_error` before promoting — only `status: ok` events have populated rubric chips and are worth labelling for INV-02/INV-08 invariants.
-4. **Grader fix (out of band):** if Alex wants to fix the grader's parse-flakiness, candidate fixes: (a) prompt the grader's LLM with "Reply JSON only, no markdown fences" + add a markdown-fence-strip pass server-side before parse; (b) switch the grader to a non-`:free` model that's more JSON-reliable; (c) add an N=2 retry on parse_error before falling back to the hardcoded error string.
+1. **Trace 9+10 are real-rubric-grounded** (re-seeded after Phase A grader hardening — council 1778881174 verdict shipped at HEAD `8f7f34c`). Both events landed `status: "ok"` with populated rubric chips. Labels mechanically derived from real rubric content — Trace 9 is INV-02-N_A / INV-08-FAIL (correct, snake_case chips); Trace 10 is INV-02-PASS / INV-08-FAIL (3 failing chips named, snake_case chips).
+2. **The grader IS still flaky** but Phase A's three layers (raw output capture, response_format=json_object, maxTokens bump, balanced-brace regex fallback) successfully drove this re-seed through `status: ok` on first attempt. Both events latency 20-30s — within normal `:free`-model range.
+3. **`is_synthetic: true` filter impact:** Surface X's `filterEvents` defaults `include_synthetic: false`. The judge needs `--include-synthetic` to see these traces. Precedent set by existing Trace 1 (is_synthetic: true) — golden fixture mixes synthetic with real.
+4. **Pre-Phase-A parse-error fallback traces** (events `95acd374ff0d4a3384d798f80ac3c6d8` + `31d5f308c1e9491bba215c04a0301fb7` from 2026-05-15) are kept in the VPS log as observability witnesses. NOT promoted as golden fixtures because empty-rubric events are now consumer-filtered out of calibration by Surface X (Phase A.4 `status_in=["ok"]` default).
