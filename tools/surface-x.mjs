@@ -305,6 +305,7 @@ if (process.argv[1]?.endsWith("surface-x.mjs")) {
     from_ts: args.from,
     to_ts: args.to,
     include_synthetic: !!args["include-synthetic"],
+    status_in: args["all-statuses"] ? null : ["ok"],
   });
   const sessionId = args.session ?? `auto-${Date.now()}`;
   const idsArg = args.invariants === "all" ? null : (args.invariants ?? "INV-01,INV-02,INV-03,INV-04,INV-05,INV-06,INV-07,INV-08,INV-09,INV-10");

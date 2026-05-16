@@ -39,3 +39,21 @@ test("filterEvents filters by task_id and time window", () => {
   const r = filterEvents(events, { task_id: "t1", from_ts: "2026-05-13T09:00:00Z", to_ts: "2026-05-13T11:30:00Z" });
   assert.deepEqual(r.map(e => e.event_id), ["e1"]);
 });
+
+test("filterEvents supports status_in", () => {
+  const events = [
+    { event_id: "1", status: "ok", task_id: "T1" },
+    { event_id: "2", status: "parse_error", task_id: "T1" },
+    { event_id: "3", status: "ok", task_id: "T2" },
+  ];
+  const okOnly = filterEvents(events, { status_in: ["ok"] });
+  assert.equal(okOnly.length, 2);
+  assert.deepEqual(okOnly.map(e => e.event_id), ["1", "3"]);
+
+  const errorOnly = filterEvents(events, { status_in: ["parse_error", "error"] });
+  assert.equal(errorOnly.length, 1);
+  assert.equal(errorOnly[0].event_id, "2");
+
+  // Backward-compat: omitting status_in includes all
+  assert.equal(filterEvents(events, {}).length, 3);
+});

@@ -26,7 +26,7 @@ export async function readEvents({ dir = "/opt/jarvis/data/private", sshTarget =
   return all;
 }
 
-export function filterEvents(events, { task_id, session_id, from_ts, to_ts, event_type, include_synthetic = false } = {}) {
+export function filterEvents(events, { task_id, session_id, from_ts, to_ts, event_type, include_synthetic = false, status_in = null } = {}) {
   return events.filter(e => {
     if (!include_synthetic && e.is_synthetic) return false;
     if (task_id && e.task_id !== task_id) return false;
@@ -34,6 +34,7 @@ export function filterEvents(events, { task_id, session_id, from_ts, to_ts, even
     if (event_type && e.event_type !== event_type) return false;
     if (from_ts && (e.ts_utc ?? "") < from_ts) return false;
     if (to_ts && (e.ts_utc ?? "") > to_ts) return false;
+    if (status_in && !status_in.includes(e.status)) return false;
     return true;
   });
 }
