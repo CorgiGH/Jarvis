@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { ConceptDrawer } from "../components/ConceptDrawer";
 
@@ -26,4 +26,10 @@ test("close button is auto-focused on mount", () => {
   render(<ConceptDrawer concept="closures" onClose={() => {}} />);
   const closeBtn = screen.getByLabelText("Close concept drawer");
   expect(document.activeElement).toBe(closeBtn);
+});
+
+test("HTTP error surfaces distinct load-error UI (not just empty 'no past gaps')", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
+  render(<ConceptDrawer concept="closures" onClose={() => {}} />);
+  await waitFor(() => expect(screen.getByTestId("concept-drawer-load-error")).toHaveTextContent(/HTTP 500/));
 });

@@ -188,8 +188,17 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
         <div className="text-xs text-danger-text mt-1">docs load failed: {docsError}</div>
       )}
       {syncError && (
-        <div data-testid="knowledge-gap-sync-error" className="text-xs text-danger-text mt-1">
-          status sync failed: {syncError}
+        <div data-testid="knowledge-gap-sync-error" className="text-xs text-danger-text mt-1 flex items-center gap-2 flex-wrap">
+          <span>status sync failed: {syncError}</span>
+          {resolved && (
+            <button
+              onClick={() => postStatus(resolved)}
+              data-testid="knowledge-gap-sync-retry"
+              className="text-xs font-bold tracking-widest bg-accent text-page-fg px-3 py-2 sm:py-1 border border-border-strong"
+            >
+              RETRY
+            </button>
+          )}
         </div>
       )}
     </div>

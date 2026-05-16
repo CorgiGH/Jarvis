@@ -124,6 +124,17 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
           </button>
         </div>
       )}
+      {status === "failed" && edit.type === "clipboard" && !readOnly && (
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => { setStatus("pending"); setError(null); apply(); }}
+            data-testid="suggested-edit-retry"
+            className="text-xs font-bold tracking-widest bg-accent text-page-fg px-3 py-2 sm:py-1 border border-border-strong"
+          >
+            RETRY
+          </button>
+        </div>
+      )}
     </div>
   );
 }

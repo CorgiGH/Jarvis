@@ -19,16 +19,23 @@ interface Gap {
 export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
   const [gaps, setGaps] = useState<Gap[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "resolved">("all");
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     function fetchGaps() {
+      setLoadError(null);
       jarvisFetch("/api/v1/gaps")
-        .then(r => r.ok ? r.json() : { gaps: [] })
+        .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
         .then((d: { gaps: Gap[] }) => { if (!cancelled) setGaps(d.gaps ?? []); })
-        .catch(() => { if (!cancelled) setGaps([]); })
+        .catch((e: Error) => {
+          if (!cancelled) {
+            setGaps([]);
+            setLoadError(e.message);
+          }
+        })
         .finally(() => { if (!cancelled) setLoaded(true); });
     }
     fetchGaps();
@@ -88,6 +95,10 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
       </div>
       {!loaded ? (
         <div className="text-page-fg/60">loading…</div>
+      ) : loadError ? (
+        <div data-testid="ledger-load-error" className="text-danger-text">
+          couldn't load gaps — {loadError}
+        </div>
       ) : filtered.length === 0 ? (
         <div data-testid="ledger-empty" className="text-page-fg/60">no gaps yet</div>
       ) : (

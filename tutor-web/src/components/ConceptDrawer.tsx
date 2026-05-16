@@ -13,12 +13,14 @@ interface DrawerHit { filename: string; snippet: string; }
  */
 export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: () => void }) {
   const [hits, setHits] = useState<DrawerHit[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setLoadError(null);
     jarvisFetch(`/api/v1/gaps`)
-      .then(r => r.ok ? r.json() : { gaps: [] })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then((d: { gaps: any[] }) => {
         if (cancelled) return;
         const matches = (d.gaps ?? [])
@@ -29,7 +31,12 @@ export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: 
           snippet: g.content ?? "",
         })));
       })
-      .catch(() => { if (!cancelled) setHits([]); });
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setHits([]);
+          setLoadError(e.message);
+        }
+      });
     return () => { cancelled = true; };
   }, [concept]);
 
@@ -64,6 +71,10 @@ export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: 
       </div>
       {hits == null ? (
         <div className="text-page-fg/60">loading…</div>
+      ) : loadError ? (
+        <div data-testid="concept-drawer-load-error" className="text-danger-text">
+          couldn't load references — {loadError}
+        </div>
       ) : hits.length === 0 ? (
         <div className="text-page-fg/60">no past gaps mention this concept yet</div>
       ) : (

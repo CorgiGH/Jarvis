@@ -75,3 +75,10 @@ test("re-fetches gaps on jarvis:gap-created event", async () => {
   window.dispatchEvent(new CustomEvent("jarvis:gap-created", { detail: { id: "y" } }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 });
+
+test("HTTP error surfaces distinct load-error UI (not just empty state)", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 500 })));
+  render(<KnowledgeLedger onClose={() => {}} />);
+  await waitFor(() => expect(screen.getByTestId("ledger-load-error")).toHaveTextContent(/HTTP 500/));
+  expect(screen.queryByTestId("ledger-empty")).toBeNull();
+});
