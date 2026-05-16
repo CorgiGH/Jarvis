@@ -322,7 +322,22 @@ export async function runStandin({
       }
     }
 
-    const tripwire = flagSuspectRun(transcript);
+    // Findings = UX-friction observations the persona surfaced. Defined by
+    // the "Discovered unknown-unknowns" filter (any non-empty observation
+    // outside the error/stuck actions). Lifted here so tripwire AND-gate
+    // can reason about transcript-shape × findings-count jointly per
+    // council 1778881175 first-principles refinement.
+    const findings = transcript.filter(t => t.observation && t.action !== "error" && t.action !== "stuck");
+    const findingsCount = findings.length;
+    const tripwire = flagSuspectRun(transcript, findingsCount);
+
+    // Confidence-band declares the calibration-corpus size that tripwire
+    // thresholds were tuned against. Hardcoded for now; bump when corpus
+    // grows. Per Council 1778881175 (Devil's Advocate: "name what guarantee
+    // means before chasing it").
+    const tripwireCorpusN = 2;
+    const tripwireConfidenceBand = `thin_corpus_n${tripwireCorpusN}`;
+
     const stamp = await getStamp(null, {
       judge_model_resolved: lastJudgeModel,
       judge_prompt_sha256: lastPromptSha,
@@ -350,12 +365,14 @@ export async function runStandin({
       `duration_min: ${((Date.now() - t0) / 60000).toFixed(1)}`,
       `gate_violations: ${gateViolations.length}`,
       `tripwire_status: ${tripwire.suspect ? "suspect" : "clean"}`,
+      `tripwire_findings_count: ${findingsCount}`,
+      `tripwire_confidence_band: ${tripwireConfidenceBand}`,
       "---",
       "",
       `# Surface Y findings — task ${taskId}, session ${sessionId}`,
       "",
       "## Discovered unknown-unknowns",
-      ...transcript.filter(t => t.observation && t.action !== "error" && t.action !== "stuck").map(t => `- step ${transcript.indexOf(t) + 1}: ${t.observation}`),
+      ...findings.map(t => `- step ${transcript.indexOf(t) + 1}: ${t.observation}`),
       "",
       "## Schema-gate violations (naivety leakage)",
       ...gateViolations.map(v => `- step ${v.step}: referenced off-ledger concepts: ${v.violations.join(", ")}`),

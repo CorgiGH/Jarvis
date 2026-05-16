@@ -420,8 +420,12 @@ test("DRAFT-Y emits tripwire_status: suspect for an instant-submit hyper-compete
     "  - {id: laplace_distribution, aliases: [Laplace]}",
     "confusion_tuples: []",
   ].join("\n"));
+  // Empty observation → no friction findings surfaced. Per council 1778881175
+  // first-principles refinement: suspect = competent-shape AND zero findings.
+  // A submit with `observation: "ready"` would count as a finding (any non-empty
+  // observation outside error/stuck) and the AND-gate would clear the run.
   const fakeCallLlm = async () => ({
-    text: '{"thinking":"x","action":"submit","target":"","payload":"","observation":"ready"}',
+    text: '{"thinking":"x","action":"submit","target":"","payload":"","observation":""}',
     model_resolved: "fake", prompt_sha256: "z".repeat(64),
     tokens_in: 50, tokens_out: 20, latency_ms: 200,
   });
@@ -454,6 +458,9 @@ test("DRAFT-Y emits tripwire_status: suspect for an instant-submit hyper-compete
   assert.match(text, /\*\*Status:\*\* suspect/);
   // Rationale must reference Path B's wording.
   assert.match(text, /submit at step \d+ with no prior/);
+  // Council 1778881175 frontmatter additions: findings_count + confidence_band.
+  assert.match(text, /^tripwire_findings_count: 0$/m);
+  assert.match(text, /^tripwire_confidence_band: thin_corpus_n\d+$/m);
 });
 
 test("a successful submit step is marked controller-executed in the finding doc", async () => {
