@@ -70,6 +70,12 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
         body: JSON.stringify({ status }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      // Broadcast to any open rail (ChatPane historicalGaps, KnowledgeLedger
+      // open-filter) so they can re-fetch and reflect the new status without
+      // waiting for remount. Per Phase 4 [4] + Phase 7 [7] backlog.
+      window.dispatchEvent(new CustomEvent("jarvis:gap-resolved", {
+        detail: { id: gap.id, status },
+      }));
     } catch (e) {
       setSyncError((e as Error).message);
     }

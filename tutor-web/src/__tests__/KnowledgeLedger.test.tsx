@@ -57,3 +57,21 @@ test("close button is auto-focused on mount", async () => {
   const closeBtn = screen.getByLabelText("Close ledger");
   expect(document.activeElement).toBe(closeBtn);
 });
+
+test("re-fetches gaps on jarvis:gap-resolved event", async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ gaps: [] }), { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+  render(<KnowledgeLedger onClose={() => {}} />);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  window.dispatchEvent(new CustomEvent("jarvis:gap-resolved", { detail: { id: "x" } }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+});
+
+test("re-fetches gaps on jarvis:gap-created event", async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ gaps: [] }), { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+  render(<KnowledgeLedger onClose={() => {}} />);
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  window.dispatchEvent(new CustomEvent("jarvis:gap-created", { detail: { id: "y" } }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+});

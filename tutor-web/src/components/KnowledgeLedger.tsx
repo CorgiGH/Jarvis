@@ -23,11 +23,23 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    jarvisFetch("/api/v1/gaps")
-      .then(r => r.ok ? r.json() : { gaps: [] })
-      .then((d: { gaps: Gap[] }) => setGaps(d.gaps ?? []))
-      .catch(() => setGaps([]))
-      .finally(() => setLoaded(true));
+    let cancelled = false;
+    function fetchGaps() {
+      jarvisFetch("/api/v1/gaps")
+        .then(r => r.ok ? r.json() : { gaps: [] })
+        .then((d: { gaps: Gap[] }) => { if (!cancelled) setGaps(d.gaps ?? []); })
+        .catch(() => { if (!cancelled) setGaps([]); })
+        .finally(() => { if (!cancelled) setLoaded(true); });
+    }
+    fetchGaps();
+    function onGapEvent() { fetchGaps(); }
+    window.addEventListener("jarvis:gap-created", onGapEvent);
+    window.addEventListener("jarvis:gap-resolved", onGapEvent);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("jarvis:gap-created", onGapEvent);
+      window.removeEventListener("jarvis:gap-resolved", onGapEvent);
+    };
   }, []);
 
   // Modal-dialog contract: focus close button on open, dismiss on Escape.

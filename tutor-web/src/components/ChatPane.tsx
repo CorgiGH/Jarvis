@@ -58,11 +58,13 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         .catch(() => {});
     }
     fetchGaps();
-    function onGapCreated() { fetchGaps(); }
-    window.addEventListener("jarvis:gap-created", onGapCreated);
+    function onGapEvent() { fetchGaps(); }
+    window.addEventListener("jarvis:gap-created", onGapEvent);
+    window.addEventListener("jarvis:gap-resolved", onGapEvent);
     return () => {
       cancelled = true;
-      window.removeEventListener("jarvis:gap-created", onGapCreated);
+      window.removeEventListener("jarvis:gap-created", onGapEvent);
+      window.removeEventListener("jarvis:gap-resolved", onGapEvent);
     };
   }, [taskId]);
 
