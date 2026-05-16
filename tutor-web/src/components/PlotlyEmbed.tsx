@@ -83,7 +83,7 @@ export function PlotlyEmbed({
             data={figure.data ?? []}
             layout={{ ...layoutWithoutTitle, autosize: true }}
             config={{ displayModeBar: false, ...(figure.config ?? {}) }}
-            style={{ width: "100%", maxWidth: 800 }}
+            className="w-full max-w-[800px]"
             useResizeHandler
           />
         </Suspense>

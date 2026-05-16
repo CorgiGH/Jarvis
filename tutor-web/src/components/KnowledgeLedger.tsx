@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { jarvisFetch } from "../lib/api";
 
 interface Gap {
@@ -22,6 +23,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "open" | "resolved">("all");
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -113,14 +115,30 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
       ) : (
         <>
           <ul role="list" className="space-y-2">
-            {visible.map(g => (
-              <li key={g.id} data-testid="ledger-row">
-                <div className="font-bold">{g.topic}</div>
-                <div className="text-page-fg/60">
-                  {g.type} · reused {g.reusedCount}× · {g.resolvedBy ?? "open"}
-                </div>
-              </li>
-            ))}
+            {visible.map(g => {
+              const inner = (
+                <>
+                  <div className="font-bold">{g.topic}</div>
+                  <div className="text-page-fg/60">
+                    {g.type} · reused {g.reusedCount}× · {g.resolvedBy ?? "open"}
+                  </div>
+                </>
+              );
+              return (
+                <li key={g.id} data-testid="ledger-row">
+                  {g.taskId ? (
+                    <button
+                      data-testid="ledger-row-open"
+                      onClick={() => { navigate(`/?taskId=${g.taskId}`); onClose(); }}
+                      aria-label={`Open source task for gap ${g.topic}`}
+                      className="w-full text-left p-2 hover:bg-accent-soft border border-border-thin"
+                    >
+                      {inner}
+                    </button>
+                  ) : inner}
+                </li>
+              );
+            })}
           </ul>
           {hiddenCount > 0 && (
             <div data-testid="ledger-cap-notice" className="mt-3 text-page-fg/60 italic">

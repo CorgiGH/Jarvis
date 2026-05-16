@@ -102,7 +102,7 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
         aria-expanded={ledgerOpen}
         className="border-b border-border-thin px-3 py-2 text-left hover:bg-accent-soft tracking-widest"
       >
-        📒 LEDGER
+        LEDGER
       </button>
       {ledgerOpen && <KnowledgeLedger onClose={() => setLedgerOpen(false)} />}
       <button
