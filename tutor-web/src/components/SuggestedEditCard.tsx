@@ -112,14 +112,14 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
             data-testid="suggested-edit-apply"
             disabled={readOnly}
             title={readOnly ? `READ-ONLY MODE: ${readOnlyReason}` : undefined}
-            className={`text-xs font-bold tracking-widest px-3 py-1 ${
+            className={`text-xs font-bold tracking-widest px-3 py-2 sm:py-1 ${
               readOnly ? "bg-disabled-bg text-disabled-fg cursor-not-allowed" : "bg-panel-dark-bg text-panel-dark-fg"
             }`}
           >
             {edit.type === "clipboard" ? "COPY" : "APPLY"}
           </button>
           <button onClick={reject} data-testid="suggested-edit-reject"
-                  className="text-xs font-bold tracking-widest bg-page-bg text-page-fg px-3 py-1 border border-border-strong">
+                  className="text-xs font-bold tracking-widest bg-page-bg text-page-fg px-3 py-2 sm:py-1 border border-border-strong">
             REJECT
           </button>
         </div>

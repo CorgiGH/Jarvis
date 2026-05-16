@@ -172,7 +172,7 @@ export function PdfPane({ url, onPdfSelectionGap, uploadUrl }: PdfPaneProps) {
             setTooltip(null);
             window.getSelection()?.removeAllRanges();
           }}
-          className="absolute z-10 bg-panel-dark-bg text-panel-dark-fg text-xs font-bold tracking-widest px-2 py-1"
+          className="absolute z-10 bg-panel-dark-bg text-panel-dark-fg text-xs font-bold tracking-widest px-2 py-2 sm:py-1"
           style={{ left: tooltip.x, top: tooltip.y }}
         >
           🤷 I don't know this

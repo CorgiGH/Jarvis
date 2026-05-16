@@ -100,7 +100,7 @@ export function TasksScreen() {
               data-testid={`task-subject-${s}`}
               onClick={() => setSubject(s)}
               aria-pressed={subject === s}
-              className={`text-xs font-bold tracking-widest px-2 py-1 border ${
+              className={`text-xs font-bold tracking-widest px-2 py-2 sm:py-1 border ${
                 subject === s ? "bg-panel-dark-bg text-panel-dark-fg" : "bg-page-bg text-page-fg border-border-strong"
               }`}>
               {s}
@@ -135,7 +135,7 @@ export function TasksScreen() {
           type="submit"
           data-testid="task-create-btn"
           disabled={create.inFlight}
-          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1 disabled:opacity-50"
+          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-2 sm:py-1 disabled:opacity-50"
         >
           CREATE
         </button>
@@ -163,13 +163,13 @@ export function TasksScreen() {
                <div className="flex gap-2 mt-2 flex-wrap">
                  <Link to={`/?taskId=${t.id}`}
                        data-testid="task-open-btn"
-                       className="inline-block text-xs font-bold tracking-widest bg-accent text-page-fg px-2 py-1">
+                       className="inline-block text-xs font-bold tracking-widest bg-accent text-page-fg px-2 py-2 sm:py-1">
                    OPEN
                  </Link>
                  <button onClick={() => deleteTask(t)}
                          data-testid="task-delete-btn"
                          aria-label={`Delete task ${t.title}`}
-                         className="inline-block text-xs font-bold tracking-widest bg-page-bg text-page-fg/70 border border-border-thin px-2 py-1 hover:bg-danger-bg hover:text-danger-fg">
+                         className="inline-block text-xs font-bold tracking-widest bg-page-bg text-page-fg/70 border border-border-thin px-2 py-2 sm:py-1 hover:bg-danger-bg hover:text-danger-fg">
                    × DELETE
                  </button>
                </div>

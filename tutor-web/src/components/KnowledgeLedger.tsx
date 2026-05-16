@@ -44,13 +44,13 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
         <div className="font-bold tracking-widest">KNOWLEDGE LEDGER</div>
         <button onClick={onClose}
                 aria-label="Close ledger"
-                className="bg-accent text-page-fg px-2 py-1">×</button>
+                className="bg-accent text-page-fg px-2 py-2 sm:py-1">×</button>
       </div>
       <div className="flex gap-1 mb-3">
         {(["all", "open", "resolved"] as const).map(f => (
           <button key={f} data-testid={`ledger-filter-${f}`}
                   onClick={() => setFilter(f)}
-                  className={`px-2 py-1 border ${filter === f ? "bg-accent text-page-fg" : "bg-page-bg text-page-fg/70 border-border-thin"}`}>
+                  className={`px-2 py-2 sm:py-1 border ${filter === f ? "bg-accent text-page-fg" : "bg-page-bg text-page-fg/70 border-border-thin"}`}>
             {f.toUpperCase()}
           </button>
         ))}

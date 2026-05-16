@@ -138,7 +138,7 @@ export function TrustSettings() {
           type="submit"
           data-testid="trust-create-btn"
           disabled={grant.inFlight}
-          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1 disabled:opacity-50"
+          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-2 sm:py-1 disabled:opacity-50"
         >
           GRANT
         </button>
@@ -168,7 +168,7 @@ export function TrustSettings() {
                 <button
                   data-testid="trust-revoke-btn"
                   onClick={() => revokeGrant(g.id)}
-                  className="mt-2 text-xs font-bold tracking-widest bg-page-bg text-page-fg border border-border-strong px-2 py-0.5"
+                  className="mt-2 text-xs font-bold tracking-widest bg-page-bg text-page-fg border border-border-strong px-2 py-2 sm:py-1"
                 >
                   REVOKE
                 </button>

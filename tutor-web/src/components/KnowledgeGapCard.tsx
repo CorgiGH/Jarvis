@@ -135,19 +135,19 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
       {!resolved && (
         <div className="flex gap-2 mt-2 flex-wrap">
           <button onClick={insert} data-testid="knowledge-gap-insert"
-                  className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-1">
+                  className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-2 sm:py-1">
             INSERT → SCRATCHPAD
           </button>
           <button onClick={markResolved} data-testid="knowledge-gap-resolve"
-                  className="text-xs font-bold tracking-widest bg-page-bg text-page-fg px-3 py-1 border border-border-strong">
+                  className="text-xs font-bold tracking-widest bg-page-bg text-page-fg px-3 py-2 sm:py-1 border border-border-strong">
             MARK RESOLVED
           </button>
           <button onClick={dismiss} data-testid="knowledge-gap-dismiss"
-                  className="text-xs tracking-widest bg-page-bg text-page-fg/60 px-3 py-1 border border-border-thin">
+                  className="text-xs tracking-widest bg-page-bg text-page-fg/60 px-3 py-2 sm:py-1 border border-border-thin">
             FLAG WRONG
           </button>
           <button onClick={loadDocs} data-testid="knowledge-gap-show-docs"
-                  className="text-xs tracking-widest bg-page-bg text-page-fg/80 px-3 py-1 border border-border-thin">
+                  className="text-xs tracking-widest bg-page-bg text-page-fg/80 px-3 py-2 sm:py-1 border border-border-thin">
             {docsOpen ? "HIDE DOCS" : "SHOW DOCS"}
           </button>
           {promoted ? (
@@ -158,7 +158,7 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
           ) : (
             <button onClick={promoteToFsrs} disabled={promoting}
                     data-testid="knowledge-gap-promote"
-                    className="text-xs font-bold tracking-widest bg-accent text-page-fg px-3 py-1 border border-border-strong disabled:opacity-50">
+                    className="text-xs font-bold tracking-widest bg-accent text-page-fg px-3 py-2 sm:py-1 border border-border-strong disabled:opacity-50">
               {promoting ? "PROMOTING…" : "PROMOTE → FSRS"}
             </button>
           )}
