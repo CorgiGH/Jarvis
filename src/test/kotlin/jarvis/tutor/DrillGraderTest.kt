@@ -88,7 +88,7 @@ class DrillGraderTest {
     @Test
     fun `grade returns GradeAttempt carrying raw output on success`() = kotlinx.coroutines.runBlocking {
         val fakeLlm = object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int): Pair<String, String> {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
                 return """{"correct":true,"rubric":{"numeric":true,"mechanism":true,"justification":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
             }
         }
@@ -104,7 +104,7 @@ class DrillGraderTest {
     @Test
     fun `grade returns GradeAttempt carrying raw output even on parse fail`() = kotlinx.coroutines.runBlocking {
         val fakeLlm = object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int): Pair<String, String> {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
                 return "Sure here is your grade I think it is good" to "fake/model"
             }
         }

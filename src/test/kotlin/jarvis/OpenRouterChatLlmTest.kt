@@ -273,3 +273,42 @@ class OpenRouterChatLlmTest {
         )
     }
 }
+
+/**
+ * Tests for the Task A.5 [OpenRouterChatLlm.buildCompletePayload] companion:
+ * verifies `response_format` is wired into the request body when callers
+ * opt in (DrillGrader does so via `responseFormat = "json_object"` to coax
+ * JSON-only output from `:free` models). Plan:
+ * docs/superpowers/plans/2026-05-16-grader-tripwire-reseed.md
+ */
+class OpenRouterChatLlmResponseFormatTest {
+    @Test
+    fun `complete payload includes response_format when responseFormat=json_object`() {
+        val payload = OpenRouterChatLlm.buildCompletePayload(
+            messages = listOf(ChatMessage("user", "hi")),
+            maxTokens = 100,
+            defaultModel = "openai/gpt-oss-120b:free",
+            fallbackModels = emptyList(),
+            modelOverride = null,
+            responseFormat = "json_object",
+        )
+        val rf = payload["response_format"] as? kotlinx.serialization.json.JsonObject
+        assertTrue(
+            rf != null && rf["type"] == kotlinx.serialization.json.JsonPrimitive("json_object"),
+            "expected response_format={type:json_object} in payload, got: $rf",
+        )
+    }
+
+    @Test
+    fun `complete payload omits response_format when null`() {
+        val payload = OpenRouterChatLlm.buildCompletePayload(
+            messages = listOf(ChatMessage("user", "hi")),
+            maxTokens = 100,
+            defaultModel = "openai/gpt-oss-120b:free",
+            fallbackModels = emptyList(),
+            modelOverride = null,
+            responseFormat = null,
+        )
+        assertTrue("response_format" !in payload, "no responseFormat ⇒ no key in payload")
+    }
+}

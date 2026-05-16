@@ -25,7 +25,11 @@ class ClaudeMaxLlm(
     override suspend fun complete(
         messages: List<ChatMessage>,
         maxTokens: Int,
+        responseFormat: String?,
     ): Pair<String, String> {
+        // responseFormat is an OpenAI/OpenRouter hint; claude --print has no
+        // equivalent flag, so we silently ignore it. Callers (DrillGrader)
+        // pass it unconditionally; non-OR providers just no-op.
         val prompt = serialize(messages)
 
         val cmd = mutableListOf(binary, "--print", "--output-format", "text")

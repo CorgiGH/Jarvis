@@ -11,10 +11,19 @@ data class ChatMessage(val role: String, val content: String)
  *  client (see jarvis.embeddings.EmbeddingsClient) since not every provider
  *  supplies them. */
 interface Llm : AutoCloseable {
-    /** Send the conversation; return (assistant text, model identifier used). */
+    /** Send the conversation; return (assistant text, model identifier used).
+     *
+     *  [responseFormat] is an OpenAI-style response_format hint, e.g.
+     *  `"json_object"`. Providers that support it (OpenRouter) coerce the
+     *  model to JSON-only output; providers that don't (Claude CLI,
+     *  Copilot CLI, relay) MUST silently ignore the hint so callers can
+     *  pass it unconditionally. Task A.5 of the grader-tripwire-reseed
+     *  plan adds this so DrillGrader can ask OR for json_object output
+     *  before falling through to the regex extract path. */
     suspend fun complete(
         messages: List<ChatMessage>,
         maxTokens: Int = Config.MAX_TOKENS,
+        responseFormat: String? = null,
     ): Pair<String, String>
 
     override fun close() {}

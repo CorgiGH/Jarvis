@@ -104,5 +104,6 @@ private fun Llm(block: suspend (List<jarvis.ChatMessage>, Int) -> Pair<String, S
         override suspend fun complete(
             messages: List<jarvis.ChatMessage>,
             maxTokens: Int,
+            responseFormat: String?,
         ): Pair<String, String> = block(messages, maxTokens)
     }

@@ -63,7 +63,12 @@ class RelayLlm(
     override suspend fun complete(
         messages: List<ChatMessage>,
         maxTokens: Int,
+        responseFormat: String?,
     ): Pair<String, String> {
+        // responseFormat hints OpenAI/OpenRouter to emit JSON-only output;
+        // the PC relay wraps `claude --print` which has no equivalent flag,
+        // so we silently ignore the param. Callers (DrillGrader) pass it
+        // unconditionally and rely on the regex-extract A.7 fallback.
         val body = json.encodeToString(
             RelayRequest.serializer(),
             RelayRequest(messages = messages, max_tokens = maxTokens),

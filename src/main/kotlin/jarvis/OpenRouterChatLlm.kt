@@ -88,9 +88,43 @@ class OpenRouterChatLlm(
     override suspend fun complete(
         messages: List<ChatMessage>,
         maxTokens: Int,
+        responseFormat: String?,
     ): Pair<String, String> {
-        val payload = buildJsonObject {
-            putModelField(modelOverride = null)
+        val payload = buildCompletePayload(
+            messages = messages,
+            maxTokens = maxTokens,
+            defaultModel = defaultModel,
+            fallbackModels = fallbackModels,
+            modelOverride = null,
+            responseFormat = responseFormat,
+        )
+        return postChat(payload)
+    }
+
+    companion object {
+        /**
+         * Build the chat-completions request body. Extracted from the
+         * instance [complete] so unit tests can exercise the JSON shape
+         * (including A.5's response_format wiring) without spinning up an
+         * HTTP server. The instance method delegates here with its
+         * constructor-bound default/fallback model fields.
+         */
+        fun buildCompletePayload(
+            messages: List<ChatMessage>,
+            maxTokens: Int,
+            defaultModel: String,
+            fallbackModels: List<String>,
+            modelOverride: String?,
+            responseFormat: String? = null,
+        ): JsonObject = buildJsonObject {
+            when {
+                modelOverride != null -> put("model", modelOverride)
+                fallbackModels.isEmpty() -> put("model", defaultModel)
+                else -> put("models", buildJsonArray {
+                    add(JsonPrimitive(defaultModel))
+                    fallbackModels.forEach { add(JsonPrimitive(it)) }
+                })
+            }
             put("max_tokens", maxTokens)
             put("messages", buildJsonArray {
                 for (m in messages) {
@@ -100,8 +134,12 @@ class OpenRouterChatLlm(
                     })
                 }
             })
+            if (responseFormat != null) {
+                put("response_format", buildJsonObject {
+                    put("type", responseFormat)
+                })
+            }
         }
-        return postChat(payload)
     }
 
     /**

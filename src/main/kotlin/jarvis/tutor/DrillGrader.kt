@@ -135,6 +135,12 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
                 ChatMessage("user", userMsg),
             ),
             maxTokens = 600,
+            // A.5 — ask the substrate to emit JSON-only output. OpenRouter
+            // honors this on `:free` models that expose it; CLI providers
+            // (claude --print, copilot, relay) silently ignore the hint and
+            // fall through to the A.7 regex-extract path. Plan:
+            // docs/superpowers/plans/2026-05-16-grader-tripwire-reseed.md
+            responseFormat = "json_object",
         )
         val parsed = parseGradeJson(raw.trim())
         if (parsed == null) {

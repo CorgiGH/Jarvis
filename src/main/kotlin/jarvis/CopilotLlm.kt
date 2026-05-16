@@ -38,7 +38,11 @@ class CopilotLlm(
     override suspend fun complete(
         messages: List<ChatMessage>,
         maxTokens: Int,
+        responseFormat: String?,
     ): Pair<String, String> {
+        // responseFormat is an OpenAI/OpenRouter hint; copilot CLI has no
+        // equivalent, so we silently ignore it (subprocess providers just
+        // no-op the param so callers can pass it unconditionally).
         // Java ProcessBuilder + the Windows winget shim around copilot.exe
         // mangles embedded \n in argv: the receiving Node argv parser saw
         // 47 separate tokens instead of one prompt. Flattening to single

@@ -22,6 +22,7 @@ class FallbackLlmTest {
         override suspend fun complete(
             messages: List<ChatMessage>,
             maxTokens: Int,
+            responseFormat: String?,
         ): Pair<String, String> {
             callCount++
             throwOn?.let { throw it() }

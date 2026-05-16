@@ -15,6 +15,7 @@ class ChatToolsWriteTest {
             override suspend fun complete(
                 messages: List<ChatMessage>,
                 maxTokens: Int,
+                responseFormat: String?,
             ): Pair<String, String> = q.removeFirst() to "test"
         }
     }

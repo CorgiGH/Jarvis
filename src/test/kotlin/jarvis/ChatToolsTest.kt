@@ -13,6 +13,7 @@ class ChatToolsTest {
             override suspend fun complete(
                 messages: List<ChatMessage>,
                 maxTokens: Int,
+                responseFormat: String?,
             ): Pair<String, String> {
                 require(q.isNotEmpty()) { "LLM called more times than scripted (got ${messages.size} messages)" }
                 return q.removeFirst() to model
@@ -103,6 +104,7 @@ class ChatToolsTest {
                 override suspend fun complete(
                     messages: List<ChatMessage>,
                     maxTokens: Int,
+                    responseFormat: String?,
                 ): Pair<String, String> {
                     calls++
                     return "[[search: q$calls]] still searching" to "m"

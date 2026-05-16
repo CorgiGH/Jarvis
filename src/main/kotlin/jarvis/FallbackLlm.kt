@@ -35,9 +35,14 @@ class FallbackLlm(
     override suspend fun complete(
         messages: List<ChatMessage>,
         maxTokens: Int,
+        responseFormat: String?,
     ): Pair<String, String> {
+        // responseFormat is passed through to BOTH providers — if primary
+        // honors it (OpenRouter) we keep the json_object lever; if fallback
+        // doesn't (claude/copilot CLI) it silently no-ops. Either way the
+        // caller's contract is preserved.
         val primaryError: Throwable = try {
-            return primary.complete(messages, maxTokens)
+            return primary.complete(messages, maxTokens, responseFormat)
         } catch (ce: CancellationException) {
             throw ce
         } catch (t: Throwable) {
@@ -45,7 +50,7 @@ class FallbackLlm(
         }
 
         try {
-            return fallback.complete(messages, maxTokens)
+            return fallback.complete(messages, maxTokens, responseFormat)
         } catch (ce: CancellationException) {
             throw ce
         } catch (fallbackError: Throwable) {
