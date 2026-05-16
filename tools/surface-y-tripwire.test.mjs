@@ -99,3 +99,68 @@ test("flagSuspectRun ignores findings_count for naive transcripts", () => {
   const r = flagSuspectRun(transcript, 0);
   assert.equal(r.suspect, false, "naive run is never suspect regardless of findings_count");
 });
+
+// --- Council 1778960917: adversarial-leaked fixture corpus (n=3) ---
+// Replay-shaped from authentic DRAFT-Y traces per the council's recommended path.
+// Each fixture targets a distinct branch of flagSuspectRun so threshold tuning can
+// later move each cell independently. All 3 must produce suspect=true with
+// findingsCount=0 — that is the negative class the tripwire is calibrated to flag.
+
+// Variant 1 — Path B only (very early submit at step 2, index 1).
+// Replay-shape source: DRAFT-Y-...-2026-05-15T10-33-33-020Z.md (clean R-script paste run),
+// with the typing loop collapsed to a single typed cell + an immediate submit.
+const ADVERSARIAL_LEAKED_1 = [
+  { action: "type", target: "textarea[placeholder=\"# R code\"]", payload: "n <- 10000; for (b in c(0.5,1,2,4)) { x <- rmutil::rlaplace(n, 0, b); hist(x, freq=FALSE, breaks=100, main=paste0('Laplace b=',b)); curve(rmutil::dlaplace(x, 0, b), add=TRUE, col='red') }", observation: "" },
+  { action: "submit", target: "button:nth-of-type(5)", observation: "" },
+];
+
+// Variant 2 — Path A only (7-step browse, zero ask_sidekick, zero confusion, no submit).
+// Replay-shape source: DRAFT-Y-...-2026-05-14T18-04-21-810Z.md (exploration-style run),
+// with all confused/leak observations stripped and the give_up tail removed.
+const ADVERSARIAL_LEAKED_2 = [
+  { action: "click", target: "button:nth-of-type(2)", observation: "" },
+  { action: "click", target: "button:nth-of-type(8)", observation: "" },
+  { action: "click", target: "button:nth-of-type(9)", observation: "" },
+  { action: "click", target: "button:nth-of-type(10)", observation: "" },
+  { action: "click", target: "button:nth-of-type(3)", observation: "" },
+  { action: "click", target: "button:nth-of-type(2)", observation: "" },
+  { action: "type", target: "#drill-prediction-input", payload: "histogram is symmetric around 0 with exponential decay; scale b widens the peak", observation: "" },
+];
+
+// Variant 3 — BOTH paths fire (6-step run ending in early submit at index 3).
+// Replay-shape source: DRAFT-Y-...-2026-05-14T14-56-31-416Z.md (multi-step then submit),
+// trimmed and prose-stripped so neither the run-length-zero-friction gate nor the
+// early-submit gate has any escape.
+const ADVERSARIAL_LEAKED_3 = [
+  { action: "click", target: "button:nth-of-type(2)", observation: "" },
+  { action: "type", target: "#drill-prediction-input", payload: "heavy tails, symmetric peak at 0", observation: "" },
+  { action: "type", target: "textarea[placeholder=\"# R code\"]", payload: "x <- rmutil::rlaplace(10000, 0, 1); hist(x, freq=FALSE)", observation: "" },
+  { action: "submit", target: "button:nth-of-type(5)", observation: "" },
+  { action: "click", target: "button:nth-of-type(3)", observation: "" },
+  { action: "click", target: "button:nth-of-type(4)", observation: "" },
+];
+
+test("flagSuspectRun: ADVERSARIAL_LEAKED_1 (Path B only — submit at step 2) → suspect", () => {
+  const r = flagSuspectRun(ADVERSARIAL_LEAKED_1, 0);
+  assert.equal(r.suspect, true);
+  assert.equal(r.signals.ask_sidekick_count, 0);
+  assert.equal(r.signals.confusion_step_count, 0);
+  assert.ok(r.rationale.some(s => s.includes("submit at step")), "Path B rationale must mention early submit");
+});
+
+test("flagSuspectRun: ADVERSARIAL_LEAKED_2 (Path A only — 7-step zero-friction browse, no submit) → suspect", () => {
+  const r = flagSuspectRun(ADVERSARIAL_LEAKED_2, 0);
+  assert.equal(r.suspect, true);
+  assert.equal(r.signals.ask_sidekick_count, 0);
+  assert.equal(r.signals.confusion_step_count, 0);
+  assert.ok(r.rationale.some(s => s.includes("zero ask_sidekick")), "Path A rationale must mention zero ask_sidekick");
+  assert.equal(ADVERSARIAL_LEAKED_2.find(t => t.action === "submit"), undefined, "fixture intentionally has no submit");
+});
+
+test("flagSuspectRun: ADVERSARIAL_LEAKED_3 (both paths — long clean run ending in early submit) → suspect", () => {
+  const r = flagSuspectRun(ADVERSARIAL_LEAKED_3, 0);
+  assert.equal(r.suspect, true);
+  assert.equal(r.signals.ask_sidekick_count, 0);
+  assert.equal(r.signals.confusion_step_count, 0);
+  assert.equal(r.rationale.length, 2, "both Path A and Path B must fire");
+});
