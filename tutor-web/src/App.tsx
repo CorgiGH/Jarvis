@@ -167,7 +167,7 @@ export function App() {
         </div>
         <nav className="flex items-center gap-4 text-xs font-bold tracking-widest">
           <Link
-            to="/?pick=1"
+            to={explicitTaskId && !pickMode ? `/?taskId=${explicitTaskId}` : "/?pick=1"}
             aria-current={here.pathname === "/" ? "page" : undefined}
             className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
           >

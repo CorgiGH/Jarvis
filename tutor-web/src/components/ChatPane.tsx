@@ -192,22 +192,25 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
            tabIndex={0}
            role="log"
            aria-label="Chat messages">
-        {historicalGaps.length > 0 && (
-          <div data-testid="historical-gaps" className="mb-2">
-            <div className="text-xs font-bold tracking-widest text-page-fg/60 mb-1">
-              PREVIOUSLY FLAGGED ({historicalGaps.length})
+        {(() => {
+          const openGaps = historicalGaps.filter(g => g.resolvedBy == null);
+          return openGaps.length > 0 && (
+            <div data-testid="historical-gaps" className="mb-2">
+              <div className="text-xs font-bold tracking-widest text-page-fg/60 mb-1">
+                PREVIOUSLY FLAGGED ({openGaps.length})
+              </div>
+              {openGaps.map(g => (
+                <KnowledgeGapCard key={g.id} gap={g}
+                  onInsertScratchpad={gg => {
+                    const text = gg.exampleCode
+                      ? `// ${gg.topic}\n${gg.exampleCode}`
+                      : `// ${gg.topic}\n${gg.content}`;
+                    onScratchpadInsert?.(text);
+                  }} />
+              ))}
             </div>
-            {historicalGaps.map(g => (
-              <KnowledgeGapCard key={g.id} gap={g}
-                onInsertScratchpad={gg => {
-                  const text = gg.exampleCode
-                    ? `// ${gg.topic}\n${gg.exampleCode}`
-                    : `// ${gg.topic}\n${gg.content}`;
-                  onScratchpadInsert?.(text);
-                }} />
-            ))}
-          </div>
-        )}
+          );
+        })()}
         {messages.map((m, i) => (
           <div key={i} className="min-w-0">
             <div className={`inline-block px-2 py-0.5 text-xs font-bold tracking-widest ${

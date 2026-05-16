@@ -28,7 +28,9 @@ export function ActiveTaskDashboard() {
       .finally(() => setLoaded(true));
   }, []);
 
-  const ranked = [...tasks].sort((a, b) => rankTask(b) - rankTask(a));
+  const ranked = tasks
+    .filter(t => t.status === "ACTIVE" || t.status === "TODO" || t.status == null)
+    .sort((a, b) => rankTask(b) - rankTask(a));
 
   async function runDetection() {
     setDetecting(true);
