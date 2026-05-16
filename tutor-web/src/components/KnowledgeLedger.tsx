@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { jarvisFetch } from "../lib/api";
 
 interface Gap {
@@ -20,6 +20,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
   const [gaps, setGaps] = useState<Gap[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<"all" | "open" | "resolved">("all");
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     jarvisFetch("/api/v1/gaps")
@@ -29,6 +30,17 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
       .finally(() => setLoaded(true));
   }, []);
 
+  // Modal-dialog contract: focus close button on open, dismiss on Escape.
+  // Backdrop overlay handles click-outside-to-dismiss (see JSX below).
+  useEffect(() => {
+    closeBtnRef.current?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const filtered = gaps.filter(g => {
     if (filter === "all") return true;
     if (filter === "open") return g.resolvedBy == null;
@@ -36,14 +48,20 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <div data-testid="knowledge-ledger"
-         role="dialog"
-         aria-modal="true"
-         aria-label="Knowledge ledger"
-         className="fixed top-0 right-0 h-full w-96 bg-page-bg border-l-4 border-border-strong p-4 font-mono text-xs overflow-auto z-20">
+    <>
+      <div data-testid="knowledge-ledger-backdrop"
+           onClick={onClose}
+           aria-hidden="true"
+           className="fixed inset-0 bg-page-fg/20 z-[19]" />
+      <div data-testid="knowledge-ledger"
+           role="dialog"
+           aria-modal="true"
+           aria-label="Knowledge ledger"
+           className="fixed top-0 right-0 h-full w-96 bg-page-bg border-l-4 border-border-strong p-4 font-mono text-xs overflow-auto z-20">
       <div className="flex justify-between items-center mb-3">
         <div className="font-bold tracking-widest">KNOWLEDGE LEDGER</div>
-        <button onClick={onClose}
+        <button ref={closeBtnRef}
+                onClick={onClose}
                 aria-label="Close ledger"
                 className="bg-accent text-page-fg px-2 py-2 sm:py-1">×</button>
       </div>
@@ -72,6 +90,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
           ))}
         </ul>
       )}
-    </div>
+      </div>
+    </>
   );
 }

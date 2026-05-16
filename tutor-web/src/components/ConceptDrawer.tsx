@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { jarvisFetch } from "../lib/api";
 
 interface DrawerHit { filename: string; snippet: string; }
@@ -13,6 +13,7 @@ interface DrawerHit { filename: string; snippet: string; }
  */
 export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: () => void }) {
   const [hits, setHits] = useState<DrawerHit[] | null>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,15 +33,32 @@ export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: 
     return () => { cancelled = true; };
   }, [concept]);
 
+  // Modal-dialog contract: focus close button on open, dismiss on Escape.
+  // Backdrop overlay handles click-outside-to-dismiss (see JSX below).
+  useEffect(() => {
+    closeBtnRef.current?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div data-testid="concept-drawer"
-         role="dialog"
-         aria-modal="true"
-         aria-label={`Concept reference: ${concept}`}
-         className="fixed top-0 right-0 h-full w-80 bg-page-bg border-l-4 border-border-strong p-4 font-mono text-xs overflow-auto z-30">
+    <>
+      <div data-testid="concept-drawer-backdrop"
+           onClick={onClose}
+           aria-hidden="true"
+           className="fixed inset-0 bg-page-fg/20 z-[29]" />
+      <div data-testid="concept-drawer"
+           role="dialog"
+           aria-modal="true"
+           aria-label={`Concept reference: ${concept}`}
+           className="fixed top-0 right-0 h-full w-80 bg-page-bg border-l-4 border-border-strong p-4 font-mono text-xs overflow-auto z-30">
       <div className="flex justify-between items-center mb-3">
         <div className="font-bold tracking-widest">CONCEPT · {concept}</div>
-        <button onClick={onClose}
+        <button ref={closeBtnRef}
+                onClick={onClose}
                 aria-label="Close concept drawer"
                 className="bg-accent text-page-fg px-2 py-2 sm:py-1">×</button>
       </div>
@@ -58,6 +76,7 @@ export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: 
           ))}
         </ul>
       )}
-    </div>
+      </div>
+    </>
   );
 }

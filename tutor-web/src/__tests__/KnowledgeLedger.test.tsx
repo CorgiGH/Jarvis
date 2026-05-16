@@ -34,3 +34,26 @@ test("filter open shows only unresolved", async () => {
   fireEvent.click(screen.getByTestId("ledger-filter-open"));
   expect(screen.getAllByTestId("ledger-row").length).toBe(1);
 });
+
+test("Escape key closes the ledger", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ gaps: [] }), { status: 200 })));
+  const onClose = vi.fn();
+  render(<KnowledgeLedger onClose={onClose} />);
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test("backdrop click closes the ledger", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ gaps: [] }), { status: 200 })));
+  const onClose = vi.fn();
+  render(<KnowledgeLedger onClose={onClose} />);
+  fireEvent.click(screen.getByTestId("knowledge-ledger-backdrop"));
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test("close button is auto-focused on mount", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ gaps: [] }), { status: 200 })));
+  render(<KnowledgeLedger onClose={() => {}} />);
+  const closeBtn = screen.getByLabelText("Close ledger");
+  expect(document.activeElement).toBe(closeBtn);
+});
