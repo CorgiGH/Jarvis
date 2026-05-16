@@ -82,6 +82,25 @@ test("buildPersonaPrompt includes active confusion-tuple text", () => {
   assert.match(prompt, /You frequently confuse laplace_distribution with normal_distribution/);
 });
 
+test("buildPersonaPrompt includes authentic-naive exemplars (council 1778881175)", () => {
+  // External hand-authored exemplars — must NOT come from calibration corpus
+  // (would create overfitting / transcript-mimicry per Risk Analyst's
+  // circular-dependency warning). Markers locked in below to catch
+  // accidental deletion in future edits.
+  const prompt = buildPersonaPrompt({
+    schema,
+    ledger: new Set(),
+    sessionHistory: [],
+    activeConfusionTuple: null,
+    currentDom: "<p>x</p>",
+  });
+  assert.match(prompt, /AUTHENTIC-NAIVE EXEMPLAR/i, "must include hand-authored exemplar block");
+  assert.match(prompt, /ask_sidekick/i, "exemplar must demonstrate sidekick use");
+  assert.match(prompt, /don't know|confused|stuck/i, "exemplar must demonstrate confusion expression");
+  assert.match(prompt, /SHAPE references only|hand-authored|NOT.*calibration/i,
+    "exemplar block must warn against verbatim copying");
+});
+
 test("buildPersonaPrompt exposes the submit action and instructs using it over click", () => {
   const prompt = buildPersonaPrompt({
     schema,

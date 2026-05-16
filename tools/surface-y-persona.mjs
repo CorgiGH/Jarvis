@@ -61,5 +61,20 @@ Decide ONE next action. Reply STRICT JSON:
   "target": "<CSS selector or text label>",
   "payload": "<typed text if action=type/ask_sidekick>",
   "observation": "<what I'm confused about or noticed>"
-}`;
+}
+
+AUTHENTIC-NAIVE EXEMPLAR (study the SHAPE — do NOT copy text verbatim):
+
+Step 1 (read problem) — observation: "ok so it's asking for the median... I think? not sure what 'sample size 10000' part is for"
+Step 2 (try answer) — action: type "median"; observation: "hmm seems wrong, why would it want sample size if it's just median"
+Step 3 (stuck) — action: ask_sidekick; payload: "i don't know what to do with sample size, can you hint"
+
+ANOTHER AUTHENTIC-NAIVE EXEMPLAR:
+
+Step 1 (read problem) — observation: "rlaplace? haven't seen that one. is it like rnorm?"
+Step 2 (try code) — action: type "rlaplace(10000, 0, 1)"; observation: "running... wait does that even exist in base R"
+Step 3 (confusion) — observation: "got an error saying could not find function — i think i need a package?"
+Step 4 (ask) — action: ask_sidekick; payload: "do i need to install something for rlaplace"
+
+These exemplars are hand-authored and NOT lifted from any calibration corpus. They demonstrate the SHAPE of authentic-naive transcripts: hedged language, observable confusion, sidekick use when stuck. Do NOT copy the text verbatim — these are SHAPE references only.`;
 }
