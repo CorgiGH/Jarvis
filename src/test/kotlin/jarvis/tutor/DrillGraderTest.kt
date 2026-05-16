@@ -115,4 +115,69 @@ class DrillGraderTest {
         assertNull(attempt.parsed)
         assertEquals("Sure here is your grade I think it is good", attempt.rawOutput)
     }
+
+    // Task A.3 — envelope-build block at TutorRoutes.kt:1669+ must populate
+    // TutorEvent.llm_output_raw_truncated from GradeAttempt.rawOutput when
+    // status == "parse_error". The conditional helper below mirrors the
+    // exact wiring in TutorRoutes so the three status branches (ok /
+    // parse_error / error=attempt-null) can be unit-tested without an LLM
+    // injection seam in the HTTP route. The HTTP-level path is already
+    // covered by `POST drill grade writes a redacted TutorEvent` in
+    // TutorRoutesTest (which exercises the error branch via no-API-key).
+    private fun envelopeRawTruncated(status: String, attempt: GradeAttempt?): String? =
+        if (status == "parse_error" && attempt?.rawOutput != null)
+            attempt.rawOutput.take(1500)
+        else null
+
+    @Test
+    fun `envelope raw-truncated populated only on parse_error`() {
+        val garbage = "Sure here is your grade"
+        val attempt = GradeAttempt(parsed = null, rawOutput = garbage, modelResolved = "fake/model")
+        assertEquals(garbage, envelopeRawTruncated("parse_error", attempt))
+        assertEquals(null, envelopeRawTruncated("ok", attempt),
+            "rendered reply lives in llm_output_full on ok; raw stays null")
+        assertEquals(null, envelopeRawTruncated("error", null),
+            "no GradeAttempt on LLM-exception path; raw stays null")
+    }
+
+    @Test
+    fun `envelope raw-truncated capped at 1500 chars`() {
+        val big = "x".repeat(3000)
+        val attempt = GradeAttempt(parsed = null, rawOutput = big, modelResolved = "fake/model")
+        val captured = envelopeRawTruncated("parse_error", attempt)
+        assertNotNull(captured)
+        assertEquals(1500, captured!!.length, "truncation hard-cap from plan + council 1778881174")
+    }
+
+    // Task A.3 — envelope-build block at TutorRoutes.kt:1669+ must populate
+    // TutorEvent.llm_output_raw_truncated from GradeAttempt.rawOutput when
+    // status == "parse_error". This test validates the serialization-level
+    // contract: the field round-trips through TutorEvent encode/decode.
+    // The A.1 schema change is already in place — this is end-to-end
+    // validation, not red-then-green TDD.
+    @Test
+    fun `parse_error envelope carries llm_output_raw_truncated`() {
+        val evt = TutorEvent(
+            event_type = "drill_grade",
+            event_id = "test1",
+            ts_utc = "2026-05-16T00:00:00Z",
+            task_id = null,
+            session_id = "s1",
+            prompt_template_id = null,
+            system_prompt_sha256 = null,
+            retrieved_context_summary = null,
+            llm_output_full = "{...rendered reply...}",
+            model_resolved = "fake/model",
+            tokens_in = null,
+            tokens_out = null,
+            latency_ms = null,
+            llm_output_raw_truncated = "Sure here is your grade",
+            status = "parse_error",
+        )
+        val json = kotlinx.serialization.json.Json { encodeDefaults = true }
+        val encoded = json.encodeToString(TutorEvent.serializer(), evt)
+        assertTrue(encoded.contains("\"llm_output_raw_truncated\":\"Sure here is your grade\""))
+        val decoded = json.decodeFromString(TutorEvent.serializer(), encoded)
+        assertEquals("Sure here is your grade", decoded.llm_output_raw_truncated)
+    }
 }

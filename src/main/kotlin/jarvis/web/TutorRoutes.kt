@@ -1691,7 +1691,21 @@ fun Application.installTutorRoutes() {
                         llm_input_full = null,
                         llm_input_redacted = redacted,
                         llm_output_full = llmOutputFull,
-                        model_resolved = null, // TODO(standin-task-0.5): expose model id from DrillGrader.
+                        // A.3: capture raw LLM output on parse_error so Surface
+                        // X status_in=parse_error queries can see what the LLM
+                        // actually returned (rendered reply alone is useless
+                        // for debugging the grader prompt). Truncate to 1500
+                        // chars per plan + council 1778881174 guidance. Null
+                        // on ok (rendered reply already in llm_output_full)
+                        // and error (no LLM output to capture).
+                        llm_output_raw_truncated = if (status == "parse_error" && attempt?.rawOutput != null)
+                            attempt.rawOutput.take(1500)
+                        else null,
+                        // A.3: wire real model id from GradeAttempt.modelResolved
+                        // (paired with raw-output capture per council reviewer
+                        // note 6). On LLM-exception path attempt is null, so
+                        // this stays null — preserves today's behavior.
+                        model_resolved = attempt?.modelResolved,
                         tokens_in = null,      // TODO(standin-task-0.5): expose token counts from DrillGrader.
                         tokens_out = null,     // TODO(standin-task-0.5): expose token counts from DrillGrader.
                         latency_ms = System.currentTimeMillis() - t0,
