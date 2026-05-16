@@ -170,6 +170,7 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
 
   return (
     <div ref={workspaceRef} className="flex flex-col h-full bg-page-bg text-page-fg">
+      <h1 className="sr-only">Tutor workspace · task {taskId}</h1>
       <header data-testid="tutor-header"
               className="flex items-center justify-between px-4 py-1 border-b-4 border-border-strong bg-panel-dark-bg text-panel-dark-fg text-[10px] font-mono tracking-widest">
         <span className="font-bold">JARVIS · TUTOR · {taskId}</span>

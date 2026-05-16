@@ -75,10 +75,10 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
       <div data-testid="knowledge-ledger"
            role="dialog"
            aria-modal="true"
-           aria-label="Knowledge ledger"
+           aria-labelledby="ledger-heading"
            className="fixed top-0 right-0 h-full w-96 bg-page-bg border-l-4 border-border-strong p-4 font-mono text-xs overflow-auto z-20">
       <div className="flex justify-between items-center mb-3">
-        <div className="font-bold tracking-widest">KNOWLEDGE LEDGER</div>
+        <h2 id="ledger-heading" className="font-bold tracking-widest text-xs">KNOWLEDGE LEDGER</h2>
         <button ref={closeBtnRef}
                 onClick={onClose}
                 aria-label="Close ledger"

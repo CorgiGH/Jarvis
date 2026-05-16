@@ -130,6 +130,10 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         body: JSON.stringify({ msg: userMsg, taskId }),
         signal: ac.signal,
       });
+      if (!res.ok) {
+        const bodyPreview = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}${bodyPreview ? `: ${bodyPreview.slice(0, 200)}` : ""}`);
+      }
       const data = await res.json();
       const raw = data.reply ?? "(no reply)";
       // Run both extractors. parseSuggestedEdits strips <edit> envelopes

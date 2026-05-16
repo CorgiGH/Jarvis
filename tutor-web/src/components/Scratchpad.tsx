@@ -36,7 +36,7 @@ export function Scratchpad({ value, onChange, status, errorMessage }: Scratchpad
   return (
     <div data-testid="scratchpad" className="border-t-4 border-border-strong bg-page-bg">
       <div className="flex items-center justify-between bg-panel-dark-bg text-panel-dark-fg px-3 py-1 text-xs tracking-widest font-bold">
-        <span>SCRATCHPAD</span>
+        <h2 id="scratchpad-heading" className="text-xs">SCRATCHPAD</h2>
         {status && status !== "idle" && (
           <span
             data-testid="scratchpad-status"
@@ -56,6 +56,7 @@ export function Scratchpad({ value, onChange, status, errorMessage }: Scratchpad
       <textarea
         ref={ref}
         data-testid="scratchpad-input"
+        aria-labelledby="scratchpad-heading"
         aria-label="Task scratchpad — local notes; auto-saved per browser"
         value={value}
         onChange={e => onChange(e.target.value)}

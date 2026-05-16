@@ -119,7 +119,7 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
         const low = pct != null && pct < 30;
         return (
         <div key={subject} data-testid={`sidebar-subject-${subject}`}>
-          <div className="px-3 py-1 mt-2 bg-page-fg/10 tracking-widest font-bold border-y border-border-thin flex items-center justify-between">
+          <h3 className="px-3 py-1 mt-2 bg-page-fg/10 tracking-widest font-bold border-y border-border-thin flex items-center justify-between text-xs">
             <span>{subject}</span>
             {pct != null && (
               <span data-testid={`sidebar-subject-pct-${subject}`}
@@ -128,7 +128,7 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
                 {pct}%
               </span>
             )}
-          </div>
+          </h3>
           <ul role="list">
             {subjectTasks.map(t => {
               const days = Math.round(

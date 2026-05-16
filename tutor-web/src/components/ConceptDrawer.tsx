@@ -60,10 +60,11 @@ export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: 
       <div data-testid="concept-drawer"
            role="dialog"
            aria-modal="true"
+           aria-labelledby="concept-drawer-heading"
            aria-label={`Concept reference: ${concept}`}
            className="fixed top-0 right-0 h-full w-80 bg-page-bg border-l-4 border-border-strong p-4 font-mono text-xs overflow-auto z-30">
       <div className="flex justify-between items-center mb-3">
-        <div className="font-bold tracking-widest">CONCEPT · {concept}</div>
+        <h2 id="concept-drawer-heading" className="font-bold tracking-widest text-xs">CONCEPT · {concept}</h2>
         <button ref={closeBtnRef}
                 onClick={onClose}
                 aria-label="Close concept drawer"
