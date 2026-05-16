@@ -180,4 +180,50 @@ class DrillGraderTest {
         val decoded = json.decodeFromString(TutorEvent.serializer(), encoded)
         assertEquals("Sure here is your grade", decoded.llm_output_raw_truncated)
     }
+
+    // Task A.6 — code-grading path runs longer (multi-line rubric_chip_text +
+    // elaborated_feedback referencing specific code lines), so the 600-token
+    // cap was triggering JSON truncation. Council 1778881174 Risk Analyst
+    // flagged maxTokens=600 as probable root cause of truncated JSON in
+    // code-grade responses. Split: 1200 for code, 600 stays for text.
+    // Plan: docs/superpowers/plans/2026-05-16-grader-tripwire-reseed.md (A.6)
+    @Test
+    fun `grade uses maxTokens=1200 for code grading path`() = kotlinx.coroutines.runBlocking {
+        var observedMaxTokens = -1
+        val capturingLlm = object : jarvis.Llm {
+            override suspend fun complete(
+                messages: List<jarvis.ChatMessage>,
+                maxTokens: Int,
+                responseFormat: String?,
+            ): Pair<String, String> {
+                observedMaxTokens = maxTokens
+                return """{"correct":true,"rubric":{"foo":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
+            }
+        }
+        DrillGrader.grade(
+            problemStatement = "p", userAttempt = "a", expectedHint = "h",
+            llm = capturingLlm, language = "r", referenceSolution = "x", rubricItems = listOf("foo"),
+        )
+        assertEquals(1200, observedMaxTokens)
+    }
+
+    @Test
+    fun `grade keeps maxTokens=600 for text grading path`() = kotlinx.coroutines.runBlocking {
+        var observedMaxTokens = -1
+        val capturingLlm = object : jarvis.Llm {
+            override suspend fun complete(
+                messages: List<jarvis.ChatMessage>,
+                maxTokens: Int,
+                responseFormat: String?,
+            ): Pair<String, String> {
+                observedMaxTokens = maxTokens
+                return """{"correct":true,"rubric":{"numeric":true,"mechanism":true,"justification":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
+            }
+        }
+        DrillGrader.grade(
+            problemStatement = "p", userAttempt = "a", expectedHint = "h",
+            llm = capturingLlm, language = null,
+        )
+        assertEquals(600, observedMaxTokens)
+    }
 }

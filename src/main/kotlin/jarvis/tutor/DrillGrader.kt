@@ -129,12 +129,17 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
             userAttempt = userAttempt,
             prediction = prediction,
         )
+        // A.6 — code-grading produces longer JSON (multi-line elaborated_feedback
+        // citing specific code lines + dynamic rubric_chip_text), so bump the
+        // cap to 1200 for code paths. Text grading stays at 600 — its rubric
+        // is fixed at 3 booleans and feedback is a short one-liner.
+        val effectiveMaxTokens = if (isCode) 1200 else 600
         val (raw, modelResolved) = llm.complete(
             listOf(
                 ChatMessage("system", systemPrompt),
                 ChatMessage("user", userMsg),
             ),
-            maxTokens = 600,
+            maxTokens = effectiveMaxTokens,
             // A.5 — ask the substrate to emit JSON-only output. OpenRouter
             // honors this on `:free` models that expose it; CLI providers
             // (claude --print, copilot, relay) silently ignore the hint and
