@@ -335,7 +335,7 @@ export async function runStandin({
     // thresholds were tuned against. Hardcoded for now; bump when corpus
     // grows. Per Council 1778881175 (Devil's Advocate: "name what guarantee
     // means before chasing it").
-    const tripwireCorpusN = 2;
+    const tripwireCorpusN = 5;
     const tripwireConfidenceBand = `thin_corpus_n${tripwireCorpusN}`;
 
     const stamp = await getStamp(null, {
