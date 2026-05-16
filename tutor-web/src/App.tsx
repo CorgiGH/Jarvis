@@ -141,6 +141,9 @@ export function App() {
   }, [taskId, isDefault, sessionReady]);
 
   const showQuickStart = isDefault || taskExists === false;
+  // Surface a one-shot banner when /last-task restored a taskId that no longer
+  // exists on this device's view — distinguishes from a fresh user landing.
+  const missingPinnedTask = !isDefault && taskExists === false;
 
   function pickAnotherTask() {
     try { localStorage.removeItem(LAST_TASK_KEY); } catch (_) {}
@@ -149,7 +152,7 @@ export function App() {
 
   return (
     <div className="h-dvh flex flex-col">
-      <header className="bg-panel-dark-bg text-panel-dark-fg px-4 py-3 flex items-center justify-between border-b-4 border-accent">
+      <header className="bg-panel-dark-bg text-panel-dark-fg px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b-4 border-accent">
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-lg font-bold tracking-widest">JARVIS · TUTOR</span>
           {!showQuickStart && (
@@ -206,6 +209,13 @@ export function App() {
           )}
         </nav>
       </header>
+      {missingPinnedTask && (
+        <div data-testid="missing-pinned-task"
+             role="status" aria-live="polite"
+             className="bg-accent border-b-4 border-border-strong text-page-fg font-mono text-xs font-bold tracking-widest px-4 py-1.5">
+          couldn't open last task ({taskId}) — pick another below
+        </div>
+      )}
       <main className="flex-1 min-h-0 overflow-hidden bg-page-bg">
         {here.pathname === "/review"
           ? <FsrsReview streak={0} />

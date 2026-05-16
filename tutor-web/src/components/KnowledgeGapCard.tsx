@@ -27,6 +27,7 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
   const [resolved, setResolved] = useState<GapResolved | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [contentExpanded, setContentExpanded] = useState(false);
+  const [exampleExpanded, setExampleExpanded] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
   const [docs, setDocs] = useState<{ filename: string; snippet: string; lineRef: string | null }[] | null>(null);
   const [docsError, setDocsError] = useState<string | null>(null);
@@ -95,8 +96,9 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
     postStatus("USER_DISMISSED");
   }
 
-  const previewCode = gap.exampleCode && gap.exampleCode.length > 320
-    ? gap.exampleCode.slice(0, 320) + "…"
+  const exampleCodeIsLong = !!gap.exampleCode && gap.exampleCode.length > 320;
+  const previewCode = exampleCodeIsLong && !exampleExpanded
+    ? gap.exampleCode!.slice(0, 320) + "…"
     : gap.exampleCode;
 
   return (
@@ -131,12 +133,19 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
         </div>
       )}
       {previewCode && (
-        <pre data-testid="knowledge-gap-code"
-             tabIndex={0}
-             aria-label="Example code snippet"
-             className="text-xs whitespace-pre-wrap font-mono bg-page-bg px-2 py-1 border border-page-fg/10 max-h-48 overflow-auto">
-          {previewCode}
-        </pre>
+        <>
+          <pre data-testid="knowledge-gap-code"
+               tabIndex={0}
+               aria-label="Example code snippet"
+               className="text-xs whitespace-pre-wrap font-mono bg-page-bg px-2 py-1 border border-page-fg/10 max-h-48 overflow-auto">
+            {previewCode}
+          </pre>
+          {exampleCodeIsLong && !exampleExpanded && (
+            <button onClick={() => setExampleExpanded(true)}
+                    data-testid="knowledge-gap-example-show-more"
+                    className="text-xs underline text-page-fg/60 mt-1 mb-2">show more</button>
+          )}
+        </>
       )}
       {!resolved && (
         <div className="flex gap-2 mt-2 flex-wrap">

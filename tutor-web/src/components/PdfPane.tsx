@@ -30,6 +30,8 @@ export function PdfPane({ url, onPdfSelectionGap, uploadUrl }: PdfPaneProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string; page: number } | null>(null);
+  const tooltipBtnRef = useRef<HTMLButtonElement>(null);
+  const tooltipDebounceRef = useRef<number | null>(null);
 
   async function uploadFile(f: File) {
     if (!uploadUrl) return;
@@ -67,7 +69,7 @@ export function PdfPane({ url, onPdfSelectionGap, uploadUrl }: PdfPaneProps) {
 
   useEffect(() => {
     if (!onPdfSelectionGap) return;
-    function onSelectionChange() {
+    function compute() {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
         setTooltip(null); return;
@@ -91,14 +93,43 @@ export function PdfPane({ url, onPdfSelectionGap, uploadUrl }: PdfPaneProps) {
       try {
         const rect = range.getBoundingClientRect();
         const containerRect = containerRef.current!.getBoundingClientRect();
-        x = rect.left - containerRect.left;
-        y = rect.bottom - containerRect.top + 4;
+        // Edge clamp: tooltip is ~180px wide × ~26px tall (text-xs + py-2 + content).
+        // Flip above the selection when bottom-anchored would overflow; clamp x to
+        // container right edge minus tooltip width minus a 8px gutter.
+        const TIP_W = 180, TIP_H = 26, GUTTER = 8;
+        const rawX = rect.left - containerRect.left;
+        const rawY = rect.bottom - containerRect.top + 4;
+        const containerW = containerRef.current!.clientWidth;
+        const containerH = containerRef.current!.clientHeight;
+        x = Math.max(GUTTER, Math.min(rawX, containerW - TIP_W - GUTTER));
+        y = rawY + TIP_H > containerH
+          ? (rect.top - containerRect.top - TIP_H - 4)
+          : rawY;
       } catch (_) { /* jsdom doesn't implement getBoundingClientRect on Range */ }
       setTooltip({ x, y, text: text.slice(0, 200), page });
     }
+    function onSelectionChange() {
+      // Debounce: real-time setTooltip per pixel-of-drag was causing flicker on
+      // mobile / older devices. Wait 100ms for the selection to stabilize before
+      // measuring the range.
+      if (tooltipDebounceRef.current != null) window.clearTimeout(tooltipDebounceRef.current);
+      tooltipDebounceRef.current = window.setTimeout(() => {
+        tooltipDebounceRef.current = null;
+        compute();
+      }, 100);
+    }
     document.addEventListener("selectionchange", onSelectionChange);
-    return () => document.removeEventListener("selectionchange", onSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", onSelectionChange);
+      if (tooltipDebounceRef.current != null) window.clearTimeout(tooltipDebounceRef.current);
+    };
   }, [onPdfSelectionGap]);
+
+  // Focus the tooltip button when it appears so keyboard users (shift+arrow
+  // selectors) can press Enter to flag without reaching for the mouse.
+  useEffect(() => {
+    if (tooltip) tooltipBtnRef.current?.focus();
+  }, [tooltip]);
 
   if (error) {
     return (
@@ -166,7 +197,9 @@ export function PdfPane({ url, onPdfSelectionGap, uploadUrl }: PdfPaneProps) {
       </Document>
       {tooltip && (
         <button
+          ref={tooltipBtnRef}
           data-testid="pdf-selection-tooltip"
+          aria-describedby="pdf-tooltip-hint"
           onClick={() => {
             onPdfSelectionGap?.({ text: tooltip.text, page: tooltip.page });
             setTooltip(null);
@@ -176,6 +209,7 @@ export function PdfPane({ url, onPdfSelectionGap, uploadUrl }: PdfPaneProps) {
           style={{ left: tooltip.x, top: tooltip.y }}
         >
           🤷 I don't know this
+          <span id="pdf-tooltip-hint" className="sr-only"> — press Enter to flag this selection as a knowledge gap</span>
         </button>
       )}
       {size != null && (

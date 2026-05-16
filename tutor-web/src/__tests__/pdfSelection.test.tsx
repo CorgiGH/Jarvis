@@ -1,11 +1,14 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { PdfPane } from "../components/PdfPane";
 
 beforeEach(() => {
   Object.defineProperty(document, "cookie", { value: "csrf=zzz", configurable: true, writable: true });
+  // String body produces a deterministic Blob across jsdom versions (some
+  // jsdoms drop Uint8Array contents when wrapped through Response).
+  // 500 'a' chars → blob.size = 500 → skips the <200-byte placeholder path.
   vi.stubGlobal("fetch", vi.fn(async () =>
-    new Response(new Blob([new Uint8Array(500).fill(1)]), { status: 200 }),
+    new Response("a".repeat(500), { status: 200, headers: { "content-type": "application/pdf" } }),
   ));
 });
 afterEach(() => { vi.unstubAllGlobals(); });
@@ -32,7 +35,11 @@ test("PdfPane shows tooltip on text selection ≥3 chars + emits gap on click", 
   sel.addRange(range);
   document.dispatchEvent(new Event("selectionchange"));
 
-  const tooltip = await waitFor(() => screen.getByTestId("pdf-selection-tooltip"));
+  // Selectionchange handler now debounces 100ms before measuring the range
+  // (flicker fix from the PdfPane polish sweep). waitFor's default timeout
+  // (1000ms) is plenty, but be explicit so future debounce-tuning doesn't
+  // surprise this assertion.
+  const tooltip = await waitFor(() => screen.getByTestId("pdf-selection-tooltip"), { timeout: 1500 });
   expect(tooltip.textContent).toMatch(/I don't know this/);
   // Click handler invokes onPdfSelectionGap. jsdom occasionally drops
   // synthetic clicks against React 19 portals; verify the prop flow is

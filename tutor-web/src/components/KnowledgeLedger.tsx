@@ -60,11 +60,19 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const filtered = gaps.filter(g => {
-    if (filter === "all") return true;
-    if (filter === "open") return g.resolvedBy == null;
-    return g.resolvedBy != null;
-  });
+  const filtered = gaps
+    .filter(g => {
+      if (filter === "all") return true;
+      if (filter === "open") return g.resolvedBy == null;
+      return g.resolvedBy != null;
+    })
+    // Top by reusedCount (DESC). Cap rendered count at LEDGER_VISIBLE_CAP to
+    // honor [[Chunking]] / [[Hick's Law]] on dense workspaces.
+    .sort((a, b) => b.reusedCount - a.reusedCount);
+
+  const LEDGER_VISIBLE_CAP = 50;
+  const visible = filtered.slice(0, LEDGER_VISIBLE_CAP);
+  const hiddenCount = filtered.length - visible.length;
 
   return (
     <>
@@ -103,16 +111,23 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
       ) : filtered.length === 0 ? (
         <div data-testid="ledger-empty" className="text-page-fg/60">no gaps yet</div>
       ) : (
-        <ul role="list" className="space-y-2">
-          {filtered.map(g => (
-            <li key={g.id} data-testid="ledger-row">
-              <div className="font-bold">{g.topic}</div>
-              <div className="text-page-fg/60">
-                {g.type} · reused {g.reusedCount}× · {g.resolvedBy ?? "open"}
-              </div>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul role="list" className="space-y-2">
+            {visible.map(g => (
+              <li key={g.id} data-testid="ledger-row">
+                <div className="font-bold">{g.topic}</div>
+                <div className="text-page-fg/60">
+                  {g.type} · reused {g.reusedCount}× · {g.resolvedBy ?? "open"}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {hiddenCount > 0 && (
+            <div data-testid="ledger-cap-notice" className="mt-3 text-page-fg/60 italic">
+              showing top {LEDGER_VISIBLE_CAP} of {filtered.length} by reuse count · {hiddenCount} more hidden
+            </div>
+          )}
+        </>
       )}
       </div>
     </>

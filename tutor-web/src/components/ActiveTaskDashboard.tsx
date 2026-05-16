@@ -21,6 +21,9 @@ export function ActiveTaskDashboard() {
   const [detectResult, setDetectResult] = useState<string | null>(null);
   const [detectError, setDetectError] = useState<string | null>(null);
   const [detectAt, setDetectAt] = useState<number | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  const VISIBLE_CAP = 7;
 
   useEffect(() => {
     jarvisFetch("/api/v1/tasks")
@@ -67,10 +70,13 @@ export function ActiveTaskDashboard() {
     return `${Math.round(diffMin / 60)} hr ago`;
   }
 
+  const visibleRanked = showAll ? ranked : ranked.slice(0, VISIBLE_CAP);
+  const hiddenCount = ranked.length - visibleRanked.length;
+
   return (
     <div data-testid="active-task-dashboard" className="p-6 font-mono text-sm">
       <div className="text-xs font-bold tracking-widest mb-2">
-        ACTIVE TASKS · ranked by urgency × weight × readiness
+        ACTIVE TASKS · ranked by urgency × weight
       </div>
       {!loaded ? (
         <div role="status" aria-live="polite" className="text-page-fg/60">loading…</div>
@@ -80,23 +86,40 @@ export function ActiveTaskDashboard() {
         </div>
       ) : (
         <ul role="list" className="space-y-1 mb-4">
-          {ranked.map(t => {
+          {visibleRanked.map(t => {
             const days = Math.round((new Date(t.deadline).getTime() - Date.now()) / 86400000);
             const dueTag = days < 0 ? `OVERDUE ${-days}d` : days === 0 ? "TODAY" : `${days}d`;
             return (
-              <li key={t.id} data-testid="active-task-row" data-task-id={t.id}>
-                <button
-                  onClick={() => navigate(`/?taskId=${t.id}`)}
-                  className="w-full text-left border border-border-strong p-2 hover:bg-accent-soft"
-                >
+              <li key={t.id} data-testid="active-task-row" data-task-id={t.id}
+                  className="border border-border-strong p-2 hover:bg-accent-soft flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
                   <div className="text-xs font-bold tracking-widest">
                     {t.subject} · {dueTag}
                   </div>
-                  <div className="text-sm">{t.title}</div>
+                  <div className="text-sm truncate" title={t.title}>{t.title}</div>
+                </div>
+                <button
+                  onClick={() => navigate(`/?taskId=${t.id}`)}
+                  data-testid="active-task-open-btn"
+                  aria-label={`Open task ${t.title}`}
+                  className="text-xs font-bold tracking-widest bg-accent text-page-fg px-3 py-2 sm:py-1 border border-border-strong shrink-0"
+                >
+                  OPEN
                 </button>
               </li>
             );
           })}
+          {hiddenCount > 0 && (
+            <li>
+              <button
+                onClick={() => setShowAll(true)}
+                data-testid="active-task-show-all"
+                className="w-full text-left text-xs text-page-fg/70 px-2 py-2 hover:bg-accent-soft border border-dashed border-border-thin"
+              >
+                + {hiddenCount} more
+              </button>
+            </li>
+          )}
         </ul>
       )}
       <div className="flex gap-2 mb-2 flex-wrap">
