@@ -2,6 +2,9 @@ import { useEffect, useRef } from "react";
 
 export type ScratchpadSaveStatus = "idle" | "saving" | "saved" | "error";
 
+/** Mirror of the server-side cap in TutorRoutes.kt PUT /api/v1/tasks/{id}/scratchpad. */
+export const SCRATCHPAD_MAX_CHARS = 50_000;
+
 export interface ScratchpadProps {
   value: string;
   onChange: (text: string) => void;
@@ -58,11 +61,16 @@ export function Scratchpad({ value, onChange, status, errorMessage }: Scratchpad
         data-testid="scratchpad-input"
         aria-labelledby="scratchpad-heading"
         aria-label="Task scratchpad — local notes; auto-saved per browser"
+        maxLength={SCRATCHPAD_MAX_CHARS}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder="draft answers / inserted snippets land here…"
         className="w-full min-h-[6rem] max-h-[40vh] p-3 outline-none text-sm font-mono resize-y"
       />
+      <div data-testid="scratchpad-counter"
+           className={`px-3 py-1 text-[10px] font-mono text-right ${value.length > SCRATCHPAD_MAX_CHARS * 0.9 ? "text-danger-text font-bold" : "text-page-fg/60"}`}>
+        {value.length} / {SCRATCHPAD_MAX_CHARS}
+      </div>
     </div>
   );
 }

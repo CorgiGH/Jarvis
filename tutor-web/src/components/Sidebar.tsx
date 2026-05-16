@@ -35,16 +35,18 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskView[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [confidence, setConfidence] = useState<Record<string, SubjectConfidence>>({});
 
   useEffect(() => {
     function fetchTasks() {
+      setRefreshing(true);
       jarvisFetch("/api/v1/tasks")
         .then(r => r.ok ? r.json() : { tasks: [] })
         .then((data: { tasks: TaskView[] }) => setTasks(data.tasks ?? []))
         .catch(() => setTasks([]))
-        .finally(() => setLoaded(true));
+        .finally(() => { setLoaded(true); setRefreshing(false); });
     }
     function fetchConfidence() {
       jarvisFetch("/api/v1/subject-confidence")
@@ -84,8 +86,13 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
       aria-label="Tutor sidebar"
       className="hidden sm:flex flex-col w-48 border-r-4 border-border-strong bg-accent-soft font-mono text-xs overflow-y-auto"
     >
-      <div className="bg-panel-dark-bg text-panel-dark-fg px-3 py-2 tracking-widest font-bold">
-        TASKS
+      <div className="flex items-center justify-between bg-panel-dark-bg text-panel-dark-fg px-3 py-2 tracking-widest font-bold">
+        <span>TASKS</span>
+        {refreshing && loaded && (
+          <span data-testid="sidebar-refreshing" className="text-page-bg/60 text-[10px] font-normal" aria-live="polite">
+            refreshing…
+          </span>
+        )}
       </div>
       <button
         data-testid="sidebar-ledger-btn"
@@ -144,7 +151,7 @@ export function Sidebar({ activeTaskId }: { activeTaskId?: string }) {
                     data-testid="sidebar-task"
                     data-task-id={t.id}
                     onClick={() => navigate(`/?taskId=${t.id}`)}
-                    aria-current={active ? "true" : undefined}
+                    aria-current={active ? "page" : undefined}
                     className={`w-full text-left px-3 py-3 sm:py-1.5 border-b border-border-thin hover:bg-accent-soft ${
                       active ? "bg-accent font-bold" : ""
                     }`}

@@ -88,6 +88,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
         {(["all", "open", "resolved"] as const).map(f => (
           <button key={f} data-testid={`ledger-filter-${f}`}
                   onClick={() => setFilter(f)}
+                  aria-pressed={filter === f}
                   className={`px-2 py-2 sm:py-1 border ${filter === f ? "bg-accent text-page-fg" : "bg-page-bg text-page-fg/70 border-border-thin"}`}>
             {f.toUpperCase()}
           </button>

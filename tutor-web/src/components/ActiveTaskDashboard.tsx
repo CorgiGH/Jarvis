@@ -19,6 +19,8 @@ export function ActiveTaskDashboard() {
   const [showManual, setShowManual] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectResult, setDetectResult] = useState<string | null>(null);
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const [detectAt, setDetectAt] = useState<number | null>(null);
 
   useEffect(() => {
     jarvisFetch("/api/v1/tasks")
@@ -35,13 +37,14 @@ export function ActiveTaskDashboard() {
   async function runDetection() {
     setDetecting(true);
     setDetectResult(null);
+    setDetectError(null);
     try {
       const r = await jarvisFetch("/api/v1/task-detect/run", { method: "POST" });
       if (r.ok) {
         const reply = await r.json() as { inserted: number; existing: number; total: number };
         setDetectResult(`${reply.inserted} new · ${reply.existing} existing · ${reply.total} discovered`);
       } else {
-        setDetectResult(`HTTP ${r.status}`);
+        setDetectError(`HTTP ${r.status}`);
       }
       const r2 = await jarvisFetch("/api/v1/tasks");
       if (r2.ok) {
@@ -49,10 +52,19 @@ export function ActiveTaskDashboard() {
         setTasks(data.tasks ?? []);
       }
     } catch (e) {
-      setDetectResult(`error: ${(e as Error).message}`);
+      setDetectError((e as Error).message);
     } finally {
       setDetecting(false);
+      setDetectAt(Date.now());
     }
+  }
+
+  function formatRelativeAgo(ts: number): string {
+    const diffSec = Math.round((Date.now() - ts) / 1000);
+    if (diffSec < 60) return `${diffSec}s ago`;
+    const diffMin = Math.round(diffSec / 60);
+    if (diffMin < 60) return `${diffMin} min ago`;
+    return `${Math.round(diffMin / 60)} hr ago`;
   }
 
   return (
@@ -106,11 +118,18 @@ export function ActiveTaskDashboard() {
           {showManual ? "− Hide manual entry" : "+ Manual entry"}
         </button>
       </div>
-      {detectResult && (
+      {detectResult && detectAt != null && (
         <div data-testid="active-task-detect-result"
              role="status" aria-live="polite"
              className="text-xs text-page-fg/80 mb-4 border border-border-thin bg-accent-soft px-2 py-1">
-          detection: {detectResult}
+          detection: {detectResult} · last run {formatRelativeAgo(detectAt)}
+        </div>
+      )}
+      {detectError && (
+        <div data-testid="active-task-detect-error"
+             role="alert"
+             className="text-xs text-danger-text mb-4 border border-border-thin bg-page-bg px-2 py-1">
+          detection failed: {detectError}
         </div>
       )}
       {showManual && <TaskQuickStart />}

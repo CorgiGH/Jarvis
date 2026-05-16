@@ -33,6 +33,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [historicalGaps, setHistoricalGaps] = useState<KnowledgeGap[]>([]);
+  const [historicalGapsRefreshing, setHistoricalGapsRefreshing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => {
@@ -45,6 +46,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   useEffect(() => {
     let cancelled = false;
     function fetchGaps() {
+      setHistoricalGapsRefreshing(true);
       jarvisFetch(`/api/v1/gaps?taskId=${encodeURIComponent(taskId)}`)
         .then(r => r.ok ? r.json() : { gaps: [] })
         .then((data: { gaps: any[] }) => {
@@ -55,7 +57,8 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
             sourceCitation: g.sourceCitation,
           })));
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => { if (!cancelled) setHistoricalGapsRefreshing(false); });
     }
     fetchGaps();
     function onGapEvent() { fetchGaps(); }
@@ -201,9 +204,12 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         {(() => {
           const openGaps = historicalGaps.filter(g => g.resolvedBy == null);
           return openGaps.length > 0 && (
-            <div data-testid="historical-gaps" className="mb-2">
-              <div className="text-xs font-bold tracking-widest text-page-fg/60 mb-1">
-                PREVIOUSLY FLAGGED ({openGaps.length})
+            <div data-testid="historical-gaps" className={`mb-2 ${historicalGapsRefreshing ? "opacity-60" : ""}`}>
+              <div className="text-xs font-bold tracking-widest text-page-fg/60 mb-1 flex items-center gap-2">
+                <span>PREVIOUSLY FLAGGED ({openGaps.length})</span>
+                {historicalGapsRefreshing && (
+                  <span data-testid="historical-gaps-refreshing" className="text-page-fg/40 font-normal" aria-live="polite">refreshing…</span>
+                )}
               </div>
               {openGaps.map(g => (
                 <KnowledgeGapCard key={g.id} gap={g}
@@ -254,7 +260,9 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         ))}
       </div>
       <div className="flex border-t-4 border-border-strong">
+        <label htmlFor="chat-input" className="sr-only">Message Jarvis</label>
         <input
+          id="chat-input"
           ref={inputRef}
           className="flex-1 px-3 py-2 outline-none text-sm font-mono"
           placeholder="message · ctrl+enter sends"
