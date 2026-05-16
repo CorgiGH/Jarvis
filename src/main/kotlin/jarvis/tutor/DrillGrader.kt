@@ -85,9 +85,48 @@ iff every rubric item is true AND the code is free of syntax errors that would
 prevent it from running. Output ONLY the JSON object. No code fences."""
 
     fun parseGradeJson(raw: String): GradeResult? {
+        // Attempt 1: existing strip-fence path. Preserves all prior happy-path tests.
+        val direct = tryParse(raw.trim()
+            .removePrefix("```json").removePrefix("```").removeSuffix("```").trim())
+        if (direct != null) return direct
+
+        // Attempt 2: A.7 — CLI providers (claude --print, copilot, relay) silently
+        // ignore the responseFormat=json_object hint from A.5 and wrap the JSON in
+        // preamble/trailing chatter. Extract first balanced `{...}` block and try
+        // parsing that. Type-check inside tryParse still rejects garbage blocks
+        // (missing rubric/score/elaborated_feedback → null), so a non-grade
+        // `{"meta":...}` first-block returns null rather than a malformed result.
+        // Council 1778881174 — Layer 1 fix. Risk Analyst note: bounded by
+        // existing typed-field gates.
+        val extracted = extractFirstBalancedBraceBlock(raw) ?: return null
+        return tryParse(extracted)
+    }
+
+    private fun extractFirstBalancedBraceBlock(s: String): String? {
+        val start = s.indexOf('{')
+        if (start < 0) return null
+        var depth = 0
+        var inString = false
+        var escape = false
+        for (i in start until s.length) {
+            val c = s[i]
+            if (escape) { escape = false; continue }
+            if (c == '\\' && inString) { escape = true; continue }
+            if (c == '"') { inString = !inString; continue }
+            if (inString) continue
+            when (c) {
+                '{' -> depth++
+                '}' -> {
+                    depth--
+                    if (depth == 0) return s.substring(start, i + 1)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun tryParse(cleaned: String): GradeResult? {
         return try {
-            val cleaned = raw.trim()
-                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
             val obj = Json { ignoreUnknownKeys = true }.parseToJsonElement(cleaned) as? JsonObject
                 ?: return null
             val correct = (obj["correct"] as? JsonPrimitive)?.boolean ?: return null

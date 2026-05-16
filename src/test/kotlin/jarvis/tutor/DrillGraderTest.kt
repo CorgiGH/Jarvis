@@ -226,4 +226,37 @@ class DrillGraderTest {
         )
         assertEquals(600, observedMaxTokens)
     }
+
+    // Task A.7 — Council 1778881174 Layer 1 fix. CLI providers (claude --print,
+    // copilot, relay) silently ignore the responseFormat="json_object" hint and
+    // wrap the JSON in preamble/trailing chatter. The strip-fence path alone
+    // returns null on those payloads. Fallback: extract first balanced `{...}`
+    // block and try parsing that. Type-check still gates garbage blocks.
+    @Test
+    fun `parseGradeJson extracts JSON from preamble chatter`() {
+        val raw = """Sure! Here is your grade in JSON format:
+{"correct":true,"rubric":{"numeric":true,"mechanism":true,"justification":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}
+Hope that helps!"""
+        val r = DrillGrader.parseGradeJson(raw)
+        assertNotNull(r)
+        assertTrue(r.correct)
+        assertEquals(1.0, r.score, 0.001)
+    }
+
+    @Test
+    fun `parseGradeJson falls back to first balanced brace block`() {
+        val raw = """{"meta":"this should be skipped"}
+{"correct":false,"rubric":{"foo":false},"score":0.0,"misconception":"OTHER","elaborated_feedback":"nope"}"""
+        val r = DrillGrader.parseGradeJson(raw)
+        // First balanced block is the meta — has no `correct` key → parseGradeJson should return null.
+        // This documents that aggressive extract is bounded: type-check still rejects garbage blocks.
+        assertNull(r)
+    }
+
+    @Test
+    fun `parseGradeJson rejects extracted block missing required fields`() {
+        val raw = """Here you go: {"correct":true} done."""
+        // Block extracted but missing rubric/score/elaborated_feedback → null.
+        assertNull(DrillGrader.parseGradeJson(raw))
+    }
 }
