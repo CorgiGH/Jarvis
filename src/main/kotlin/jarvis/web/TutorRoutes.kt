@@ -1602,9 +1602,11 @@ fun Application.installTutorRoutes() {
                 val isSynthetic = call.request.headers["X-Standin-Run"] == "1"
                 val sessionId: String = sid ?: "anon"
 
-                // Compute reply + status across all three code paths.
-                val (reply, status) = try {
-                    val result = jarvis.OpenRouterChatLlm().use { llm ->
+                // Compute reply + status across all three code paths. A.2 plan:
+                // grader now returns GradeAttempt carrying raw LLM output so
+                // A.3 can populate envelope llm_output_raw_truncated below.
+                val attempt: jarvis.tutor.GradeAttempt? = try {
+                    jarvis.OpenRouterChatLlm().use { llm ->
                         kotlinx.coroutines.runBlocking {
                             jarvis.tutor.DrillGrader.grade(
                                 problemStatement = req.problemStatement,
@@ -1618,33 +1620,44 @@ fun Application.installTutorRoutes() {
                             )
                         }
                     }
-                    if (result == null) {
-                        // Grader returned null = malformed LLM output.
+                } catch (e: Exception) {
+                    // Graceful degraded path: 200 with "ungraded" body so the
+                    // frontend treats transient LLM failures as "re-attempt"
+                    // instead of a wiring error. Slice 1 spec §E error handling:
+                    // "LLM grader 5xx / timeout → fall back ... tag attempt as
+                    // `ungraded`. Don't auto-pass." Exception message captured
+                    // separately so the degraded reply can still echo it.
+                    System.err.println("[drill-grade] LLM call failed: ${e.message?.take(160)}")
+                    null
+                }
+
+                val (reply, status) = when {
+                    attempt == null -> {
+                        ApiDrillGradeReply(
+                            correct = false, score = 0.0, rubric = emptyMap(),
+                            misconception = "UNGRADED",
+                            elaboratedFeedback = "LLM unavailable. Please re-attempt or ask sidekick.",
+                        ) to "error"
+                    }
+                    attempt.parsed == null -> {
+                        // Grader returned malformed LLM output — A.3 will route
+                        // attempt.rawOutput into envelope.llm_output_raw_truncated.
                         ApiDrillGradeReply(
                             correct = false, score = 0.0, rubric = emptyMap(),
                             misconception = "OTHER",
                             elaboratedFeedback = "LLM grader returned malformed output; please re-attempt or ask sidekick.",
                         ) to "parse_error"
-                    } else {
+                    }
+                    else -> {
+                        val r = attempt.parsed!!
                         ApiDrillGradeReply(
-                            correct = result.correct,
-                            score = result.score,
-                            rubric = result.rubric,
-                            misconception = result.misconception,
-                            elaboratedFeedback = result.elaboratedFeedback,
+                            correct = r.correct,
+                            score = r.score,
+                            rubric = r.rubric,
+                            misconception = r.misconception,
+                            elaboratedFeedback = r.elaboratedFeedback,
                         ) to "ok"
                     }
-                } catch (e: Exception) {
-                    // Graceful degraded reply: 200 with "ungraded" body so the
-                    // frontend treats transient LLM failures as "re-attempt"
-                    // instead of a wiring error. Slice 1 spec §E error handling:
-                    // "LLM grader 5xx / timeout → fall back ... tag attempt as
-                    // `ungraded`. Don't auto-pass."
-                    ApiDrillGradeReply(
-                        correct = false, score = 0.0, rubric = emptyMap(),
-                        misconception = "UNGRADED",
-                        elaboratedFeedback = "LLM unavailable (${e.message?.take(120) ?: ""}). Please re-attempt or ask sidekick.",
-                    ) to "error"
                 }
 
                 call.respond(HttpStatusCode.OK, reply)

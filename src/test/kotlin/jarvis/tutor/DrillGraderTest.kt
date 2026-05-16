@@ -78,4 +78,41 @@ class DrillGraderTest {
         assertEquals(4, r.rubric.size, "all 4 rubric items present")
         assertEquals("OFF_BY_TEN", r.misconception)
     }
+
+    // Task A.2 — grade() now returns GradeAttempt carrying raw LLM output so
+    // the caller can populate envelope llm_output_raw_truncated even when
+    // parsing fails. Plan: docs/superpowers/plans/2026-05-16-grader-tripwire-reseed.md
+    // Council 1778881174 verdict FLAWED — Layer 3 (raw output capture) is
+    // the load-bearing observability fix. Without it, parse_error envelopes
+    // tell us nothing about what the LLM actually returned.
+    @Test
+    fun `grade returns GradeAttempt carrying raw output on success`() = kotlinx.coroutines.runBlocking {
+        val fakeLlm = object : jarvis.Llm {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int): Pair<String, String> {
+                return """{"correct":true,"rubric":{"numeric":true,"mechanism":true,"justification":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
+            }
+        }
+        val attempt = DrillGrader.grade(
+            problemStatement = "p", userAttempt = "a", expectedHint = "h",
+            llm = fakeLlm,
+        )
+        assertNotNull(attempt.parsed)
+        assertTrue(attempt.rawOutput.contains("\"correct\":true"))
+        assertEquals("fake/model", attempt.modelResolved)
+    }
+
+    @Test
+    fun `grade returns GradeAttempt carrying raw output even on parse fail`() = kotlinx.coroutines.runBlocking {
+        val fakeLlm = object : jarvis.Llm {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int): Pair<String, String> {
+                return "Sure here is your grade I think it is good" to "fake/model"
+            }
+        }
+        val attempt = DrillGrader.grade(
+            problemStatement = "p", userAttempt = "a", expectedHint = "h",
+            llm = fakeLlm,
+        )
+        assertNull(attempt.parsed)
+        assertEquals("Sure here is your grade I think it is good", attempt.rawOutput)
+    }
 }

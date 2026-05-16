@@ -1,7 +1,7 @@
 package jarvis.tutor
 
 import jarvis.ChatMessage
-import jarvis.OpenRouterChatLlm
+import jarvis.Llm
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -17,6 +17,26 @@ data class GradeResult(
     val score: Double,
     val misconception: String?,
     val elaboratedFeedback: String,
+)
+
+/**
+ * Forensic wrapper around a grading attempt — A.2 plan output.
+ *
+ * Carries the raw LLM text + resolved model id alongside the parsed
+ * [GradeResult] (null on parse failure). Lets the caller route the raw
+ * output into the envelope's `llm_output_raw_truncated` field even when
+ * parsing fails, so Surface X status_in=parse_error queries can see what
+ * the LLM actually returned. Without this, parse_error envelopes carried
+ * only the rendered API reply — useless for debugging the grader prompt.
+ *
+ * See docs/superpowers/plans/2026-05-16-grader-tripwire-reseed.md (A.2) +
+ * council 1778881174 (Risk Analyst layer-3 fix).
+ */
+@Serializable
+data class GradeAttempt(
+    val parsed: GradeResult?,
+    val rawOutput: String,
+    val modelResolved: String,
 )
 
 object DrillGrader {
@@ -87,12 +107,12 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         problemStatement: String,
         userAttempt: String,
         expectedHint: String,
-        llm: OpenRouterChatLlm,
+        llm: Llm,
         language: String? = null,
         referenceSolution: String? = null,
         rubricItems: List<String>? = null,
         prediction: String? = null,
-    ): GradeResult? {
+    ): GradeAttempt {
         val isCode = !language.isNullOrBlank() && language.lowercase() != "text"
         val systemPrompt = if (isCode) GRADE_PROMPT_CODE else GRADE_PROMPT_TEXT
         val userMsg = if (isCode) buildCodeUserMessage(
@@ -109,7 +129,7 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
             userAttempt = userAttempt,
             prediction = prediction,
         )
-        val (raw, _) = llm.complete(
+        val (raw, modelResolved) = llm.complete(
             listOf(
                 ChatMessage("system", systemPrompt),
                 ChatMessage("user", userMsg),
@@ -120,7 +140,7 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         if (parsed == null) {
             System.err.println("[drill grader] parse-fail lang=$language raw=${raw.take(600).replace('\n', ' ')}")
         }
-        return parsed
+        return GradeAttempt(parsed = parsed, rawOutput = raw, modelResolved = modelResolved)
     }
 
     private fun buildCodeUserMessage(
