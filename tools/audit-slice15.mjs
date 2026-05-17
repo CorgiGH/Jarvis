@@ -129,6 +129,48 @@ export async function auditState({ page, row, baseUrl }) {
         });
       }
     }
+    // Capture DOM text (strip code/pre/input.value — mirrors LINT_EVAL_SCRIPT
+    // semantics so the existing detectSnakeCase calibration carries over).
+    const domText = await page.evaluate(() => {
+      const root = document.body.cloneNode(true);
+      root.querySelectorAll("code, pre, script, style").forEach(el => el.remove());
+      // input values are not in textContent, no strip needed
+      return root.innerText || "";
+    });
+
+    // State-specific allowlist for raw HTTP errors: load-error UIs
+    // intentionally surface "HTTP 5xx" (concept-drawer-load-error,
+    // ledger-load-error). Allow them when the testid carrying the text
+    // exists on the page; suppress raw-http-error findings in that case.
+    const allowedHttpErrorTestIds = ["concept-drawer-load-error", "ledger-load-error", "pdf-upload-error", "suggested-edit-error"];
+    let httpErrorAllowed = false;
+    for (const tid of allowedHttpErrorTestIds) {
+      if (await page.locator(`[data-testid="${tid}"]`).count() > 0) {
+        httpErrorAllowed = true;
+        break;
+      }
+    }
+
+    const lintCalls = [
+      { fn: detectSnakeCase, category: "snake-case-leak" },
+      { fn: detectScreamingSnake, category: "screaming-snake-leak" },
+      { fn: detectDottedModelName, category: "model-name-leak" },
+      { fn: detectRawHttpError, category: "raw-http-error" },
+      { fn: detectPlaceholder, category: "placeholder-leak" },
+    ];
+    for (const { fn, category } of lintCalls) {
+      if (category === "raw-http-error" && httpErrorAllowed) continue;
+      const result = fn(domText);
+      const matches = Array.isArray(result) ? result : result.matches;
+      for (const match of matches) {
+        findings.push({
+          stateId: row.id,
+          category,
+          evidence: `text: "${match}"`,
+          severity: classifySeverity({ category }),
+        });
+      }
+    }
     for (const err of consoleErrors) {
       findings.push({
         stateId: row.id,
