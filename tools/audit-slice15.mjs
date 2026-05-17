@@ -2,6 +2,7 @@
 // Spec: docs/superpowers/specs/2026-05-17-slice15-audit-design.md
 
 import { chromium } from "playwright";
+import { AxeBuilder } from "@axe-core/playwright";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -170,6 +171,21 @@ export async function auditState({ page, row, baseUrl }) {
           severity: classifySeverity({ category }),
         });
       }
+    }
+    // axe-core a11y scan. AA violations classified HIGH; AAA classified MED.
+    const axeResults = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag2aaa"])
+      .analyze()
+      .catch(e => ({ violations: [], error: e.message }));
+    for (const v of axeResults.violations ?? []) {
+      const isAA = v.tags.some(t => t === "wcag2aa" || t === "wcag21aa" || t === "wcag2a" || t === "wcag21a");
+      const axeLevel = isAA ? "wcag2aa" : "wcag2aaa";
+      findings.push({
+        stateId: row.id,
+        category: "axe-violation",
+        evidence: `${v.id}: ${v.help} (nodes: ${v.nodes.length})`,
+        severity: classifySeverity({ category: "axe-violation", axeLevel }),
+      });
     }
     for (const err of consoleErrors) {
       findings.push({
