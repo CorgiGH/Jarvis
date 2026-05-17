@@ -151,7 +151,7 @@ export function TrustSettings() {
       {loading ? (
         <div className="text-sm">loading…</div>
       ) : grants.length === 0 ? (
-        <div role="status" data-testid="trust-grants-list" className="text-sm text-page-fg/80">no grants yet — fill the NEW GRANT form above to add one</div>
+        <div role="status" data-testid="trust-grants-empty" className="text-sm text-page-fg/80">no grants yet — fill the NEW GRANT form above to add one</div>
       ) : (
         <ul className="space-y-2" data-testid="trust-grants-list">
           {grants.map(g => (

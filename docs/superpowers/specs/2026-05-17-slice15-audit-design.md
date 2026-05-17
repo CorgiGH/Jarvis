@@ -76,7 +76,7 @@ the audit. Cells listed in `S-XX` order; the audit tool consumes this table verb
 | S-25 | S-21 + Escape closes | S-21 → press Escape | ledger dismissed | onClose fired |
 | S-26 | S-21 + backdrop closes | S-21 → click `knowledge-ledger-backdrop` | ledger dismissed | onClose fired |
 | S-27 | `/tutor/review` | `goto /tutor/review` | `fsrs-review` (or whatever the page roots on) | no console error |
-| S-28 | `/tutor/settings/trust` | `goto /tutor/settings/trust` | `trust-grants-list` (or empty state), `trust-create-btn` | no snake_case in any grant row |
+| S-28 | `/tutor/settings/trust` | `goto /tutor/settings/trust` | `trust-grants-empty`, `trust-create-btn` | no snake_case in any grant row |
 | S-29 | header at <420px (mobile) | viewport 375x812 ; goto /tutor/?taskId=01KR6K07T6PATPRR5KH1JXYF8E | header `flex-wrap` reflows; nav visible | all action buttons ≥32px tall |
 | S-30 | missing-pinned-task banner | clear-cookies ; goto /tutor/?taskId=DOES-NOT-EXIST | `missing-pinned-task` banner visible | banner text human-readable |
 

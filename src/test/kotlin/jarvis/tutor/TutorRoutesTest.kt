@@ -224,12 +224,14 @@ class TutorRoutesTest {
         application { installFreshTutor(tmp) }
         startApplication()
         val sidCookie = "telemetry-sess-${Instant.now().toEpochMilli()}"
+        val csrf = "telemetry-csrf-12345"
         val client = createClient {
             install(HttpCookies)
             install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
         }
         val resp = client.post("/api/v1/sensor/telemetry") {
             cookie("jarvis_session", sidCookie)
+            cookie("csrf", csrf); header("X-CSRF-Token", csrf)
             contentType(ContentType.Application.Json)
             setBody("""{"name":"ledger.opened","ts":"2026-05-17T08:30:00Z"}""")
         }
@@ -245,7 +247,9 @@ class TutorRoutesTest {
     @Test
     fun `POST sensor telemetry rejects bad name regex`() = testApplication {
         application { installTutorRoutes() }
+        val csrf = "telemetry-csrf-bad"
         val resp = client.post("/api/v1/sensor/telemetry") {
+            cookie("csrf", csrf); header("X-CSRF-Token", csrf)
             contentType(ContentType.Application.Json)
             setBody("""{"name":"BADNAME"}""")
         }
@@ -255,11 +259,25 @@ class TutorRoutesTest {
     @Test
     fun `POST sensor telemetry rejects malformed body`() = testApplication {
         application { installTutorRoutes() }
+        val csrf = "telemetry-csrf-malformed"
         val resp = client.post("/api/v1/sensor/telemetry") {
+            cookie("csrf", csrf); header("X-CSRF-Token", csrf)
             contentType(ContentType.Application.Json)
             setBody("not-json")
         }
         assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `POST sensor telemetry rejects request missing csrf`() = testApplication {
+        application { installTutorRoutes() }
+        val resp = client.post("/api/v1/sensor/telemetry") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"ledger.opened"}""")
+        }
+        // csrfProtect returns 403 when cookie/header pair is absent or mismatched.
+        assertTrue(resp.status == HttpStatusCode.Forbidden || resp.status == HttpStatusCode.Unauthorized,
+            "expected 403 or 401 when CSRF missing, got ${resp.status}")
     }
 
     @Test

@@ -332,26 +332,28 @@ fun Application.installTutorRoutes() {
         // window if zero usage is observed. Appends a TutorEvent with
         // event_type="ui_telemetry" carrying the event name + payload.
         // Best-effort + bounded: payload capped at 1500 chars to bound
-        // poisoning blast-radius; no CSRF requirement since the route is
-        // append-only telemetry and the data is shaped at the schema layer.
+        // poisoning blast-radius. csrfProtect for consistency with every
+        // other state-changing POST route — defense-in-depth even though
+        // the route only appends to the event log.
         post("/api/v1/sensor/telemetry") {
+          call.csrfProtect {
             val sid = call.request.cookies["jarvis_session"] ?: "anon"
             val rawBody = try {
                 call.receiveText().take(1500)
             } catch (_: Exception) {
-                call.respond(HttpStatusCode.BadRequest, "missing body"); return@post
+                call.respond(HttpStatusCode.BadRequest, "missing body"); return@csrfProtect
             }
             val req = try {
                 sensorJson.decodeFromString(ApiTelemetryRequest.serializer(), rawBody)
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(120)}")
-                return@post
+                return@csrfProtect
             }
             // Reject names that aren't [a-z][a-z0-9.-]* (32 chars) — bounds
             // event_type pollution from arbitrary clients.
             if (!req.name.matches(Regex("^[a-z][a-z0-9._-]{0,31}$"))) {
                 call.respond(HttpStatusCode.BadRequest, "name must match [a-z][a-z0-9._-]{0,31}")
-                return@post
+                return@csrfProtect
             }
             runCatching {
                 TutorEventLog.GLOBAL.append(TutorEvent(
@@ -374,6 +376,7 @@ fun Application.installTutorRoutes() {
                 ))
             }
             call.respond(HttpStatusCode.NoContent)
+          }
         }
 
         // Layer B1 — effector dispatch route. Single mutating endpoint
