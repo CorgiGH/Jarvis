@@ -101,24 +101,64 @@ async function executeReach(page, reachExpr, baseUrl) {
  */
 export async function auditState({ page, row, baseUrl }) {
   const findings = [];
+  const consoleErrors = [];
+  const httpErrors = [];
+  const pageErrors = [];
+
+  const consoleHandler = (m) => { if (m.type() === "error") consoleErrors.push(m.text()); };
+  const responseHandler = (r) => { if (r.status() >= 400) httpErrors.push({ url: r.url(), status: r.status() }); };
+  const pageErrorHandler = (e) => pageErrors.push(e.message);
+  page.on("console", consoleHandler);
+  page.on("response", responseHandler);
+  page.on("pageerror", pageErrorHandler);
+
   try {
-    await executeReach(page, row.reach, baseUrl);
-  } catch (e) {
-    return { stateId: row.id, findings: [], unreachableReason: `reach-failed: ${e.message}` };
-  }
-  // Required-selectors check
-  for (const sel of row.selectors) {
-    const count = await page.locator(`[data-testid="${sel}"]`).count();
-    if (count === 0) {
+    try {
+      await executeReach(page, row.reach, baseUrl);
+    } catch (e) {
+      return { stateId: row.id, findings: [], unreachableReason: `reach-failed: ${e.message}` };
+    }
+    for (const sel of row.selectors) {
+      const count = await page.locator(`[data-testid="${sel}"]`).count();
+      if (count === 0) {
+        findings.push({
+          stateId: row.id,
+          category: "missing-selector",
+          evidence: `[data-testid="${sel}"] not found`,
+          severity: classifySeverity({ category: "missing-selector" }),
+        });
+      }
+    }
+    for (const err of consoleErrors) {
       findings.push({
         stateId: row.id,
-        category: "missing-selector",
-        evidence: `[data-testid="${sel}"] not found`,
-        severity: classifySeverity({ category: "missing-selector" }),
+        category: "pageerror",
+        evidence: `console.error: ${err.slice(0, 200)}`,
+        severity: classifySeverity({ category: "pageerror" }),
       });
     }
+    for (const httpErr of httpErrors) {
+      findings.push({
+        stateId: row.id,
+        category: "first-paint-http-error",
+        evidence: `${httpErr.status} ${httpErr.url}`,
+        severity: classifySeverity({ category: "first-paint-http-error" }),
+      });
+    }
+    for (const pe of pageErrors) {
+      findings.push({
+        stateId: row.id,
+        category: "pageerror",
+        evidence: `pageerror: ${pe.slice(0, 200)}`,
+        severity: classifySeverity({ category: "pageerror" }),
+      });
+    }
+    return { stateId: row.id, findings, unreachableReason: null };
+  } finally {
+    page.off("console", consoleHandler);
+    page.off("response", responseHandler);
+    page.off("pageerror", pageErrorHandler);
   }
-  return { stateId: row.id, findings, unreachableReason: null };
 }
 
 // CLI
