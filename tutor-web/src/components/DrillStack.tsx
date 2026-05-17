@@ -4,6 +4,7 @@ import type { DrillCardState } from "./DrillCard";
 import { gradeDrill } from "../lib/drillGrader";
 import type { GradeResult } from "../lib/drillGrader";
 import { MathText } from "./MathText";
+import { formatEnum } from "../lib/formatEnum";
 
 export interface DrillContent {
   drill: string;
@@ -182,7 +183,7 @@ export function DrillStack({
             </div>
             <ul className="list-disc pl-4">
               {content.rubricItems.map((item) => (
-                <li key={item}>{item}</li>
+                <li key={item}>{formatEnum(item, { preserve: ["PDF", "CDF", "VGAM", "R"] })}</li>
               ))}
             </ul>
           </div>
