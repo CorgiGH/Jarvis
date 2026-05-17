@@ -69,3 +69,25 @@ test("detectDottedModelName ignores URLs", () => {
   const r = detectDottedModelName("https://corgflix.duckdns.org/tutor/");
   assert.deepEqual(r.matches, []);
 });
+
+import { detectRawHttpError } from "./surface-z-lints.mjs";
+
+test("detectRawHttpError finds 'HTTP 500' style leaks", () => {
+  const r = detectRawHttpError("save failed: HTTP 500 internal");
+  assert.deepEqual(r.matches, ["HTTP 500"]);
+});
+
+test("detectRawHttpError finds multiple HTTP error mentions", () => {
+  const r = detectRawHttpError("HTTP 404 not found, also HTTP 502");
+  assert.deepEqual(r.matches, ["HTTP 404", "HTTP 502"]);
+});
+
+test("detectRawHttpError ignores 2xx and 3xx (success / redirect ranges)", () => {
+  const r = detectRawHttpError("HTTP 200 OK; HTTP 301 redirect");
+  assert.deepEqual(r.matches, []);
+});
+
+test("detectRawHttpError ignores non-HTTP-prefixed numbers (e.g. counts)", () => {
+  const r = detectRawHttpError("404 reused × today, 200 entries");
+  assert.deepEqual(r.matches, []);
+});

@@ -72,6 +72,22 @@ export function detectDottedModelName(text) {
   return { matches };
 }
 
+/**
+ * Detect raw HTTP error envelopes leaking through to user text —
+ * "HTTP 4xx" or "HTTP 5xx" patterns. The Slice-1.5 error-recovery
+ * surfaces ALSO render these (Scratchpad save status, ConceptDrawer
+ * load-error UI), so callers may need to allowlist specific
+ * data-testid containers; this detector returns raw matches without
+ * context, the orchestrator handles allowlisting.
+ */
+export function detectRawHttpError(text) {
+  const matches = [];
+  const re = /\bHTTP [45]\d{2}\b/g;
+  let m;
+  while ((m = re.exec(text)) !== null) matches.push(m[0]);
+  return { matches };
+}
+
 // These run inside page.evaluate() — exported as strings to be serialized
 export const LINT_EVAL_SCRIPT = `
 (() => {
