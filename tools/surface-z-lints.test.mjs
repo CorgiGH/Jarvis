@@ -25,3 +25,25 @@ test("detectSnakeCase returns all matches in order", () => {
     ["foo_bar", "baz_qux"],
   );
 });
+
+import { detectScreamingSnake } from "./surface-z-lints.mjs";
+
+test("detectScreamingSnake finds SCREAMING_SNAKE in plain text", () => {
+  const r = detectScreamingSnake("status is USER_MARKED_DONE today");
+  assert.deepEqual(r.matches, ["USER_MARKED_DONE"]);
+});
+
+test("detectScreamingSnake ignores single ALLCAPS words (PDF, OK)", () => {
+  const r = detectScreamingSnake("PDF is OK and ALSO fine");
+  assert.deepEqual(r.matches, []);
+});
+
+test("detectScreamingSnake finds multiple distinct matches", () => {
+  const r = detectScreamingSnake("got EXPLICIT_ASK and USER_MARKED_DONE here");
+  assert.deepEqual(r.matches, ["EXPLICIT_ASK", "USER_MARKED_DONE"]);
+});
+
+test("detectScreamingSnake ignores ALLCAPS_with_lowercase mixed (those are different class)", () => {
+  const r = detectScreamingSnake("ALLCAPS_then_lower not flagged here");
+  assert.deepEqual(r.matches, []);
+});

@@ -3,6 +3,19 @@ export function detectSnakeCase(text) {
   return [...text.matchAll(/\b[a-z]+_[a-z_]+\b/g)].map(m => m[0]);
 }
 
+/**
+ * Detect SCREAMING_SNAKE_CASE tokens in plain text — server-enum leaks
+ * to UI (USER_MARKED_DONE, EXPLICIT_ASK, etc.). Requires at least one
+ * underscore so single ALLCAPS words (PDF, OK) don't trip.
+ */
+export function detectScreamingSnake(text) {
+  const matches = [];
+  const re = /\b[A-Z]{2,}(?:_[A-Z0-9]+)+\b/g;
+  let m;
+  while ((m = re.exec(text)) !== null) matches.push(m[0]);
+  return { matches };
+}
+
 // These run inside page.evaluate() — exported as strings to be serialized
 export const LINT_EVAL_SCRIPT = `
 (() => {
