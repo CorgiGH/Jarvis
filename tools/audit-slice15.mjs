@@ -80,9 +80,10 @@ async function executeReach(page, reachExpr, baseUrl) {
   const sequence = [];
   const gotoMatch = reachExpr.match(/goto\s+(\S+)/);
   if (gotoMatch) sequence.push({ kind: "goto", target: gotoMatch[1] });
-  const clickMatches = reachExpr.matchAll(/click\s+([a-z][a-z0-9-]+)/g);
+  // Testids may include uppercase (rail-item-SCRATCHPAD, rail-item-PRIOR_GAP, etc.)
+  const clickMatches = reachExpr.matchAll(/click\s+([a-z][a-zA-Z0-9_-]+)/g);
   for (const m of clickMatches) sequence.push({ kind: "click", target: m[1] });
-  const fillMatches = reachExpr.matchAll(/fill\s+([a-z][a-z0-9-]+)\s+"([^"]+)"/g);
+  const fillMatches = reachExpr.matchAll(/fill\s+([a-z][a-zA-Z0-9_-]+)\s+"([^"]+)"/g);
   for (const m of fillMatches) sequence.push({ kind: "fill", target: m[1], value: m[2] });
 
   for (const step of sequence) {
