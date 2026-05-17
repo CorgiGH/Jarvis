@@ -13,6 +13,7 @@ import {
   detectRawHttpError,
   detectPlaceholder,
 } from "./surface-z-lints.mjs";
+import { callLlm } from "./lib/openrouter.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -239,6 +240,46 @@ export async function auditState({ page, row, baseUrl }) {
         severity: classifySeverity({ category: "pageerror" }),
       });
     }
+
+    // LLM judge: feed page text to :free model, ask for UX nits.
+    // Subjective; severities downgraded one band by classifySeverity.
+    const apiKey = process.env.OPENROUTER_API_KEY_STANDIN ?? process.env.OPENROUTER_API_KEY;
+    if (apiKey && domText) {
+      try {
+        const judgeReply = await callLlm({
+          apiKey,
+          model: "openai/gpt-oss-120b:free",
+          systemPrompt:
+            "You are a UX nitpicker. Given the visible text of a webpage, list any issues " +
+            "a real user would call out as broken, confusing, or unfinished. Output ONE finding " +
+            'per line in the form: "[HIGH|MED|LOW] <issue> · evidence=<quoted phrase from text>". ' +
+            "Be terse. Skip nitpicks. Output nothing if the page looks fine.",
+          userPrompt: `State: ${row.id}\nRoute: ${row.route}\n\nPage text (first 3000 chars):\n${domText.slice(0, 3000)}`,
+          maxTokens: 600,
+        });
+        const lines = (judgeReply.text || "").split("\n").map(l => l.trim()).filter(Boolean);
+        for (const line of lines) {
+          const m = line.match(/^\[(HIGH|MED|LOW)\]\s+(.+)$/);
+          if (!m) continue;
+          findings.push({
+            stateId: row.id,
+            category: "llm-judge",
+            evidence: m[2].slice(0, 200),
+            severity: classifySeverity({ category: "llm-judge", judgeSeverity: m[1] }),
+          });
+        }
+      } catch (e) {
+        // LLM judge unreachable (quota / network) — non-blocking. Note as
+        // a single LOW finding so the report shows judge was attempted.
+        findings.push({
+          stateId: row.id,
+          category: "llm-judge",
+          evidence: `judge call failed: ${e.message.slice(0, 120)}`,
+          severity: "LOW",
+        });
+      }
+    }
+
     return { stateId: row.id, findings, unreachableReason: null };
   } finally {
     page.off("console", consoleHandler);
