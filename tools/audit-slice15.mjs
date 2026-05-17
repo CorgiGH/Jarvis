@@ -280,7 +280,25 @@ if (process.argv[1]?.endsWith("audit-slice15.mjs")) {
   console.log(`audit: ${rows.length} states against ${baseUrl}`);
   const browser = await chromium.launch({ headless: true });
   try {
-    const ctx = await browser.newContext({ extraHTTPHeaders: { "X-Standin-Run": "1" } });
+    // Auth: read jarvis_auth cookie from env or fallback file.
+    // Mirrors tools/seed-tutor-events.mjs loadAuthToken pattern.
+    let authToken = process.env.JARVIS_AUTH_COOKIE;
+    if (!authToken) {
+      try {
+        authToken = readFileSync(resolve(REPO_ROOT, "tools/AUTH_TOKEN.txt"), "utf8").trim();
+      } catch { /* tolerate; states that need auth will be unreachable */ }
+    }
+    const ctx = await browser.newContext({
+      storageState: authToken ? {
+        cookies: [{
+          name: "jarvis_auth", value: authToken,
+          domain: new URL(baseUrl).hostname, path: "/",
+          secure: true, httpOnly: false,
+        }],
+        origins: [],
+      } : undefined,
+      extraHTTPHeaders: { "X-Standin-Run": "1" },
+    });
     const page = await ctx.newPage();
     const allFindings = [];
     const unreachable = [];
