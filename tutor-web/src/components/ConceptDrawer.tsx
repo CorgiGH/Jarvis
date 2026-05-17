@@ -71,13 +71,13 @@ export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: 
                 className="bg-accent text-page-fg px-2 py-2 sm:py-1">×</button>
       </div>
       {hits == null ? (
-        <div className="text-page-fg/60">loading…</div>
+        <div className="text-page-fg/80">loading…</div>
       ) : loadError ? (
         <div data-testid="concept-drawer-load-error" className="text-danger-text">
           couldn't load references — {loadError}
         </div>
       ) : hits.length === 0 ? (
-        <div className="text-page-fg/60">no past gaps mention this concept yet</div>
+        <div className="text-page-fg/80">no past gaps mention this concept yet</div>
       ) : (
         <ul role="list" className="space-y-2">
           {hits.map((h, i) => (

@@ -150,7 +150,7 @@ export function TutorWorkspace({ pdfUrl: _pdfUrl, taskId, dedupedNotice = false 
           {debugMode && <DaemonHealthPill />}
         </header>
         <div data-testid="workspace-skeleton" aria-busy="true"
-             className="flex-1 flex flex-col items-center justify-center gap-4 p-12 font-mono text-page-fg/60 tracking-widest">
+             className="flex-1 flex flex-col items-center justify-center gap-4 p-12 font-mono text-page-fg/80 tracking-widest">
           <p>preparing drill stack…</p>
           <p className="text-xs">LLM extracting problems from your PDF · poll every 2s</p>
         </div>

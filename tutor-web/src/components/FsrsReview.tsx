@@ -95,19 +95,19 @@ export function FsrsReview({ streak }: Props) {
         </header>
 
         <main className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-start p-6 gap-6">
-          {loading && <p className="text-page-fg/60 tracking-widest text-sm">loading review queue…</p>}
+          {loading && <p className="text-page-fg/80 tracking-widest text-sm">loading review queue…</p>}
           {error && <p className="text-danger-text tracking-widest text-sm" role="alert">(can't reach review queue — {error})</p>}
 
           {(empty || done) && !loading && !error && (
             <div data-testid="fsrs-empty" className="text-center space-y-2">
               <p className="text-2xl font-bold tracking-widest">ALL DONE</p>
-              <p className="text-page-fg/60 text-sm tracking-widest">no cards due right now — check back later</p>
+              <p className="text-page-fg/80 text-sm tracking-widest">no cards due right now — check back later</p>
             </div>
           )}
 
           {currentCard && !done && !loading && (
             <>
-              <p className="text-xs text-page-fg/60 tracking-widest self-start">CARD {index + 1} OF {totalDue}</p>
+              <p className="text-xs text-page-fg/80 tracking-widest self-start">CARD {index + 1} OF {totalDue}</p>
 
               <div className="fsrs-scene w-full max-w-xl">
                 <div className="fsrs-card-flip-container" style={{ minHeight: "180px" }}>
@@ -117,14 +117,14 @@ export function FsrsReview({ streak }: Props) {
                     style={{ minHeight: "180px" }}
                   >
                     <div className="fsrs-card-face border-4 border-border-strong bg-accent-soft p-6 flex flex-col gap-4" style={{ minHeight: "180px" }}>
-                      <p className="text-[10px] tracking-widest text-page-fg/50 font-bold">FRONT · click to flip</p>
+                      <p className="text-[10px] tracking-widest text-page-fg/80 font-bold">FRONT · click to flip</p>
                       <p data-testid="card-front" className="text-base leading-relaxed">{currentCard.front}</p>
                       <div className="flex gap-3 mt-auto">
                         <button data-testid="show-answer-btn" onClick={handleShowAnswer} className="px-4 py-2 bg-accent hover:bg-accent-hover text-page-fg font-bold tracking-widest text-xs">SHOW ANSWER</button>
                       </div>
                     </div>
                     <div className="fsrs-card-face fsrs-card-back border-4 border-accent bg-page-bg p-6 flex flex-col gap-4" style={{ minHeight: "180px" }}>
-                      <p className="text-[10px] tracking-widest text-page-fg/50 font-bold">ANSWER</p>
+                      <p className="text-[10px] tracking-widest text-page-fg/80 font-bold">ANSWER</p>
                       <p data-testid="card-back" className="text-base leading-relaxed">{currentCard.back}</p>
                     </div>
                   </div>

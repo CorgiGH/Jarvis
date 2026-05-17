@@ -46,7 +46,7 @@ export function ProblemStepper({ problems, activeProblemIndex, onProblemSelect }
             className={`flex items-center gap-1 tracking-widest whitespace-nowrap px-2 py-1 transition-colors ${
               active
                 ? "text-page-fg font-bold bg-accent"
-                : "text-page-fg/60 hover:text-page-fg hover:bg-accent/50"
+                : "text-page-fg/80 hover:text-page-fg hover:bg-accent/50"
             }`}
           >
             <span aria-hidden="true">{active ? "◉" : "○"}</span>

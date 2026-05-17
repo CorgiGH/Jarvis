@@ -79,9 +79,9 @@ export function ActiveTaskDashboard() {
         ACTIVE TASKS · ranked by urgency × weight
       </div>
       {!loaded ? (
-        <div role="status" aria-live="polite" className="text-page-fg/60">loading…</div>
+        <div role="status" aria-live="polite" className="text-page-fg/80">loading…</div>
       ) : ranked.length === 0 ? (
-        <div data-testid="active-task-empty" className="text-page-fg/60 mb-4">
+        <div data-testid="active-task-empty" className="text-page-fg/80 mb-4">
           No active tasks yet. Trigger detection or add one manually below.
         </div>
       ) : (

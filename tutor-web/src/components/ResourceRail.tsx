@@ -38,7 +38,7 @@ function PriorGapAdapter({ gapId }: { gapId: string }) {
   });
 
   if (err) return <div className="p-4 text-xs text-danger-text">gap load failed: {err}</div>;
-  if (!gap) return <div className="p-4 text-xs text-page-fg/60">loading gap…</div>;
+  if (!gap) return <div className="p-4 text-xs text-page-fg/80">loading gap…</div>;
   return <KnowledgeGapCard gap={gap} />;
 }
 
@@ -158,7 +158,7 @@ export function ResourceRail({ taskId, items, forceOpenPath, onDrawerClosed }: R
             onClick={() => handleClick(item)}
             className="text-left px-3 py-2 border-b-2 border-border-thin hover:bg-accent-soft focus:bg-accent-soft focus:outline-none"
           >
-            <span className="block text-[10px] tracking-widest text-page-fg/60">{item.type}</span>
+            <span className="block text-[10px] tracking-widest text-page-fg/80">{item.type}</span>
             <span className="block text-sm">{item.label}</span>
           </button>
         ))}

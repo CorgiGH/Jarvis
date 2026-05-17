@@ -178,7 +178,7 @@ export function DrillStack({
             data-testid="drill-rubric"
             className="mb-3 border-l-4 border-border-strong bg-page-bg/40 px-3 py-2 text-[10px] font-mono leading-relaxed text-page-fg/80"
           >
-            <div className="mb-1 font-bold uppercase tracking-wider text-page-fg/60">
+            <div className="mb-1 font-bold uppercase tracking-wider text-page-fg/80">
               rubric — must satisfy all
             </div>
             <ul className="list-disc pl-4">
@@ -224,7 +224,7 @@ export function DrillStack({
             data-testid="rubric-grade"
             className="mt-2 px-3 py-2 border-2 border-border-thin font-mono text-[10px] leading-relaxed"
           >
-            <div className="mb-1 font-bold uppercase tracking-wider text-page-fg/60">
+            <div className="mb-1 font-bold uppercase tracking-wider text-page-fg/80">
               rubric grade
             </div>
             <ul>
@@ -266,7 +266,7 @@ export function DrillStack({
               onClick={handleGiveUp}
               data-testid="drill-giveup-btn"
               disabled={phase === "grading"}
-              className="px-4 py-1.5 text-page-fg/60 font-mono text-xs tracking-widest border-2 border-border-thin hover:text-page-fg hover:border-border-strong disabled:opacity-40"
+              className="px-4 py-1.5 text-page-fg/80 font-mono text-xs tracking-widest border-2 border-border-thin hover:text-page-fg hover:border-border-strong disabled:opacity-40"
             >
               give up — show solution
             </button>

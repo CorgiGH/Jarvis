@@ -86,7 +86,7 @@ export function DrillCard({
         </div>
         <span
           data-testid="ped-tag"
-          className="text-[10px] tracking-widest text-page-fg/60 shrink-0 ml-2"
+          className="text-[10px] tracking-widest text-page-fg/80 shrink-0 ml-2"
         >
           {PED_TAG[cardType]}
         </span>

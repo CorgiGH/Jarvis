@@ -232,7 +232,7 @@ export function App() {
         {here.pathname === "/review"
           ? <FsrsReview streak={0} />
           : !sessionReady
-            ? <div className="p-6 font-mono text-sm text-page-fg/60">setting up tutor session…</div>
+            ? <div className="p-6 font-mono text-sm text-page-fg/80">setting up tutor session…</div>
             : showQuickStart
               ? <ActiveTaskDashboard />
               : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}

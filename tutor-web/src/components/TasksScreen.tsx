@@ -83,7 +83,7 @@ export function TasksScreen() {
   return (
     <div data-testid="tasks-screen" className="p-4 font-mono">
       <h1 className="text-lg font-bold tracking-widest mb-3">TASKS</h1>
-      <p className="text-xs text-page-fg/60 mb-4">
+      <p className="text-xs text-page-fg/80 mb-4">
         Create a task row to make Jarvis aware of what you're working on.
         Subject + title + deadline drive the in-chat task header.
       </p>
@@ -140,13 +140,13 @@ export function TasksScreen() {
           CREATE
         </button>
         {create.showSpinner && (
-          <span data-testid="task-create-spinner" aria-live="polite" className="ml-2 text-xs text-page-fg/60">creating…</span>
+          <span data-testid="task-create-spinner" aria-live="polite" className="ml-2 text-xs text-page-fg/80">creating…</span>
         )}
       </form>
 
       <div className="text-xs font-bold tracking-widest mb-2">ACTIVE ({tasks.length})</div>
       {loading ? <div className="text-sm">loading…</div> :
-       tasks.length === 0 ? <div role="status" className="text-sm text-page-fg/60">no tasks yet — fill the NEW TASK form above to add one</div> :
+       tasks.length === 0 ? <div role="status" className="text-sm text-page-fg/80">no tasks yet — fill the NEW TASK form above to add one</div> :
        <ul data-testid="tasks-list" className="space-y-2">
          {tasks.map(t => {
            const days = Math.round((new Date(t.deadline).getTime() - Date.now()) / 86400000);

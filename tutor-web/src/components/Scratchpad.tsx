@@ -68,7 +68,7 @@ export function Scratchpad({ value, onChange, status, errorMessage }: Scratchpad
         className="w-full min-h-[6rem] max-h-[40vh] p-3 outline-none text-sm font-mono resize-y"
       />
       <div data-testid="scratchpad-counter"
-           className={`px-3 py-1 text-[10px] font-mono text-right ${value.length > SCRATCHPAD_MAX_CHARS * 0.9 ? "text-danger-text font-bold" : "text-page-fg/60"}`}>
+           className={`px-3 py-1 text-[10px] font-mono text-right ${value.length > SCRATCHPAD_MAX_CHARS * 0.9 ? "text-danger-text font-bold" : "text-page-fg/80"}`}>
         {value.length} / {SCRATCHPAD_MAX_CHARS}
       </div>
     </div>

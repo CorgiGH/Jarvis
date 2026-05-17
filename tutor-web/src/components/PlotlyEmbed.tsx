@@ -78,7 +78,7 @@ export function PlotlyEmbed({
         {caption}
       </div>
       <div ref={containerRef}>
-        <Suspense fallback={<div className="text-xs text-page-fg/60 p-2">loading plot…</div>}>
+        <Suspense fallback={<div className="text-xs text-page-fg/80 p-2">loading plot…</div>}>
           <Plot
             data={figure.data ?? []}
             layout={{ ...layoutWithoutTitle, autosize: true }}

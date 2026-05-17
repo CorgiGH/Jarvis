@@ -101,7 +101,7 @@ export function CompileSubmitCard({
 
       {/* LaTeX export block */}
       <div className="px-4 py-4">
-        <div className="mb-2 tracking-widest text-page-fg/60 text-[10px]">
+        <div className="mb-2 tracking-widest text-page-fg/80 text-[10px]">
           STITCHED ANSWERS · LaTeX EXPORT
         </div>
         <pre

@@ -106,13 +106,13 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
         ))}
       </div>
       {!loaded ? (
-        <div className="text-page-fg/60">loading…</div>
+        <div className="text-page-fg/80">loading…</div>
       ) : loadError ? (
         <div data-testid="ledger-load-error" className="text-danger-text">
           couldn't load gaps — {loadError}
         </div>
       ) : filtered.length === 0 ? (
-        <div data-testid="ledger-empty" className="text-page-fg/60">no gaps yet</div>
+        <div data-testid="ledger-empty" className="text-page-fg/80">no gaps yet</div>
       ) : (
         <>
           <ul role="list" className="space-y-2">
@@ -120,7 +120,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
               const inner = (
                 <>
                   <div className="font-bold">{g.topic}</div>
-                  <div className="text-page-fg/60">
+                  <div className="text-page-fg/80">
                     {formatEnum(g.type)} · reused {g.reusedCount}× · {g.resolvedBy ? formatEnum(g.resolvedBy) : "open"}
                   </div>
                 </>
@@ -142,7 +142,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
             })}
           </ul>
           {hiddenCount > 0 && (
-            <div data-testid="ledger-cap-notice" className="mt-3 text-page-fg/60 italic">
+            <div data-testid="ledger-cap-notice" className="mt-3 text-page-fg/80 italic">
               showing top {LEDGER_VISIBLE_CAP} of {filtered.length} by reuse count · {hiddenCount} more hidden
             </div>
           )}

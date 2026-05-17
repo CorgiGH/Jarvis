@@ -86,7 +86,7 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
           SUGGESTED · {edit.type.toUpperCase()}
           {edit.label ? ` · ${edit.label}` : ""}
         </div>
-        <div data-testid="suggested-edit-status" className="text-xs text-page-fg/60">
+        <div data-testid="suggested-edit-status" className="text-xs text-page-fg/80">
           {status}
         </div>
       </div>
@@ -98,7 +98,7 @@ export function SuggestedEditCard({ edit, onStatusChange, readOnly, readOnlyReas
       {isLong && !expanded && (
         <button onClick={() => setExpanded(true)}
                 data-testid="suggested-edit-show-more"
-                className="text-xs underline text-page-fg/60 mt-1">show more</button>
+                className="text-xs underline text-page-fg/80 mt-1">show more</button>
       )}
       {error && (
         <div data-testid="suggested-edit-error" className="text-xs text-danger-text mt-1">

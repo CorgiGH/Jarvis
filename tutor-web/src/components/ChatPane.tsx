@@ -205,10 +205,10 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
           const openGaps = historicalGaps.filter(g => g.resolvedBy == null);
           return openGaps.length > 0 && (
             <div data-testid="historical-gaps" className={`mb-2 ${historicalGapsRefreshing ? "opacity-60" : ""}`}>
-              <div className="text-xs font-bold tracking-widest text-page-fg/60 mb-1 flex items-center gap-2">
+              <div className="text-xs font-bold tracking-widest text-page-fg/80 mb-1 flex items-center gap-2">
                 <span>PREVIOUSLY FLAGGED ({openGaps.length})</span>
                 {historicalGapsRefreshing && (
-                  <span data-testid="historical-gaps-refreshing" className="text-page-fg/40 font-normal" aria-live="polite">refreshing…</span>
+                  <span data-testid="historical-gaps-refreshing" className="text-page-fg/80 font-normal" aria-live="polite">refreshing…</span>
                 )}
               </div>
               {openGaps.map(g => (

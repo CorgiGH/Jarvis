@@ -92,7 +92,7 @@ export function TrustSettings() {
   return (
     <div data-testid="trust-settings" className="p-4 font-mono">
       <h1 className="text-lg font-bold tracking-widest mb-3">TRUST GRANTS</h1>
-      <p className="text-xs text-page-fg/60 mb-4">
+      <p className="text-xs text-page-fg/80 mb-4">
         Each grant gives the daemon permission to write to one or more
         paths for a limited time + call count. Default 1h / 10 calls.
         Cap 8h. Revoke any time.
@@ -143,7 +143,7 @@ export function TrustSettings() {
           GRANT
         </button>
         {grant.showSpinner && (
-          <span data-testid="trust-create-spinner" aria-live="polite" className="ml-2 text-xs text-page-fg/60">granting…</span>
+          <span data-testid="trust-create-spinner" aria-live="polite" className="ml-2 text-xs text-page-fg/80">granting…</span>
         )}
       </form>
 
@@ -151,7 +151,7 @@ export function TrustSettings() {
       {loading ? (
         <div className="text-sm">loading…</div>
       ) : grants.length === 0 ? (
-        <div role="status" className="text-sm text-page-fg/60">no grants yet — fill the NEW GRANT form above to add one</div>
+        <div role="status" className="text-sm text-page-fg/80">no grants yet — fill the NEW GRANT form above to add one</div>
       ) : (
         <ul className="space-y-2" data-testid="trust-grants-list">
           {grants.map(g => (

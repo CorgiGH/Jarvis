@@ -92,7 +92,7 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
   }
 
   if (!loaded) {
-    return <div className="p-6 font-mono text-sm text-page-fg/60">loading workspace…</div>;
+    return <div className="p-6 font-mono text-sm text-page-fg/80">loading workspace…</div>;
   }
 
   return (
@@ -149,13 +149,13 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
                 + {p.subject} · {p.daysFromNow}d
               </div>
               <div className="text-sm">{p.title}</div>
-              {busy === id && <div className="text-xs text-page-fg/60 mt-1">creating…</div>}
+              {busy === id && <div className="text-xs text-page-fg/80 mt-1">creating…</div>}
             </button>
           );
         })}
       </div>
 
-      <div className="text-xs text-page-fg/60">
+      <div className="text-xs text-page-fg/80">
         Custom task? <a className="underline" href="/tutor/tasks">/tasks page</a>.
         Don't want this panel? Pick any task above.
       </div>

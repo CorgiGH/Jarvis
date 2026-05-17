@@ -110,12 +110,12 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
           GAP · {gap.type} · {gap.topic}
           {gap.language ? ` · ${gap.language}` : ""}
         </div>
-        <div data-testid="knowledge-gap-status" className="text-xs text-page-fg/60">
+        <div data-testid="knowledge-gap-status" className="text-xs text-page-fg/80">
           {resolved ? formatEnum(resolved) : "open"}
         </div>
       </div>
       {gap.sourceCitation && (
-        <div data-testid="knowledge-gap-citation" className="text-xs italic text-page-fg/60 mb-2">
+        <div data-testid="knowledge-gap-citation" className="text-xs italic text-page-fg/80 mb-2">
           source: {gap.sourceCitation}
         </div>
       )}
@@ -126,7 +126,7 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
           </div>
           <button onClick={() => setContentExpanded(true)}
                   data-testid="knowledge-gap-show-more"
-                  className="text-xs underline text-page-fg/60 mb-2">show more</button>
+                  className="text-xs underline text-page-fg/80 mb-2">show more</button>
         </>
       ) : (
         <div className="text-sm leading-relaxed mb-2 whitespace-pre-wrap">
@@ -144,7 +144,7 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
           {exampleCodeIsLong && !exampleExpanded && (
             <button onClick={() => setExampleExpanded(true)}
                     data-testid="knowledge-gap-example-show-more"
-                    className="text-xs underline text-page-fg/60 mt-1 mb-2">show more</button>
+                    className="text-xs underline text-page-fg/80 mt-1 mb-2">show more</button>
           )}
         </>
       )}
@@ -159,7 +159,7 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
             MARK RESOLVED
           </button>
           <button onClick={dismiss} data-testid="knowledge-gap-dismiss"
-                  className="text-xs tracking-widest bg-page-bg text-page-fg/60 px-3 py-2 sm:py-1 border border-border-thin">
+                  className="text-xs tracking-widest bg-page-bg text-page-fg/80 px-3 py-2 sm:py-1 border border-border-thin">
             FLAG WRONG
           </button>
           <button onClick={loadDocs} data-testid="knowledge-gap-show-docs"
@@ -168,7 +168,7 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
           </button>
           {promoted ? (
             <span data-testid="knowledge-gap-promoted"
-                  className="text-xs font-bold tracking-widest bg-page-bg text-page-fg/60 px-3 py-1 border border-border-thin">
+                  className="text-xs font-bold tracking-widest bg-page-bg text-page-fg/80 px-3 py-1 border border-border-thin">
               → FSRS ({promoted.slice(0, 6)})
             </span>
           ) : (
@@ -183,7 +183,7 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
       {docsOpen && docs && (
         <div data-testid="knowledge-gap-docs" className="mt-2 border-t border-border-thin pt-2 space-y-1">
           {docs.length === 0 ? (
-            <div className="text-xs text-page-fg/60">no docs found</div>
+            <div className="text-xs text-page-fg/80">no docs found</div>
           ) : (
             docs.map((d, i) => (
               <div key={`${d.filename}-${i}`} className="text-xs">

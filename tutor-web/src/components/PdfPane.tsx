@@ -143,7 +143,7 @@ export function PdfPane({ url, onPdfSelectionGap, uploadUrl }: PdfPaneProps) {
           <div className="font-bold text-xs tracking-widest mb-1">PDF NOT VIEWABLE</div>
           <div className="text-xs text-page-fg/70">{error}</div>
         </div>
-        <p className="text-xs text-page-fg/60 mb-3">
+        <p className="text-xs text-page-fg/80 mb-3">
           No PDF attached to this task yet.
         </p>
         {uploadUrl && (
