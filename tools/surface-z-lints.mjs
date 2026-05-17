@@ -16,6 +16,62 @@ export function detectScreamingSnake(text) {
   return { matches };
 }
 
+/**
+ * Detect OpenRouter / Anthropic model-name leaks in user text — strings
+ * of the form `vendor/model-name(-suffix)*(:tier)?`. Excludes file paths
+ * (must NOT have a file extension on the right side) and URLs (must NOT
+ * be preceded by `://` or follow `/`).
+ */
+export function detectDottedModelName(text) {
+  const matches = [];
+  // Vendor: 2-20 lowercase letters/digits/hyphens
+  // Model: 2-40 lowercase + digits + hyphens + dots, optional trailing :tier
+  const re = /[a-z][a-z0-9-]{1,19}\/[a-z][a-z0-9.-]{1,39}(?::free|:beta|:nitro)?\b/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const idx = m.index;
+    const match = m[0];
+    const endIdx = idx + match.length;
+
+    // Reject if preceded by :// (URL scheme like https://)
+    if (idx >= 2 && text[idx - 1] === '/' && text[idx - 2] === ':') {
+      continue;
+    }
+
+    // Reject if preceded by . and there's a :// earlier (domain part of URL)
+    if (idx > 0 && text[idx - 1] === '.' && text.substring(0, idx).includes('://')) {
+      continue;
+    }
+
+    // Reject if preceded by / (path separator in URLs or file paths)
+    if (idx > 0 && text[idx - 1] === '/') {
+      continue;
+    }
+
+    // Reject if match ends with a file extension like .js or .ts
+    if (match.match(/\.[a-z]{2,5}$/)) {
+      continue;
+    }
+
+    // Reject if followed by / (continuing file path) or . (file extension)
+    if (endIdx < text.length) {
+      const nextChar = text[endIdx];
+      if (nextChar === '/') {
+        continue; // Likely a path like path/to/file
+      }
+      if (nextChar === '.') {
+        const extMatch = text.slice(endIdx + 1).match(/^[a-z]{2,5}(\s|$)/);
+        if (extMatch) {
+          continue;
+        }
+      }
+    }
+
+    matches.push(match);
+  }
+  return { matches };
+}
+
 // These run inside page.evaluate() — exported as strings to be serialized
 export const LINT_EVAL_SCRIPT = `
 (() => {

@@ -47,3 +47,25 @@ test("detectScreamingSnake ignores ALLCAPS_with_lowercase mixed (those are diffe
   const r = detectScreamingSnake("ALLCAPS_then_lower not flagged here");
   assert.deepEqual(r.matches, []);
 });
+
+import { detectDottedModelName } from "./surface-z-lints.mjs";
+
+test("detectDottedModelName finds OpenRouter-style model names", () => {
+  const r = detectDottedModelName("served by z-ai/glm-4.5-air:free model");
+  assert.deepEqual(r.matches, ["z-ai/glm-4.5-air:free"]);
+});
+
+test("detectDottedModelName finds non-:free variants too", () => {
+  const r = detectDottedModelName("anthropic/claude-haiku-4-5 wrapped");
+  assert.deepEqual(r.matches, ["anthropic/claude-haiku-4-5"]);
+});
+
+test("detectDottedModelName ignores file paths (path/to/file.js)", () => {
+  const r = detectDottedModelName("see path/to/file.js or src/main.ts");
+  assert.deepEqual(r.matches, []);
+});
+
+test("detectDottedModelName ignores URLs", () => {
+  const r = detectDottedModelName("https://corgflix.duckdns.org/tutor/");
+  assert.deepEqual(r.matches, []);
+});
