@@ -5,6 +5,7 @@ import { TaskQuickStart } from "./components/TaskQuickStart";
 import { ActiveTaskDashboard } from "./components/ActiveTaskDashboard";
 import { FsrsReview } from "./components/FsrsReview";
 import { DaemonHealthPill } from "./components/DaemonHealthPill";
+import { KnowledgeLedger } from "./components/KnowledgeLedger";
 import { jarvisFetch } from "./lib/api";
 
 const LAST_TASK_KEY = "jarvis.lastTaskId";
@@ -28,6 +29,7 @@ export function App() {
   const dedupedFlag = params.get("deduped") === "1";  // surfaced when POST /tasks deduped
   const debug = params.get("debug") === "1";  // ?debug=1 shows DaemonHealthPill + full domain footer
   const [sessionReady, setSessionReady] = useState(false);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
 
   // Strip ?deduped=1 after a tick so a refresh doesn't re-flash the banner.
   useEffect(() => {
@@ -197,6 +199,16 @@ export function App() {
           >
             trust
           </Link>
+          <button
+            data-testid="header-ledger-btn"
+            onClick={() => setLedgerOpen(true)}
+            aria-label="Open knowledge ledger"
+            aria-haspopup="dialog"
+            aria-expanded={ledgerOpen}
+            className="hover:underline"
+          >
+            ledger
+          </button>
           {debug ? (
             <>
               <DaemonHealthPill />
@@ -225,6 +237,7 @@ export function App() {
               ? <ActiveTaskDashboard />
               : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
       </main>
+      {ledgerOpen && <KnowledgeLedger onClose={() => setLedgerOpen(false)} />}
     </div>
   );
 }

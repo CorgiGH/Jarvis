@@ -125,10 +125,10 @@ Highlights worth triaging manually:
 - "☐③ DRILL · YOUR TURN[PRACTICE]" — mixed checkbox/number/bracket label not self-explanatory.
 
 Real follow-up work (HIGH bucket, not in LOW):
-- `[audit-2026-05-17] [HIGH] [backend]` POST /api/v1/task-detect/run returns 500
-- `[audit-2026-05-17] [HIGH] [backend]` POO C1 task prep 404 (id: 01KR6TZ9NCA982XHCFM1VYK761)
-- `[audit-2026-05-17] [HIGH] [css]` axe AA color-contrast on 4-7 nodes across multiple states — needs node-by-node investigation
-- `[audit-2026-05-17] [HIGH] [feature]` Sidebar component never mounted in App.tsx — LEDGER feature has no entry point in live UI
-- `[audit-2026-05-17] [HIGH] [spec]` parseStateMatrix picks up extra rows from spec's example findings table — needs code-fence skip in parser
-- `[audit-2026-05-17] [MED] [audit-tool]` snake-case-leak false positives on filenames + gap topics — needs context allowlist
+- ~~`[audit-2026-05-17] [HIGH] [backend]` POST /api/v1/task-detect/run returns 500~~ — **FIXED 2026-05-17**: 2 root causes (prod chmod on archival dirs + TaskRepo.findByUserSubjectTitle upsert wired into /api/v1/task-detect/run). Live probe HTTP 200 with `{inserted:0, existing:4, total:4}`. See commit 57fbe9c + `docs/standin-findings/backend-recon-2026-05-17.md`.
+- ~~`[audit-2026-05-17] [HIGH] [backend]` POO C1 task prep 404~~ — **FALSE POSITIVE 2026-05-17**: endpoint returns 200 with empty drills when fully authenticated. Audit caught the lazy-generation race; closed via prep pre-warm in `tools/audit-slice15.mjs`. See commit 92ed2db.
+- ~~`[audit-2026-05-17] [HIGH] [css]` axe AA color-contrast~~ — **FIXED 2026-05-17**: bumped `text-[9px] text-page-fg/40` → `text-[11px] text-page-fg/75` in DrillStack; analogous in App.tsx + DaemonHealthPill. Post-audit S-07/S-08/S-10/S-11 AA findings cleared (AAA on rubric heading remains, lower priority).
+- ~~`[audit-2026-05-17] [HIGH] [feature]` Sidebar component never mounted~~ — **CLOSED 2026-05-17 via Option C**: per council `1778988899-sidebar-dead-code` (5/5 CONDITIONAL on C), Sidebar.tsx + Sidebar.test.tsx deleted; LEDGER reachable via new `<button data-testid="header-ledger-btn">ledger</button>` in App.tsx header nav between `trust` and READY status. Audit spec S-21 testid renamed accordingly; S-22..S-26 chain-resolve. **Deferred (Sidebar deletion 2026-05-17):** per-subject task list grouping + subject confidence % badges (Sidebar was the sole consumer of `/api/v1/subject-confidence`; endpoint stays live for future re-surfacing). **Carried risk:** if LEDGER itself sees no user usage within 2 weeks, next move is delete KnowledgeLedger too (Option B fallback per council Devil's Advocate KEY CONCERN).
+- ~~`[audit-2026-05-17] [HIGH] [spec]` parseStateMatrix picks up extra rows~~ — **FIXED 2026-05-17**: `inFence` tracking added in commit 92ed2db.
+- ~~`[audit-2026-05-17] [MED] [audit-tool]` snake-case-leak false positives~~ — **FIXED 2026-05-17**: `detectSnakeCase(text, {skipFilenameTokens: true})` option added; audit-slice15 passes it; `intro_print` in `.pdf` filename dropped. Commit 92ed2db.
 

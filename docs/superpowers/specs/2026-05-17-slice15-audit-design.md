@@ -69,7 +69,7 @@ the audit. Cells listed in `S-XX` order; the audit tool consumes this table verb
 | S-18 | S-07 + PDF drawer open | S-07 → click `rail-item-PDF` | `rail-drawer`, `pdf-pane` (or error branch with `pdf-upload-button`) | PDF loads OR upload affordance visible |
 | S-19 | S-07 + CONCEPT drawer open | S-07 → click `rail-item-CONCEPT` (if rail has one) | `concept-drawer`, `concept-drawer-backdrop`, `concept-drawer-heading` | Escape closes; backdrop click closes; close auto-focused |
 | S-20 | S-07 + PRIOR_GAP drawer open | S-07 → click `rail-item-PRIOR_GAP` (if rail has one) | `rail-drawer`, `knowledge-gap-card` (via PriorGapAdapter) | gap loaded OR "loading gap…"/error visible |
-| S-21 | S-07 + sidebar LEDGER open | S-07 → click `sidebar-ledger-btn` | `knowledge-ledger`, `knowledge-ledger-backdrop`, `ledger-heading`, `ledger-filter-all` `aria-pressed="true"` | NO snake_case in `ledger-row` text |
+| S-21 | S-07 + header LEDGER open | S-07 → click `header-ledger-btn` | `knowledge-ledger`, `knowledge-ledger-backdrop`, `ledger-heading`, `ledger-filter-all` `aria-pressed="true"` | NO snake_case in `ledger-row` text |
 | S-22 | S-21 + filter=open | S-21 → click `ledger-filter-open` | `ledger-filter-open` `aria-pressed="true"`; rows filtered | NO `g.type` raw enum visible |
 | S-23 | S-21 + filter=resolved | S-21 → click `ledger-filter-resolved` | same shape, filter pressed | NO `g.resolvedBy` enum like "USER_MARKED_DONE" raw |
 | S-24 | S-21 + row click → navigate + close | S-21 → click `ledger-row-open` (if any row has taskId) | ledger dismissed, URL changed to `/tutor/?taskId=...` | no console error during transition |

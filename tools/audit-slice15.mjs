@@ -396,7 +396,13 @@ if (process.argv[1]?.endsWith("audit-slice15.mjs")) {
   const startFromId = args["start-from"] ?? null;
 
   const specText = readFileSync(resolve(REPO_ROOT, specPath), "utf8");
-  let rows = parseStateMatrix(specText);
+  const allRows = parseStateMatrix(specText);
+  // rowsById is built from the FULL parsed spec — chain resolution
+  // (S-NN → ...) must find parent rows even when --only or --start-from
+  // narrowed the iteration set. Otherwise the parent goto disappears and
+  // the click runs against an empty page.
+  const rowsById = new Map(allRows.map(r => [r.id, r]));
+  let rows = allRows;
   if (startFromId) {
     const idx = rows.findIndex(r => r.id === startFromId);
     if (idx >= 0) rows = rows.slice(idx);
@@ -458,7 +464,6 @@ if (process.argv[1]?.endsWith("audit-slice15.mjs")) {
       }
     }
 
-    const rowsById = new Map(rows.map(r => [r.id, r]));
     const allFindings = [];
     const unreachable = [];
     for (const row of rows) {
