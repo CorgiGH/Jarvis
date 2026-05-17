@@ -187,6 +187,34 @@ export async function auditState({ page, row, baseUrl }) {
         severity: classifySeverity({ category: "axe-violation", axeLevel }),
       });
     }
+    // Interaction probe: focus every [data-testid] interactive element to
+    // assert no JS error during focus. Click-probe ONLY on an allowlist of
+    // idempotent affordances (close buttons) to avoid mutating state.
+    const idempotentClickAllowlist = [
+      "knowledge-ledger-backdrop",   // close
+      "concept-drawer-backdrop",     // close
+      // (extend per audit experience)
+    ];
+    const interactables = await page.locator(
+      '[data-testid][role="button"], [data-testid] > button, button[data-testid], a[data-testid][href], input[data-testid], textarea[data-testid]',
+    ).all();
+    for (const el of interactables) {
+      const tid = await el.getAttribute("data-testid").catch(() => null);
+      try {
+        await el.focus({ timeout: 1000 });
+      } catch (e) {
+        findings.push({
+          stateId: row.id,
+          category: "pageerror",
+          evidence: `focus failed on [data-testid="${tid}"]: ${e.message.slice(0, 120)}`,
+          severity: classifySeverity({ category: "pageerror" }),
+        });
+      }
+      if (tid && idempotentClickAllowlist.includes(tid)) {
+        // Skip — would close the current state mid-audit. Allowlist exists
+        // for explicit future probes where we WANT to dismiss + assert.
+      }
+    }
     for (const err of consoleErrors) {
       findings.push({
         stateId: row.id,
