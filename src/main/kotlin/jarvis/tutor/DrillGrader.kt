@@ -142,6 +142,17 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         } catch (_: Exception) { null }
     }
 
+    /**
+     * Sentinel string the frontend sends as `userAttempt` when the user clicks
+     * "GIVE UP" without typing anything. Pre-2026-05-17 this string travelled
+     * verbatim into the grader prompt; the LLM echoed it into elaborated_feedback,
+     * leaking SCREAMING_SNAKE_CASE into the rendered UI. See hot-work item 1 in
+     * the 2026-05-17 BRIDGE entry. Defense layers: (1) substitute in prompt
+     * input, (2) post-parse output scrub.
+     */
+    private const val GIVE_UP_SENTINEL = "ATTEMPTED_NOT_SOLVED"
+    private const val GIVE_UP_HUMAN = "the student gave up"
+
     suspend fun grade(
         problemStatement: String,
         userAttempt: String,
@@ -151,8 +162,16 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         referenceSolution: String? = null,
         rubricItems: List<String>? = null,
         prediction: String? = null,
+        giveUp: Boolean = false,
     ): GradeAttempt {
         val isCode = !language.isNullOrBlank() && language.lowercase() != "text"
+        // Sentinel auto-detection: legacy frontend callers may post the sentinel
+        // as userAttempt without setting giveUp=true. Treat either signal as
+        // give-up to ensure the LLM never sees the raw token.
+        val effectiveGiveUp = giveUp || userAttempt.trim() == GIVE_UP_SENTINEL
+        val effectiveAttempt = if (effectiveGiveUp) {
+            "(no attempt submitted — student gave up before answering)"
+        } else userAttempt
         val systemPrompt = if (isCode) GRADE_PROMPT_CODE else GRADE_PROMPT_TEXT
         val userMsg = if (isCode) buildCodeUserMessage(
             language = language!!,
@@ -160,13 +179,15 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
             expectedHint = expectedHint,
             referenceSolution = referenceSolution,
             rubricItems = rubricItems.orEmpty(),
-            userAttempt = userAttempt,
+            userAttempt = effectiveAttempt,
             prediction = prediction,
+            giveUp = effectiveGiveUp,
         ) else buildTextUserMessage(
             problemStatement = problemStatement,
             expectedHint = expectedHint,
-            userAttempt = userAttempt,
+            userAttempt = effectiveAttempt,
             prediction = prediction,
+            giveUp = effectiveGiveUp,
         )
         // A.6 — code-grading produces longer JSON (multi-line elaborated_feedback
         // citing specific code lines + dynamic rubric_chip_text), so bump the
@@ -190,8 +211,20 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         if (parsed == null) {
             System.err.println("[drill grader] parse-fail lang=$language raw=${raw.take(600).replace('\n', ' ')}")
         }
-        return GradeAttempt(parsed = parsed, rawOutput = raw, modelResolved = modelResolved)
+        // Defense layer 2: scrub residual sentinel from LLM-emitted text even if
+        // the prompt translation worked. Case-insensitive replace because some
+        // models normalize-case unpredictably.
+        val sanitized = parsed?.copy(
+            elaboratedFeedback = scrubSentinel(parsed.elaboratedFeedback),
+            misconception = parsed.misconception?.let { m ->
+                if (m.equals(GIVE_UP_SENTINEL, ignoreCase = true)) null else m
+            },
+        )
+        return GradeAttempt(parsed = sanitized, rawOutput = raw, modelResolved = modelResolved)
     }
+
+    private fun scrubSentinel(s: String): String =
+        s.replace(Regex(Regex.escape(GIVE_UP_SENTINEL), RegexOption.IGNORE_CASE), GIVE_UP_HUMAN)
 
     private fun buildCodeUserMessage(
         language: String,
@@ -201,6 +234,7 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         rubricItems: List<String>,
         userAttempt: String,
         prediction: String?,
+        giveUp: Boolean = false,
     ): String {
         val sb = StringBuilder()
         sb.append("Language: ").append(language).append('\n')
@@ -222,6 +256,11 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
                 .append(prediction.trim()).append("\n\n")
             sb.append("In your elaborated_feedback, briefly name how the student's prediction aligns or diverges from what their code actually does — recognize the commitment first, then evaluate the code against the rubric.\n\n")
         }
+        if (giveUp) {
+            sb.append("Note: the student gave up without submitting code. ")
+                .append("All rubric items should be marked false. ")
+                .append("In elaborated_feedback, walk through what a correct solution would look like against each rubric item — frame as a teaching pass, not a critique. Refer to the student as \"the student\" or \"you\"; do not echo any internal status code.\n\n")
+        }
         sb.append("Student's code:\n```").append(language).append('\n').append(userAttempt).append("\n```\n")
         return sb.toString()
     }
@@ -231,6 +270,7 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         expectedHint: String,
         userAttempt: String,
         prediction: String?,
+        giveUp: Boolean = false,
     ): String {
         val sb = StringBuilder()
         sb.append("Problem: ").append(problemStatement).append('\n')
@@ -238,6 +278,12 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         if (!prediction.isNullOrBlank()) {
             sb.append("Student's prior prediction (committed before final attempt): ")
                 .append(prediction.trim()).append('\n')
+        }
+        if (giveUp) {
+            sb.append("Note: the student gave up without submitting an attempt. ")
+                .append("Mark all rubric items false and use elaborated_feedback to explain ")
+                .append("what the correct answer should be, treating it as a teaching pass. ")
+                .append("Refer to \"the student\" or \"you\"; do not echo any internal status code.\n")
         }
         sb.append("Student's attempt: ").append(userAttempt).append('\n')
         return sb.toString()

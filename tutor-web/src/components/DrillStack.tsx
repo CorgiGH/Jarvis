@@ -118,7 +118,7 @@ export function DrillStack({
         taskId,
         problemId,
         problemStatement: content.drill,
-        userAttempt: "ATTEMPTED_NOT_SOLVED",
+        userAttempt: "",
         expectedAnswerHint: content.expectedAnswerHint,
         giveUp: true,
         language: content.language,

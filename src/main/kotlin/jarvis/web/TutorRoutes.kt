@@ -1630,6 +1630,7 @@ fun Application.installTutorRoutes() {
                                 referenceSolution = req.referenceSolution,
                                 rubricItems = req.rubricItems,
                                 prediction = req.prediction,
+                                giveUp = req.giveUp,
                             )
                         }
                     }
@@ -1977,6 +1978,13 @@ private data class ApiDrillGradeRequest(
     val referenceSolution: String? = null,
     val rubricItems: List<String>? = null,
     val prediction: String? = null,
+    /**
+     * Set by frontend when the user clicks GIVE UP. The grader renders a
+     * teaching-pass prompt and never sees the legacy "ATTEMPTED_NOT_SOLVED"
+     * sentinel. Default false preserves wire compat with older callers — the
+     * grader also auto-detects the sentinel server-side.
+     */
+    val giveUp: Boolean = false,
 )
 
 @Serializable

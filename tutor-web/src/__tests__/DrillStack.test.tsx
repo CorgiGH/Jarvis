@@ -240,13 +240,13 @@ describe("DrillStack misconception path", () => {
 });
 
 describe("DrillStack giveUp path", () => {
-  test("give up → POSTs attempted-not-solved to grade endpoint + unlocks all cards", async () => {
+  test("give up → POSTs giveUp=true with empty userAttempt + unlocks all cards", async () => {
     const giveUpResult: GradeResult = {
       correct: false,
       score: 0.0,
       rubric: { numeric: false, mechanism: false, justification: false },
       misconception: null,
-      elaboratedFeedback: "Marked as attempted-not-solved.",
+      elaboratedFeedback: "the student gave up before answering.",
     };
     const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
       if (typeof url === "string" && url.includes("/api/v1/drill/grade")) {
@@ -273,7 +273,9 @@ describe("DrillStack giveUp path", () => {
       expect(screen.queryAllByTestId("card-lock-message")).toHaveLength(0)
     );
 
-    // Verify the grade call included giveUp flag
+    // Verify the grade call signals giveUp + does NOT leak the legacy
+    // ATTEMPTED_NOT_SOLVED sentinel (which pre-2026-05-17 was echoed into
+    // elaboratedFeedback by the LLM grader as SCREAMING_SNAKE in the UI).
     const gradeCalls = fetchMock.mock.calls.filter(
       (c) =>
         typeof c[0] === "string" && c[0].includes("/api/v1/drill/grade")
@@ -281,7 +283,8 @@ describe("DrillStack giveUp path", () => {
     expect(gradeCalls).toHaveLength(1);
     const body = JSON.parse(gradeCalls[0][1].body as string);
     expect(body.giveUp).toBe(true);
-    expect(body.userAttempt).toBe("ATTEMPTED_NOT_SOLVED");
+    expect(body.userAttempt).toBe("");
+    expect(body.userAttempt).not.toContain("ATTEMPTED_NOT_SOLVED");
   });
 });
 

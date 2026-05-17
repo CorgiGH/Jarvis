@@ -259,4 +259,81 @@ Hope that helps!"""
         // Block extracted but missing rubric/score/elaborated_feedback → null.
         assertNull(DrillGrader.parseGradeJson(raw))
     }
+
+    // 2026-05-17 hot-work #1: ATTEMPTED_NOT_SOLVED sentinel leak fix.
+    // Frontend's give-up path posts userAttempt="ATTEMPTED_NOT_SOLVED"; the LLM
+    // sees that string verbatim in the prompt and parrots it into elaborated_feedback.
+    // Two-layer defense: (1) translate the sentinel in the prompt input so the LLM
+    // never sees it, (2) sanitize any residual SCREAMING_SNAKE occurrence in the
+    // parsed output as belt-and-suspenders.
+
+    @Test
+    fun `grade with giveUp=true substitutes sentinel out of prompt`() = kotlinx.coroutines.runBlocking {
+        var seenUserMessage = ""
+        val capturingLlm = object : jarvis.Llm {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+                seenUserMessage = messages.firstOrNull { it.role == "user" }?.content.orEmpty()
+                return """{"correct":false,"rubric":{"numeric":false,"mechanism":false,"justification":false},"score":0.0,"misconception":"OTHER","elaborated_feedback":"the student gave up"}""" to "fake/model"
+            }
+        }
+        DrillGrader.grade(
+            problemStatement = "p", userAttempt = "ATTEMPTED_NOT_SOLVED", expectedHint = "h",
+            llm = capturingLlm, giveUp = true,
+        )
+        assertFalse(seenUserMessage.contains("ATTEMPTED_NOT_SOLVED"),
+            "give-up prompt must NOT contain the sentinel string; LLM will echo it into elaborated_feedback")
+        assertTrue(seenUserMessage.contains("gave up") || seenUserMessage.contains("no attempt"),
+            "give-up prompt must explain context so LLM frames feedback against rubric, not nonsense sentinel")
+    }
+
+    @Test
+    fun `grade auto-detects sentinel and treats as giveUp without explicit flag`() = kotlinx.coroutines.runBlocking {
+        var seenUserMessage = ""
+        val capturingLlm = object : jarvis.Llm {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+                seenUserMessage = messages.firstOrNull { it.role == "user" }?.content.orEmpty()
+                return """{"correct":false,"rubric":{"numeric":false},"score":0.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
+            }
+        }
+        DrillGrader.grade(
+            problemStatement = "p", userAttempt = "ATTEMPTED_NOT_SOLVED", expectedHint = "h",
+            llm = capturingLlm,
+        )
+        assertFalse(seenUserMessage.contains("ATTEMPTED_NOT_SOLVED"),
+            "legacy callers send sentinel without giveUp flag; grader must still scrub it")
+    }
+
+    @Test
+    fun `grade sanitizes residual ATTEMPTED_NOT_SOLVED from elaboratedFeedback`() = kotlinx.coroutines.runBlocking {
+        val leakyLlm = object : jarvis.Llm {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+                return """{"correct":false,"rubric":{"numeric":false},"score":0.0,"misconception":"OTHER",
+                    "elaborated_feedback":"Since ATTEMPTED_NOT_SOLVED, here is the breakdown..."}""" to "fake/model"
+            }
+        }
+        val attempt = DrillGrader.grade(
+            problemStatement = "p", userAttempt = "", expectedHint = "h",
+            llm = leakyLlm, giveUp = true,
+        )
+        assertNotNull(attempt.parsed)
+        assertFalse(attempt.parsed!!.elaboratedFeedback.contains("ATTEMPTED_NOT_SOLVED"),
+            "even if LLM ignores prompt translation, output must be sanitized as defense-in-depth")
+    }
+
+    @Test
+    fun `grade preserves userAttempt verbatim in normal non-giveUp path`() = kotlinx.coroutines.runBlocking {
+        var seenUserMessage = ""
+        val capturingLlm = object : jarvis.Llm {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+                seenUserMessage = messages.firstOrNull { it.role == "user" }?.content.orEmpty()
+                return """{"correct":true,"rubric":{"numeric":true,"mechanism":true,"justification":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
+            }
+        }
+        DrillGrader.grade(
+            problemStatement = "p", userAttempt = "the median is 0.5", expectedHint = "h",
+            llm = capturingLlm, giveUp = false,
+        )
+        assertTrue(seenUserMessage.contains("the median is 0.5"),
+            "regular attempts must reach the LLM verbatim — translation is sentinel-only")
+    }
 }
