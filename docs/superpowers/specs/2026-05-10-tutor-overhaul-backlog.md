@@ -112,3 +112,23 @@ End: TOTAL: 0 high, 5 med, 6 low.
 - `[8] [a11y] [aria-expanded] [done] Sidebar LEDGER button gained aria-expanded={ledgerOpen} + aria-haspopup="dialog". ActiveTaskDashboard "+ Manual entry" already had aria-expanded={showManual} (post-shipped).`
 - `[8] [a11y] [aria-modal] [done] aria-modal="true" added to both ConceptDrawer + KnowledgeLedger. Focus-trap from the Phase 7 [7] keyboard-nav entry still open; aria-modal alone is incomplete without it (announces inert background but background is still actually-clickable).`
 - `[8] [visual-polish] [token-coverage] [done] PlotlyEmbed now uses className="w-full max-w-[800px]" instead of inline style={{ maxWidth: 800 }}. Tailwind-class form is at least more discoverable for grep-based refactors than the inline literal. Future token migration (--plot-max-width: 50rem) remains an option but no longer hidden inside a style prop.`
+
+
+## Audit 2026-05-17 — LOW findings catalogued (deferred)
+
+51 LOW findings from the Slice-1.5 audit (`docs/standin-findings/audit-slice15-2026-05-17.md`). Mostly LLM-judge subjective UX nits (concatenation noise, label ambiguity, etc.). Full table in the audit findings doc; not duplicated here to avoid drift. Re-run audit with `node tools/audit-slice15.mjs ...` to regenerate.
+
+Highlights worth triaging manually:
+- LLM judge "closeworkspacetasksreviewtrustREADY" appears across many states — innerText artifact (no space between sibling nav links in DOM). Real visual gap? Or audit-tool artifact? Needs human verify.
+- Sidekick `?` icon ambiguity flagged repeatedly — "Select text or click ? to ask the sidekick" — `?` not visually visible.
+- Concatenation in rail item labels: "PDFTema_A.pdf p.1SCRATCHPADdraft answers..." — same innerText artifact.
+- "☐③ DRILL · YOUR TURN[PRACTICE]" — mixed checkbox/number/bracket label not self-explanatory.
+
+Real follow-up work (HIGH bucket, not in LOW):
+- `[audit-2026-05-17] [HIGH] [backend]` POST /api/v1/task-detect/run returns 500
+- `[audit-2026-05-17] [HIGH] [backend]` POO C1 task prep 404 (id: 01KR6TZ9NCA982XHCFM1VYK761)
+- `[audit-2026-05-17] [HIGH] [css]` axe AA color-contrast on 4-7 nodes across multiple states — needs node-by-node investigation
+- `[audit-2026-05-17] [HIGH] [feature]` Sidebar component never mounted in App.tsx — LEDGER feature has no entry point in live UI
+- `[audit-2026-05-17] [HIGH] [spec]` parseStateMatrix picks up extra rows from spec's example findings table — needs code-fence skip in parser
+- `[audit-2026-05-17] [MED] [audit-tool]` snake-case-leak false positives on filenames + gap topics — needs context allowlist
+
