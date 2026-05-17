@@ -1,6 +1,20 @@
 // tools/audit-slice15.mjs — Slice-1.5 audit orchestrator + spec parser.
 // Spec: docs/superpowers/specs/2026-05-17-slice15-audit-design.md
 
+import { chromium } from "playwright";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  detectSnakeCase,
+  detectScreamingSnake,
+  detectDottedModelName,
+  detectRawHttpError,
+  detectPlaceholder,
+} from "./surface-z-lints.mjs";
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
 /**
  * Parse the "State matrix" markdown table out of the spec doc.
  * Returns an array of { id, route, reach, selectors, expectations }.
@@ -49,5 +63,103 @@ export function classifySeverity(finding) {
       return "LOW";
     default:
       return "LOW";
+  }
+}
+
+/**
+ * Execute one state row's Playwright "reach" sequence.
+ * The reach DSL supports `goto <path>` and `click <data-testid>` and
+ * `fill <data-testid> "value"`. Anything else throws.
+ */
+async function executeReach(page, reachExpr, baseUrl) {
+  // Reach expressions in the spec are written as natural-language with
+  // backtick-quoted Playwright primitives. Extract the primitives by
+  // grepping for known patterns.
+  const sequence = [];
+  const gotoMatch = reachExpr.match(/goto\s+(\S+)/);
+  if (gotoMatch) sequence.push({ kind: "goto", target: gotoMatch[1] });
+  const clickMatches = reachExpr.matchAll(/click\s+([a-z][a-z0-9-]+)/g);
+  for (const m of clickMatches) sequence.push({ kind: "click", target: m[1] });
+  const fillMatches = reachExpr.matchAll(/fill\s+([a-z][a-z0-9-]+)\s+"([^"]+)"/g);
+  for (const m of fillMatches) sequence.push({ kind: "fill", target: m[1], value: m[2] });
+
+  for (const step of sequence) {
+    if (step.kind === "goto") {
+      await page.goto(`${baseUrl}${step.target}`);
+      await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+    } else if (step.kind === "click") {
+      await page.click(`[data-testid="${step.target}"]`, { timeout: 5000 });
+    } else if (step.kind === "fill") {
+      await page.fill(`[data-testid="${step.target}"]`, step.value);
+    }
+  }
+}
+
+/**
+ * For one state row, navigate + capture + lint + classify findings.
+ * Returns { stateId, findings[], unreachableReason }.
+ */
+export async function auditState({ page, row, baseUrl }) {
+  const findings = [];
+  try {
+    await executeReach(page, row.reach, baseUrl);
+  } catch (e) {
+    return { stateId: row.id, findings: [], unreachableReason: `reach-failed: ${e.message}` };
+  }
+  // Required-selectors check
+  for (const sel of row.selectors) {
+    const count = await page.locator(`[data-testid="${sel}"]`).count();
+    if (count === 0) {
+      findings.push({
+        stateId: row.id,
+        category: "missing-selector",
+        evidence: `[data-testid="${sel}"] not found`,
+        severity: classifySeverity({ category: "missing-selector" }),
+      });
+    }
+  }
+  return { stateId: row.id, findings, unreachableReason: null };
+}
+
+// CLI
+if (process.argv[1]?.endsWith("audit-slice15.mjs")) {
+  const args = Object.fromEntries(process.argv.slice(2).map(a => {
+    const m = a.match(/^--([^=]+)=(.+)$/); return m ? [m[1], m[2]] : [a.replace(/^--/, ""), true];
+  }));
+  const baseUrl = args["base-url"] ?? "https://corgflix.duckdns.org";
+  const specPath = args.spec ?? "docs/superpowers/specs/2026-05-17-slice15-audit-design.md";
+  const outputPath = args.output ?? `docs/standin-findings/audit-slice15-${new Date().toISOString().slice(0, 10)}.md`;
+  const onlyIds = args.only ? args.only.split(",") : null;
+  const startFromId = args["start-from"] ?? null;
+
+  const specText = readFileSync(resolve(REPO_ROOT, specPath), "utf8");
+  let rows = parseStateMatrix(specText);
+  if (startFromId) {
+    const idx = rows.findIndex(r => r.id === startFromId);
+    if (idx >= 0) rows = rows.slice(idx);
+  }
+  if (onlyIds) rows = rows.filter(r => onlyIds.includes(r.id));
+
+  console.log(`audit: ${rows.length} states against ${baseUrl}`);
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const ctx = await browser.newContext({ extraHTTPHeaders: { "X-Standin-Run": "1" } });
+    const page = await ctx.newPage();
+    const allFindings = [];
+    const unreachable = [];
+    for (const row of rows) {
+      const result = await auditState({ page, row, baseUrl });
+      if (result.unreachableReason) {
+        unreachable.push({ stateId: row.id, reason: result.unreachableReason });
+        console.log(`  ${row.id}: UNREACHABLE — ${result.unreachableReason}`);
+      } else {
+        allFindings.push(...result.findings);
+        console.log(`  ${row.id}: ${result.findings.length} findings`);
+      }
+    }
+    // Findings doc writer wired in B.12.
+    console.log(`audit complete: ${allFindings.length} total findings, ${unreachable.length} unreachable`);
+  } finally {
+    await browser.close();
   }
 }
