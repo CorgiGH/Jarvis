@@ -24,3 +24,30 @@ export function parseStateMatrix(specText) {
   }
   return rows;
 }
+
+/**
+ * Mechanical severity rules per spec § Phase B severity classifier.
+ * Subjective LLM judge severities are bumped one band down: an LLM
+ * "HIGH" maps to a deterministic-pipeline MED at most.
+ */
+export function classifySeverity(finding) {
+  switch (finding.category) {
+    case "missing-selector":
+    case "pageerror":
+    case "first-paint-http-error":
+    case "raw-http-error":
+      return "HIGH";
+    case "axe-violation":
+      return finding.axeLevel === "wcag2aa" ? "HIGH" : "MED";
+    case "snake-case-leak":
+    case "screaming-snake-leak":
+    case "model-name-leak":
+    case "placeholder-leak":
+      return "MED";
+    case "llm-judge":
+      if (finding.judgeSeverity === "HIGH") return "MED";
+      return "LOW";
+    default:
+      return "LOW";
+  }
+}

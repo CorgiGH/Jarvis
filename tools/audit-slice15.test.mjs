@@ -29,3 +29,61 @@ test("parseStateMatrix returns empty array when no matrix present", () => {
   const rows = parseStateMatrix("# Header only\n\nNo table.");
   assert.deepEqual(rows, []);
 });
+
+import { classifySeverity } from "./audit-slice15.mjs";
+
+test("classifySeverity: missing required selector → HIGH", () => {
+  assert.equal(classifySeverity({ category: "missing-selector" }), "HIGH");
+});
+
+test("classifySeverity: pageerror → HIGH", () => {
+  assert.equal(classifySeverity({ category: "pageerror" }), "HIGH");
+});
+
+test("classifySeverity: 4xx/5xx on first paint → HIGH", () => {
+  assert.equal(classifySeverity({ category: "first-paint-http-error" }), "HIGH");
+});
+
+test("classifySeverity: axe AA violation → HIGH", () => {
+  assert.equal(classifySeverity({ category: "axe-violation", axeLevel: "wcag2aa" }), "HIGH");
+});
+
+test("classifySeverity: axe AAA violation → MED", () => {
+  assert.equal(classifySeverity({ category: "axe-violation", axeLevel: "wcag2aaa" }), "MED");
+});
+
+test("classifySeverity: snake_case → MED", () => {
+  assert.equal(classifySeverity({ category: "snake-case-leak" }), "MED");
+});
+
+test("classifySeverity: SCREAMING_SNAKE → MED", () => {
+  assert.equal(classifySeverity({ category: "screaming-snake-leak" }), "MED");
+});
+
+test("classifySeverity: dotted model name → MED", () => {
+  assert.equal(classifySeverity({ category: "model-name-leak" }), "MED");
+});
+
+test("classifySeverity: raw HTTP error visible (outside allowlist) → HIGH", () => {
+  assert.equal(classifySeverity({ category: "raw-http-error" }), "HIGH");
+});
+
+test("classifySeverity: placeholder text → MED", () => {
+  assert.equal(classifySeverity({ category: "placeholder-leak" }), "MED");
+});
+
+test("classifySeverity: LLM judge HIGH → MED (one-band downgrade — judge is subjective)", () => {
+  assert.equal(classifySeverity({ category: "llm-judge", judgeSeverity: "HIGH" }), "MED");
+});
+
+test("classifySeverity: LLM judge MED → LOW", () => {
+  assert.equal(classifySeverity({ category: "llm-judge", judgeSeverity: "MED" }), "LOW");
+});
+
+test("classifySeverity: LLM judge LOW → LOW", () => {
+  assert.equal(classifySeverity({ category: "llm-judge", judgeSeverity: "LOW" }), "LOW");
+});
+
+test("classifySeverity: unknown category → LOW (safe default)", () => {
+  assert.equal(classifySeverity({ category: "unknown" }), "LOW");
+});
