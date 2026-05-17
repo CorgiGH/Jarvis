@@ -100,7 +100,7 @@ async function executeReach(page, reachExpr, baseUrl) {
   // grepping for known patterns. Order matters — walk the reach string
   // left-to-right so goto/click/fill stay in spec order across chains.
   const sequence = [];
-  const stepRe = /\b(goto|click|fill|clear-cookies|viewport)\b(?:\s+([^\s"]+))?(?:\s+"([^"]+)")?/g;
+  const stepRe = /\b(goto|click|fill|clear-cookies|viewport|wait)\b(?:\s+([^\s"]+))?(?:\s+"([^"]+)")?/g;
   let m;
   while ((m = stepRe.exec(reachExpr)) !== null) {
     const [, kind, arg1, arg2] = m;
@@ -115,6 +115,8 @@ async function executeReach(page, reachExpr, baseUrl) {
     } else if (kind === "viewport") {
       const dims = arg1?.match(/^(\d+)x(\d+)$/);
       if (dims) sequence.push({ kind: "viewport", width: +dims[1], height: +dims[2] });
+    } else if (kind === "wait") {
+      if (arg1 && /^[a-z][a-zA-Z0-9_-]+$/.test(arg1)) sequence.push({ kind: "wait", target: arg1 });
     }
   }
 
@@ -130,6 +132,11 @@ async function executeReach(page, reachExpr, baseUrl) {
       await page.context().clearCookies();
     } else if (step.kind === "viewport") {
       await page.setViewportSize({ width: step.width, height: step.height });
+    } else if (step.kind === "wait") {
+      // Async grading + similar deferred work — wait up to 45s for the
+      // expected testid to appear before continuing. Tolerant on timeout
+      // so the auditState lint stage still runs + reports the gap.
+      await page.locator(`[data-testid="${step.target}"]`).waitFor({ state: "visible", timeout: 45000 }).catch(() => {});
     }
   }
 }
@@ -429,7 +436,19 @@ if (process.argv[1]?.endsWith("audit-slice15.mjs")) {
         }],
         origins: [],
       } : undefined,
-      extraHTTPHeaders: { "X-Standin-Run": "1" },
+    });
+    // X-Standin-Run flags synthetic events in TutorRoutes.kt:1340/1615. Must
+    // be scoped to baseUrl origin only — applying it globally breaks CORS
+    // preflight on cross-origin CDN fetches (e.g. pdfjs-dist worker on
+    // cdn.jsdelivr.net), causing spurious pageerror findings.
+    const baseHost = new URL(baseUrl).hostname;
+    await ctx.route("**/*", async (route, request) => {
+      const reqHost = new URL(request.url()).hostname;
+      if (reqHost === baseHost) {
+        await route.continue({ headers: { ...request.headers(), "x-standin-run": "1" } });
+      } else {
+        await route.continue();
+      }
     });
     const page = await ctx.newPage();
 

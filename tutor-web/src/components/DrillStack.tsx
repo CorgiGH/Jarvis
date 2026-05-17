@@ -256,6 +256,7 @@ export function DrillStack({
           <div className="mt-3 flex gap-2">
             <button
               onClick={handleCheckAnswer}
+              data-testid="drill-check-btn"
               disabled={phase === "grading" || attempt.trim().length === 0}
               className="px-4 py-1.5 bg-accent text-page-fg font-mono text-xs font-bold tracking-widest border-2 border-border-strong hover:bg-accent-hover disabled:opacity-40 transition-all duration-[280ms] ease-in-out active:scale-95"
             >
@@ -263,6 +264,7 @@ export function DrillStack({
             </button>
             <button
               onClick={handleGiveUp}
+              data-testid="drill-giveup-btn"
               disabled={phase === "grading"}
               className="px-4 py-1.5 text-page-fg/60 font-mono text-xs tracking-widest border-2 border-border-thin hover:text-page-fg hover:border-border-strong disabled:opacity-40"
             >

@@ -96,7 +96,7 @@ export function DrillCard({
       {state === "locked" ? (
         <div
           data-testid="card-lock-message"
-          className="px-4 py-6 text-page-fg/40 tracking-widest text-center"
+          className="px-4 py-6 text-page-fg/75 tracking-widest text-center"
         >
           🔒 attempt drill first
         </div>

@@ -57,9 +57,9 @@ the audit. Cells listed in `S-XX` order; the audit tool consumes this table verb
 | S-06 | `/tutor/tasks` | `goto /tutor/tasks` | `tasks-screen`, `task-create-form`, `tasks-list` (≥0), `task-subject-PS`, `task-subject-PA`, `task-subject-POO`, `task-subject-ALO`, `task-subject-SO` | no snake_case in `task-row` |
 | S-07 | `/tutor/?taskId=PS-Tema-A` (drill un-attempted) | `goto /tutor/?taskId=01KR6K07T6PATPRR5KH1JXYF8E` | `tutor-header`, `problem-stepper`, `progress-strip`, `drill-stack`, `drill-rubric`, `resource-rail` | **NO snake_case in `drill-rubric` li text** (the reported-bug cell) |
 | S-08 | S-07 + typed | S-07 → fill `drill-attempt-input` "test" | `drill-stack` still visible, no autoclose | no console error |
-| S-09 | S-07 → wrong-answer graded | S-07 → fill `drill-attempt-input` "bomboclat" → click `drill-check-btn` | `grade-feedback`, `rubric-grade`, `misconception-banner` | **NO snake_case in `rubric-grade` text**, **NO SCREAMING_SNAKE in `misconception-banner` text** |
-| S-10 | S-07 → correct-answer graded | S-07 → fill input with reference solution → CHECK ANSWER | `grade-feedback`, `rubric-grade` all ✓ | same as S-09 |
-| S-11 | S-07 → gave-up | S-07 → click GIVE UP | `grade-feedback` with give-up content | same |
+| S-09 | S-07 → wrong-answer graded | S-07 → fill `drill-attempt-input` "bomboclat" → click `drill-check-btn` → wait `grade-feedback` | `grade-feedback`, `rubric-grade`, `misconception-banner` | **NO snake_case in `rubric-grade` text**, **NO SCREAMING_SNAKE in `misconception-banner` text** |
+| S-10 | S-07 → correct-answer graded | S-07 → fill `drill-attempt-input` "f(x)= (1/(2*b)) * exp(-abs(x-mu)/b)" → click `drill-check-btn` → wait `grade-feedback` | `grade-feedback`, `rubric-grade` all ✓ | same as S-09 |
+| S-11 | S-07 → gave-up | S-07 → click `drill-giveup-btn` → wait `grade-feedback` | `grade-feedback` with give-up content | same |
 | S-12 | `/tutor/?taskId=POO-C1` (empty drills) | `goto /tutor/?taskId=01KR6TZ9NCA982XHCFM1VYK761` | `tutor-header`, `problem-stepper`, `progress-strip`. Drill-stack may be empty. | no raw "{}" or "undefined" in UI |
 | S-13 | `/tutor/?taskId=PA-Tema5` (empty drills) | `goto /tutor/?taskId=01KR6RRRCZNAXX10SQCEPPR4FG` | same as S-12 | same |
 | S-14 | `/tutor/?taskId=SO-Linux` (empty drills) | `goto /tutor/?taskId=01KR7K0ASW5ZVK81PQ367WK4FC` | same as S-12 | same |

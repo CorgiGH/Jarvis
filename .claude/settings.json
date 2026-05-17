@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File C:\\Users\\User\\jarvis-kotlin\\tools\\memory-verify.ps1"
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File tools/memory-verify.ps1"
           }
         ]
       }
