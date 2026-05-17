@@ -219,6 +219,45 @@ export async function auditState({ page, row, baseUrl }) {
   }
 }
 
+function writeFindingsDoc({ outputPath, allFindings, unreachable, baseUrl, totalStates }) {
+  const counts = { HIGH: 0, MED: 0, LOW: 0 };
+  for (const f of allFindings) counts[f.severity] = (counts[f.severity] ?? 0) + 1;
+  const date = new Date().toISOString().slice(0, 10);
+  const lines = [
+    `# Slice-1.5 Audit Findings — ${date}`,
+    "",
+    "## Method",
+    "",
+    `Audit run via \`tools/audit-slice15.mjs\` against \`${baseUrl}\` per the state matrix in`,
+    "`docs/superpowers/specs/2026-05-17-slice15-audit-design.md`.",
+    "",
+    "## Summary",
+    "",
+    `- HIGH: ${counts.HIGH}  MED: ${counts.MED}  LOW: ${counts.LOW}`,
+    `- States audited: ${totalStates - unreachable.length}/${totalStates} (${unreachable.length} unreachable)`,
+    "",
+    "## Unreachable states",
+    "",
+    ...(unreachable.length === 0
+      ? ["_(none)_"]
+      : unreachable.map(u => `- **${u.stateId}**: ${u.reason}`)),
+    "",
+    "## Findings",
+    "",
+    "| State | Severity | Category | Evidence |",
+    "|-------|----------|----------|----------|",
+    ...allFindings
+      .sort((a, b) => {
+        const order = { HIGH: 0, MED: 1, LOW: 2 };
+        return order[a.severity] - order[b.severity];
+      })
+      .map(f => `| ${f.stateId} | ${f.severity} | ${f.category} | ${f.evidence.replace(/\|/g, "\\|")} |`),
+    "",
+  ];
+  mkdirSync(dirname(resolve(REPO_ROOT, outputPath)), { recursive: true });
+  writeFileSync(resolve(REPO_ROOT, outputPath), lines.join("\n"));
+}
+
 // CLI
 if (process.argv[1]?.endsWith("audit-slice15.mjs")) {
   const args = Object.fromEntries(process.argv.slice(2).map(a => {
@@ -255,8 +294,16 @@ if (process.argv[1]?.endsWith("audit-slice15.mjs")) {
         console.log(`  ${row.id}: ${result.findings.length} findings`);
       }
     }
-    // Findings doc writer wired in B.12.
-    console.log(`audit complete: ${allFindings.length} total findings, ${unreachable.length} unreachable`);
+    writeFindingsDoc({
+      outputPath,
+      allFindings,
+      unreachable,
+      baseUrl,
+      totalStates: rows.length,
+    });
+    console.log(`audit complete: ${allFindings.length} total findings (${
+      Object.entries({ HIGH: 0, MED: 0, LOW: 0 }).map(([k]) => `${k}:${allFindings.filter(f => f.severity === k).length}`).join(" ")
+    }), ${unreachable.length} unreachable — written to ${outputPath}`);
   } finally {
     await browser.close();
   }
