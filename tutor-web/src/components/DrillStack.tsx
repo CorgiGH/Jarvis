@@ -246,7 +246,7 @@ export function DrillStack({
             data-testid="misconception-banner"
             className="mt-2 px-3 py-1.5 bg-panel-dark-bg text-panel-dark-fg font-mono text-[10px] tracking-widest"
           >
-            MISCONCEPTION · {gradeResult.misconception.replace(/_/g, " ")}
+            MISCONCEPTION · {formatEnum(gradeResult.misconception)}
           </div>
         )}
         {error && (
