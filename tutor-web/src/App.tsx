@@ -7,6 +7,7 @@ import { FsrsReview } from "./components/FsrsReview";
 import { DaemonHealthPill } from "./components/DaemonHealthPill";
 import { KnowledgeLedger } from "./components/KnowledgeLedger";
 import { jarvisFetch } from "./lib/api";
+import { recordTelemetry } from "./lib/telemetry";
 
 const LAST_TASK_KEY = "jarvis.lastTaskId";
 
@@ -201,7 +202,13 @@ export function App() {
           </Link>
           <button
             data-testid="header-ledger-btn"
-            onClick={() => setLedgerOpen(true)}
+            onClick={() => {
+              // 2026-05-17 hot-work #4: telemetry ping per council 1778988899
+              // Devil's Advocate carry-over. If this counter stays at 0 by
+              // 2026-05-31, Option B (delete KnowledgeLedger entirely) fires.
+              recordTelemetry("ledger.opened");
+              setLedgerOpen(true);
+            }}
             aria-label="Open knowledge ledger"
             aria-haspopup="dialog"
             aria-expanded={ledgerOpen}

@@ -215,6 +215,53 @@ class TutorRoutesTest {
         assertTrue(tail.contains("llm_input_full"), "missing llm_input_full field: $tail")
     }
 
+    // 2026-05-17 hot-work #4: UI telemetry endpoint must append a
+    // TutorEvent of type "ui_telemetry" carrying the event name in
+    // prompt_template_id and the raw body in llm_output_full. Bad payloads
+    // (malformed JSON, invalid name regex) return 400 without writing.
+    @Test
+    fun `POST sensor telemetry writes a ui_telemetry event`(@TempDir tmp: Path) = testApplication {
+        application { installFreshTutor(tmp) }
+        startApplication()
+        val sidCookie = "telemetry-sess-${Instant.now().toEpochMilli()}"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val resp = client.post("/api/v1/sensor/telemetry") {
+            cookie("jarvis_session", sidCookie)
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"ledger.opened","ts":"2026-05-17T08:30:00Z"}""")
+        }
+        assertEquals(HttpStatusCode.NoContent, resp.status)
+        val mine = readSharedEventLogLines().filter { it.contains("\"session_id\":\"$sidCookie\"") }
+        assertTrue(mine.isNotEmpty(), "no envelope for session_id=$sidCookie")
+        val tail = mine.last()
+        assertTrue(tail.contains("\"event_type\":\"ui_telemetry\""), "missing event_type: $tail")
+        assertTrue(tail.contains("\"prompt_template_id\":\"ledger.opened\""), "missing name: $tail")
+        assertTrue(tail.contains("ledger.opened"), "missing body echo: $tail")
+    }
+
+    @Test
+    fun `POST sensor telemetry rejects bad name regex`() = testApplication {
+        application { installTutorRoutes() }
+        val resp = client.post("/api/v1/sensor/telemetry") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"BADNAME"}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `POST sensor telemetry rejects malformed body`() = testApplication {
+        application { installTutorRoutes() }
+        val resp = client.post("/api/v1/sensor/telemetry") {
+            contentType(ContentType.Application.Json)
+            setBody("not-json")
+        }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
     @Test
     fun `POST sidekick ask drill-self-paste path writes a guard envelope`(@TempDir tmp: Path) = testApplication {
         var ctx: TutorContext? = null

@@ -326,6 +326,56 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        // 2026-05-17 hot-work #4: UI telemetry endpoint. Lightweight ping
+        // for feature-usage tracking (e.g. ledger.opened) so council 1778988899
+        // can decide on Option B (delete KnowledgeLedger) at the 2026-05-31
+        // window if zero usage is observed. Appends a TutorEvent with
+        // event_type="ui_telemetry" carrying the event name + payload.
+        // Best-effort + bounded: payload capped at 1500 chars to bound
+        // poisoning blast-radius; no CSRF requirement since the route is
+        // append-only telemetry and the data is shaped at the schema layer.
+        post("/api/v1/sensor/telemetry") {
+            val sid = call.request.cookies["jarvis_session"] ?: "anon"
+            val rawBody = try {
+                call.receiveText().take(1500)
+            } catch (_: Exception) {
+                call.respond(HttpStatusCode.BadRequest, "missing body"); return@post
+            }
+            val req = try {
+                sensorJson.decodeFromString(ApiTelemetryRequest.serializer(), rawBody)
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(120)}")
+                return@post
+            }
+            // Reject names that aren't [a-z][a-z0-9.-]* (32 chars) — bounds
+            // event_type pollution from arbitrary clients.
+            if (!req.name.matches(Regex("^[a-z][a-z0-9._-]{0,31}$"))) {
+                call.respond(HttpStatusCode.BadRequest, "name must match [a-z][a-z0-9._-]{0,31}")
+                return@post
+            }
+            runCatching {
+                TutorEventLog.GLOBAL.append(TutorEvent(
+                    event_type = "ui_telemetry",
+                    event_id = java.util.UUID.randomUUID().toString().replace("-", ""),
+                    ts_utc = Instant.now().toString(),
+                    task_id = null,
+                    session_id = sid,
+                    prompt_template_id = req.name,
+                    system_prompt_sha256 = null,
+                    retrieved_context_summary = null,
+                    llm_input_full = null,
+                    llm_input_redacted = null,
+                    llm_output_full = rawBody,
+                    model_resolved = null,
+                    tokens_in = null,
+                    tokens_out = null,
+                    latency_ms = null,
+                    status = "ok",
+                ))
+            }
+            call.respond(HttpStatusCode.NoContent)
+        }
+
         // Layer B1 — effector dispatch route. Single mutating endpoint
         // for the chat surface; routes through EffectorDispatcher so
         // every dispatch goes preSeal → backend → postSeal/rollback +
@@ -1966,6 +2016,13 @@ private data class ApiCreateGrantRequest(
 
 @Serializable
 private data class ApiScratchpadView(val text: String)
+
+@Serializable
+private data class ApiTelemetryRequest(
+    val name: String,
+    val ts: String? = null,
+    val payload: kotlinx.serialization.json.JsonElement? = null,
+)
 
 @Serializable
 private data class ApiDrillGradeRequest(
