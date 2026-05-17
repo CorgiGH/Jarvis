@@ -1102,11 +1102,24 @@ fun Application.installTutorRoutes() {
                         existing++
                         continue
                     }
+                    // Detect-by-mapping missed (different sourceId/externalId in
+                    // a prior run, OR manual entry) but a row with the same
+                    // (userId, subject, title) triple already exists. Reuse it
+                    // and adopt this detection's mapping — otherwise the
+                    // UNIQUE constraint at the storage layer 500s the whole run.
+                    val subjectCap = d.subject.take(32)
+                    val titleCap = d.title.take(256)
+                    val byTriple = taskRepo.findByUserSubjectTitle(userId, subjectCap, titleCap)
+                    if (byTriple != null) {
+                        repo.upsertMapping(d.sourceId, d.externalId, byTriple.id, userId)
+                        existing++
+                        continue
+                    }
                     val newId = jarvis.tutor.TutorTypes.ulid()
                     val now = Instant.now()
                     taskRepo.insert(jarvis.tutor.Task(
                         id = newId, userId = userId,
-                        subject = d.subject.take(32), title = d.title.take(256),
+                        subject = subjectCap, title = titleCap,
                         deadline = d.deadline,
                         problemRef = jarvis.tutor.ContentRef(repo = "detected", path = d.problemPath ?: "", sha = "pending"),
                         conceptRefs = emptyList(),

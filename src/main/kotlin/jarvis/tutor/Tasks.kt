@@ -7,6 +7,7 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.selectAll
@@ -158,6 +159,17 @@ class TaskRepo(private val db: Database) {
 
     fun findById(id: String): Task? = transaction(db) {
         TasksTable.selectAll().where { TasksTable.id eq id }.singleOrNull()?.toTask()
+    }
+
+    // Resolve a task by the same (userId, subject, title) triple that uniqueIndex
+    // protects. Used by task-detect to map a detected task to a pre-existing row
+    // (manual entry, or a prior detect run that used a different sourceId/externalId)
+    // BEFORE attempting INSERT — otherwise the UNIQUE constraint fires and the
+    // whole detect run 500s on the first conflict.
+    fun findByUserSubjectTitle(userId: String, subject: String, title: String): Task? = transaction(db) {
+        TasksTable.selectAll()
+            .where { (TasksTable.userId eq userId) and (TasksTable.subject eq subject) and (TasksTable.title eq title) }
+            .singleOrNull()?.toTask()
     }
 
     fun listForUser(userId: String): List<Task> = transaction(db) {

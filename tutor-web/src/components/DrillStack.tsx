@@ -169,7 +169,7 @@ export function DrillStack({
             placeholder="e.g., the histogram should look symmetric around 0, peaked, with heavier tails as b grows"
             className="w-full border-2 border-border-thin bg-page-bg font-mono text-xs p-2 resize-none focus:outline-none focus:border-accent disabled:opacity-50"
           />
-          <div className="mt-1 text-[9px] uppercase tracking-widest text-page-fg/40">
+          <div className="mt-1 text-[11px] uppercase tracking-widest text-page-fg/75">
             generation-effect: even a wrong guess BEFORE attempting locks in better than passive reading (Slamecka 1978).
           </div>
         </div>

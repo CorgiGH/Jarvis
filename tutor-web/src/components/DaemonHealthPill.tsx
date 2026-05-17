@@ -55,7 +55,7 @@ export function DaemonHealthPill() {
       data-testid="daemon-health-pill"
       data-status={status}
       title={lastSeenAt ? `Last seen: ${lastSeenAt}` : STATUS_LABELS[status]}
-      className="inline-flex items-center gap-1 font-mono text-[9px] tracking-widest text-page-fg/70 select-none"
+      className="inline-flex items-center gap-1 font-mono text-[11px] tracking-widest text-page-fg/85 select-none"
     >
       <span className={`inline-block w-1.5 h-1.5 rounded-full ${STATUS_DOT_CLASS[status]} transition-colors duration-500`} aria-hidden="true" />
       {STATUS_LABELS[status]}

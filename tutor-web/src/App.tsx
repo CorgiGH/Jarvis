@@ -200,12 +200,12 @@ export function App() {
           {debug ? (
             <>
               <DaemonHealthPill />
-              <span data-testid="domain-footer" className="text-[9px] tracking-widest text-panel-dark-fg/60">
+              <span data-testid="domain-footer" className="text-[11px] tracking-widest text-panel-dark-fg/85">
                 READY · CTRL+ENTER · CORGFLIX.DUCKDNS.ORG
               </span>
             </>
           ) : (
-            <span className="text-[9px] tracking-widest text-panel-dark-fg/60">READY</span>
+            <span className="text-[11px] tracking-widest text-panel-dark-fg/85">READY</span>
           )}
         </nav>
       </header>

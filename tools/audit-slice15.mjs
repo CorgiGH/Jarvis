@@ -224,10 +224,18 @@ export async function auditState({ page, row, baseUrl, rowsById }) {
     for (const v of axeResults.violations ?? []) {
       const isAA = v.tags.some(t => t === "wcag2aa" || t === "wcag21aa" || t === "wcag2a" || t === "wcag21a");
       const axeLevel = isAA ? "wcag2aa" : "wcag2aaa";
+      const nodeSnippets = (v.nodes ?? [])
+        .slice(0, 3)
+        .map(n => (n.html ?? "").replace(/\s+/g, " ").trim().slice(0, 160))
+        .filter(Boolean)
+        .join(" | ");
+      const evidence = nodeSnippets
+        ? `${v.id}: ${v.help} (nodes: ${v.nodes.length}) — ${nodeSnippets}`
+        : `${v.id}: ${v.help} (nodes: ${v.nodes.length})`;
       findings.push({
         stateId: row.id,
         category: "axe-violation",
-        evidence: `${v.id}: ${v.help} (nodes: ${v.nodes.length})`,
+        evidence,
         severity: classifySeverity({ category: "axe-violation", axeLevel }),
       });
     }

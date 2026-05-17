@@ -69,6 +69,24 @@ class TasksTest {
     }
 
     @Test
+    fun `findByUserSubjectTitle returns the row matching the uniqueIndex triple`() {
+        val db = freshDb()
+        val u = seedUser(db); val other = seedUser(db)
+        val repo = TaskRepo(db)
+        val t = makeTask(u, Instant.now().plusSeconds(3600), title = "Tema A unique probe")
+        repo.insert(t)
+        val found = repo.findByUserSubjectTitle(u, t.subject, t.title)
+        assertNotNull(found)
+        assertEquals(t.id, found.id)
+        // other user does NOT see this row
+        assertEquals(null, repo.findByUserSubjectTitle(other, t.subject, t.title))
+        // wrong subject misses
+        assertEquals(null, repo.findByUserSubjectTitle(u, "PA", t.title))
+        // wrong title misses
+        assertEquals(null, repo.findByUserSubjectTitle(u, t.subject, "different title"))
+    }
+
+    @Test
     fun `insert with problemRefs round-trips through repo`() {
         val db = freshDb()
         val u = seedUser(db)

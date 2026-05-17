@@ -50,6 +50,13 @@ dependencies {
     // Layer B: PDF text-layer extraction for study-material ingestion.
     implementation("org.apache.pdfbox:pdfbox:2.0.30")
 
+    // SLF4J runtime: without an impl, Ktor's StatusPages exceptions get
+    // silently swallowed (NOP logger) — that hid a TaskRepo.insert UNIQUE
+    // violation for hours during the 2026-05-17 audit recon. Keep this
+    // pinned to slf4j-simple so future Unhandled: stack traces hit
+    // /var/log/jarvis.log without ops intervention.
+    runtimeOnly("org.slf4j:slf4j-simple:2.0.16")
+
     testImplementation(kotlin("test"))
     testImplementation("io.ktor:ktor-server-test-host:3.0.1")
     testImplementation("io.ktor:ktor-client-content-negotiation:3.0.1")
