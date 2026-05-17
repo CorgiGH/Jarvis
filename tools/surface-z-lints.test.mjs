@@ -26,6 +26,22 @@ test("detectSnakeCase returns all matches in order", () => {
   );
 });
 
+test("detectSnakeCase skipFilenameTokens drops intro_print embedded in .pdf filename", () => {
+  const text = "see lectures__OS1.1_Linux-intro_print-ro.pdf for details";
+  assert.deepEqual(detectSnakeCase(text, { skipFilenameTokens: true }), []);
+});
+
+test("detectSnakeCase skipFilenameTokens keeps real enum leaks (no extension on token)", () => {
+  assert.deepEqual(
+    detectSnakeCase("rubric: uses_rlaplace_or_inverse_cdf_sampler is required", { skipFilenameTokens: true }),
+    ["uses_rlaplace_or_inverse_cdf_sampler"],
+  );
+});
+
+test("detectSnakeCase default (no opts) preserves legacy permissive match for back-compat", () => {
+  assert.deepEqual(detectSnakeCase("see foo_bar.pdf details"), ["foo_bar"]);
+});
+
 import { detectScreamingSnake } from "./surface-z-lints.mjs";
 
 test("detectScreamingSnake finds SCREAMING_SNAKE in plain text", () => {

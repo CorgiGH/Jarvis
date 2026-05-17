@@ -1,6 +1,27 @@
 // tools/surface-z-lints.mjs
-export function detectSnakeCase(text) {
-  return [...text.matchAll(/\b[a-z]+_[a-z_]+\b/g)].map(m => m[0]);
+
+// File-extension suffix on the surrounding non-whitespace token marks a
+// filename (e.g. "Linux-intro_print-ro.pdf"); the embedded snake_case is
+// noise, not a user-visible enum leak. Keep narrow — only common doc/data
+// extensions, NOT e.g. ".js" / ".ts" which appear in URLs.
+const FILENAME_EXT_RE = /\.(pdf|md|html?|txt|json|docx?|csv|zip|png|jpe?g|svg)$/i;
+
+export function detectSnakeCase(text, { skipFilenameTokens = false } = {}) {
+  const matches = [];
+  for (const m of text.matchAll(/\b[a-z]+_[a-z_]+\b/g)) {
+    if (skipFilenameTokens) {
+      // Expand to bounding non-whitespace token, reject if it ends with
+      // a known doc/data file extension.
+      let start = m.index;
+      while (start > 0 && !/\s/.test(text[start - 1])) start--;
+      let end = m.index + m[0].length;
+      while (end < text.length && !/\s/.test(text[end])) end++;
+      const token = text.slice(start, end);
+      if (FILENAME_EXT_RE.test(token)) continue;
+    }
+    matches.push(m[0]);
+  }
+  return matches;
 }
 
 /**

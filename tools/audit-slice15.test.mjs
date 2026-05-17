@@ -30,6 +30,27 @@ test("parseStateMatrix returns empty array when no matrix present", () => {
   assert.deepEqual(rows, []);
 });
 
+test("parseStateMatrix skips example rows inside ``` fenced code blocks", () => {
+  const spec = [
+    "## State matrix",
+    "",
+    "| ID | Route | Reach | Selectors | Expectations |",
+    "|----|-------|-------|-----------|--------------|",
+    "| S-01 | `/a` | `goto /a` | `foo` | none |",
+    "",
+    "## Example findings",
+    "",
+    "```",
+    "| S-99 | MED | example-only | should-not-parse | example | none |",
+    "```",
+    "",
+    "| S-02 | `/b` | `goto /b` | `bar` | none |",
+  ].join("\n");
+  const rows = parseStateMatrix(spec);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map(r => r.id), ["S-01", "S-02"]);
+});
+
 import { classifySeverity } from "./audit-slice15.mjs";
 
 test("classifySeverity: missing required selector → HIGH", () => {
@@ -86,4 +107,21 @@ test("classifySeverity: LLM judge LOW → LOW", () => {
 
 test("classifySeverity: unknown category → LOW (safe default)", () => {
   assert.equal(classifySeverity({ category: "unknown" }), "LOW");
+});
+
+// Internal helper — re-import via dynamic import to test the non-exported chain resolver.
+const audit = await import("./audit-slice15.mjs");
+
+test("parseStateMatrix recognises S-29 ;-separated reach with viewport keyword", () => {
+  const spec = [
+    "| ID | Route | Reach | Selectors | Expectations |",
+    "|----|-------|-------|-----------|--------------|",
+    "| S-29 | mobile | viewport 375x812 ; goto /tutor/?taskId=01KR6K07T6PATPRR5KH1JXYF8E | `tutor-header` | none |",
+  ].join("\n");
+  const rows = audit.parseStateMatrix(spec);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, "S-29");
+  assert.ok(rows[0].reach.includes("viewport 375x812"));
+  assert.ok(rows[0].reach.includes("goto /tutor/"));
+  assert.deepEqual(rows[0].selectors, ["tutor-header"]);
 });

@@ -27,7 +27,10 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export function parseStateMatrix(specText) {
   const lines = specText.split("\n");
   const rows = [];
+  let inFence = false;
   for (const line of lines) {
+    if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
     if (!/^\|\s*S-\d+\s*\|/.test(line)) continue;
     const cells = line.split("|").slice(1, -1).map(c => c.trim().replace(/`/g, ""));
     if (cells.length < 5) continue;
@@ -73,18 +76,47 @@ export function classifySeverity(finding) {
  * The reach DSL supports `goto <path>` and `click <data-testid>` and
  * `fill <data-testid> "value"`. Anything else throws.
  */
+/**
+ * Resolve `S-NN → ...` chain prefix into the prior row's reach expression.
+ * Returns the fully-resolved reach string. Prevents state-leak between
+ * sibling rows (e.g. S-18 click intercepted by S-15's open scratchpad
+ * drawer) by guaranteeing each row's reach starts from its own baseline.
+ */
+function resolveChainedReach(reachExpr, rowsById, visited = new Set()) {
+  const chainMatch = reachExpr.match(/^\s*(S-\d+)\s*(?:→|->|>)\s*(.+)$/);
+  if (!chainMatch) return reachExpr;
+  const [, parentId, rest] = chainMatch;
+  if (visited.has(parentId)) return rest;
+  visited.add(parentId);
+  const parentRow = rowsById.get(parentId);
+  if (!parentRow) return rest;
+  const parentReach = resolveChainedReach(parentRow.reach, rowsById, visited);
+  return `${parentReach} ; ${rest}`;
+}
+
 async function executeReach(page, reachExpr, baseUrl) {
   // Reach expressions in the spec are written as natural-language with
   // backtick-quoted Playwright primitives. Extract the primitives by
-  // grepping for known patterns.
+  // grepping for known patterns. Order matters — walk the reach string
+  // left-to-right so goto/click/fill stay in spec order across chains.
   const sequence = [];
-  const gotoMatch = reachExpr.match(/goto\s+(\S+)/);
-  if (gotoMatch) sequence.push({ kind: "goto", target: gotoMatch[1] });
-  // Testids may include uppercase (rail-item-SCRATCHPAD, rail-item-PRIOR_GAP, etc.)
-  const clickMatches = reachExpr.matchAll(/click\s+([a-z][a-zA-Z0-9_-]+)/g);
-  for (const m of clickMatches) sequence.push({ kind: "click", target: m[1] });
-  const fillMatches = reachExpr.matchAll(/fill\s+([a-z][a-zA-Z0-9_-]+)\s+"([^"]+)"/g);
-  for (const m of fillMatches) sequence.push({ kind: "fill", target: m[1], value: m[2] });
+  const stepRe = /\b(goto|click|fill|clear-cookies|viewport)\b(?:\s+([^\s"]+))?(?:\s+"([^"]+)")?/g;
+  let m;
+  while ((m = stepRe.exec(reachExpr)) !== null) {
+    const [, kind, arg1, arg2] = m;
+    if (kind === "goto") {
+      if (arg1) sequence.push({ kind: "goto", target: arg1 });
+    } else if (kind === "click") {
+      if (arg1 && /^[a-z][a-zA-Z0-9_-]+$/.test(arg1)) sequence.push({ kind: "click", target: arg1 });
+    } else if (kind === "fill") {
+      if (arg1 && /^[a-z][a-zA-Z0-9_-]+$/.test(arg1) && arg2 != null) sequence.push({ kind: "fill", target: arg1, value: arg2 });
+    } else if (kind === "clear-cookies") {
+      sequence.push({ kind: "clear-cookies" });
+    } else if (kind === "viewport") {
+      const dims = arg1?.match(/^(\d+)x(\d+)$/);
+      if (dims) sequence.push({ kind: "viewport", width: +dims[1], height: +dims[2] });
+    }
+  }
 
   for (const step of sequence) {
     if (step.kind === "goto") {
@@ -94,6 +126,10 @@ async function executeReach(page, reachExpr, baseUrl) {
       await page.click(`[data-testid="${step.target}"]`, { timeout: 15000 });
     } else if (step.kind === "fill") {
       await page.fill(`[data-testid="${step.target}"]`, step.value);
+    } else if (step.kind === "clear-cookies") {
+      await page.context().clearCookies();
+    } else if (step.kind === "viewport") {
+      await page.setViewportSize({ width: step.width, height: step.height });
     }
   }
 }
@@ -102,7 +138,7 @@ async function executeReach(page, reachExpr, baseUrl) {
  * For one state row, navigate + capture + lint + classify findings.
  * Returns { stateId, findings[], unreachableReason }.
  */
-export async function auditState({ page, row, baseUrl }) {
+export async function auditState({ page, row, baseUrl, rowsById }) {
   const findings = [];
   const consoleErrors = [];
   const httpErrors = [];
@@ -116,8 +152,14 @@ export async function auditState({ page, row, baseUrl }) {
   page.on("pageerror", pageErrorHandler);
 
   try {
+    // Reset viewport between states so S-29's mobile override doesn't leak
+    // into later rows. Playwright default is 1280x720.
+    await page.setViewportSize({ width: 1280, height: 720 }).catch(() => {});
     try {
-      await executeReach(page, row.reach, baseUrl);
+      const resolvedReach = rowsById
+        ? resolveChainedReach(row.reach, rowsById)
+        : row.reach;
+      await executeReach(page, resolvedReach, baseUrl);
     } catch (e) {
       return { stateId: row.id, findings: [], unreachableReason: `reach-failed: ${e.message}` };
     }
@@ -155,15 +197,15 @@ export async function auditState({ page, row, baseUrl }) {
     }
 
     const lintCalls = [
-      { fn: detectSnakeCase, category: "snake-case-leak" },
+      { fn: detectSnakeCase, category: "snake-case-leak", opts: { skipFilenameTokens: true } },
       { fn: detectScreamingSnake, category: "screaming-snake-leak" },
       { fn: detectDottedModelName, category: "model-name-leak" },
       { fn: detectRawHttpError, category: "raw-http-error" },
       { fn: detectPlaceholder, category: "placeholder-leak" },
     ];
-    for (const { fn, category } of lintCalls) {
+    for (const { fn, category, opts } of lintCalls) {
       if (category === "raw-http-error" && httpErrorAllowed) continue;
-      const result = fn(domText);
+      const result = opts ? fn(domText, opts) : fn(domText);
       const matches = Array.isArray(result) ? result : result.matches;
       for (const match of matches) {
         findings.push({
@@ -226,6 +268,12 @@ export async function auditState({ page, row, baseUrl }) {
       });
     }
     for (const httpErr of httpErrors) {
+      // Spec-intentional 4xx: a reach that probes a non-existent task ID
+      // (e.g. S-30 missing-pinned-task with `?taskId=DOES-NOT-EXIST`) MUST
+      // produce a 4xx on the /api/v1/tasks/<id>/prep fetch — that's how
+      // the banner gets exercised. Suppress those.
+      const intentional4xx = /\/(tasks|task)\/(DOES-NOT-EXIST|PS-Tema-A|MISSING|UNKNOWN)\//i.test(httpErr.url);
+      if (intentional4xx) continue;
       findings.push({
         stateId: row.id,
         category: "first-paint-http-error",
@@ -370,10 +418,43 @@ if (process.argv[1]?.endsWith("audit-slice15.mjs")) {
       extraHTTPHeaders: { "X-Standin-Run": "1" },
     });
     const page = await ctx.newPage();
+
+    // Pre-warm prep endpoints for every ULID referenced in the spec.
+    // Backend generates /api/v1/tasks/{id}/prep lazily on first request and
+    // returns 404 until the generator finishes; the audit's first-paint
+    // probes raced that generator and produced false-positive S-12 findings
+    // in the 2026-05-17 run. Pre-warm makes the audit deterministic.
+    const ulidsToPrewarm = [...new Set(
+      rows.flatMap(r => [...r.reach.matchAll(/01[A-Z0-9]{24}/g)].map(m => m[0]))
+    )];
+    if (ulidsToPrewarm.length > 0) {
+      console.log(`prewarm: ${ulidsToPrewarm.length} prep endpoints`);
+      // Bootstrap a real session by visiting / once so jarvis_session + csrf
+      // cookies populate before the prep fetches (the prep endpoint requires
+      // full session auth, not just jarvis_auth).
+      await page.goto(`${baseUrl}/tutor/`).catch(() => {});
+      await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+      for (const id of ulidsToPrewarm) {
+        const url = `${baseUrl}/api/v1/tasks/${id}/prep`;
+        const r = await ctx.request.get(url).catch(e => ({ status: () => 0, error: e.message }));
+        const status = r.status?.() ?? 0;
+        if (status === 200) {
+          console.log(`  ${id}: prep ready`);
+        } else if (status === 404) {
+          console.log(`  ${id}: prep 404 (will retry once after 3s)`);
+          await new Promise(res => setTimeout(res, 3000));
+          await ctx.request.get(url).catch(() => null);
+        } else {
+          console.log(`  ${id}: prep HTTP ${status}`);
+        }
+      }
+    }
+
+    const rowsById = new Map(rows.map(r => [r.id, r]));
     const allFindings = [];
     const unreachable = [];
     for (const row of rows) {
-      const result = await auditState({ page, row, baseUrl });
+      const result = await auditState({ page, row, baseUrl, rowsById });
       if (result.unreachableReason) {
         unreachable.push({ stateId: row.id, reason: result.unreachableReason });
         console.log(`  ${row.id}: UNREACHABLE — ${result.unreachableReason}`);

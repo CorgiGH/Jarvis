@@ -57,7 +57,7 @@ the audit. Cells listed in `S-XX` order; the audit tool consumes this table verb
 | S-06 | `/tutor/tasks` | `goto /tutor/tasks` | `tasks-screen`, `task-create-form`, `tasks-list` (≥0), `task-subject-PS`, `task-subject-PA`, `task-subject-POO`, `task-subject-ALO`, `task-subject-SO` | no snake_case in `task-row` |
 | S-07 | `/tutor/?taskId=PS-Tema-A` (drill un-attempted) | `goto /tutor/?taskId=01KR6K07T6PATPRR5KH1JXYF8E` | `tutor-header`, `problem-stepper`, `progress-strip`, `drill-stack`, `drill-rubric`, `resource-rail` | **NO snake_case in `drill-rubric` li text** (the reported-bug cell) |
 | S-08 | S-07 + typed | S-07 → fill `drill-attempt-input` "test" | `drill-stack` still visible, no autoclose | no console error |
-| S-09 | S-07 → wrong-answer graded | S-07 → fill input "bomboclat" → click CHECK ANSWER | `grade-feedback`, `rubric-grade`, `misconception-banner` | **NO snake_case in `rubric-grade` text**, **NO SCREAMING_SNAKE in `misconception-banner` text** |
+| S-09 | S-07 → wrong-answer graded | S-07 → fill `drill-attempt-input` "bomboclat" → click `drill-check-btn` | `grade-feedback`, `rubric-grade`, `misconception-banner` | **NO snake_case in `rubric-grade` text**, **NO SCREAMING_SNAKE in `misconception-banner` text** |
 | S-10 | S-07 → correct-answer graded | S-07 → fill input with reference solution → CHECK ANSWER | `grade-feedback`, `rubric-grade` all ✓ | same as S-09 |
 | S-11 | S-07 → gave-up | S-07 → click GIVE UP | `grade-feedback` with give-up content | same |
 | S-12 | `/tutor/?taskId=POO-C1` (empty drills) | `goto /tutor/?taskId=01KR6TZ9NCA982XHCFM1VYK761` | `tutor-header`, `problem-stepper`, `progress-strip`. Drill-stack may be empty. | no raw "{}" or "undefined" in UI |
@@ -77,8 +77,8 @@ the audit. Cells listed in `S-XX` order; the audit tool consumes this table verb
 | S-26 | S-21 + backdrop closes | S-21 → click `knowledge-ledger-backdrop` | ledger dismissed | onClose fired |
 | S-27 | `/tutor/review` | `goto /tutor/review` | `fsrs-review` (or whatever the page roots on) | no console error |
 | S-28 | `/tutor/settings/trust` | `goto /tutor/settings/trust` | `trust-grants-list` (or empty state), `trust-create-btn` | no snake_case in any grant row |
-| S-29 | header at <420px (mobile) | viewport 375 then `goto /tutor/?taskId=PS-Tema-A` | header `flex-wrap` reflows; nav visible | all action buttons ≥32px tall |
-| S-30 | missing-pinned-task banner | clear cookies + set `?taskId=DOES-NOT-EXIST` | `missing-pinned-task` banner visible | banner text human-readable |
+| S-29 | header at <420px (mobile) | viewport 375x812 ; goto /tutor/?taskId=01KR6K07T6PATPRR5KH1JXYF8E | header `flex-wrap` reflows; nav visible | all action buttons ≥32px tall |
+| S-30 | missing-pinned-task banner | clear-cookies ; goto /tutor/?taskId=DOES-NOT-EXIST | `missing-pinned-task` banner visible | banner text human-readable |
 
 Acceptance: every state above must successfully reach in Playwright AND emit zero
 HIGH/MED findings post-fix. States that fail to reach are flagged for spec correction
