@@ -80,7 +80,7 @@ export function FsrsReview({ streak }: Props) {
   return (
     <>
       <style>{FLIP_STYLE}</style>
-      <div className="flex flex-col h-full font-mono bg-page-bg text-page-fg">
+      <div data-testid="fsrs-review" className="flex flex-col h-full font-mono bg-page-bg text-page-fg">
         <header
           data-testid="fsrs-header"
           className="bg-panel-dark-bg text-panel-dark-fg px-4 py-3 flex items-center gap-4 border-b-4 border-accent tracking-widest font-bold text-sm"

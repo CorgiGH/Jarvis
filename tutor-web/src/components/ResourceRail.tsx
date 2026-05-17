@@ -6,6 +6,7 @@ import { ScratchpadDrawer } from "./ScratchpadDrawer";
 import { ConceptDrawer } from "./ConceptDrawer";
 import { KnowledgeGapCard } from "./KnowledgeGapCard";
 import { jarvisFetch } from "../lib/api";
+import { formatEnum } from "../lib/formatEnum";
 import type { RailItem } from "../lib/taskPrep";
 import type { KnowledgeGap } from "../lib/knowledgeGap";
 
@@ -158,7 +159,7 @@ export function ResourceRail({ taskId, items, forceOpenPath, onDrawerClosed }: R
             onClick={() => handleClick(item)}
             className="text-left px-3 py-2 border-b-2 border-border-thin hover:bg-accent-soft focus:bg-accent-soft focus:outline-none"
           >
-            <span className="block text-[10px] tracking-widest text-page-fg/80">{item.type}</span>
+            <span className="block text-[10px] tracking-widest text-page-fg/80">{formatEnum(item.type, { preserve: ["PDF", "FSRS"] })}</span>
             <span className="block text-sm">{item.label}</span>
           </button>
         ))}

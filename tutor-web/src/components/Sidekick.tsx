@@ -63,7 +63,7 @@ export function Sidekick({ envelope, onCitationClick }: SidekickProps) {
       </div>
       <div style={{ overflow: "hidden", maxHeight: expanded ? "600px" : "0", transition: "max-height 200ms ease-out" }}>
         <div style={{ padding: "10px 12px", fontSize: "13px", lineHeight: 1.6 }}>
-          {fetchState.status === "idle" && <span style={{ opacity: 0.5 }}>Select text or click ? to ask the sidekick.</span>}
+          {fetchState.status === "idle" && <span style={{ opacity: 0.8 }}>Highlight any text in the workspace — a small <kbd style={{ display: "inline-block", padding: "0 4px", border: "1px solid currentColor", borderRadius: 2, fontFamily: "monospace", fontWeight: 700 }}>?</kbd> button appears next to your selection; click it to ask the sidekick about that passage.</span>}
           {fetchState.status === "loading" && <span style={{ opacity: 0.7 }}>thinking…</span>}
           {fetchState.status === "error" && <span style={{ color: "var(--color-accent, #ffcc00)", opacity: 0.9 }}>(LLM unavailable; rate-limited?)</span>}
           {fetchState.status === "ok" && (

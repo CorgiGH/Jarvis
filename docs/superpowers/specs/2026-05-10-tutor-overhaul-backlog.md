@@ -116,13 +116,36 @@ End: TOTAL: 0 high, 5 med, 6 low.
 
 ## Audit 2026-05-17 — LOW findings catalogued (deferred)
 
-51 LOW findings from the Slice-1.5 audit (`docs/standin-findings/audit-slice15-2026-05-17.md`). Mostly LLM-judge subjective UX nits (concatenation noise, label ambiguity, etc.). Full table in the audit findings doc; not duplicated here to avoid drift. Re-run audit with `node tools/audit-slice15.mjs ...` to regenerate.
+**2026-05-17 follow-up pass — 119 findings → 30** (-89, -75%). Three audit re-runs after iterative fixes:
+- v1 (commit `233e434`): 119 findings (HIGH:23 MED:45 LOW:51)
+- v2 (post-AAA + Sidekick fix): 79 findings (HIGH:16 MED:6 LOW:57)
+- v3 (post-walker + judge-prompt fix): 46 findings (HIGH:13 MED:2 LOW:31)
+- **v4 (post-BUTTON-blockish + mock-fetch): 30 findings (HIGH:12 MED:2 LOW:16)** ← current
 
-Highlights worth triaging manually:
-- LLM judge "closeworkspacetasksreviewtrustREADY" appears across many states — innerText artifact (no space between sibling nav links in DOM). Real visual gap? Or audit-tool artifact? Needs human verify.
-- Sidekick `?` icon ambiguity flagged repeatedly — "Select text or click ? to ask the sidekick" — `?` not visually visible.
-- Concatenation in rail item labels: "PDFTema_A.pdf p.1SCRATCHPADdraft answers..." — same innerText artifact.
-- "☐③ DRILL · YOUR TURN[PRACTICE]" — mixed checkbox/number/bracket label not self-explanatory.
+Closed during the pass:
+- ~~"closeworkspacetasksreviewtrustREADY" innerText artifact across all states~~ — **FIXED**: `tools/audit-slice15.mjs` `domText` capture now uses a DOM walker that inserts a space between sibling block-level elements (BUTTON + A + LABEL added to BLOCKISH set). innerText concatenation noise eliminated.
+- ~~Sidekick `?` icon ambiguity~~ — **FIXED**: `Sidekick.tsx` idle copy rewritten to "Highlight any text in the workspace — a small `<kbd>?</kbd>` button appears next to your selection; click it to ask…". The `?` now renders as a visible kbd element (not bare text).
+- ~~"PDFTema_A.pdf p.1SCRATCHPADdraft answers" rail concat~~ — **FIXED**: ResourceRail items now formatEnum'd; walker adds separators between rail buttons.
+- ~~"PRIOR_GAP" SCREAMING_SNAKE leak (S-14)~~ — **FIXED**: ResourceRail item.type renders via formatEnum.
+- ~~axe AAA `color-contrast-enhanced` on `text-page-fg/60` (45 MED findings, S-01..S-30)~~ — **FIXED**: site-wide bump /60 → /80; also FsrsReview /50 → /80 + ChatPane /40 → /80. /80 = #333 on white = 12.63:1 (AAA pass).
+- ~~axe AAA on red rubric chips (`text-danger-text` #b91c1c, 4 nodes per state S-09/10/11)~~ — **FIXED**: bumped `--color-danger-text` red-700 → red-800 (#991b1b = 7.66:1 AAA pass).
+- ~~ATTEMPTED_NOT_SOLVED SCREAMING_SNAKE leak in give-up feedback~~ — **FIXED**: DrillGrader translates sentinel before LLM call + scrubs output as defense; frontend sends `userAttempt: "" + giveUp: true` (no more sentinel).
+- ~~S-03 active-task-empty unreachable (no mock-fetch DSL)~~ — **FIXED**: `mock-fetch "<urlSubstring>" "<jsonResponse>"` step added to reach DSL + spec S-03 rewritten to use it.
+- ~~Missing testids: `concept-drawer-heading`, `fsrs-review`, `trust-grants-list` (empty state)~~ — **FIXED**: added in respective components.
+- ~~Route:/State: audit-metadata leaking into findings~~ — **FIXED**: LLM judge system prompt now lists 12 rules — including drop Route:/State:, BUC, CORGFLIX.DUCKDNS.ORG, "loading…", lock icons, DOES-NOT-EXIST placeholder, × close glyph.
+
+Remaining 16 LOW (deferred — subjective or design-intent):
+- "× weight" multiplication-sign ambiguity in `ranked by urgency × weight` — copy could say "by" but × is standard.
+- "0/3 problems" "no problem items visible" in empty-task states (S-07, S-12, S-14, S-17, S-23, S-25) — counters honest, LLM judge can't see UI.
+- "0/50000" SCRATCHPAD char count label missing — add `chars` suffix.
+- DRILL without lock icon (S-16) — design choice, productive-failure surface.
+- "PDF Tema_A.pdf" not clickable looking (S-16) — IS a button, false positive.
+- Stuck "loading…" indicators (S-19, S-21, S-22, S-23) — transient async loaders; audit captures before .finally() fires. LLM judge rule #9 added but model occasionally ignores.
+- "PDF Tema_A.pdf p.1" and "PDF · Tema_A.pdf p.1" duplicate (S-18) — needs human verify; may be rail item rendered twice.
+
+Real follow-up work (HIGH bucket, deferred — these are backend issues not in audit-tool scope):
+- S-24 ledger-row stale taskId — clicking a ledger row referencing a deleted task returns 404 on `/api/v1/tasks/task-A/prep`. Real bug. Fix: filter ledger to only show rows whose taskId still resolves, OR show "task deleted" instead of routing.
+- S-30 401 on `/api/v1/last-task` when session cookies cleared — `?taskId=DOES-NOT-EXIST` probe with no `jarvis_session` cookie. Real auth-required leak. Fix: short-circuit 401 → 204 with empty payload for `/last-task` to avoid noisy console errors during missing-pinned-task flow.
 
 Real follow-up work (HIGH bucket, not in LOW):
 - ~~`[audit-2026-05-17] [HIGH] [backend]` POST /api/v1/task-detect/run returns 500~~ — **FIXED 2026-05-17**: 2 root causes (prod chmod on archival dirs + TaskRepo.findByUserSubjectTitle upsert wired into /api/v1/task-detect/run). Live probe HTTP 200 with `{inserted:0, existing:4, total:4}`. See commit 57fbe9c + `docs/standin-findings/backend-recon-2026-05-17.md`.

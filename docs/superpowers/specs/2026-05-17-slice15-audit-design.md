@@ -51,7 +51,7 @@ the audit. Cells listed in `S-XX` order; the audit tool consumes this table verb
 |----|-------|----------------------------|---------------------------------------------|-----------------------------|
 | S-01 | `/tutor/` (cold) | `goto /tutor/` | `active-task-dashboard`, `active-task-row` (≥1), `active-task-detect-btn`, `active-task-manual-btn` | no snake_case in any `active-task-row` |
 | S-02 | `/tutor/?pick=1` | `goto /tutor/?pick=1` | same as S-01 | same |
-| S-03 | `/tutor/` empty-tasks state | force fetch to return `{tasks:[]}` via cookie clear OR mock | `active-task-empty` | no raw HTTP error in body |
+| S-03 | `/tutor/` empty-tasks state | `mock-fetch "/api/v1/tasks" "{\"tasks\":[]}" ; goto /tutor/` | `active-task-empty` | no raw HTTP error in body |
 | S-04 | `/tutor/` with detect-result | S-01 → click `active-task-detect-btn`, wait for `active-task-detect-result` | `active-task-detect-result` carries "· last run" | no snake_case in result text |
 | S-05 | `/tutor/` after manual-toggle | S-01 → click `active-task-manual-btn` | `active-task-manual-btn` `aria-expanded="true"`, `task-quickstart-error` absent | no duplicate task lists (P6 [6] progressive-disclosure tracking) |
 | S-06 | `/tutor/tasks` | `goto /tutor/tasks` | `tasks-screen`, `task-create-form`, `tasks-list` (≥0), `task-subject-PS`, `task-subject-PA`, `task-subject-POO`, `task-subject-ALO`, `task-subject-SO` | no snake_case in `task-row` |

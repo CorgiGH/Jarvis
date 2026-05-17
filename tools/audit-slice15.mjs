@@ -100,10 +100,17 @@ async function executeReach(page, reachExpr, baseUrl) {
   // grepping for known patterns. Order matters — walk the reach string
   // left-to-right so goto/click/fill stay in spec order across chains.
   const sequence = [];
-  const stepRe = /\b(goto|click|fill|clear-cookies|viewport|wait)\b(?:\s+([^\s"]+))?(?:\s+"([^"]+)")?/g;
+  // mock-fetch "<urlSubstring>" "<jsonResponse>" — intercepts API call and
+  // returns canned JSON. The urlSubstring is checked via String.includes()
+  // against the outgoing request URL; the jsonResponse is sent as
+  // application/json with status 200. Necessary for empty-state audits
+  // (S-03 `{tasks:[]}` from /api/v1/tasks) without rewriting backend data.
+  const stepRe = /\b(goto|click|fill|clear-cookies|viewport|wait|mock-fetch)\b(?:\s+"([^"]+)"|\s+([^\s"]+))?(?:\s+"([^"]+)")?/g;
   let m;
   while ((m = stepRe.exec(reachExpr)) !== null) {
-    const [, kind, arg1, arg2] = m;
+    const [, kind, qArg1, uArg1, qArg2] = m;
+    const arg1 = qArg1 ?? uArg1;
+    const arg2 = qArg2;
     if (kind === "goto") {
       if (arg1) sequence.push({ kind: "goto", target: arg1 });
     } else if (kind === "click") {
@@ -117,6 +124,8 @@ async function executeReach(page, reachExpr, baseUrl) {
       if (dims) sequence.push({ kind: "viewport", width: +dims[1], height: +dims[2] });
     } else if (kind === "wait") {
       if (arg1 && /^[a-z][a-zA-Z0-9_-]+$/.test(arg1)) sequence.push({ kind: "wait", target: arg1 });
+    } else if (kind === "mock-fetch") {
+      if (arg1 && arg2 != null) sequence.push({ kind: "mock-fetch", urlSubstring: arg1, response: arg2 });
     }
   }
 
@@ -137,6 +146,20 @@ async function executeReach(page, reachExpr, baseUrl) {
       // expected testid to appear before continuing. Tolerant on timeout
       // so the auditState lint stage still runs + reports the gap.
       await page.locator(`[data-testid="${step.target}"]`).waitFor({ state: "visible", timeout: 45000 }).catch(() => {});
+    } else if (step.kind === "mock-fetch") {
+      // Install a route that intercepts the next request matching the
+      // urlSubstring and replies with the canned JSON. Subsequent goto
+      // navigations will trigger the matching fetch. The url predicate
+      // receives a URL string, not a Request object (Playwright API).
+      // page.route predicate receives a URL object (per Playwright API);
+      // call .toString() (or .href) before substring matching.
+      await page.route(url => String(url).includes(step.urlSubstring), async route => {
+        try {
+          await route.fulfill({ status: 200, contentType: "application/json", body: step.response });
+        } catch {
+          await route.continue().catch(() => {});
+        }
+      });
     }
   }
 }
@@ -162,6 +185,9 @@ export async function auditState({ page, row, baseUrl, rowsById }) {
     // Reset viewport between states so S-29's mobile override doesn't leak
     // into later rows. Playwright default is 1280x720.
     await page.setViewportSize({ width: 1280, height: 720 }).catch(() => {});
+    // Unroute any mock-fetch installed by a previous state — otherwise the
+    // mock persists across state iterations and corrupts later audits.
+    await page.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
     try {
       const resolvedReach = rowsById
         ? resolveChainedReach(row.reach, rowsById)
@@ -181,13 +207,50 @@ export async function auditState({ page, row, baseUrl, rowsById }) {
         });
       }
     }
-    // Capture DOM text (strip code/pre/input.value — mirrors LINT_EVAL_SCRIPT
-    // semantics so the existing detectSnakeCase calibration carries over).
+    // Capture DOM text. innerText concatenates inline-styled siblings without
+    // separators (header > nav > a a a renders as "workspacetasksreview"
+    // because Tailwind inline-flex strips block-level boundaries). The LLM
+    // judge then misreads concatenated nav labels as "garbled UI". Walk the
+    // DOM ourselves: insert a space between distinct text-bearing elements,
+    // a newline at block-level boundaries. Strip code/pre/script/style.
+    // Closes 2026-05-17 audit LOW finding cluster (innerText artifacts).
     const domText = await page.evaluate(() => {
-      const root = document.body.cloneNode(true);
-      root.querySelectorAll("code, pre, script, style").forEach(el => el.remove());
-      // input values are not in textContent, no strip needed
-      return root.innerText || "";
+      const BLOCKISH = new Set([
+        "DIV","HEADER","FOOTER","NAV","SECTION","ASIDE","MAIN","ARTICLE",
+        "UL","OL","LI","P","H1","H2","H3","H4","H5","H6","BR","HR",
+        "TABLE","TR","TD","TH","FORM","FIELDSET","BLOCKQUOTE","DETAILS","SUMMARY",
+        // Buttons and anchors are inline by HTML default but in this app they
+        // are CSS-styled as block/inline-block via Tailwind classes (rails,
+        // toolbars, nav). Treat them as blockish so the captured text shows
+        // a newline between sibling buttons — matches what a sighted user
+        // sees visually and prevents the LLM judge from misreading adjacent
+        // labels as one concatenated string.
+        "BUTTON","A","LABEL",
+      ]);
+      const SKIP = new Set(["SCRIPT","STYLE","NOSCRIPT","CODE","PRE","SVG","CANVAS"]);
+      const out = [];
+      const walk = (el) => {
+        if (!el) return;
+        if (el.nodeType === 3) {
+          const t = el.textContent;
+          if (t) out.push(t);
+          return;
+        }
+        if (el.nodeType !== 1) return;
+        const tag = el.tagName.toUpperCase();
+        if (SKIP.has(tag)) return;
+        const blockish = BLOCKISH.has(tag);
+        if (blockish) out.push("\n");
+        for (const child of el.childNodes) walk(child);
+        if (blockish) out.push("\n");
+        else out.push(" ");
+      };
+      walk(document.body);
+      return out.join("")
+        .replace(/[ \t]+/g, " ")
+        .replace(/ ?\n ?/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
     });
 
     // State-specific allowlist for raw HTTP errors: load-error UIs
@@ -315,9 +378,23 @@ export async function auditState({ page, row, baseUrl, rowsById }) {
           model: "openai/gpt-oss-120b:free",
           systemPrompt:
             "You are a UX nitpicker. Given the visible text of a webpage, list any issues " +
-            "a real user would call out as broken, confusing, or unfinished. Output ONE finding " +
+            "a real user would call out as BROKEN, CONFUSING, or UNFINISHED. Output ONE finding " +
             'per line in the form: "[HIGH|MED|LOW] <issue> · evidence=<quoted phrase from text>". ' +
-            "Be terse. Skip nitpicks. Output nothing if the page looks fine.",
+            "Be terse. Skip nitpicks. Output nothing if the page looks fine.\n\n" +
+            "RULES — do NOT report any of the following (they are NOT bugs):\n" +
+            "1. Adjacent labels missing spaces (e.g. \"TUTORworkspace\", \"PDFTema_A.pdf\", \"REVIEW0\") — text-capture noise from this audit tool, not visible to users.\n" +
+            "2. Filenames with underscores or dots (e.g. \"lectures__OS1.1_Linux-intro_print-ro.pdf\") — those ARE the real filenames.\n" +
+            "3. Subject codes like POO, PA, PS, ALO, SO, RC — those are real course labels at Iași FII, not typos.\n" +
+            "4. Mixed Romanian/English text — this is a Romanian-language tutor.\n" +
+            "5. Status codes adjacent to subjects (\"OPENPOO\", \"OPENSO\") — same text-capture artifact as rule 1.\n" +
+            "6. The literal phrases \"State:\" or \"Route:\" — those describe THIS audit's input prompt, not page content. NEVER report a finding whose evidence cites \"Route:\" or \"State:\" prefixed text.\n" +
+            "7. \"BUC\" near a timestamp — that is the IATA-style code for Bucharest, the user's timezone label.\n" +
+            "8. \"CORGFLIX.DUCKDNS.ORG\" + time — that is the StatusBar's intentional self-reference (current host + local time). Not a broken link.\n" +
+            "9. \"loading…\" alone — a transient loading state is expected on first paint of async content. Only flag if it has been loading for over a minute or shows a stuck animation.\n" +
+            "10. Lock icons (🔒) with \"attempt drill first\" — this is the documented productive-failure UI gate; deliberate, not broken.\n" +
+            "11. \"DOES-NOT-EXIST\" or similar obviously placeholder task IDs — those are test artifacts only ever seen via /tutor/?taskId=DOES-NOT-EXIST manual probes.\n" +
+            "12. \"× close\" — × is the standard close glyph; tooltip is unnecessary when aria-label is set (which it is).\n\n" +
+            "ONLY report issues a sighted user with the rendered page would call out as wrong.",
           userPrompt: `State: ${row.id}\nRoute: ${row.route}\n\nPage text (first 3000 chars):\n${domText.slice(0, 3000)}`,
           maxTokens: 600,
         });

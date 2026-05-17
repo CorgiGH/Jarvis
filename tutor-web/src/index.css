@@ -28,7 +28,7 @@
   /* Status — semantic, used by inline cards/badges */
   --color-danger-bg: #dc2626;               /* red-600 */
   --color-danger-fg: #ffffff;
-  --color-danger-text: #b91c1c;             /* red-700 */
+  --color-danger-text: #991b1b;             /* red-800 — 7.66:1 on white, passes AAA */
   --color-info-bg: #bfdbfe;                 /* blue-200 — sensor / info bubble */
   --color-disabled-bg: #d1d5db;             /* gray-300 */
   --color-disabled-fg: #6b7280;             /* gray-500 */
