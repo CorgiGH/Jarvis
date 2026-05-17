@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { jarvisFetch } from "../lib/api";
+import { formatEnum } from "../lib/formatEnum";
 
 interface Gap {
   id: string;
@@ -120,7 +121,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
                 <>
                   <div className="font-bold">{g.topic}</div>
                   <div className="text-page-fg/60">
-                    {g.type} · reused {g.reusedCount}× · {g.resolvedBy ?? "open"}
+                    {formatEnum(g.type)} · reused {g.reusedCount}× · {g.resolvedBy ? formatEnum(g.resolvedBy) : "open"}
                   </div>
                 </>
               );
