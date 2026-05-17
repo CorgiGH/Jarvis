@@ -49,20 +49,20 @@ the audit. Cells listed in `S-XX` order; the audit tool consumes this table verb
 
 | ID | Route | Reach (Playwright sequence) | Required `[data-testid]` selectors visible | Bug-class lint expectations |
 |----|-------|----------------------------|---------------------------------------------|-----------------------------|
-| S-01 | `/` (cold) | `goto /` | `active-task-dashboard`, `active-task-row` (≥1), `active-task-detect-btn`, `active-task-manual-btn` | no snake_case in any `active-task-row` |
-| S-02 | `/?pick=1` | `goto /?pick=1` | same as S-01 | same |
-| S-03 | `/` empty-tasks state | force fetch to return `{tasks:[]}` via cookie clear OR mock | `active-task-empty` | no raw HTTP error in body |
-| S-04 | `/` with detect-result | S-01 → click `active-task-detect-btn`, wait for `active-task-detect-result` | `active-task-detect-result` carries "· last run" | no snake_case in result text |
-| S-05 | `/` after manual-toggle | S-01 → click `active-task-manual-btn` | `active-task-manual-btn` `aria-expanded="true"`, `task-quickstart-error` absent | no duplicate task lists (P6 [6] progressive-disclosure tracking) |
-| S-06 | `/tasks` | `goto /tasks` | `tasks-screen`, `task-create-form`, `tasks-list` (≥0), `task-subject-PS`, `task-subject-PA`, `task-subject-POO`, `task-subject-ALO`, `task-subject-SO` | no snake_case in `task-row` |
-| S-07 | `/?taskId=PS-Tema-A` (drill un-attempted) | `goto /?taskId=01KR6K07T6PATPRR5KH1JXYF8E` | `tutor-header`, `problem-stepper`, `progress-strip`, `drill-stack`, `drill-rubric`, `resource-rail` | **NO snake_case in `drill-rubric` li text** (the reported-bug cell) |
+| S-01 | `/tutor/` (cold) | `goto /tutor/` | `active-task-dashboard`, `active-task-row` (≥1), `active-task-detect-btn`, `active-task-manual-btn` | no snake_case in any `active-task-row` |
+| S-02 | `/tutor/?pick=1` | `goto /tutor/?pick=1` | same as S-01 | same |
+| S-03 | `/tutor/` empty-tasks state | force fetch to return `{tasks:[]}` via cookie clear OR mock | `active-task-empty` | no raw HTTP error in body |
+| S-04 | `/tutor/` with detect-result | S-01 → click `active-task-detect-btn`, wait for `active-task-detect-result` | `active-task-detect-result` carries "· last run" | no snake_case in result text |
+| S-05 | `/tutor/` after manual-toggle | S-01 → click `active-task-manual-btn` | `active-task-manual-btn` `aria-expanded="true"`, `task-quickstart-error` absent | no duplicate task lists (P6 [6] progressive-disclosure tracking) |
+| S-06 | `/tutor/tasks` | `goto /tutor/tasks` | `tasks-screen`, `task-create-form`, `tasks-list` (≥0), `task-subject-PS`, `task-subject-PA`, `task-subject-POO`, `task-subject-ALO`, `task-subject-SO` | no snake_case in `task-row` |
+| S-07 | `/tutor/?taskId=PS-Tema-A` (drill un-attempted) | `goto /tutor/?taskId=01KR6K07T6PATPRR5KH1JXYF8E` | `tutor-header`, `problem-stepper`, `progress-strip`, `drill-stack`, `drill-rubric`, `resource-rail` | **NO snake_case in `drill-rubric` li text** (the reported-bug cell) |
 | S-08 | S-07 + typed | S-07 → fill `drill-attempt-input` "test" | `drill-stack` still visible, no autoclose | no console error |
 | S-09 | S-07 → wrong-answer graded | S-07 → fill input "bomboclat" → click CHECK ANSWER | `grade-feedback`, `rubric-grade`, `misconception-banner` | **NO snake_case in `rubric-grade` text**, **NO SCREAMING_SNAKE in `misconception-banner` text** |
 | S-10 | S-07 → correct-answer graded | S-07 → fill input with reference solution → CHECK ANSWER | `grade-feedback`, `rubric-grade` all ✓ | same as S-09 |
 | S-11 | S-07 → gave-up | S-07 → click GIVE UP | `grade-feedback` with give-up content | same |
-| S-12 | `/?taskId=POO-C1` (empty drills) | `goto /?taskId=01KR6TZ9NCA982XHCFM1VYK761` | `tutor-header`, `problem-stepper`, `progress-strip`. Drill-stack may be empty. | no raw "{}" or "undefined" in UI |
-| S-13 | `/?taskId=PA-Tema5` (empty drills) | `goto /?taskId=01KR6RRRCZNAXX10SQCEPPR4FG` | same as S-12 | same |
-| S-14 | `/?taskId=SO-Linux` (empty drills) | `goto /?taskId=01KR7K0ASW5ZVK81PQ367WK4FC` | same as S-12 | same |
+| S-12 | `/tutor/?taskId=POO-C1` (empty drills) | `goto /tutor/?taskId=01KR6TZ9NCA982XHCFM1VYK761` | `tutor-header`, `problem-stepper`, `progress-strip`. Drill-stack may be empty. | no raw "{}" or "undefined" in UI |
+| S-13 | `/tutor/?taskId=PA-Tema5` (empty drills) | `goto /tutor/?taskId=01KR6RRRCZNAXX10SQCEPPR4FG` | same as S-12 | same |
+| S-14 | `/tutor/?taskId=SO-Linux` (empty drills) | `goto /tutor/?taskId=01KR7K0ASW5ZVK81PQ367WK4FC` | same as S-12 | same |
 | S-15 | S-07 + SCRATCHPAD drawer open | S-07 → click `rail-item-SCRATCHPAD` | `rail-drawer`, `scratchpad`, `scratchpad-input`, `scratchpad-counter` | no snake_case anywhere; counter shows "0 / 50000" |
 | S-16 | S-15 + scratchpad typed | S-15 → fill `scratchpad-input` "abc" | `scratchpad-status` shows "saving…" then "saved" within 2s | save-error path NOT triggered |
 | S-17 | S-15 + scratchpad cleared (clobber-race check) | S-15 → fill empty | hydration ref preserves clear; no re-fetch overwrites | no extra GET /scratchpad |
@@ -72,12 +72,12 @@ the audit. Cells listed in `S-XX` order; the audit tool consumes this table verb
 | S-21 | S-07 + sidebar LEDGER open | S-07 → click `sidebar-ledger-btn` | `knowledge-ledger`, `knowledge-ledger-backdrop`, `ledger-heading`, `ledger-filter-all` `aria-pressed="true"` | NO snake_case in `ledger-row` text |
 | S-22 | S-21 + filter=open | S-21 → click `ledger-filter-open` | `ledger-filter-open` `aria-pressed="true"`; rows filtered | NO `g.type` raw enum visible |
 | S-23 | S-21 + filter=resolved | S-21 → click `ledger-filter-resolved` | same shape, filter pressed | NO `g.resolvedBy` enum like "USER_MARKED_DONE" raw |
-| S-24 | S-21 + row click → navigate + close | S-21 → click `ledger-row-open` (if any row has taskId) | ledger dismissed, URL changed to `/?taskId=...` | no console error during transition |
+| S-24 | S-21 + row click → navigate + close | S-21 → click `ledger-row-open` (if any row has taskId) | ledger dismissed, URL changed to `/tutor/?taskId=...` | no console error during transition |
 | S-25 | S-21 + Escape closes | S-21 → press Escape | ledger dismissed | onClose fired |
 | S-26 | S-21 + backdrop closes | S-21 → click `knowledge-ledger-backdrop` | ledger dismissed | onClose fired |
-| S-27 | `/review` | `goto /review` | `fsrs-review` (or whatever the page roots on) | no console error |
-| S-28 | `/settings/trust` | `goto /settings/trust` | `trust-grants-list` (or empty state), `trust-create-btn` | no snake_case in any grant row |
-| S-29 | header at <420px (mobile) | viewport 375 then `goto /?taskId=PS-Tema-A` | header `flex-wrap` reflows; nav visible | all action buttons ≥32px tall |
+| S-27 | `/tutor/review` | `goto /tutor/review` | `fsrs-review` (or whatever the page roots on) | no console error |
+| S-28 | `/tutor/settings/trust` | `goto /tutor/settings/trust` | `trust-grants-list` (or empty state), `trust-create-btn` | no snake_case in any grant row |
+| S-29 | header at <420px (mobile) | viewport 375 then `goto /tutor/?taskId=PS-Tema-A` | header `flex-wrap` reflows; nav visible | all action buttons ≥32px tall |
 | S-30 | missing-pinned-task banner | clear cookies + set `?taskId=DOES-NOT-EXIST` | `missing-pinned-task` banner visible | banner text human-readable |
 
 Acceptance: every state above must successfully reach in Playwright AND emit zero
