@@ -235,7 +235,7 @@ export function DrillStack({
                   data-rubric-key={k}
                   data-rubric-pass={v}
                 >
-                  {v ? "[✓]" : "[✗]"} {k.replace(/_/g, " ")}
+                  {v ? "[✓]" : "[✗]"} {formatEnum(k, { preserve: ["PDF", "CDF", "AND", "OR", "R"] })}
                 </li>
               ))}
             </ul>
