@@ -91,3 +91,25 @@ test("detectRawHttpError ignores non-HTTP-prefixed numbers (e.g. counts)", () =>
   const r = detectRawHttpError("404 reused × today, 200 entries");
   assert.deepEqual(r.matches, []);
 });
+
+import { detectPlaceholder } from "./surface-z-lints.mjs";
+
+test("detectPlaceholder finds TODO/TBD/FIXME/XXX as word boundary tokens", () => {
+  const r = detectPlaceholder("TODO: finish this; TBD next sprint; FIXME later");
+  assert.deepEqual(r.matches.sort(), ["FIXME", "TBD", "TODO"]);
+});
+
+test("detectPlaceholder is case-insensitive", () => {
+  const r = detectPlaceholder("todo something fixme later");
+  assert.deepEqual(r.matches.sort(), ["fixme", "todo"]);
+});
+
+test("detectPlaceholder ignores substrings (todoist, fixmesomething)", () => {
+  const r = detectPlaceholder("todoist app and fixmeisntaword");
+  assert.deepEqual(r.matches, []);
+});
+
+test("detectPlaceholder finds lorem ipsum", () => {
+  const r = detectPlaceholder("body: lorem ipsum dolor sit");
+  assert.deepEqual(r.matches, ["lorem ipsum"]);
+});

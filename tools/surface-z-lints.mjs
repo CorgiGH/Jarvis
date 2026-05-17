@@ -88,6 +88,19 @@ export function detectRawHttpError(text) {
   return { matches };
 }
 
+/**
+ * Detect placeholder text leaking to user UI — engineering markers
+ * (TODO/TBD/FIXME/XXX) and copy-stub patterns (lorem ipsum).
+ * Case-insensitive but preserves the match string's casing.
+ */
+export function detectPlaceholder(text) {
+  const matches = [];
+  const re = /\b(TODO|TBD|FIXME|XXX|lorem ipsum)\b/gi;
+  let m;
+  while ((m = re.exec(text)) !== null) matches.push(m[0]);
+  return { matches };
+}
+
 // These run inside page.evaluate() — exported as strings to be serialized
 export const LINT_EVAL_SCRIPT = `
 (() => {
