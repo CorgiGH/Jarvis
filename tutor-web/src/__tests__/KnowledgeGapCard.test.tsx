@@ -32,7 +32,7 @@ test("MARK RESOLVED hides actions + emits USER_MARKED_DONE", () => {
   fireEvent.click(screen.getByTestId("knowledge-gap-resolve"));
   expect(fn).toHaveBeenCalledWith("g1", "USER_MARKED_DONE");
   expect(screen.queryByTestId("knowledge-gap-insert")).toBeNull();
-  expect(screen.getByTestId("knowledge-gap-status")).toHaveTextContent("USER_MARKED_DONE");
+  expect(screen.getByTestId("knowledge-gap-status")).toHaveTextContent("user marked done");
 });
 
 test("FLAG WRONG (dismiss) hides actions + emits USER_DISMISSED", () => {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { KnowledgeGap, GapResolved } from "../lib/knowledgeGap";
 import { jarvisFetch } from "../lib/api";
+import { formatEnum } from "../lib/formatEnum";
 
 export interface KnowledgeGapCardProps {
   gap: KnowledgeGap;
@@ -110,7 +111,7 @@ export function KnowledgeGapCard({ gap, onInsertScratchpad, onResolve }: Knowled
           {gap.language ? ` · ${gap.language}` : ""}
         </div>
         <div data-testid="knowledge-gap-status" className="text-xs text-page-fg/60">
-          {resolved ?? "open"}
+          {resolved ? formatEnum(resolved) : "open"}
         </div>
       </div>
       {gap.sourceCitation && (
