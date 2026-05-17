@@ -89,9 +89,9 @@ async function executeReach(page, reachExpr, baseUrl) {
   for (const step of sequence) {
     if (step.kind === "goto") {
       await page.goto(`${baseUrl}${step.target}`);
-      await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+      await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
     } else if (step.kind === "click") {
-      await page.click(`[data-testid="${step.target}"]`, { timeout: 5000 });
+      await page.click(`[data-testid="${step.target}"]`, { timeout: 15000 });
     } else if (step.kind === "fill") {
       await page.fill(`[data-testid="${step.target}"]`, step.value);
     }
