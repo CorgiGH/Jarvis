@@ -4,6 +4,7 @@ import { AlgoStepperShellSmoke } from "./AlgoStepperShellSmoke";
 import { CompareFrames } from "./CompareFrames";
 import { DPWastedWork } from "./DPWastedWork";
 import { BayesTree } from "./BayesTree";
+import { NPGadget } from "./NPGadget";
 import { PageTableWalk } from "./PageTableWalk";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
@@ -168,6 +169,14 @@ export function VizDemoPage() {
           Disease/test scenario. Watch P(D|+) emerge from prior × likelihood / evidence.
         </p>
         <BayesTree />
+      </section>
+
+      <section data-testid="viz-demo-pa7-np-gadget" style={tileStyle}>
+        <h2 style={headingStyle}>PA-7 · NP gadget (3-SAT → CLIQUE) ⭐ world-first</h2>
+        <p style={subheadingStyle}>
+          Bidirectional iff reduction. Watch φ ⟺ k-clique correspondence both ways.
+        </p>
+        <NPGadget />
       </section>
     </div>
   );
