@@ -11,10 +11,15 @@ import { Tls0RttReplay } from "./Tls0RttReplay";
 import { CppVTable } from "./CppVTable";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
+import { OsiEncap } from "./OsiEncap";
+import { ProcessFSM } from "./ProcessFSM";
+import { RaceMutex } from "./RaceMutex";
 import { RecursionTree } from "./RecursionTree";
+import { SchedulerGantt } from "./SchedulerGantt";
 import { SigmaStackedBar } from "./SigmaStackedBar";
 import { SlopeCounter } from "./SlopeCounter";
 import { SumPlotTracker } from "./SumPlotTracker";
+import { TcpHandshake } from "./TcpHandshake";
 import { FONT_FAMILY, INK, PAPER } from "./theme";
 
 const tileStyle: CSSProperties = {
@@ -204,6 +209,46 @@ export function VizDemoPage() {
           Virtual dispatch through vptr/vtable. shared_ptr cycles cause memory leaks; weak_ptr breaks the cycle.
         </p>
         <CppVTable />
+      </section>
+
+      <section data-testid="viz-demo-so1-process-fsm" style={tileStyle}>
+        <h2 style={headingStyle}>SO-1 · Process lifecycle FSM (with zombie)</h2>
+        <p style={subheadingStyle}>
+          fork/wait scenario. NEW → READY → RUNNING → WAITING → ZOMBIE → TERMINATED. PCB lingers until parent wait() reaps.
+        </p>
+        <ProcessFSM />
+      </section>
+
+      <section data-testid="viz-demo-so2-sched-gantt" style={tileStyle}>
+        <h2 style={headingStyle}>SO-2 · Scheduler comparison (FCFS / SJF / SRTF / RR / MLFQ)</h2>
+        <p style={subheadingStyle}>
+          Same 4-job batch under 5 algorithms. Gantt timeline + avg turnaround per algo + MLFQ promotion/demotion.
+        </p>
+        <SchedulerGantt />
+      </section>
+
+      <section data-testid="viz-demo-so3-race-mutex" style={tileStyle}>
+        <h2 style={headingStyle}>SO-3 · Race condition + mutex</h2>
+        <p style={subheadingStyle}>
+          Two threads racing to increment shared counter. Lost update without mutex (counter=1); mutex serializes critical section (counter=2).
+        </p>
+        <RaceMutex />
+      </section>
+
+      <section data-testid="viz-demo-rc1-osi-encap" style={tileStyle}>
+        <h2 style={headingStyle}>RC-1 · OSI encapsulation + MTU fragmentation</h2>
+        <p style={subheadingStyle}>
+          1400B HTTP descends OSI stack, IP fragments at L3 against 800B MTU, reassembles at receiver. Headers attached + stripped layer by layer.
+        </p>
+        <OsiEncap />
+      </section>
+
+      <section data-testid="viz-demo-rc2-tcp-handshake" style={tileStyle}>
+        <h2 style={headingStyle}>RC-2 · TCP 3-way handshake + SYN flood + SYN cookies</h2>
+        <p style={subheadingStyle}>
+          Normal SYN/SYN-ACK/ACK with ISN randomization. Attacker exhausts backlog via spoofed SYNs. SYN cookies defend without backlog state.
+        </p>
+        <TcpHandshake />
       </section>
     </div>
   );
