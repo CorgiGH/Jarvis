@@ -764,9 +764,47 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
             midY = Math.min(from.y, to.y) - arcHeight;
             pathD = `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`;
             arrowAngleDeg = 90; // tip points down
+          } else if (objPos.has(p.from) && isObjectTarget) {
+            // Object → object. If targets sit far below/above the source
+            // (e.g. obj → vtable), route vertically so the arrow doesn't
+            // cut diagonally across the heap and through other objects'
+            // text. Use the centers of top/bottom edges so the arrow lands
+            // cleanly on the boundary.
+            const src = objPos.get(p.from)!;
+            const tgt = objPos.get(p.to)!;
+            const srcCx = src.x + src.w / 2;
+            const tgtCx = tgt.x + tgt.w / 2;
+            const srcCy = src.y + src.h / 2;
+            const tgtCy = tgt.y + tgt.h / 2;
+            const vGap = Math.abs(tgtCy - srcCy);
+            const hGap = Math.abs(tgtCx - srcCx);
+
+            if (vGap > hGap && vGap > 40) {
+              // Vertical layout — go bottom-to-top or top-to-bottom.
+              const goingDown = tgtCy > srcCy;
+              from = { x: srcCx, y: goingDown ? src.y + src.h : src.y };
+              to = { x: tgtCx, y: goingDown ? tgt.y : tgt.y + tgt.h };
+              arrowAngleDeg = goingDown ? 90 : 270;
+              if (Math.abs(tgtCx - srcCx) > 4) {
+                // Slight S-curve when x's differ — vertical control points
+                // keep the path mostly vertical with a gentle bend.
+                const midY2 = (from.y + to.y) / 2;
+                pathD = `M ${from.x} ${from.y} C ${from.x} ${midY2}, ${to.x} ${midY2}, ${to.x} ${to.y}`;
+              } else {
+                // Pure vertical line.
+                pathD = `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+              }
+              midX = (from.x + to.x) / 2;
+              midY = (from.y + to.y) / 2;
+            } else if (hasReverse) {
+              // Phase 2 cycle pair — ±45 vertical arc.
+              const arcOffset = i % 2 === 0 ? -45 : 45;
+              midX = (from.x + to.x) / 2;
+              midY = (from.y + to.y) / 2 + arcOffset;
+              pathD = `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`;
+              arrowAngleDeg = to.x < from.x ? 180 : 0;
+            }
           } else if (hasReverse) {
-            // Phase 2 ref-count cycle: ±45 arc so both directions clear the
-            // objects sitting between A and B with room to breathe.
             const arcOffset = i % 2 === 0 ? -45 : 45;
             midX = (from.x + to.x) / 2;
             midY = (from.y + to.y) / 2 + arcOffset;

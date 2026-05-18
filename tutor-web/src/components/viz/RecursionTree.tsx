@@ -3,7 +3,6 @@ import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "./theme";
 import {
   AnimatePresence,
-  DrawLine,
   FadeText,
   PopIn,
   motion,
@@ -246,37 +245,37 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
         })}
       </AnimatePresence>
 
-      {/* Tree edges (parent -> child) — draw on when child node appears.
-          Outer motion.g fades opacity for returned subtrees. */}
+      {/* Tree edges (parent -> child) — endpoints slide smoothly when nodes
+          shift between frames (motion.line animates x1/y1/x2/y2 via framer-
+          motion); new edges fade in via opacity; returned subtrees fade to 0.4. */}
       <AnimatePresence>
         {tree.flatMap((node) => {
           if (node.parentId === null) return [];
           const from = positions.get(node.parentId);
           const to = positions.get(node.id);
           if (!from || !to) return [];
+          const targetOpacity = node.status === "returned" ? 0.4 : 0.8;
           return [
-            <motion.g
+            <motion.line
               key={`edge-${node.parentId}-${node.id}`}
-              animate={{ opacity: node.status === "returned" ? 0.4 : 0.8 }}
-              transition={{ duration: 0.4 }}
-              initial={{ opacity: 0.8 }}
+              x1={from.x}
+              y1={from.y + TREE_NODE_R}
+              x2={to.x}
+              y2={to.y - TREE_NODE_R}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: targetOpacity }}
               exit={{ opacity: 0 }}
-            >
-              <DrawLine
-                x1={from.x}
-                y1={from.y + TREE_NODE_R}
-                x2={to.x}
-                y2={to.y - TREE_NODE_R}
-                stroke={INK}
-                strokeWidth={1}
-                durationMs={400}
-              />
-            </motion.g>,
+              transition={{ duration: 0.5, ease: "easeInOut" }}
+              stroke={INK}
+              strokeWidth={1}
+            />,
           ];
         })}
       </AnimatePresence>
 
-      {/* Tree nodes — pop in on creation, slide smoothly when layout shifts. */}
+      {/* Tree nodes — pop in on creation, slide smoothly when layout shifts.
+          Whole node (circle + label + sub-text) wrapped in motion.g animating
+          its translate so the label slides in lockstep with the circle. */}
       <AnimatePresence>
         {tree.map((node) => {
           const pos = positions.get(node.id);
@@ -285,47 +284,53 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
           const returned = node.status === "returned";
           return (
             <PopIn key={`node-${node.id}`}>
-              <motion.circle
+              <motion.g
                 initial={false}
-                animate={{
-                  cx: pos.x,
-                  cy: pos.y,
-                  fill: isCurrent ? ACCENT : "#fff",
-                  strokeWidth: isCurrent ? 2 : 1,
-                  opacity: returned ? 1 : 0.85,
-                }}
+                animate={{ x: pos.x, y: pos.y }}
                 transition={{ duration: 0.5, ease: "easeInOut" }}
-                r={TREE_NODE_R}
-                stroke={INK}
-              />
-              <FadeText
-                x={pos.x}
-                y={pos.y + 4}
-                textAnchor="middle"
-                fontFamily={FONT_FAMILY}
-                fontSize={10}
-                fontWeight={700}
-                fill={INK}
               >
-                {String(node.value !== null ? node.value : node.n)}
-              </FadeText>
-              <AnimatePresence>
-                {node.value === null && (
-                  <PopIn key={`node-sub-${node.id}`}>
-                    <text
-                      x={pos.x}
-                      y={pos.y + TREE_NODE_R + 11}
-                      textAnchor="middle"
-                      fontFamily={FONT_FAMILY}
-                      fontSize={8}
-                      fill={INK}
-                      opacity={0.6}
-                    >
-                      fib({node.n})
-                    </text>
-                  </PopIn>
-                )}
-              </AnimatePresence>
+                <motion.circle
+                  cx={0}
+                  cy={0}
+                  initial={false}
+                  animate={{
+                    fill: isCurrent ? ACCENT : "#fff",
+                    strokeWidth: isCurrent ? 2 : 1,
+                    opacity: returned ? 1 : 0.85,
+                  }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                  r={TREE_NODE_R}
+                  stroke={INK}
+                />
+                <FadeText
+                  x={0}
+                  y={4}
+                  textAnchor="middle"
+                  fontFamily={FONT_FAMILY}
+                  fontSize={10}
+                  fontWeight={700}
+                  fill={INK}
+                >
+                  {String(node.value !== null ? node.value : node.n)}
+                </FadeText>
+                <AnimatePresence>
+                  {node.value === null && (
+                    <PopIn key={`node-sub-${node.id}`}>
+                      <text
+                        x={0}
+                        y={TREE_NODE_R + 11}
+                        textAnchor="middle"
+                        fontFamily={FONT_FAMILY}
+                        fontSize={8}
+                        fill={INK}
+                        opacity={0.6}
+                      >
+                        fib({node.n})
+                      </text>
+                    </PopIn>
+                  )}
+                </AnimatePresence>
+              </motion.g>
             </PopIn>
           );
         })}

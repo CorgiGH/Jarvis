@@ -3,7 +3,6 @@ import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
 import {
   AnimatePresence,
-  DrawLine,
   DrawPath,
   FadeText,
   PopIn,
@@ -354,30 +353,36 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
 
       {/* ---- NAIVE TREE ---- */}
 
-      {/* Tree edges */}
+      {/* Tree edges — endpoints animate via motion.line so they track moving
+          nodes between frames. New edges fade in via opacity. */}
       <AnimatePresence>
         {tree.flatMap((node) => {
           if (node.parentId === null) return [];
           const from = positions.get(node.parentId);
           const to = positions.get(node.id);
           if (!from || !to) return [];
+          const restingOpacity = node.status === "returned" ? 0.35 : 0.75;
           return [
-            <DrawLine
+            <motion.line
               key={`edge-${node.parentId}-${node.id}`}
               x1={from.x}
               y1={from.y + TREE_NODE_R}
               x2={to.x}
               y2={to.y - TREE_NODE_R}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: restingOpacity }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5, ease: "easeInOut" }}
               stroke={INK}
               strokeWidth={1}
-              opacity={node.status === "returned" ? 0.35 : 0.75}
-              durationMs={350}
             />,
           ];
         })}
       </AnimatePresence>
 
-      {/* Tree nodes — shaded by duplicate count */}
+      {/* Tree nodes — shaded by duplicate count. Whole node (circle + text)
+          wraps in motion.g animating its translate so the label slides with
+          the circle when tree layout shifts between frames. */}
       <AnimatePresence>
         {tree.map((node) => {
           const pos = positions.get(node.id);
@@ -389,30 +394,36 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
           const targetFillOpacity = isCurrent ? 1 : fillOpacity;
           return (
             <PopIn key={`node-${node.id}`} durationMs={300}>
-              <motion.circle
-                cx={pos.x}
-                cy={pos.y}
-                r={TREE_NODE_R}
-                stroke={INK}
+              <motion.g
                 initial={false}
-                animate={{
-                  fill: targetFill,
-                  fillOpacity: targetFillOpacity,
-                  strokeWidth: isCurrent ? 2 : 1,
-                }}
-                transition={{ duration: 0.4, ease: "easeInOut" }}
-              />
-              <FadeText
-                x={pos.x}
-                y={pos.y + 4}
-                textAnchor="middle"
-                fontFamily={FONT_FAMILY}
-                fontSize={9}
-                fontWeight={700}
-                fill={INK}
+                animate={{ x: pos.x, y: pos.y }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
               >
-                {node.value !== null ? String(node.value) : String(node.n)}
-              </FadeText>
+                <motion.circle
+                  cx={0}
+                  cy={0}
+                  r={TREE_NODE_R}
+                  stroke={INK}
+                  initial={false}
+                  animate={{
+                    fill: targetFill,
+                    fillOpacity: targetFillOpacity,
+                    strokeWidth: isCurrent ? 2 : 1,
+                  }}
+                  transition={{ duration: 0.4, ease: "easeInOut" }}
+                />
+                <FadeText
+                  x={0}
+                  y={4}
+                  textAnchor="middle"
+                  fontFamily={FONT_FAMILY}
+                  fontSize={9}
+                  fontWeight={700}
+                  fill={INK}
+                >
+                  {node.value !== null ? String(node.value) : String(node.n)}
+                </FadeText>
+              </motion.g>
             </PopIn>
           );
         })}
