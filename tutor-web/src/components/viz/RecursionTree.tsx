@@ -4,8 +4,8 @@ import { ACCENT, FONT_FAMILY, INK } from "./theme";
 import {
   AnimatePresence,
   DrawLine,
+  FadeText,
   PopIn,
-  TweenText,
   motion,
 } from "./motion-helpers";
 
@@ -226,7 +226,7 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
                 <AnimatePresence>
                   {node.value !== null && (
                     <PopIn key={`stack-val-${nodeId}`}>
-                      <TweenText
+                      <FadeText
                         x={STACK_X + STACK_W - 8}
                         y={STACK_FRAME_H / 2 + 4}
                         textAnchor="end"
@@ -234,9 +234,9 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
                         fontSize={11}
                         fill={INK}
                         opacity={0.7}
-                        value={node.value}
-                        formatter={(v) => `= ${Math.round(v)}`}
-                      />
+                      >
+                        {`= ${node.value}`}
+                      </FadeText>
                     </PopIn>
                   )}
                 </AnimatePresence>
@@ -298,7 +298,7 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
                 r={TREE_NODE_R}
                 stroke={INK}
               />
-              <TweenText
+              <FadeText
                 x={pos.x}
                 y={pos.y + 4}
                 textAnchor="middle"
@@ -306,8 +306,9 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
                 fontSize={10}
                 fontWeight={700}
                 fill={INK}
-                value={node.value !== null ? node.value : node.n}
-              />
+              >
+                {String(node.value !== null ? node.value : node.n)}
+              </FadeText>
               <AnimatePresence>
                 {node.value === null && (
                   <PopIn key={`node-sub-${node.id}`}>

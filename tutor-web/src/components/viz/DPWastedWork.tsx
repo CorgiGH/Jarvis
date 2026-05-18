@@ -7,7 +7,6 @@ import {
   DrawPath,
   FadeText,
   PopIn,
-  TweenText,
   motion,
 } from "./motion-helpers";
 
@@ -276,7 +275,7 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
             <AnimatePresence>
               {isFilled ? (
                 <PopIn key={`dp-val-${cell.idx}`} durationMs={300}>
-                  <TweenText
+                  <FadeText
                     x={x + DP_CELL_W / 2}
                     y={DP_Y + DP_CELL_H / 2 + 4}
                     textAnchor="middle"
@@ -284,9 +283,9 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
                     fontSize={11}
                     fontWeight={700}
                     fill={INK}
-                    value={cell.value ?? 0}
-                    formatter={(n) => Math.round(n).toString()}
-                  />
+                  >
+                    {String(cell.value ?? 0)}
+                  </FadeText>
                 </PopIn>
               ) : (
                 <text
