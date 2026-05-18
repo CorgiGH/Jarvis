@@ -204,6 +204,69 @@ function TreeEdge({
   );
 }
 
+function TreeNodeGlyph({
+  node,
+  mv,
+  isCurrent,
+}: {
+  node: TreeNode;
+  mv: NodeMV;
+  isCurrent: boolean;
+}) {
+  // Every visible element of the node binds its SVG attribute directly to
+  // the same MotionValues the edge endpoints read from. No motion.g style
+  // transforms involved — every element uses the same setAttribute path,
+  // so the browser paints them in lockstep at every RAF tick.
+  const labelY = useTransform(mv.y, (v) => v + 4);
+  const subLabelY = useTransform(mv.y, (v) => v + TREE_NODE_R + 11);
+  const returned = node.status === "returned";
+  return (
+    <>
+      <motion.circle
+        cx={mv.x}
+        cy={mv.y}
+        initial={false}
+        animate={{
+          fill: isCurrent ? ACCENT : "#fff",
+          strokeWidth: isCurrent ? 2 : 1,
+          opacity: returned ? 1 : 0.85,
+        }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
+        r={TREE_NODE_R}
+        stroke={INK}
+      />
+      <FadeText
+        x={mv.x as unknown as number}
+        y={labelY as unknown as number}
+        textAnchor="middle"
+        fontFamily={FONT_FAMILY}
+        fontSize={10}
+        fontWeight={700}
+        fill={INK}
+      >
+        {String(node.value !== null ? node.value : node.n)}
+      </FadeText>
+      <AnimatePresence>
+        {node.value === null && (
+          <PopIn key={`node-sub-${node.id}`}>
+            <motion.text
+              x={mv.x}
+              y={subLabelY}
+              textAnchor="middle"
+              fontFamily={FONT_FAMILY}
+              fontSize={8}
+              fill={INK}
+              opacity={0.6}
+            >
+              fib({node.n})
+            </motion.text>
+          </PopIn>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 function TreePane({
   tree,
   currentId,
@@ -239,52 +302,9 @@ function TreePane({
           const mv = mvMap.get(node.id);
           if (!mv) return null;
           const isCurrent = node.id === currentId;
-          const returned = node.status === "returned";
           return (
             <PopIn key={`node-${node.id}`}>
-              <motion.g style={{ x: mv.x, y: mv.y }}>
-                <motion.circle
-                  cx={0}
-                  cy={0}
-                  initial={false}
-                  animate={{
-                    fill: isCurrent ? ACCENT : "#fff",
-                    strokeWidth: isCurrent ? 2 : 1,
-                    opacity: returned ? 1 : 0.85,
-                  }}
-                  transition={{ duration: 0.5, ease: "easeInOut" }}
-                  r={TREE_NODE_R}
-                  stroke={INK}
-                />
-                <FadeText
-                  x={0}
-                  y={4}
-                  textAnchor="middle"
-                  fontFamily={FONT_FAMILY}
-                  fontSize={10}
-                  fontWeight={700}
-                  fill={INK}
-                >
-                  {String(node.value !== null ? node.value : node.n)}
-                </FadeText>
-                <AnimatePresence>
-                  {node.value === null && (
-                    <PopIn key={`node-sub-${node.id}`}>
-                      <text
-                        x={0}
-                        y={TREE_NODE_R + 11}
-                        textAnchor="middle"
-                        fontFamily={FONT_FAMILY}
-                        fontSize={8}
-                        fill={INK}
-                        opacity={0.6}
-                      >
-                        fib({node.n})
-                      </text>
-                    </PopIn>
-                  )}
-                </AnimatePresence>
-              </motion.g>
+              <TreeNodeGlyph node={node} mv={mv} isCurrent={isCurrent} />
             </PopIn>
           );
         })}
