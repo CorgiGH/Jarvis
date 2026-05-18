@@ -387,14 +387,22 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
       </AnimatePresence>
 
       {/* Messages — each draws on with DrawLine; key by msg.id so AnimatePresence
-          tracks each as a stable identity. */}
+          tracks each as a stable identity. As more messages stack up, slotHeight
+          shrinks so existing rows shift y; wrap MessageRow in motion.g animating
+          y so rows SLIDE to their new positions instead of teleporting. */}
       <AnimatePresence>
         {visibleMessages.map((m, i) => {
-          const y = MSG_TOP + i * slotHeight + slotHeight / 2;
+          const targetY = MSG_TOP + i * slotHeight + slotHeight / 2;
           const isHighlighted = m.id === highlightedMessageId;
           return (
             <PopIn key={`msg-${m.id}`} durationMs={50}>
-              <MessageRow msg={m} y={y} isHighlighted={isHighlighted} />
+              <motion.g
+                initial={false}
+                animate={{ y: targetY }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              >
+                <MessageRow msg={m} y={0} isHighlighted={isHighlighted} />
+              </motion.g>
             </PopIn>
           );
         })}

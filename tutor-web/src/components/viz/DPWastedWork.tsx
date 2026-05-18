@@ -362,15 +362,15 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
           const to = positions.get(node.id);
           if (!from || !to) return [];
           const restingOpacity = node.status === "returned" ? 0.35 : 0.75;
+          const x1 = from.x;
+          const y1 = from.y + TREE_NODE_R;
+          const x2 = to.x;
+          const y2 = to.y - TREE_NODE_R;
           return [
             <motion.line
               key={`edge-${node.parentId}-${node.id}`}
-              x1={from.x}
-              y1={from.y + TREE_NODE_R}
-              x2={to.x}
-              y2={to.y - TREE_NODE_R}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: restingOpacity }}
+              initial={{ opacity: 0, x1, y1, x2, y2 }}
+              animate={{ opacity: restingOpacity, x1, y1, x2, y2 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.5, ease: "easeInOut" }}
               stroke={INK}

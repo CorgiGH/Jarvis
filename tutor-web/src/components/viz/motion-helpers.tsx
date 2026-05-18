@@ -91,6 +91,9 @@ export function DrawLine(props: {
   const x2 = Number(lineProps.x2 ?? 0);
   const y2 = Number(lineProps.y2 ?? 0);
   const len = Math.max(1, Math.hypot(x2 - x1, y2 - y1));
+  // opacity + strokeDashoffset share the same duration so the line draws on
+  // and reveals at the same beat (instead of opacity flashing in at 150ms
+  // while the stroke is still drawing for another ~350ms).
   return (
     <motion.line
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -99,12 +102,9 @@ export function DrawLine(props: {
       initial={{ strokeDashoffset: len, opacity: 0 }}
       animate={{ strokeDashoffset: 0, opacity: 1 }}
       transition={{
-        strokeDashoffset: {
-          duration: durationMs / 1000,
-          delay: delayMs / 1000,
-          ease: "easeInOut",
-        },
-        opacity: { duration: 0.15, delay: delayMs / 1000 },
+        duration: durationMs / 1000,
+        delay: delayMs / 1000,
+        ease: "easeInOut",
       }}
     />
   );
@@ -126,12 +126,9 @@ export function DrawPath(props: {
       initial={{ pathLength: 0, opacity: 0 }}
       animate={{ pathLength: 1, opacity: 1 }}
       transition={{
-        pathLength: {
-          duration: durationMs / 1000,
-          delay: delayMs / 1000,
-          ease: "easeInOut",
-        },
-        opacity: { duration: 0.15, delay: delayMs / 1000 },
+        duration: durationMs / 1000,
+        delay: delayMs / 1000,
+        ease: "easeInOut",
       }}
     />
   );

@@ -892,12 +892,14 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
             x2: vt.x + vt.w / 2,
             y2: vt.y,
           };
-          // 3) vtable speak slot -> conceptual function (off-pane edge)
+          // 3) vtable speak slot -> conceptual function below the vtable
+          // (placed below so the label doesn't overlap the adjacent vtable-Cat).
+          const labelY = vt.y + vt.h + 14;
           const step3 = {
-            x1: vt.x + vt.w,
-            y1: vt.y + 20,
-            x2: vt.x + vt.w + 14,
-            y2: vt.y + 20,
+            x1: vt.x + vt.w / 2,
+            y1: vt.y + vt.h,
+            x2: vt.x + vt.w / 2,
+            y2: labelY - 6,
           };
           return (
             <PopIn key="dispatch-resolution" durationMs={200}>
@@ -923,10 +925,11 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                 delayMs={700}
               />
               <text
-                x={vt.x + vt.w + 16}
-                y={vt.y + 23}
+                x={vt.x + vt.w / 2}
+                y={labelY}
+                textAnchor="middle"
                 fontFamily={FONT_FAMILY}
-                fontSize={7}
+                fontSize={8}
                 fontWeight={700}
                 fill={INK}
               >
