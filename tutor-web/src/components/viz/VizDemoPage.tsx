@@ -7,6 +7,7 @@ import { BayesTree } from "./BayesTree";
 import { NPGadget } from "./NPGadget";
 import { TcpCwnd } from "./TcpCwnd";
 import { PageTableWalk } from "./PageTableWalk";
+import { Tls0RttReplay } from "./Tls0RttReplay";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
 import { RecursionTree } from "./RecursionTree";
@@ -186,6 +187,14 @@ export function VizDemoPage() {
           cwnd trajectory over 30 RTTs. Slow-start exponential → congestion avoidance linear → packet loss → fast recovery.
         </p>
         <TcpCwnd />
+      </section>
+
+      <section data-testid="viz-demo-rc6-tls-0rtt" style={tileStyle}>
+        <h2 style={headingStyle}>RC-6 · TLS 1.3 0-RTT replay attack ⭐ world-first</h2>
+        <p style={subheadingStyle}>
+          Resumption + EarlyData → attacker replays the captured ClientHello → server processes twice. Mitigations: idempotent-only, single-use tickets, anti-replay window.
+        </p>
+        <Tls0RttReplay />
       </section>
     </div>
   );
