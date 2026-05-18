@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { useState } from "react";
 import { AlgoStepperShellSmoke } from "./AlgoStepperShellSmoke";
 import { CompareFrames } from "./CompareFrames";
+import { DPWastedWork } from "./DPWastedWork";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
 import { RecursionTree } from "./RecursionTree";
@@ -141,6 +142,14 @@ export function VizDemoPage() {
           Call stack + recursion tree side-by-side. Step through fib(5) execution. Yellow = current call.
         </p>
         <RecursionTree />
+      </section>
+
+      <section data-testid="viz-demo-pa3-dp-wasted" style={tileStyle}>
+        <h2 style={headingStyle}>PA-3 · DP wasted-work ⭐ world-first</h2>
+        <p style={subheadingStyle}>
+          Naïve recursion vs DP, side-by-side. Watch duplicate subproblems shade darker as wasted work accumulates.
+        </p>
+        <DPWastedWork />
       </section>
     </div>
   );
