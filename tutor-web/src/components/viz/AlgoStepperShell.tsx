@@ -34,7 +34,7 @@ export interface AlgoStepperShellProps<S> {
   testIdPrefix?: string;
 }
 
-const DEFAULT_AUTOPLAY_MS = 800;
+const DEFAULT_AUTOPLAY_MS = 1400;
 
 function readReducedMotion(): boolean {
   if (typeof window === "undefined") return false;
@@ -264,20 +264,32 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
         }}
       >
         <style>{`
+          @keyframes algoStepperFadeIn {
+            from { opacity: 0; }
+            to { opacity: var(--algo-stepper-target-opacity, 1); }
+          }
           .algo-stepper-shell-svg * {
-            transition: cx 250ms ease-in-out, cy 250ms ease-in-out,
-                        x 250ms ease-in-out, y 250ms ease-in-out,
-                        x1 250ms ease-in-out, y1 250ms ease-in-out,
-                        x2 250ms ease-in-out, y2 250ms ease-in-out,
-                        width 250ms ease-in-out, height 250ms ease-in-out,
-                        opacity 250ms ease-in-out,
-                        fill 250ms ease-in-out,
-                        stroke 250ms ease-in-out,
-                        fill-opacity 250ms ease-in-out;
+            transition: cx 400ms ease-in-out, cy 400ms ease-in-out,
+                        x 400ms ease-in-out, y 400ms ease-in-out,
+                        x1 400ms ease-in-out, y1 400ms ease-in-out,
+                        x2 400ms ease-in-out, y2 400ms ease-in-out,
+                        width 400ms ease-in-out, height 400ms ease-in-out,
+                        r 400ms ease-in-out,
+                        d 400ms ease-in-out,
+                        transform 400ms ease-in-out,
+                        opacity 400ms ease-in-out,
+                        fill 400ms ease-in-out,
+                        stroke 400ms ease-in-out,
+                        stroke-width 400ms ease-in-out,
+                        stroke-dasharray 400ms ease-in-out,
+                        fill-opacity 400ms ease-in-out,
+                        stroke-opacity 400ms ease-in-out;
+            animation: algoStepperFadeIn 350ms ease-out;
           }
           @media (prefers-reduced-motion: reduce) {
             .algo-stepper-shell-svg * {
               transition: none;
+              animation: none;
             }
           }
         `}</style>
