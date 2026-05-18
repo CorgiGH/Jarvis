@@ -13,6 +13,7 @@ MatrixTransform shipped 2026-05-17 as a 617-LOC standalone primitive with duplic
 - Per-subject drill mounting of any viz primitive — separate later slice
 - New primitives (PA-1, PA-3, SO-4, PS-2, etc.) — separate later slices; this slice ships Shell so they have a foundation to subclass
 - MatrixTransform retrofit onto Shell — `MatrixTransform.tsx` keeps its current standalone plumbing this slice; retrofit deferred to whichever later slice has reason to touch it
+- **Plotly removal from `package.json`** — gated on `ChatPane` + `PlotlyEmbed` migration (8 plotly-dependent files including chat envelope rendering). `<plotly>` chat-envelope feature still functional this slice; this slice only reimpls `CompareFrames` (E path A). Full plotly removal is its own future slice.
 - Parent spec Phase 1 items NOT in this slice: §13 empty-state / §14 error / §17 bilingual toggle / brutalist rule-sniff Playwright / RLS + cross-tenant CI test. Those land in separate slices.
 
 ## 3. Deliverables
@@ -152,30 +153,31 @@ Components: `NumLineDirect.tsx`, `SumPlotTracker.tsx`, `SlopeCounter.tsx`, `Sigm
 - Each component visible at `/viz-demo` gallery (add tiles if missing)
 - No new blue/amber/gradient/shadow in the diff (grep enforces)
 
-### E — Plotly deprecate (`CompareFrames.tsx` reimpl over @visx/shape)
+### E — `CompareFrames.tsx` reimpl over @visx/shape (path A — trim)
 
-**Current state:** `CompareFrames.tsx` uses `react-plotly.js` + `plotly.js-dist-min` (~1MB minified). Default chrome is blue, violates R1-R10. Parent §11.1 deliverable 25.
+**Current state:** `CompareFrames.tsx` uses `react-plotly.js` + `plotly.js-dist-min` (~1MB minified). Default chrome is blue, violates R1-R10. Parent §11.1 deliverable 25 envisioned full plotly removal but blocked by `ChatPane` + `PlotlyEmbed` still using plotly for `<plotly>` envelope rendering in chat (Phase 7-8 overhaul wire-up).
 
-**Target:** Reimplement over `@visx/shape` (`Line`, `Bar`, axes hand-SVG). Same prop interface, same data-testids, brutalist styling.
+**Decision (2026-05-18):** Trim E to CompareFrames-only reimpl. **Plotly stays installed** for ChatPane envelope rendering. **Bundle savings deferred** to a future "ChatPane plotly migration" slice that will tackle rewriting `PlotlyEmbed` or replacing chat-charts.
+
+**Target:** Reimplement `CompareFrames` over `@visx/shape` (`Line`, `Bar`, axes hand-SVG). Same prop interface, same data-testids, brutalist styling. No `package.json` changes.
 
 **Steps:**
 
 1. Read current `CompareFrames.tsx` + its test
-2. Identify the plot type(s) used (likely line/bar from sum-plot tracking)
+2. Identify the plot type used (mean-vs-median scatter + animation)
 3. Reimplement in `@visx/shape` with theme.ts colors + JetBrains Mono labels
 4. Preserve prop API — callers shouldn't notice
-5. Existing `CompareFrames.test.tsx` should still pass (if not, it was over-specified to Plotly DOM — update assertion to render-no-throw + data-testid presence)
-6. Remove from `package.json`: `plotly.js-dist-min` + `react-plotly.js`
-7. `npm install` + commit lockfile
-8. Verify bundle size drop (≥800KB) via `npm run build` output comparison before / after
+5. Existing `CompareFrames.test.tsx` may need update if it was over-specified to Plotly DOM (likely uses `.js-plotly-plot` selector or imports plotly mock) — refactor to render-no-throw + data-testid presence assertions
+6. Keep plotly imports OUT of the new `CompareFrames.tsx` — it should be plotly-free even though the package stays installed for other consumers
 
 **Acceptance:**
 
-- `CompareFrames.tsx` reimplemented, no plotly import
-- `package.json` plotly entries gone
-- Bundle gzipped size drops ≥800KB (CompareFrames itself is small; the saving is Plotly's static cost)
-- CompareFrames vitest green
-- Visible at `/viz-demo`, brutalist eyeball
+- `CompareFrames.tsx` reimplemented, no plotly import in the file
+- `PlotlyEmbed.tsx` + `ChatPane.tsx` + plotly deps in `package.json` unchanged
+- CompareFrames vitest green (updated assertions if necessary)
+- Visible at `/viz-demo`, brutalist eyeball (INK / PAPER / ACCENT only, no blue dashed line, hard edges)
+
+**Deferred (note for future slice):** Migrate `ChatPane`'s `<plotly>` envelope rendering off plotly. Options: rewrite `PlotlyEmbed` to translate `{ data, layout }` spec → `@visx/shape` (non-trivial — plotly has many chart types); drop chat-chart feature; replace with smaller library (`uPlot` ~40KB, `@observablehq/plot`). Until this lands, plotly stays in `package.json` and the ~1MB bundle cost is paid.
 
 ## 4. Execution order (linear D → C → B → E)
 
@@ -233,6 +235,6 @@ All on one page, all tab-navigable, all keyboard-operable for the interactive on
 - All vitest green: `npm --prefix tutor-web run test -- --run`
 - `npm --prefix tutor-web run build` clean
 - `/tutor/viz-demo` renders all 7 tiles, brutalist-compliant by eye
-- Bundle size dropped ≥800KB (post-plotly)
-- BRIDGE.md handoff updated with new bundle hash + tests passing + this slice path
+- Bundle size unchanged (or marginally larger from new deps minus modest plotly-internal cleanup — full ≥800KB drop deferred per E-trim decision)
+- BRIDGE.md handoff updated with: this slice path · noted deferred ChatPane plotly migration
 - No new memory files needed (existing parent spec + this slice doc cover everything; auto-memory only logs intent/exceptions per durable rules)
