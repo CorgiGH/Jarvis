@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "./theme";
+import { FadeText, motion } from "./motion-helpers";
 
 type CounterState = { n: number };
 
@@ -24,7 +25,7 @@ function renderCounter(f: Frame<CounterState>): ReactNode {
       >
         COUNTER
       </text>
-      <text
+      <FadeText
         x={240}
         y={210}
         textAnchor="middle"
@@ -33,13 +34,15 @@ function renderCounter(f: Frame<CounterState>): ReactNode {
         fontWeight={900}
         fill={INK}
       >
-        {f.state.n}
-      </text>
-      <rect
+        {String(f.state.n)}
+      </FadeText>
+      <motion.rect
         x={140}
         y={250}
-        width={(f.state.n / 7) * 200}
         height={12}
+        initial={false}
+        animate={{ width: (f.state.n / 7) * 200 }}
+        transition={{ type: "tween", duration: 0.5, ease: "easeInOut" }}
         fill={ACCENT}
         stroke={INK}
         strokeWidth={1}

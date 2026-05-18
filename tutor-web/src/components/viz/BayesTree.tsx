@@ -224,46 +224,26 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
 
       {/* D node */}
       <circle cx={branchX1} cy={branch1Y} r={5} fill={ACCENT} stroke={INK} strokeWidth={1} />
-      {/* D label: "D · " static + tween percentage */}
-      <text
-        x={branchX1 + 8}
-        y={branch1Y + 4}
-        fontFamily={FONT_FAMILY}
-        fontSize={10}
-        fontWeight={700}
-        fill={INK}
-      >
-        D · P=
-      </text>
       <TweenText
-        x={branchX1 + 36}
+        x={branchX1 + 8}
         y={branch1Y + 4}
         fontFamily={FONT_FAMILY}
         fontSize={10}
         fontWeight={700}
         fill={INK}
         value={prior}
-        formatter={fmtPct}
+        formatter={(v) => `D · P=${fmtPct(v)}`}
       />
       {/* H node */}
       <circle cx={branchX1} cy={branch2Y} r={5} fill="#fff" stroke={INK} strokeWidth={1} />
-      <text
+      <TweenText
         x={branchX1 + 8}
         y={branch2Y + 4}
         fontFamily={FONT_FAMILY}
         fontSize={10}
         fill={INK}
-      >
-        H · P=
-      </text>
-      <TweenText
-        x={branchX1 + 36}
-        y={branch2Y + 4}
-        fontFamily={FONT_FAMILY}
-        fontSize={10}
-        fill={INK}
         value={pH}
-        formatter={fmtPct}
+        formatter={(v) => `H · P=${fmtPct(v)}`}
       />
 
       {/* Sub-branches: D → +/-, H → +/- — draw on each frame */}
@@ -318,56 +298,45 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         />
       </AnimatePresence>
 
-      {/* Leaf labels: "+ · " / "− · " static + tween percentages */}
-      <text x={leafX + 4} y={branch1Y - 14} fontFamily={FONT_FAMILY} fontSize={9} fill={INK}>
-        + ·
-      </text>
+      {/* Leaf labels — sign + percentage in a single TweenText so they
+          can't drift apart or overlap each other. */}
       <TweenText
-        x={leafX + 16}
+        x={leafX + 4}
         y={branch1Y - 14}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fill={INK}
         value={sensitivity}
-        formatter={fmtPct}
+        formatter={(v) => `+ · ${fmtPct(v)}`}
       />
-      <text x={leafX + 4} y={branch1Y + 18} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.5}>
-        − ·
-      </text>
       <TweenText
-        x={leafX + 16}
+        x={leafX + 4}
         y={branch1Y + 18}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fill={INK}
         opacity={0.5}
         value={1 - sensitivity}
-        formatter={fmtPct}
+        formatter={(v) => `− · ${fmtPct(v)}`}
       />
-      <text x={leafX + 4} y={branch2Y - 14} fontFamily={FONT_FAMILY} fontSize={9} fill={INK}>
-        + ·
-      </text>
       <TweenText
-        x={leafX + 16}
+        x={leafX + 4}
         y={branch2Y - 14}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fill={INK}
         value={fpr}
-        formatter={fmtPct}
+        formatter={(v) => `+ · ${fmtPct(v)}`}
       />
-      <text x={leafX + 4} y={branch2Y + 18} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.5}>
-        − ·
-      </text>
       <TweenText
-        x={leafX + 16}
+        x={leafX + 4}
         y={branch2Y + 18}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fill={INK}
         opacity={0.5}
         value={1 - fpr}
-        formatter={fmtPct}
+        formatter={(v) => `− · ${fmtPct(v)}`}
       />
 
       {/* === AREA PANE === */}
@@ -444,17 +413,35 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         )}
       </AnimatePresence>
 
-      {/* Labels on area */}
-      <text
-        x={AREA_X + 4}
-        y={AREA_Y + (AREA_H * sensitivity) / 2 + 4}
-        fontFamily={FONT_FAMILY}
-        fontSize={9}
-        fontWeight={700}
-        fill={INK}
-      >
-        D ∩ +
-      </text>
+      {/* Labels on area — D-column labels only when the column is wide
+          enough (>=15% of AREA_W). Otherwise the "D ∩ +" text overflows
+          past the rect and collides with the H labels. */}
+      <AnimatePresence>
+        {visualPrior >= 0.15 && (
+          <PopIn key="d-area-labels" durationMs={300}>
+            <text
+              x={AREA_X + 4}
+              y={AREA_Y + (AREA_H * sensitivity) / 2 + 4}
+              fontFamily={FONT_FAMILY}
+              fontSize={9}
+              fontWeight={700}
+              fill={INK}
+            >
+              D ∩ +
+            </text>
+            <text
+              x={AREA_X + 4}
+              y={AREA_Y + AREA_H * (sensitivity + (1 - sensitivity) / 2) + 4}
+              fontFamily={FONT_FAMILY}
+              fontSize={9}
+              fill={INK}
+              opacity={0.6}
+            >
+              D ∩ −
+            </text>
+          </PopIn>
+        )}
+      </AnimatePresence>
       <motion.text
         y={AREA_Y + (AREA_H * fpr) / 2 + 6}
         initial={false}

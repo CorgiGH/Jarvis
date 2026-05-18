@@ -429,36 +429,49 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
         })}
       </AnimatePresence>
 
-      {/* ---- WASTED-WORK TALLY ---- */}
-      <FadeText
-        x={DP_X}
-        y={TALLY_Y}
-        fontFamily={FONT_FAMILY}
-        fontSize={9}
-        fontWeight={700}
-        fill={INK}
-        opacity={0.75}
-      >
-        {`WASTED WORK: ${
+      {/* ---- WASTED-WORK TALLY ----
+          Full-width band at the bottom of the SVG so the text doesn't cross
+          the DP-vs-naïve pane separator. Wasted entries truncated to fit. */}
+      {(() => {
+        const fullEntries =
           wastedEntries.length > 0
             ? wastedEntries.map(([n, count]) => `fib(${n})×${count}`).join("  ")
-            : "(none yet)"
-        }`}
-      </FadeText>
-      <FadeText
-        x={DP_X}
-        y={TALLY_Y + 14}
-        fontFamily={FONT_FAMILY}
-        fontSize={8}
-        fill={INK}
-        opacity={0.5}
-      >
-        {`DP: ${N + 1} cells computed. ${
-          tree.length > 0
-            ? `Naïve: ${tree.length} calls so far.`
-            : "Naïve phase not started."
-        }`}
-      </FadeText>
+            : "(none yet)";
+        const MAX_WW_CHARS = 80;
+        const wwTrimmed =
+          fullEntries.length > MAX_WW_CHARS
+            ? fullEntries.slice(0, MAX_WW_CHARS - 1) + "…"
+            : fullEntries;
+        const tally = `DP: ${N + 1} cells computed.${
+          tree.length > 0 ? `  Naïve: ${tree.length} calls so far.` : ""
+        }`;
+        return (
+          <>
+            <FadeText
+              x={DP_X}
+              y={SVG_H - 16}
+              fontFamily={FONT_FAMILY}
+              fontSize={9}
+              fontWeight={700}
+              fill={INK}
+              opacity={0.75}
+            >
+              {`WASTED WORK: ${wwTrimmed}`}
+            </FadeText>
+            <FadeText
+              x={SVG_W - 8}
+              y={SVG_H - 16}
+              textAnchor="end"
+              fontFamily={FONT_FAMILY}
+              fontSize={8}
+              fill={INK}
+              opacity={0.5}
+            >
+              {tally}
+            </FadeText>
+          </>
+        );
+      })()}
 
       {/* Bounds anchor — keeps coords within the shell's 480×360 viewBox */}
       <rect x={0} y={0} width={480} height={360} fill="none" stroke="none" />
