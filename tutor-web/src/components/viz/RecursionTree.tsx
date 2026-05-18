@@ -1,4 +1,10 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import {
+  animate,
+  motionValue,
+  useTransform,
+  type MotionValue,
+} from "motion/react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "./theme";
 import {
@@ -121,6 +127,172 @@ const TREE_X_END = 470;
 const TREE_NODE_R = 14;
 const TREE_LEVEL_GAP = 50;
 
+// Per-node shared MotionValues for x/y. Both the circle's motion.g translate
+// AND the edges' x1/y1/x2/y2 read from the SAME MotionValue so they're
+// physically incapable of drifting out of sync.
+type NodeMV = { x: MotionValue<number>; y: MotionValue<number> };
+
+function useNodePositionMVs(
+  tree: TreeNode[],
+  positions: Map<number, { x: number; y: number }>,
+): Map<number, NodeMV> {
+  const mvMapRef = useRef<Map<number, NodeMV>>(new Map());
+
+  // Lazy-create MotionValues for any new node, initialised to the current
+  // target so first paint is at the right spot.
+  tree.forEach((node) => {
+    if (!mvMapRef.current.has(node.id)) {
+      const pos = positions.get(node.id);
+      if (pos) {
+        mvMapRef.current.set(node.id, {
+          x: motionValue(pos.x),
+          y: motionValue(pos.y),
+        });
+      }
+    }
+  });
+
+  // Retarget every node's MotionValue to its current frame's position.
+  // Runs after render so motion-driven values catch up to the latest layout.
+  useEffect(() => {
+    const controls: Array<{ stop: () => void }> = [];
+    tree.forEach((node) => {
+      const pos = positions.get(node.id);
+      const mv = mvMapRef.current.get(node.id);
+      if (!pos || !mv) return;
+      controls.push(
+        animate(mv.x, pos.x, { duration: 0.5, ease: "easeInOut" }),
+      );
+      controls.push(
+        animate(mv.y, pos.y, { duration: 0.5, ease: "easeInOut" }),
+      );
+    });
+    return () => controls.forEach((c) => c.stop());
+  });
+
+  return mvMapRef.current;
+}
+
+function TreeEdge({
+  parentMv,
+  childMv,
+  status,
+}: {
+  parentMv: NodeMV;
+  childMv: NodeMV;
+  status: "pending" | "returned";
+}) {
+  // Derive line endpoints from the SAME MotionValues the circles use. As
+  // motion's RAF tick updates each MV, the line endpoints update in the
+  // same tick — guaranteed lockstep with the circles at the ends.
+  const y1 = useTransform(parentMv.y, (v) => v + TREE_NODE_R);
+  const y2 = useTransform(childMv.y, (v) => v - TREE_NODE_R);
+  const targetOpacity = status === "returned" ? 0.4 : 0.8;
+  return (
+    <motion.line
+      x1={parentMv.x}
+      y1={y1}
+      x2={childMv.x}
+      y2={y2}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: targetOpacity }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.5, ease: "easeInOut" }}
+      stroke={INK}
+      strokeWidth={1}
+    />
+  );
+}
+
+function TreePane({
+  tree,
+  currentId,
+  positions,
+}: {
+  tree: TreeNode[];
+  currentId: number;
+  positions: Map<number, { x: number; y: number }>;
+}) {
+  const mvMap = useNodePositionMVs(tree, positions);
+
+  return (
+    <>
+      <AnimatePresence>
+        {tree.flatMap((node) => {
+          if (node.parentId === null) return [];
+          const parentMv = mvMap.get(node.parentId);
+          const childMv = mvMap.get(node.id);
+          if (!parentMv || !childMv) return [];
+          return [
+            <TreeEdge
+              key={`edge-${node.parentId}-${node.id}`}
+              parentMv={parentMv}
+              childMv={childMv}
+              status={node.status}
+            />,
+          ];
+        })}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {tree.map((node) => {
+          const mv = mvMap.get(node.id);
+          if (!mv) return null;
+          const isCurrent = node.id === currentId;
+          const returned = node.status === "returned";
+          return (
+            <PopIn key={`node-${node.id}`}>
+              <motion.g style={{ x: mv.x, y: mv.y }}>
+                <motion.circle
+                  cx={0}
+                  cy={0}
+                  initial={false}
+                  animate={{
+                    fill: isCurrent ? ACCENT : "#fff",
+                    strokeWidth: isCurrent ? 2 : 1,
+                    opacity: returned ? 1 : 0.85,
+                  }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                  r={TREE_NODE_R}
+                  stroke={INK}
+                />
+                <FadeText
+                  x={0}
+                  y={4}
+                  textAnchor="middle"
+                  fontFamily={FONT_FAMILY}
+                  fontSize={10}
+                  fontWeight={700}
+                  fill={INK}
+                >
+                  {String(node.value !== null ? node.value : node.n)}
+                </FadeText>
+                <AnimatePresence>
+                  {node.value === null && (
+                    <PopIn key={`node-sub-${node.id}`}>
+                      <text
+                        x={0}
+                        y={TREE_NODE_R + 11}
+                        textAnchor="middle"
+                        fontFamily={FONT_FAMILY}
+                        fontSize={8}
+                        fill={INK}
+                        opacity={0.6}
+                      >
+                        fib({node.n})
+                      </text>
+                    </PopIn>
+                  )}
+                </AnimatePresence>
+              </motion.g>
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
+    </>
+  );
+}
+
 function renderFrame(frame: Frame<RecursionState>): ReactNode {
   const { stack, tree } = frame.state;
   const currentId = frame.state.step.nodeId;
@@ -187,8 +359,6 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
         {stack.map((nodeId, i) => {
           const node = tree.find((t) => t.id === nodeId);
           if (!node) return null;
-          // i=0 oldest (bottom of stack), i=stack.length-1 newest (top)
-          // Render newest at top of screen (smallest y)
           const idxFromTop = stack.length - 1 - i;
           const cardY = STACK_Y_TOP + idxFromTop * (STACK_FRAME_H + STACK_FRAME_GAP);
           const isCurrent = nodeId === currentId;
@@ -245,96 +415,7 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
         })}
       </AnimatePresence>
 
-      {/* Tree edges (parent -> child) — endpoints slide smoothly when nodes
-          shift between frames (motion.line animates x1/y1/x2/y2 via framer-
-          motion); new edges fade in via opacity; returned subtrees fade to 0.4. */}
-      <AnimatePresence>
-        {tree.flatMap((node) => {
-          if (node.parentId === null) return [];
-          const from = positions.get(node.parentId);
-          const to = positions.get(node.id);
-          if (!from || !to) return [];
-          const targetOpacity = node.status === "returned" ? 0.4 : 0.8;
-          const x1 = from.x;
-          const y1 = from.y + TREE_NODE_R;
-          const x2 = to.x;
-          const y2 = to.y - TREE_NODE_R;
-          return [
-            <motion.line
-              key={`edge-${node.parentId}-${node.id}`}
-              initial={{ opacity: 0, x1, y1, x2, y2 }}
-              animate={{ opacity: targetOpacity, x1, y1, x2, y2 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.5, ease: "easeInOut" }}
-              stroke={INK}
-              strokeWidth={1}
-            />,
-          ];
-        })}
-      </AnimatePresence>
-
-      {/* Tree nodes — pop in on creation, slide smoothly when layout shifts.
-          Whole node (circle + label + sub-text) wrapped in motion.g animating
-          its translate so the label slides in lockstep with the circle. */}
-      <AnimatePresence>
-        {tree.map((node) => {
-          const pos = positions.get(node.id);
-          if (!pos) return null;
-          const isCurrent = node.id === currentId;
-          const returned = node.status === "returned";
-          return (
-            <PopIn key={`node-${node.id}`}>
-              <motion.g
-                initial={false}
-                animate={{ x: pos.x, y: pos.y }}
-                transition={{ type: "tween", duration: 0.5, ease: "easeInOut" }}
-              >
-                <motion.circle
-                  cx={0}
-                  cy={0}
-                  initial={false}
-                  animate={{
-                    fill: isCurrent ? ACCENT : "#fff",
-                    strokeWidth: isCurrent ? 2 : 1,
-                    opacity: returned ? 1 : 0.85,
-                  }}
-                  transition={{ duration: 0.5, ease: "easeInOut" }}
-                  r={TREE_NODE_R}
-                  stroke={INK}
-                />
-                <FadeText
-                  x={0}
-                  y={4}
-                  textAnchor="middle"
-                  fontFamily={FONT_FAMILY}
-                  fontSize={10}
-                  fontWeight={700}
-                  fill={INK}
-                >
-                  {String(node.value !== null ? node.value : node.n)}
-                </FadeText>
-                <AnimatePresence>
-                  {node.value === null && (
-                    <PopIn key={`node-sub-${node.id}`}>
-                      <text
-                        x={0}
-                        y={TREE_NODE_R + 11}
-                        textAnchor="middle"
-                        fontFamily={FONT_FAMILY}
-                        fontSize={8}
-                        fill={INK}
-                        opacity={0.6}
-                      >
-                        fib({node.n})
-                      </text>
-                    </PopIn>
-                  )}
-                </AnimatePresence>
-              </motion.g>
-            </PopIn>
-          );
-        })}
-      </AnimatePresence>
+      <TreePane tree={tree} currentId={currentId} positions={positions} />
     </>
   );
 }
