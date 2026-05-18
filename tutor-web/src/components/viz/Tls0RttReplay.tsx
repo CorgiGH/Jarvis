@@ -220,7 +220,7 @@ function FooterMessage({ message }: { message: string }) {
     }
   }
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence initial={false}>
       <motion.text
         key={message}
         x={16}
@@ -259,7 +259,7 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
   return (
     <>
       {/* Phase indicator — cross-fade as phase changes */}
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence initial={false}>
         <motion.text
           key={`phase-${phase}`}
           x={20}

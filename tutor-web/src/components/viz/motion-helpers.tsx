@@ -1,13 +1,13 @@
 import { useEffect, type ReactNode, type SVGProps } from "react";
 import {
   AnimatePresence,
+  animate,
   motion,
   useMotionValue,
-  useSpring,
   useTransform,
 } from "motion/react";
 
-const DEFAULT_SPRING = { stiffness: 90, damping: 18, mass: 0.6 };
+const DEFAULT_TWEEN_MS = 500;
 
 type SvgTextRest = Omit<SVGProps<SVGTextElement>, "children" | "format">;
 type SvgLineRest = SVGProps<SVGLineElement>;
@@ -15,8 +15,9 @@ type SvgPathRest = SVGProps<SVGPathElement>;
 type SvgGroupRest = SVGProps<SVGGElement>;
 
 /**
- * TweenText — animates a numeric value smoothly via a spring.
- * Use anywhere a `<text>` element displays a number that changes between frames.
+ * TweenText — animates a numeric value smoothly between frame snapshots.
+ * Uses a tween (not spring) with explicit duration so the animation arrives
+ * in lockstep with sibling motion components that use the same duration.
  *
  * The text content is driven by a MotionValue, so updates don't trigger React
  * reconciliation; the DOM textContent is mutated directly each animation frame.
@@ -24,16 +25,24 @@ type SvgGroupRest = SVGProps<SVGGElement>;
 export function TweenText(props: {
   value: number;
   formatter?: (n: number) => string;
-  spring?: { stiffness: number; damping: number; mass?: number };
+  durationMs?: number;
 } & SvgTextRest) {
-  const { value, formatter = (n: number) => n.toFixed(0), spring = DEFAULT_SPRING, ...textProps } = props;
+  const {
+    value,
+    formatter = (n: number) => n.toFixed(0),
+    durationMs = DEFAULT_TWEEN_MS,
+    ...textProps
+  } = props;
   const mv = useMotionValue(value);
-  const sp = useSpring(mv, spring);
-  const display = useTransform(sp, (v) => formatter(v));
+  const display = useTransform(mv, (v) => formatter(v));
 
   useEffect(() => {
-    mv.set(value);
-  }, [value, mv]);
+    const controls = animate(mv, value, {
+      duration: durationMs / 1000,
+      ease: "easeInOut",
+    });
+    return () => controls.stop();
+  }, [value, mv, durationMs]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return <motion.text {...(textProps as any)}>{display}</motion.text>;
@@ -41,22 +50,24 @@ export function TweenText(props: {
 
 /**
  * FadeText — cross-fades when the rendered string changes.
- * Use for non-numeric label updates where TweenText doesn't apply
- * (status text, mode badges, message bar copy, etc.).
+ *
+ * Old value fades OUT while new value fades IN simultaneously (no `mode="wait"`),
+ * so there is no invisible gap between them — the new value is already at
+ * partial opacity by the time the old one starts to vanish.
  */
 export function FadeText(props: {
   children: ReactNode;
   durationMs?: number;
 } & SvgTextRest) {
-  const { children, durationMs = 250, ...textProps } = props;
+  const { children, durationMs = 350, ...textProps } = props;
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence initial={false}>
       <motion.text
         key={String(children)}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: durationMs / 1000 }}
+        transition={{ duration: durationMs / 1000, ease: "easeInOut" }}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         {...(textProps as any)}
       >

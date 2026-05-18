@@ -406,9 +406,9 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
   // vtables placed below heap
   vtables.forEach((vt, i) => {
     const x = HEAP_X + 10 + i * 105;
-    const y = HEAP_Y + HEAP_H - 60;
+    const y = HEAP_Y + HEAP_H - 70;
     const w = 95;
-    const h = 12 + vt.entries.length * 12;
+    const h = 18 + vt.entries.length * 13;
     objPos.set(vt.id, { x, y, w, h });
   });
 
@@ -686,22 +686,31 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
               />
               <text
                 x={p.x + p.w / 2}
-                y={p.y + 9}
+                y={p.y + 11}
                 textAnchor="middle"
                 fontFamily={FONT_FAMILY}
-                fontSize={7}
+                fontSize={8}
                 fontWeight={700}
                 fill={INK}
               >
                 {vt.id.replace("vtable-", "vtable ")}
               </text>
+              <line
+                x1={p.x + 4}
+                y1={p.y + 15}
+                x2={p.x + p.w - 4}
+                y2={p.y + 15}
+                stroke={INK}
+                strokeWidth={0.5}
+                opacity={0.4}
+              />
               {vt.entries.map((e, i) => (
                 <text
                   key={`vt-e-${i}`}
-                  x={p.x + 4}
-                  y={p.y + 20 + i * 11}
+                  x={p.x + 5}
+                  y={p.y + 26 + i * 13}
                   fontFamily={FONT_FAMILY}
-                  fontSize={7}
+                  fontSize={8}
                   fill={INK}
                 >
                   [{i}] {e.name}
@@ -743,19 +752,22 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
 
           if (isStackPtr && isObjectTarget) {
             // Arc OVER the heap. Land on the top edge of the target so the
-            // arrow tip points downward into the object.
+            // arrow tip points downward into the object. Control-point y
+            // scales with horizontal distance so short hops use a small arc
+            // and long hops a tall one.
             const target = objPos.get(p.to)!;
             const targetCx = target.x + target.w / 2;
-            const arcTop = HEAP_Y - 14;
+            const dx = Math.abs(targetCx - from.x);
+            const arcHeight = Math.min(40, 16 + dx * 0.18);
             to = { x: targetCx, y: target.y };
             midX = (from.x + to.x) / 2;
-            midY = arcTop;
+            midY = Math.min(from.y, to.y) - arcHeight;
             pathD = `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`;
             arrowAngleDeg = 90; // tip points down
           } else if (hasReverse) {
-            // Phase 2 ref-count cycle: wider arc (±35) so curves clear the
-            // objects sitting between A and B.
-            const arcOffset = i % 2 === 0 ? -35 : 35;
+            // Phase 2 ref-count cycle: ±45 arc so both directions clear the
+            // objects sitting between A and B with room to breathe.
+            const arcOffset = i % 2 === 0 ? -45 : 45;
             midX = (from.x + to.x) / 2;
             midY = (from.y + to.y) / 2 + arcOffset;
             pathD = `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`;
@@ -764,7 +776,8 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
 
           const key = `ptr-${p.from}->${p.to}-${p.kind}`;
           // Arrowhead points right by default; rotate around tip for other directions.
-          const arrowPoints = `${to.x},${to.y} ${to.x - 6},${to.y - 3.5} ${to.x - 6},${to.y + 3.5}`;
+          // Slightly larger than before so the tip reads at a glance.
+          const arrowPoints = `${to.x},${to.y} ${to.x - 8},${to.y - 4} ${to.x - 8},${to.y + 4}`;
           const arrowTransform = arrowAngleDeg
             ? `rotate(${arrowAngleDeg} ${to.x} ${to.y})`
             : undefined;
@@ -917,7 +930,7 @@ function FooterMessage({ message }: { message: string }) {
     }
   }
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence initial={false}>
       <motion.text
         key={message}
         x={16}

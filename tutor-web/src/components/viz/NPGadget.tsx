@@ -424,7 +424,7 @@ function FooterMessage({ message }: { message: string }) {
     }
   }
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence initial={false}>
       <motion.text
         key={message}
         x={16}
