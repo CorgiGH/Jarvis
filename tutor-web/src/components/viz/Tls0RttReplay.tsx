@@ -446,24 +446,26 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
         })}
       </AnimatePresence>
 
-      {/* Mitigation badges — only in phase 4. Placed under the phase indicator
-          (y ~44) so they don't collide with the footer rect (y 312-348). */}
+      {/* Mitigation badges — only in phase 4. Placed at the bottom of the
+          lifeline area (y=296-308), below the last visible message and above
+          the footer rect (y=312). Previously at y=44 they collided with the
+          CLIENT/SERVER/ATTACKER actor column labels at y=40-70. */}
       <AnimatePresence>
         {showMitigations &&
           MITIGATION_BADGES.filter((b) => step >= b.appearOn).map((b, i) => (
             <PopIn key={b.id} durationMs={300} delayMs={i * 60}>
               <rect
-                x={140 + i * 110}
-                y={44}
-                width={100}
-                height={18}
+                x={20 + i * 150}
+                y={296}
+                width={140}
+                height={14}
                 fill={ACCENT}
                 stroke={INK}
                 strokeWidth={1}
               />
               <text
-                x={140 + i * 110 + 50}
-                y={57}
+                x={20 + i * 150 + 70}
+                y={306}
                 textAnchor="middle"
                 fontFamily={FONT_FAMILY}
                 fontSize={8}
