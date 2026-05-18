@@ -184,6 +184,7 @@ export function MatrixTransform({
             key={`ray-${i}`}
             x1={CX}
             y1={CY}
+            initial={false}
             animate={{ x2, y2 }}
             transition={TWEEN}
             stroke={INK}
@@ -213,6 +214,7 @@ export function MatrixTransform({
         <motion.line
           x1={CX}
           y1={CY}
+          initial={false}
           animate={{ x2: renderedW[0], y2: renderedW[1] }}
           transition={TWEEN}
           stroke={INK}
@@ -220,6 +222,7 @@ export function MatrixTransform({
           markerEnd="url(#mt-ink-arrow)"
         />
         <motion.g
+          initial={false}
           animate={{ x: renderedW[0] + 6, y: renderedW[1] - 4 }}
           transition={TWEEN}
         >
@@ -246,6 +249,7 @@ export function MatrixTransform({
               <motion.line
                 x1={CX}
                 y1={CY}
+                initial={false}
                 animate={{ x2: ex, y2: ey }}
                 transition={TWEEN}
                 stroke={ACCENT}
@@ -253,6 +257,7 @@ export function MatrixTransform({
                 markerEnd="url(#mt-yellow-arrow)"
               />
               <motion.text
+                initial={false}
                 animate={{ x: ex + ox, y: ey - oy + 4 }}
                 transition={TWEEN}
                 fontFamily={FONT_FAMILY}

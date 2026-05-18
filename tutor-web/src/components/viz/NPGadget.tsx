@@ -342,6 +342,7 @@ function renderFrame(frame: Frame<NPState>): ReactNode {
               cy={pos.y}
               r={11}
               stroke={INK}
+              initial={false}
               animate={{
                 fill: isClique ? ACCENT : "#fff",
                 strokeWidth: isClique ? 2 : 1,

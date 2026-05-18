@@ -576,6 +576,7 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
             <PopIn key={`stk-${phase}-${name}`} durationMs={250}>
               <motion.text
                 x={HEAP_X - 30}
+                initial={false}
                 animate={{ y: y + 4 }}
                 transition={{ duration: 0.4, ease: "easeInOut" }}
                 textAnchor="end"
@@ -604,6 +605,7 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                 y={p.y}
                 width={p.w}
                 height={p.h}
+                initial={false}
                 animate={{
                   fill: highlighted ? ACCENT : "#fff",
                   strokeWidth: highlighted ? 2 : 1,
@@ -748,6 +750,7 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                 />
               ) : (
                 <motion.line
+                  initial={false}
                   animate={{
                     x1: from.x,
                     y1: from.y,
@@ -761,6 +764,7 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                 />
               )}
               <motion.polygon
+                initial={false}
                 animate={{ points: arrowPoints, fill: stroke }}
                 transition={{ duration: 0.45, ease: "easeInOut" }}
                 transform={

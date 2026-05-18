@@ -240,6 +240,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
       <motion.line
         x1={PLOT_X}
         x2={PLOT_X + PLOT_W}
+        initial={false}
         animate={{ y1: yScale(ssthresh), y2: yScale(ssthresh) }}
         transition={{ duration: 0.5, ease: "easeInOut" }}
         stroke={INK}
@@ -249,6 +250,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
       />
       <motion.text
         x={PLOT_X + PLOT_W - 4}
+        initial={false}
         animate={{ y: yScale(ssthresh) - 4 }}
         transition={{ duration: 0.5, ease: "easeInOut" }}
         textAnchor="end"
@@ -309,6 +311,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
 
       {/* Current data point — yellow dot, slides smoothly via framer-motion */}
       <motion.circle
+        initial={false}
         animate={{ cx: xScale(rtt), cy: yScale(cwnd) }}
         transition={{ duration: 0.5, ease: "easeInOut" }}
         r={5}
@@ -373,6 +376,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         y={STATE_Y + 84}
         width={STATE_W - 16}
         height={20}
+        initial={false}
         animate={{ fill: mode === "SLOW_START" ? ACCENT : "#fff" }}
         transition={{ duration: 0.4 }}
         stroke={INK}

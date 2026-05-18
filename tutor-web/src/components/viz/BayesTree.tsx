@@ -200,7 +200,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       {/* Trunk branches (root → D / H) — draw on as frames begin */}
       <AnimatePresence>
         <DrawLine
-          key={`edge-root-D-step${step}`}
+          key="edge-root-D"
           x1={rootX}
           y1={rootY}
           x2={branchX1}
@@ -210,7 +210,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
           durationMs={400}
         />
         <DrawLine
-          key={`edge-root-H-step${step}`}
+          key="edge-root-H"
           x1={rootX}
           y1={rootY}
           x2={branchX1}
@@ -269,7 +269,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       {/* Sub-branches: D → +/-, H → +/- — draw on each frame */}
       <AnimatePresence>
         <DrawLine
-          key={`edge-D-plus-step${step}`}
+          key="edge-D-plus"
           x1={branchX1}
           y1={branch1Y}
           x2={leafX}
@@ -281,7 +281,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
           delayMs={200}
         />
         <DrawLine
-          key={`edge-D-minus-step${step}`}
+          key="edge-D-minus"
           x1={branchX1}
           y1={branch1Y}
           x2={leafX}
@@ -293,7 +293,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
           delayMs={250}
         />
         <DrawLine
-          key={`edge-H-plus-step${step}`}
+          key="edge-H-plus"
           x1={branchX1}
           y1={branch2Y}
           x2={leafX}
@@ -305,7 +305,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
           delayMs={300}
         />
         <DrawLine
-          key={`edge-H-minus-step${step}`}
+          key="edge-H-minus"
           x1={branchX1}
           y1={branch2Y}
           x2={leafX}
@@ -379,6 +379,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         x={AREA_X}
         y={AREA_Y}
         height={AREA_H * sensitivity}
+        initial={false}
         animate={{
           width: AREA_W * visualPrior,
           opacity: showJointDP ? 1 : 0.15,
@@ -393,6 +394,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         x={AREA_X}
         y={AREA_Y + AREA_H * sensitivity}
         height={AREA_H * (1 - sensitivity)}
+        initial={false}
         animate={{
           width: AREA_W * visualPrior,
           strokeWidth: dnStroke,
@@ -406,6 +408,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       <motion.rect
         y={AREA_Y}
         height={AREA_H * fpr}
+        initial={false}
         animate={{
           x: AREA_X + AREA_W * visualPrior,
           width: AREA_W * (1 - visualPrior),
@@ -420,6 +423,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       <motion.rect
         y={AREA_Y + AREA_H * fpr}
         height={AREA_H * (1 - fpr)}
+        initial={false}
         animate={{
           x: AREA_X + AREA_W * visualPrior,
           width: AREA_W * (1 - visualPrior),
@@ -453,6 +457,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       </text>
       <motion.text
         y={AREA_Y + (AREA_H * fpr) / 2 + 6}
+        initial={false}
         animate={{ x: AREA_X + AREA_W * visualPrior + 8 }}
         transition={{ duration: 0.55, ease: "easeInOut" }}
         fontFamily={FONT_FAMILY}
@@ -464,6 +469,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       </motion.text>
       <motion.text
         y={AREA_Y + AREA_H * (fpr + (1 - fpr) / 2) + 4}
+        initial={false}
         animate={{ x: AREA_X + AREA_W * visualPrior + 8 }}
         transition={{ duration: 0.55, ease: "easeInOut" }}
         fontFamily={FONT_FAMILY}

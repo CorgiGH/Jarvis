@@ -269,6 +269,7 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
               width={DP_CELL_W}
               height={DP_CELL_H}
               stroke={INK}
+              initial={false}
               animate={{ fill: targetFill, strokeWidth: isCurrent ? 2 : 1 }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
             />
@@ -394,6 +395,7 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
                 cy={pos.y}
                 r={TREE_NODE_R}
                 stroke={INK}
+                initial={false}
                 animate={{
                   fill: targetFill,
                   fillOpacity: targetFillOpacity,

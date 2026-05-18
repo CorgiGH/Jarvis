@@ -490,6 +490,7 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
               y={y}
               width={TLB_CELL_W}
               height={TLB_CELL_H}
+              initial={false}
               animate={{
                 fill: highlighted ? ACCENT : entry ? "#fff" : PAPER,
               }}
@@ -542,6 +543,7 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
               y={y}
               width={PT_CELL_W}
               height={PT_CELL_H}
+              initial={false}
               animate={{
                 fill: highlighted ? ACCENT : pte.valid ? "#fff" : PAPER,
               }}
@@ -576,6 +578,7 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
               y={y}
               width={PHYS_CELL_W}
               height={PHYS_CELL_H}
+              initial={false}
               animate={{
                 fill: highlighted ? ACCENT : f.allocated ? "#fff" : PAPER,
               }}

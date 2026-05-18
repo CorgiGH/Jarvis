@@ -196,6 +196,7 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
           return (
             <PopIn key={`stack-${nodeId}`}>
               <motion.g
+                initial={false}
                 animate={{ y: cardY }}
                 transition={{ duration: 0.4, ease: "easeInOut" }}
               >
@@ -204,6 +205,7 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
                   y={0}
                   width={STACK_W}
                   height={STACK_FRAME_H}
+                  initial={false}
                   animate={{
                     fill: isCurrent ? ACCENT : "#fff",
                     strokeWidth: isCurrent ? 2 : 1,
@@ -284,6 +286,7 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
           return (
             <PopIn key={`node-${node.id}`}>
               <motion.circle
+                initial={false}
                 animate={{
                   cx: pos.x,
                   cy: pos.y,
