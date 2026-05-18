@@ -5,6 +5,7 @@ import { CompareFrames } from "./CompareFrames";
 import { DPWastedWork } from "./DPWastedWork";
 import { BayesTree } from "./BayesTree";
 import { NPGadget } from "./NPGadget";
+import { TcpCwnd } from "./TcpCwnd";
 import { PageTableWalk } from "./PageTableWalk";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
@@ -177,6 +178,14 @@ export function VizDemoPage() {
           Bidirectional iff reduction. Watch φ ⟺ k-clique correspondence both ways.
         </p>
         <NPGadget />
+      </section>
+
+      <section data-testid="viz-demo-rc3-tcp-cwnd" style={tileStyle}>
+        <h2 style={headingStyle}>RC-3 · TCP congestion window (Reno) ⭐ world-first</h2>
+        <p style={subheadingStyle}>
+          cwnd trajectory over 30 RTTs. Slow-start exponential → congestion avoidance linear → packet loss → fast recovery.
+        </p>
+        <TcpCwnd />
       </section>
     </div>
   );
