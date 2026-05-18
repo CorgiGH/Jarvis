@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame, type PredictionGate } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "./theme";
+import {
+  AnimatePresence,
+  FadeText,
+  PopIn,
+  TweenText,
+  motion,
+} from "./motion-helpers";
 
 type Vec2 = [number, number];
 type Mat2 = [[number, number], [number, number]];
@@ -27,6 +34,8 @@ const FRAME_COUNT = 21; // t = 0, 0.05, ..., 1.0
 const CX = 240;
 const CY = 180;
 const UNIT = 70;
+
+const TWEEN = { duration: 0.5, ease: "easeInOut" as const };
 
 function apply(M: Mat2, v: Vec2): Vec2 {
   return [M[0][0] * v[0] + M[0][1] * v[1], M[1][0] * v[0] + M[1][1] * v[1]];
@@ -102,6 +111,7 @@ export function MatrixTransform({
       lambda: e.lambda,
     }));
     const renderedW = toSvg(apply(M, w));
+    const wIsDashed = t < 0.05;
 
     return (
       <>
@@ -135,7 +145,7 @@ export function MatrixTransform({
           </marker>
         </defs>
 
-        {/* axes */}
+        {/* axes (static) */}
         <line x1={40} y1={CY} x2={440} y2={CY} stroke={INK} strokeWidth="1" />
         <line x1={CX} y1={20} x2={CX} y2={340} stroke={INK} strokeWidth="1" />
         <text x={446} y={CY + 4} fontFamily={FONT_FAMILY} fontSize={11} fill={INK}>
@@ -145,17 +155,17 @@ export function MatrixTransform({
           y
         </text>
 
-        {/* readout */}
-        <text
+        {/* readout — t tweens */}
+        <TweenText
           x={20}
           y={36}
           fontFamily={FONT_FAMILY}
           fontSize={11}
           fontWeight={700}
           fill={INK}
-        >
-          M(t) · t = {t.toFixed(2)}
-        </text>
+          value={t}
+          formatter={(n) => `M(t) · t = ${n.toFixed(2)}`}
+        />
         <text
           x={20}
           y={52}
@@ -168,55 +178,64 @@ export function MatrixTransform({
           {target[1][1]}]]
         </text>
 
-        {/* gray test rays */}
+        {/* gray test rays — persistent, endpoints animate */}
         {renderedTestRays.map(([x2, y2], i) => (
-          <line
+          <motion.line
             key={`ray-${i}`}
             x1={CX}
             y1={CY}
-            x2={x2}
-            y2={y2}
+            animate={{ x2, y2 }}
+            transition={TWEEN}
             stroke={INK}
             strokeWidth={0.8}
             opacity={0.4}
           />
         ))}
 
-        {/* w (non-eigenvector) — dashed at t=0 */}
-        {t < 0.05 && (
-          <line
-            x1={CX}
-            y1={CY}
-            x2={toSvg(w)[0]}
-            y2={toSvg(w)[1]}
-            stroke={INK}
-            strokeWidth={1.5}
-            strokeDasharray="4 3"
-          />
-        )}
+        {/* w (non-eigenvector) — dashed at t=0, pops in/out */}
+        <AnimatePresence>
+          {wIsDashed && (
+            <PopIn key="w-dashed" durationMs={250}>
+              <line
+                x1={CX}
+                y1={CY}
+                x2={toSvg(w)[0]}
+                y2={toSvg(w)[1]}
+                stroke={INK}
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+              />
+            </PopIn>
+          )}
+        </AnimatePresence>
 
-        {/* w (non-eigenvector) — animated */}
-        <line
+        {/* w (non-eigenvector) — animated endpoint */}
+        <motion.line
           x1={CX}
           y1={CY}
-          x2={renderedW[0]}
-          y2={renderedW[1]}
+          animate={{ x2: renderedW[0], y2: renderedW[1] }}
+          transition={TWEEN}
           stroke={INK}
           strokeWidth={2}
           markerEnd="url(#mt-ink-arrow)"
         />
-        <text
-          x={renderedW[0] + 6}
-          y={renderedW[1] - 4}
-          fontFamily={FONT_FAMILY}
-          fontSize={11}
-          fontWeight={700}
-          fill={INK}
+        <motion.g
+          animate={{ x: renderedW[0] + 6, y: renderedW[1] - 4 }}
+          transition={TWEEN}
         >
-          {t < 0.05 ? "w" : `Mw (rotated)`}
-        </text>
+          <FadeText
+            x={0}
+            y={0}
+            fontFamily={FONT_FAMILY}
+            fontSize={11}
+            fontWeight={700}
+            fill={INK}
+          >
+            {wIsDashed ? "w" : "Mw (rotated)"}
+          </FadeText>
+        </motion.g>
 
-        {/* eigenvectors */}
+        {/* eigenvectors — persistent, endpoints + labels animate */}
         {renderedEigs.map(({ end, lambda }, i) => {
           const [ex, ey] = end;
           const len = Math.hypot(ex - CX, ey - CY) || 1;
@@ -224,25 +243,25 @@ export function MatrixTransform({
           const oy = ((ey - CY) / len) * 16;
           return (
             <g key={`eig-${i}`}>
-              <line
+              <motion.line
                 x1={CX}
                 y1={CY}
-                x2={ex}
-                y2={ey}
+                animate={{ x2: ex, y2: ey }}
+                transition={TWEEN}
                 stroke={ACCENT}
                 strokeWidth={4}
                 markerEnd="url(#mt-yellow-arrow)"
               />
-              <text
-                x={ex + ox}
-                y={ey - oy + 4}
+              <motion.text
+                animate={{ x: ex + ox, y: ey - oy + 4 }}
+                transition={TWEEN}
                 fontFamily={FONT_FAMILY}
                 fontSize={11}
                 fontWeight={700}
                 fill={INK}
               >
                 v{i + 1} · λ={lambda}
-              </text>
+              </motion.text>
             </g>
           );
         })}

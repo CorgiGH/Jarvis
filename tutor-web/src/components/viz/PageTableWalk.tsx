@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import {
+  AnimatePresence,
+  FadeText,
+  PopIn,
+  TweenText,
+  motion,
+} from "./motion-helpers";
 
 type PTE = {
   vpn: number;
@@ -368,10 +375,19 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
     message,
   } = frame.state;
 
+  const phaseLabel =
+    phase === 1
+      ? ": TLB miss → walk"
+      : phase === 2
+      ? ": TLB hit"
+      : phase === 3
+      ? ": page fault"
+      : ": COW after fork";
+
   return (
     <>
-      {/* Phase indicator */}
-      <text
+      {/* Phase indicator — fade between phase changes */}
+      <FadeText
         x={VA_BAR_X}
         y={VA_BAR_Y - 6}
         fontFamily={FONT_FAMILY}
@@ -380,17 +396,10 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
         fill={INK}
         opacity={0.7}
       >
-        Phase {phase}
-        {phase === 1
-          ? ": TLB miss → walk"
-          : phase === 2
-          ? ": TLB hit"
-          : phase === 3
-          ? ": page fault"
-          : ": COW after fork"}
-      </text>
+        {`Phase ${phase}${phaseLabel}`}
+      </FadeText>
 
-      {/* VA bar */}
+      {/* VA bar background (static) */}
       <rect
         x={VA_BAR_X}
         y={VA_BAR_Y}
@@ -400,30 +409,41 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
         stroke={INK}
         strokeWidth={1}
       />
-      <text
+      {/* VA text — tween vpn + offset across frame changes */}
+      <TweenText
         x={VA_BAR_X + 6}
         y={VA_BAR_Y + 14}
         fontFamily={FONT_FAMILY}
         fontSize={10}
         fill={INK}
-      >
-        VA: vpn={va.vpn} · offset=0x{va.offset.toString(16).padStart(3, "0")}
-      </text>
-      {pa && (
-        <text
-          x={VA_BAR_X + VA_BAR_W - 6}
-          y={VA_BAR_Y + 14}
-          textAnchor="end"
-          fontFamily={FONT_FAMILY}
-          fontSize={10}
-          fontWeight={700}
-          fill={INK}
-        >
-          → PA: pfn={pa.pfn} · offset=0x{pa.offset.toString(16).padStart(3, "0")}
-        </text>
-      )}
+        value={va.vpn}
+        formatter={(n) => {
+          const vpn = Math.round(n);
+          const offHex = va.offset.toString(16).padStart(3, "0");
+          return `VA: vpn=${vpn} · offset=0x${offHex}`;
+        }}
+      />
 
-      {/* Pane labels */}
+      {/* PA text on the right — appears only when translated, fades in/out */}
+      <AnimatePresence>
+        {pa && (
+          <PopIn key={`pa-${pa.pfn}-${pa.offset}`} durationMs={300}>
+            <text
+              x={VA_BAR_X + VA_BAR_W - 6}
+              y={VA_BAR_Y + 14}
+              textAnchor="end"
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+            >
+              {`→ PA: pfn=${pa.pfn} · offset=0x${pa.offset.toString(16).padStart(3, "0")}`}
+            </text>
+          </PopIn>
+        )}
+      </AnimatePresence>
+
+      {/* Pane labels (static) */}
       <text
         x={TLB_X}
         y={TLB_Y - 4}
@@ -458,128 +478,174 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
         PHYS FRAMES
       </text>
 
-      {/* TLB entries */}
+      {/* TLB entries — slot rect animates fill on highlight; entry contents pop in on first arrival */}
       {Array.from({ length: NUM_TLB_ENTRIES }, (_, i) => {
         const entry = tlb[i];
         const y = TLB_Y + i * (TLB_CELL_H + 2);
         const highlighted = highlightedTlb === i;
         return (
           <g key={`tlb-${i}`}>
-            <rect
+            <motion.rect
               x={TLB_X}
               y={y}
               width={TLB_CELL_W}
               height={TLB_CELL_H}
-              fill={highlighted ? ACCENT : entry ? "#fff" : PAPER}
+              animate={{
+                fill: highlighted ? ACCENT : entry ? "#fff" : PAPER,
+              }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
               stroke={INK}
               strokeWidth={highlighted ? 2 : 1}
             />
-            <text
-              x={TLB_X + 4}
-              y={y + 13}
-              fontFamily={FONT_FAMILY}
-              fontSize={9}
-              fill={INK}
-            >
-              {entry ? `vpn ${entry.vpn} → pfn ${entry.pfn}` : "—"}
-            </text>
+            <AnimatePresence>
+              {entry && (
+                <PopIn key={`tlb-${i}-content-${entry.vpn}-${entry.pfn}`} durationMs={300}>
+                  <text
+                    x={TLB_X + 4}
+                    y={y + 13}
+                    fontFamily={FONT_FAMILY}
+                    fontSize={9}
+                    fill={INK}
+                  >
+                    {`vpn ${entry.vpn} → pfn ${entry.pfn}`}
+                  </text>
+                </PopIn>
+              )}
+            </AnimatePresence>
+            {!entry && (
+              <text
+                x={TLB_X + 4}
+                y={y + 13}
+                fontFamily={FONT_FAMILY}
+                fontSize={9}
+                fill={INK}
+                opacity={0.5}
+              >
+                {"—"}
+              </text>
+            )}
           </g>
         );
       })}
 
-      {/* Page table entries */}
+      {/* Page table entries — fill animates on highlight; row text fades when key flags change */}
       {pageTable.map((pte, i) => {
         const y = PT_Y + i * (PT_CELL_H + 2);
         const highlighted = highlightedPte === i;
+        const cellText = `[${i}] ${
+          pte.valid ? `v=1 pfn=${pte.pfn}` : "v=0"
+        } ${pte.cow ? "COW" : pte.valid ? (pte.writable ? "R/W" : "R") : ""}`;
         return (
           <g key={`pte-${i}`}>
-            <rect
+            <motion.rect
               x={PT_X}
               y={y}
               width={PT_CELL_W}
               height={PT_CELL_H}
-              fill={highlighted ? ACCENT : pte.valid ? "#fff" : PAPER}
+              animate={{
+                fill: highlighted ? ACCENT : pte.valid ? "#fff" : PAPER,
+              }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
               stroke={INK}
               strokeWidth={highlighted ? 2 : 1}
             />
-            <text
+            <FadeText
               x={PT_X + 4}
               y={y + 14}
               fontFamily={FONT_FAMILY}
               fontSize={9}
               fill={INK}
             >
-              [{i}]{" "}
-              {pte.valid ? `v=1 pfn=${pte.pfn}` : "v=0"}{" "}
-              {pte.cow ? "COW" : pte.valid ? (pte.writable ? "R/W" : "R") : ""}
-            </text>
+              {cellText}
+            </FadeText>
           </g>
         );
       })}
 
-      {/* Physical frames */}
+      {/* Physical frames — fill animates on highlight; status text fades when state changes */}
       {physMem.map((f, i) => {
         const y = PHYS_Y + i * (PHYS_CELL_H + 2);
         const highlighted = highlightedPhys === i;
+        const cellText = `pfn ${i} ${
+          f.allocated ? (f.cowShared ? "SHARED" : "used") : "free"
+        }`;
         return (
           <g key={`phys-${i}`}>
-            <rect
+            <motion.rect
               x={PHYS_X}
               y={y}
               width={PHYS_CELL_W}
               height={PHYS_CELL_H}
-              fill={
-                highlighted ? ACCENT : f.allocated ? "#fff" : PAPER
-              }
+              animate={{
+                fill: highlighted ? ACCENT : f.allocated ? "#fff" : PAPER,
+              }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
               stroke={INK}
               strokeWidth={highlighted ? 2 : 1}
             />
-            <text
+            <FadeText
               x={PHYS_X + 4}
               y={y + 14}
               fontFamily={FONT_FAMILY}
               fontSize={9}
               fill={INK}
             >
-              pfn {i}{" "}
-              {f.allocated
-                ? f.cowShared
-                  ? "SHARED"
-                  : "used"
-                : "free"}
-            </text>
+              {cellText}
+            </FadeText>
           </g>
         );
       })}
 
-      {/* Footer message (2-line wrap) */}
+      {/* Footer message (cross-fade between frames, 2-line wrap) */}
       <rect x={10} y={MSG_Y - 28} width={460} height={36} fill={PAPER} stroke={INK} strokeWidth={1} />
-      {(() => {
-        const maxCharsPerLine = 78;
-        const words = message.split(' ');
-        let line1 = '';
-        let line2 = '';
-        for (const w of words) {
-          if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
-            line1 = line1 ? `${line1} ${w}` : w;
-          } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
-            line2 = line2 ? `${line2} ${w}` : w;
-          } else {
-            line2 = line2 + '…';
-            break;
-          }
-        }
-        return (
-          <text x={16} y={MSG_Y - 12} fontFamily={FONT_FAMILY} fontSize={9} fontWeight={700} fill={INK}>
-            <tspan x={16} dy={0}>{line1}</tspan>
-            {line2 && <tspan x={16} dy={12}>{line2}</tspan>}
-          </text>
-        );
-      })()}
+      <FooterMessage message={message} />
 
       {/* Bounds anchor */}
       <rect x={0} y={0} width={480} height={360} fill="none" stroke="none" />
     </>
+  );
+}
+
+function FooterMessage({ message }: { message: string }) {
+  const maxCharsPerLine = 78;
+  const words = message.split(" ");
+  let line1 = "";
+  let line2 = "";
+  for (const w of words) {
+    if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+      line1 = line1 ? `${line1} ${w}` : w;
+    } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+      line2 = line2 ? `${line2} ${w}` : w;
+    } else {
+      line2 = line2 + "…";
+      break;
+    }
+  }
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.text
+        key={message}
+        x={16}
+        y={MSG_Y - 12}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fontWeight={700}
+        fill={INK}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <tspan x={16} dy={0}>
+          {line1}
+        </tspan>
+        {line2 && (
+          <tspan x={16} dy={12}>
+            {line2}
+          </tspan>
+        )}
+      </motion.text>
+    </AnimatePresence>
   );
 }
 

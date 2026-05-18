@@ -1,6 +1,15 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import {
+  AnimatePresence,
+  DrawLine,
+  DrawPath,
+  FadeText,
+  PopIn,
+  TweenText,
+  motion,
+} from "./motion-helpers";
 
 const N = 5;
 
@@ -251,28 +260,48 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
         const x = DP_X + cell.idx * (DP_CELL_W + DP_GAP);
         const isCurrent = cell.idx === currentDpIdx;
         const isFilled = cell.value !== null;
+        const targetFill = isCurrent ? ACCENT : isFilled ? "#fff" : PAPER;
         return (
           <g key={`dp-${cell.idx}`}>
-            <rect
+            <motion.rect
               x={x}
               y={DP_Y}
               width={DP_CELL_W}
               height={DP_CELL_H}
-              fill={isCurrent ? ACCENT : isFilled ? "#fff" : PAPER}
               stroke={INK}
-              strokeWidth={isCurrent ? 2 : 1}
+              animate={{ fill: targetFill, strokeWidth: isCurrent ? 2 : 1 }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
             />
-            <text
-              x={x + DP_CELL_W / 2}
-              y={DP_Y + DP_CELL_H / 2 + 4}
-              textAnchor="middle"
-              fontFamily={FONT_FAMILY}
-              fontSize={11}
-              fontWeight={700}
-              fill={INK}
-            >
-              {cell.value !== null ? cell.value : "·"}
-            </text>
+            <AnimatePresence>
+              {isFilled ? (
+                <PopIn key={`dp-val-${cell.idx}`} durationMs={300}>
+                  <TweenText
+                    x={x + DP_CELL_W / 2}
+                    y={DP_Y + DP_CELL_H / 2 + 4}
+                    textAnchor="middle"
+                    fontFamily={FONT_FAMILY}
+                    fontSize={11}
+                    fontWeight={700}
+                    fill={INK}
+                    value={cell.value ?? 0}
+                    formatter={(n) => Math.round(n).toString()}
+                  />
+                </PopIn>
+              ) : (
+                <text
+                  key={`dp-dot-${cell.idx}`}
+                  x={x + DP_CELL_W / 2}
+                  y={DP_Y + DP_CELL_H / 2 + 4}
+                  textAnchor="middle"
+                  fontFamily={FONT_FAMILY}
+                  fontSize={11}
+                  fontWeight={700}
+                  fill={INK}
+                >
+                  ·
+                </text>
+              )}
+            </AnimatePresence>
             <text
               x={x + DP_CELL_W / 2}
               y={DP_Y + DP_CELL_H + 11}
@@ -289,94 +318,107 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
       })}
 
       {/* DP dependency arrows: dp[k] ← dp[k-1] + dp[k-2] for filled k ≥ 2 */}
-      {dpTable
-        .filter((c) => c.idx >= 2 && c.value !== null)
-        .map((cell) => {
-          const k = cell.idx;
-          const xCenter = (i: number) =>
-            DP_X + i * (DP_CELL_W + DP_GAP) + DP_CELL_W / 2;
-          const yTop = DP_Y - 3;
-          return (
-            <g key={`dp-arr-${k}`}>
-              {/* dp[k-1] → dp[k] */}
-              <path
-                d={`M ${xCenter(k - 1)} ${yTop} C ${xCenter(k - 1)} ${yTop - 8}, ${xCenter(k)} ${yTop - 8}, ${xCenter(k)} ${yTop}`}
-                fill="none"
-                stroke={INK}
-                strokeWidth={1}
-                opacity={0.35}
-                markerEnd="none"
-              />
-              {/* dp[k-2] → dp[k] (bigger arc) */}
-              <path
-                d={`M ${xCenter(k - 2)} ${yTop} C ${xCenter(k - 2)} ${yTop - 16}, ${xCenter(k)} ${yTop - 16}, ${xCenter(k)} ${yTop}`}
-                fill="none"
-                stroke={INK}
-                strokeWidth={1}
-                opacity={0.25}
-                markerEnd="none"
-              />
-            </g>
-          );
-        })}
+      <AnimatePresence>
+        {dpTable
+          .filter((c) => c.idx >= 2 && c.value !== null)
+          .map((cell) => {
+            const k = cell.idx;
+            const xCenter = (i: number) =>
+              DP_X + i * (DP_CELL_W + DP_GAP) + DP_CELL_W / 2;
+            const yTop = DP_Y - 3;
+            return (
+              <PopIn key={`arrow-${k}`} durationMs={300}>
+                {/* dp[k-1] → dp[k] */}
+                <DrawPath
+                  d={`M ${xCenter(k - 1)} ${yTop} C ${xCenter(k - 1)} ${yTop - 8}, ${xCenter(k)} ${yTop - 8}, ${xCenter(k)} ${yTop}`}
+                  fill="none"
+                  stroke={INK}
+                  strokeWidth={1}
+                  opacity={0.35}
+                  durationMs={400}
+                />
+                {/* dp[k-2] → dp[k] (bigger arc) */}
+                <DrawPath
+                  d={`M ${xCenter(k - 2)} ${yTop} C ${xCenter(k - 2)} ${yTop - 16}, ${xCenter(k)} ${yTop - 16}, ${xCenter(k)} ${yTop}`}
+                  fill="none"
+                  stroke={INK}
+                  strokeWidth={1}
+                  opacity={0.25}
+                  durationMs={400}
+                  delayMs={150}
+                />
+              </PopIn>
+            );
+          })}
+      </AnimatePresence>
 
       {/* ---- NAIVE TREE ---- */}
 
       {/* Tree edges */}
-      {tree.flatMap((node) => {
-        if (node.parentId === null) return [];
-        const from = positions.get(node.parentId);
-        const to = positions.get(node.id);
-        if (!from || !to) return [];
-        return [
-          <line
-            key={`edge-${node.parentId}-${node.id}`}
-            x1={from.x}
-            y1={from.y + TREE_NODE_R}
-            x2={to.x}
-            y2={to.y - TREE_NODE_R}
-            stroke={INK}
-            strokeWidth={1}
-            opacity={node.status === "returned" ? 0.35 : 0.75}
-          />,
-        ];
-      })}
+      <AnimatePresence>
+        {tree.flatMap((node) => {
+          if (node.parentId === null) return [];
+          const from = positions.get(node.parentId);
+          const to = positions.get(node.id);
+          if (!from || !to) return [];
+          return [
+            <DrawLine
+              key={`edge-${node.parentId}-${node.id}`}
+              x1={from.x}
+              y1={from.y + TREE_NODE_R}
+              x2={to.x}
+              y2={to.y - TREE_NODE_R}
+              stroke={INK}
+              strokeWidth={1}
+              opacity={node.status === "returned" ? 0.35 : 0.75}
+              durationMs={350}
+            />,
+          ];
+        })}
+      </AnimatePresence>
 
       {/* Tree nodes — shaded by duplicate count */}
-      {tree.map((node) => {
-        const pos = positions.get(node.id);
-        if (!pos) return null;
-        const isCurrent = node.id === currentTreeNodeId;
-        const dupCount = duplicates[node.n] ?? 1;
-        const { fill, fillOpacity } = dupShade(dupCount);
-        return (
-          <g key={`node-${node.id}`}>
-            <circle
-              cx={pos.x}
-              cy={pos.y}
-              r={TREE_NODE_R}
-              fill={isCurrent ? ACCENT : fill}
-              fillOpacity={isCurrent ? 1 : fillOpacity}
-              stroke={INK}
-              strokeWidth={isCurrent ? 2 : 1}
-            />
-            <text
-              x={pos.x}
-              y={pos.y + 4}
-              textAnchor="middle"
-              fontFamily={FONT_FAMILY}
-              fontSize={9}
-              fontWeight={700}
-              fill={INK}
-            >
-              {node.value !== null ? node.value : node.n}
-            </text>
-          </g>
-        );
-      })}
+      <AnimatePresence>
+        {tree.map((node) => {
+          const pos = positions.get(node.id);
+          if (!pos) return null;
+          const isCurrent = node.id === currentTreeNodeId;
+          const dupCount = duplicates[node.n] ?? 1;
+          const { fill, fillOpacity } = dupShade(dupCount);
+          const targetFill = isCurrent ? ACCENT : fill;
+          const targetFillOpacity = isCurrent ? 1 : fillOpacity;
+          return (
+            <PopIn key={`node-${node.id}`} durationMs={300}>
+              <motion.circle
+                cx={pos.x}
+                cy={pos.y}
+                r={TREE_NODE_R}
+                stroke={INK}
+                animate={{
+                  fill: targetFill,
+                  fillOpacity: targetFillOpacity,
+                  strokeWidth: isCurrent ? 2 : 1,
+                }}
+                transition={{ duration: 0.4, ease: "easeInOut" }}
+              />
+              <FadeText
+                x={pos.x}
+                y={pos.y + 4}
+                textAnchor="middle"
+                fontFamily={FONT_FAMILY}
+                fontSize={9}
+                fontWeight={700}
+                fill={INK}
+              >
+                {node.value !== null ? String(node.value) : String(node.n)}
+              </FadeText>
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
 
       {/* ---- WASTED-WORK TALLY ---- */}
-      <text
+      <FadeText
         x={DP_X}
         y={TALLY_Y}
         fontFamily={FONT_FAMILY}
@@ -385,12 +427,13 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
         fill={INK}
         opacity={0.75}
       >
-        WASTED WORK:{" "}
-        {wastedEntries.length > 0
-          ? wastedEntries.map(([n, count]) => `fib(${n})×${count}`).join("  ")
-          : "(none yet)"}
-      </text>
-      <text
+        {`WASTED WORK: ${
+          wastedEntries.length > 0
+            ? wastedEntries.map(([n, count]) => `fib(${n})×${count}`).join("  ")
+            : "(none yet)"
+        }`}
+      </FadeText>
+      <FadeText
         x={DP_X}
         y={TALLY_Y + 14}
         fontFamily={FONT_FAMILY}
@@ -398,9 +441,12 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
         fill={INK}
         opacity={0.5}
       >
-        DP: {N + 1} cells computed.{" "}
-        {tree.length > 0 ? `Naïve: ${tree.length} calls so far.` : "Naïve phase not started."}
-      </text>
+        {`DP: ${N + 1} cells computed. ${
+          tree.length > 0
+            ? `Naïve: ${tree.length} calls so far.`
+            : "Naïve phase not started."
+        }`}
+      </FadeText>
 
       {/* Bounds anchor — keeps coords within the shell's 480×360 viewBox */}
       <rect x={0} y={0} width={480} height={360} fill="none" stroke="none" />

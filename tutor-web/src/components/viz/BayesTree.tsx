@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import {
+  AnimatePresence,
+  DrawLine,
+  PopIn,
+  TweenText,
+  motion,
+} from "./motion-helpers";
 
 type BayesState = {
   step: number;
@@ -94,12 +101,17 @@ const NUM_X = 20;
 // Message (bottom)
 const MSG_Y = 340;
 
-function pct(x: number): string {
+function pctStr(x: number): string {
   return (x * 100).toFixed(2) + "%";
+}
+
+function fmtPct(n: number): string {
+  return (n * 100).toFixed(2) + "%";
 }
 
 function renderFrame(frame: Frame<BayesState>): ReactNode {
   const {
+    step,
     prior,
     sensitivity,
     fpr,
@@ -131,6 +143,18 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
   const rootY = (branch1Y + branch2Y) / 2;
   const branchX1 = TREE_X + 90;
   const leafX = TREE_X + 160;
+
+  // Sub-tree leaf endpoints
+  const leafDP_y = branch1Y - 18;
+  const leafDN_y = branch1Y + 14;
+  const leafHP_y = branch2Y - 18;
+  const leafHN_y = branch2Y + 14;
+
+  // Highlight stroke widths for area rects
+  const dpStroke = highlightArea === "DP" || highlightArea === "ALL" ? 2 : 0.5;
+  const hpStroke = highlightArea === "HP" || highlightArea === "ALL" ? 2 : 0.5;
+  const dnStroke = highlightArea === "DN" ? 2 : 0.5;
+  const hnStroke = highlightArea === "HN" ? 2 : 0.5;
 
   return (
     <>
@@ -170,13 +194,37 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         opacity={0.3}
       />
 
-      {/* Root node */}
+      {/* Root node (static) */}
       <circle cx={rootX} cy={rootY} r={5} fill={INK} />
-      {/* Branches to D / H */}
-      <line x1={rootX} y1={rootY} x2={branchX1} y2={branch1Y} stroke={INK} strokeWidth={1.5} />
-      <line x1={rootX} y1={rootY} x2={branchX1} y2={branch2Y} stroke={INK} strokeWidth={1.5} />
+
+      {/* Trunk branches (root → D / H) — draw on as frames begin */}
+      <AnimatePresence>
+        <DrawLine
+          key={`edge-root-D-step${step}`}
+          x1={rootX}
+          y1={rootY}
+          x2={branchX1}
+          y2={branch1Y}
+          stroke={INK}
+          strokeWidth={1.5}
+          durationMs={400}
+        />
+        <DrawLine
+          key={`edge-root-H-step${step}`}
+          x1={rootX}
+          y1={rootY}
+          x2={branchX1}
+          y2={branch2Y}
+          stroke={INK}
+          strokeWidth={1.5}
+          durationMs={400}
+          delayMs={100}
+        />
+      </AnimatePresence>
+
       {/* D node */}
       <circle cx={branchX1} cy={branch1Y} r={5} fill={ACCENT} stroke={INK} strokeWidth={1} />
+      {/* D label: "D · " static + tween percentage */}
       <text
         x={branchX1 + 8}
         y={branch1Y + 4}
@@ -185,8 +233,18 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         fontWeight={700}
         fill={INK}
       >
-        D · P={pct(prior)}
+        D · P=
       </text>
+      <TweenText
+        x={branchX1 + 36}
+        y={branch1Y + 4}
+        fontFamily={FONT_FAMILY}
+        fontSize={10}
+        fontWeight={700}
+        fill={INK}
+        value={prior}
+        formatter={fmtPct}
+      />
       {/* H node */}
       <circle cx={branchX1} cy={branch2Y} r={5} fill="#fff" stroke={INK} strokeWidth={1} />
       <text
@@ -196,80 +254,191 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         fontSize={10}
         fill={INK}
       >
-        H · P={pct(pH)}
+        H · P=
       </text>
+      <TweenText
+        x={branchX1 + 36}
+        y={branch2Y + 4}
+        fontFamily={FONT_FAMILY}
+        fontSize={10}
+        fill={INK}
+        value={pH}
+        formatter={fmtPct}
+      />
 
-      {/* Sub-branches: D → +/-, H → +/- */}
-      <line x1={branchX1} y1={branch1Y} x2={leafX} y2={branch1Y - 18} stroke={INK} strokeWidth={1} opacity={0.6} />
-      <line x1={branchX1} y1={branch1Y} x2={leafX} y2={branch1Y + 14} stroke={INK} strokeWidth={1} opacity={0.6} />
-      <line x1={branchX1} y1={branch2Y} x2={leafX} y2={branch2Y - 18} stroke={INK} strokeWidth={1} opacity={0.6} />
-      <line x1={branchX1} y1={branch2Y} x2={leafX} y2={branch2Y + 14} stroke={INK} strokeWidth={1} opacity={0.6} />
+      {/* Sub-branches: D → +/-, H → +/- — draw on each frame */}
+      <AnimatePresence>
+        <DrawLine
+          key={`edge-D-plus-step${step}`}
+          x1={branchX1}
+          y1={branch1Y}
+          x2={leafX}
+          y2={leafDP_y}
+          stroke={INK}
+          strokeWidth={1}
+          opacity={0.6}
+          durationMs={350}
+          delayMs={200}
+        />
+        <DrawLine
+          key={`edge-D-minus-step${step}`}
+          x1={branchX1}
+          y1={branch1Y}
+          x2={leafX}
+          y2={leafDN_y}
+          stroke={INK}
+          strokeWidth={1}
+          opacity={0.6}
+          durationMs={350}
+          delayMs={250}
+        />
+        <DrawLine
+          key={`edge-H-plus-step${step}`}
+          x1={branchX1}
+          y1={branch2Y}
+          x2={leafX}
+          y2={leafHP_y}
+          stroke={INK}
+          strokeWidth={1}
+          opacity={0.6}
+          durationMs={350}
+          delayMs={300}
+        />
+        <DrawLine
+          key={`edge-H-minus-step${step}`}
+          x1={branchX1}
+          y1={branch2Y}
+          x2={leafX}
+          y2={leafHN_y}
+          stroke={INK}
+          strokeWidth={1}
+          opacity={0.6}
+          durationMs={350}
+          delayMs={350}
+        />
+      </AnimatePresence>
+
+      {/* Leaf labels: "+ · " / "− · " static + tween percentages */}
       <text x={leafX + 4} y={branch1Y - 14} fontFamily={FONT_FAMILY} fontSize={9} fill={INK}>
-        + · {pct(sensitivity)}
+        + ·
       </text>
+      <TweenText
+        x={leafX + 16}
+        y={branch1Y - 14}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fill={INK}
+        value={sensitivity}
+        formatter={fmtPct}
+      />
       <text x={leafX + 4} y={branch1Y + 18} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.5}>
-        − · {pct(1 - sensitivity)}
+        − ·
       </text>
+      <TweenText
+        x={leafX + 16}
+        y={branch1Y + 18}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fill={INK}
+        opacity={0.5}
+        value={1 - sensitivity}
+        formatter={fmtPct}
+      />
       <text x={leafX + 4} y={branch2Y - 14} fontFamily={FONT_FAMILY} fontSize={9} fill={INK}>
-        + · {pct(fpr)}
+        + ·
       </text>
+      <TweenText
+        x={leafX + 16}
+        y={branch2Y - 14}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fill={INK}
+        value={fpr}
+        formatter={fmtPct}
+      />
       <text x={leafX + 4} y={branch2Y + 18} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.5}>
-        − · {pct(1 - fpr)}
+        − ·
       </text>
+      <TweenText
+        x={leafX + 16}
+        y={branch2Y + 18}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fill={INK}
+        opacity={0.5}
+        value={1 - fpr}
+        formatter={fmtPct}
+      />
 
       {/* === AREA PANE === */}
       {/* 100×100 unit square; map disease/healthy split + positive/negative */}
       <rect x={AREA_X} y={AREA_Y} width={AREA_W} height={AREA_H} fill={PAPER} stroke={INK} strokeWidth={1} />
 
-      {/* Disease ∩ positive (top-left of area) */}
-      <rect
+      {/* Disease ∩ positive (top-left of area) — width tweens with prior */}
+      <motion.rect
         x={AREA_X}
         y={AREA_Y}
-        width={AREA_W * visualPrior}
         height={AREA_H * sensitivity}
+        animate={{
+          width: AREA_W * visualPrior,
+          opacity: showJointDP ? 1 : 0.15,
+          strokeWidth: dpStroke,
+        }}
+        transition={{ duration: 0.55, ease: "easeInOut" }}
         fill={ACCENT}
         stroke={INK}
-        strokeWidth={highlightArea === "DP" || highlightArea === "ALL" ? 2 : 0.5}
-        opacity={showJointDP ? 1 : 0.15}
       />
       {/* Disease ∩ negative (bottom-left) */}
-      <rect
+      <motion.rect
         x={AREA_X}
         y={AREA_Y + AREA_H * sensitivity}
-        width={AREA_W * visualPrior}
         height={AREA_H * (1 - sensitivity)}
+        animate={{
+          width: AREA_W * visualPrior,
+          strokeWidth: dnStroke,
+        }}
+        transition={{ duration: 0.55, ease: "easeInOut" }}
         fill={ACCENT}
         stroke={INK}
-        strokeWidth={highlightArea === "DN" ? 2 : 0.5}
         opacity={0.2}
       />
       {/* Healthy ∩ positive (top-right) */}
-      <rect
-        x={AREA_X + AREA_W * visualPrior}
+      <motion.rect
         y={AREA_Y}
-        width={AREA_W * (1 - visualPrior)}
         height={AREA_H * fpr}
+        animate={{
+          x: AREA_X + AREA_W * visualPrior,
+          width: AREA_W * (1 - visualPrior),
+          fillOpacity: showJointHP ? 0.8 : 0.15,
+          strokeWidth: hpStroke,
+        }}
+        transition={{ duration: 0.55, ease: "easeInOut" }}
         fill={INK}
         stroke={INK}
-        strokeWidth={highlightArea === "HP" || highlightArea === "ALL" ? 2 : 0.5}
-        opacity={showJointHP ? 0.8 : 0.15}
       />
       {/* Healthy ∩ negative (bottom-right) */}
-      <rect
-        x={AREA_X + AREA_W * visualPrior}
+      <motion.rect
         y={AREA_Y + AREA_H * fpr}
-        width={AREA_W * (1 - visualPrior)}
         height={AREA_H * (1 - fpr)}
+        animate={{
+          x: AREA_X + AREA_W * visualPrior,
+          width: AREA_W * (1 - visualPrior),
+          strokeWidth: hnStroke,
+        }}
+        transition={{ duration: 0.55, ease: "easeInOut" }}
         fill="#fff"
         stroke={INK}
-        strokeWidth={highlightArea === "HN" ? 2 : 0.5}
       />
       {/* Min-width note when prior is very small */}
-      {prior < PRIOR_MIN_VISUAL && (
-        <text x={AREA_X + 2} y={AREA_Y + AREA_H + 12} fontFamily={FONT_FAMILY} fontSize={7} fill={INK} opacity={0.6}>
-          (min width 5% for visibility)
-        </text>
-      )}
+      <AnimatePresence>
+        {prior < PRIOR_MIN_VISUAL && (
+          <PopIn key="min-width-note" durationMs={250}>
+            <text x={AREA_X + 2} y={AREA_Y + AREA_H + 12} fontFamily={FONT_FAMILY} fontSize={7} fill={INK} opacity={0.6}>
+              (min width 5% for visibility)
+            </text>
+          </PopIn>
+        )}
+      </AnimatePresence>
 
       {/* Labels on area */}
       <text
@@ -282,93 +451,335 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       >
         D ∩ +
       </text>
-      <text
-        x={AREA_X + AREA_W * visualPrior + 8}
+      <motion.text
         y={AREA_Y + (AREA_H * fpr) / 2 + 6}
+        animate={{ x: AREA_X + AREA_W * visualPrior + 8 }}
+        transition={{ duration: 0.55, ease: "easeInOut" }}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fontWeight={700}
         fill={"#fff"}
       >
         H ∩ +
-      </text>
-      <text
-        x={AREA_X + AREA_W * visualPrior + 8}
+      </motion.text>
+      <motion.text
         y={AREA_Y + AREA_H * (fpr + (1 - fpr) / 2) + 4}
+        animate={{ x: AREA_X + AREA_W * visualPrior + 8 }}
+        transition={{ duration: 0.55, ease: "easeInOut" }}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fill={INK}
         opacity={0.6}
       >
         H ∩ −
-      </text>
+      </motion.text>
 
       {/* === NUMERIC PANE === */}
+      {/* Top conditional line: P(D) = X · P(+|D) = Y · P(+|H) = Z  → split into static + TweenText */}
       <text x={NUM_X} y={NUM_Y + 12} fontFamily={FONT_FAMILY} fontSize={10} fill={INK}>
-        P(D) = {pct(prior)} · P(+|D) = {pct(sensitivity)} · P(+|H) = {pct(fpr)}
+        P(D) =
       </text>
-      {showJointDP && (
-        <text x={NUM_X} y={NUM_Y + 28} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
-          P(D ∩ +) = {pct(prior)} × {pct(sensitivity)} = {pct(pDP)}
-        </text>
-      )}
-      {showJointHP && (
-        <text x={NUM_X} y={NUM_Y + 44} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
-          P(H ∩ +) = {pct(pH)} × {pct(fpr)} = {pct(pHP)}
-        </text>
-      )}
-      {showTotal && (
-        <text x={NUM_X} y={NUM_Y + 60} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
-          P(+) = {pct(pDP)} + {pct(pHP)} = {pct(pPlus)}
-        </text>
-      )}
-      {showPosterior && (
-        <g>
-          <rect
-            x={NUM_X - 4}
-            y={NUM_Y + 64}
-            width={SVG_W - 40}
-            height={20}
-            fill={ACCENT}
-            stroke={INK}
-            strokeWidth={1}
-          />
-          <text x={NUM_X} y={NUM_Y + 78} fontFamily={FONT_FAMILY} fontSize={11} fontWeight={900} fill={INK}>
-            P(D | +) = P(D ∩ +) / P(+) = {pct(pDP)} / {pct(pPlus)} = {pct(posterior)}
-          </text>
-        </g>
-      )}
+      <TweenText
+        x={NUM_X + 38}
+        y={NUM_Y + 12}
+        fontFamily={FONT_FAMILY}
+        fontSize={10}
+        fill={INK}
+        value={prior}
+        formatter={fmtPct}
+      />
+      <text x={NUM_X + 84} y={NUM_Y + 12} fontFamily={FONT_FAMILY} fontSize={10} fill={INK}>
+        · P(+|D) =
+      </text>
+      <TweenText
+        x={NUM_X + 138}
+        y={NUM_Y + 12}
+        fontFamily={FONT_FAMILY}
+        fontSize={10}
+        fill={INK}
+        value={sensitivity}
+        formatter={fmtPct}
+      />
+      <text x={NUM_X + 184} y={NUM_Y + 12} fontFamily={FONT_FAMILY} fontSize={10} fill={INK}>
+        · P(+|H) =
+      </text>
+      <TweenText
+        x={NUM_X + 238}
+        y={NUM_Y + 12}
+        fontFamily={FONT_FAMILY}
+        fontSize={10}
+        fill={INK}
+        value={fpr}
+        formatter={fmtPct}
+      />
 
-      {/* Footer message (2-line wrap) */}
+      <AnimatePresence>
+        {showJointDP && (
+          <PopIn key="joint-dp" durationMs={300}>
+            <text x={NUM_X} y={NUM_Y + 28} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
+              P(D ∩ +) =
+            </text>
+            <TweenText
+              x={NUM_X + 56}
+              y={NUM_Y + 28}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+              value={prior}
+              formatter={fmtPct}
+            />
+            <text x={NUM_X + 100} y={NUM_Y + 28} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
+              ×
+            </text>
+            <TweenText
+              x={NUM_X + 110}
+              y={NUM_Y + 28}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+              value={sensitivity}
+              formatter={fmtPct}
+            />
+            <text x={NUM_X + 156} y={NUM_Y + 28} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
+              =
+            </text>
+            <TweenText
+              x={NUM_X + 166}
+              y={NUM_Y + 28}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+              value={pDP}
+              formatter={fmtPct}
+            />
+          </PopIn>
+        )}
+        {showJointHP && (
+          <PopIn key="joint-hp" durationMs={300}>
+            <text x={NUM_X} y={NUM_Y + 44} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
+              P(H ∩ +) =
+            </text>
+            <TweenText
+              x={NUM_X + 56}
+              y={NUM_Y + 44}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+              value={pH}
+              formatter={fmtPct}
+            />
+            <text x={NUM_X + 100} y={NUM_Y + 44} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
+              ×
+            </text>
+            <TweenText
+              x={NUM_X + 110}
+              y={NUM_Y + 44}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+              value={fpr}
+              formatter={fmtPct}
+            />
+            <text x={NUM_X + 156} y={NUM_Y + 44} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
+              =
+            </text>
+            <TweenText
+              x={NUM_X + 166}
+              y={NUM_Y + 44}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+              value={pHP}
+              formatter={fmtPct}
+            />
+          </PopIn>
+        )}
+        {showTotal && (
+          <PopIn key="total-plus" durationMs={300}>
+            <text x={NUM_X} y={NUM_Y + 60} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
+              P(+) =
+            </text>
+            <TweenText
+              x={NUM_X + 36}
+              y={NUM_Y + 60}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+              value={pDP}
+              formatter={fmtPct}
+            />
+            <text x={NUM_X + 80} y={NUM_Y + 60} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
+              +
+            </text>
+            <TweenText
+              x={NUM_X + 90}
+              y={NUM_Y + 60}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+              value={pHP}
+              formatter={fmtPct}
+            />
+            <text x={NUM_X + 134} y={NUM_Y + 60} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
+              =
+            </text>
+            <TweenText
+              x={NUM_X + 144}
+              y={NUM_Y + 60}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+              value={pPlus}
+              formatter={fmtPct}
+            />
+          </PopIn>
+        )}
+        {showPosterior && (
+          <PopIn key="posterior" durationMs={400}>
+            <rect
+              x={NUM_X - 4}
+              y={NUM_Y + 64}
+              width={SVG_W - 40}
+              height={20}
+              fill={ACCENT}
+              stroke={INK}
+              strokeWidth={1}
+            />
+            <text x={NUM_X} y={NUM_Y + 78} fontFamily={FONT_FAMILY} fontSize={11} fontWeight={900} fill={INK}>
+              P(D | +) = P(D ∩ +) / P(+) =
+            </text>
+            <TweenText
+              x={NUM_X + 152}
+              y={NUM_Y + 78}
+              fontFamily={FONT_FAMILY}
+              fontSize={11}
+              fontWeight={900}
+              fill={INK}
+              value={pDP}
+              formatter={fmtPct}
+            />
+            <text x={NUM_X + 198} y={NUM_Y + 78} fontFamily={FONT_FAMILY} fontSize={11} fontWeight={900} fill={INK}>
+              /
+            </text>
+            <TweenText
+              x={NUM_X + 208}
+              y={NUM_Y + 78}
+              fontFamily={FONT_FAMILY}
+              fontSize={11}
+              fontWeight={900}
+              fill={INK}
+              value={pPlus}
+              formatter={fmtPct}
+            />
+            <text x={NUM_X + 254} y={NUM_Y + 78} fontFamily={FONT_FAMILY} fontSize={11} fontWeight={900} fill={INK}>
+              =
+            </text>
+            <TweenText
+              x={NUM_X + 264}
+              y={NUM_Y + 78}
+              fontFamily={FONT_FAMILY}
+              fontSize={11}
+              fontWeight={900}
+              fill={INK}
+              value={posterior}
+              formatter={fmtPct}
+            />
+          </PopIn>
+        )}
+      </AnimatePresence>
+
+      {/* Surprise badge — pops in only on step 6 */}
+      <AnimatePresence>
+        {step === 6 && (
+          <PopIn key="surprise-badge" durationMs={500}>
+            <rect
+              x={SVG_W - 160}
+              y={NUM_Y - 10}
+              width={150}
+              height={22}
+              fill={ACCENT}
+              stroke={INK}
+              strokeWidth={1.5}
+            />
+            <text
+              x={SVG_W - 85}
+              y={NUM_Y + 5}
+              textAnchor="middle"
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={900}
+              fill={INK}
+            >
+              16% despite positive test!
+            </text>
+          </PopIn>
+        )}
+      </AnimatePresence>
+
+      {/* Footer message (2-line wrap, cross-fades on change) */}
       <rect x={10} y={MSG_Y - 28} width={460} height={36} fill={PAPER} stroke={INK} strokeWidth={1} />
-      {(() => {
-        const maxCharsPerLine = 78;
-        const words = message.split(' ');
-        let line1 = '';
-        let line2 = '';
-        for (const w of words) {
-          if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
-            line1 = line1 ? `${line1} ${w}` : w;
-          } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
-            line2 = line2 ? `${line2} ${w}` : w;
-          } else {
-            line2 = line2 + '…';
-            break;
-          }
-        }
-        return (
-          <text x={16} y={MSG_Y - 12} fontFamily={FONT_FAMILY} fontSize={9} fontWeight={700} fill={INK}>
-            <tspan x={16} dy={0}>{line1}</tspan>
-            {line2 && <tspan x={16} dy={12}>{line2}</tspan>}
-          </text>
-        );
-      })()}
+      <FooterMessage message={message} />
 
       {/* Bounds anchor */}
       <rect x={0} y={0} width={480} height={360} fill="none" stroke="none" />
     </>
   );
 }
+
+function FooterMessage({ message }: { message: string }) {
+  const maxCharsPerLine = 78;
+  const words = message.split(" ");
+  let line1 = "";
+  let line2 = "";
+  for (const w of words) {
+    if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+      line1 = line1 ? `${line1} ${w}` : w;
+    } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+      line2 = line2 ? `${line2} ${w}` : w;
+    } else {
+      line2 = line2 + "…";
+      break;
+    }
+  }
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.text
+        key={message}
+        x={16}
+        y={MSG_Y - 12}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fontWeight={700}
+        fill={INK}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <tspan x={16} dy={0}>
+          {line1}
+        </tspan>
+        {line2 && (
+          <tspan x={16} dy={12}>
+            {line2}
+          </tspan>
+        )}
+      </motion.text>
+    </AnimatePresence>
+  );
+}
+
+// Retained for potential debug/breakpoint use — not referenced in render now.
+void pctStr;
 
 export function BayesTree(): ReactNode {
   return (

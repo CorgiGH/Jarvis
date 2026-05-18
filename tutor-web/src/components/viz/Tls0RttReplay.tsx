@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import {
+  AnimatePresence,
+  DrawLine,
+  PopIn,
+  motion,
+} from "./motion-helpers";
 
 type Actor = "client" | "server" | "attacker";
 type Message = {
@@ -116,9 +122,132 @@ function actorX(a: Actor): number {
   return ATTACKER_X + COL_W / 2;
 }
 
+type MitigationBadge = { id: string; text: string; appearOn: number };
+const MITIGATION_BADGES: MitigationBadge[] = [
+  { id: "mit-idempotent", text: "idempotent-only", appearOn: 10 },
+  { id: "mit-singleuse", text: "single-use ticket", appearOn: 11 },
+  { id: "mit-antireplay", text: "anti-replay window", appearOn: 12 },
+];
+
+function MessageRow({
+  msg,
+  y,
+  isHighlighted,
+}: {
+  msg: Message;
+  y: number;
+  isHighlighted: boolean;
+}) {
+  const fromX = actorX(msg.from);
+  const toX = actorX(msg.to);
+  const dir = toX > fromX ? 1 : -1;
+  const strokeC = msg.replay ? ACCENT : INK;
+  const strokeW = msg.replay || isHighlighted ? 2 : 1;
+  const midX = (fromX + toX) / 2;
+  const labelText = msg.label.length > 28 ? msg.label.slice(0, 28) + "…" : msg.label;
+
+  return (
+    <>
+      {/* Animated line — draws on left→right via DrawLine */}
+      <DrawLine
+        x1={fromX}
+        y1={y}
+        x2={toX}
+        y2={y}
+        stroke={strokeC}
+        strokeWidth={strokeW}
+        strokeDasharray={msg.encrypted ? undefined : "4 3"}
+        durationMs={450}
+      />
+      {/* Arrowhead — fades in alongside the line */}
+      <motion.polygon
+        points={`${toX},${y} ${toX - dir * 6},${y - 3} ${toX - dir * 6},${y + 3}`}
+        fill={strokeC}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.25, delay: 0.35 }}
+      />
+      {/* Label box — fade-in with highlight color animated */}
+      <motion.rect
+        x={midX - 70}
+        y={y - 10}
+        width={140}
+        height={20}
+        stroke={INK}
+        strokeWidth={1}
+        initial={{ opacity: 0 }}
+        animate={{
+          opacity: isHighlighted ? 1 : 0.95,
+          fill: isHighlighted ? ACCENT : "#fff",
+        }}
+        transition={{ duration: 0.35, delay: 0.15 }}
+      />
+      {/* Label text — fade in alongside box */}
+      <motion.text
+        x={midX}
+        y={y + 4}
+        textAnchor="middle"
+        fontFamily={FONT_FAMILY}
+        fontSize={8}
+        fill={INK}
+        fontWeight={isHighlighted ? 700 : 500}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3, delay: 0.25 }}
+      >
+        {labelText}
+      </motion.text>
+    </>
+  );
+}
+
+function FooterMessage({ message }: { message: string }) {
+  const maxCharsPerLine = 78;
+  const words = message.split(" ");
+  let line1 = "";
+  let line2 = "";
+  for (const w of words) {
+    if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+      line1 = line1 ? `${line1} ${w}` : w;
+    } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+      line2 = line2 ? `${line2} ${w}` : w;
+    } else {
+      line2 = line2 + "…";
+      break;
+    }
+  }
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.text
+        key={message}
+        x={16}
+        y={MSG_Y_FOOTER - 12}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fontWeight={700}
+        fill={INK}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <tspan x={16} dy={0}>
+          {line1}
+        </tspan>
+        {line2 && (
+          <tspan x={16} dy={12}>
+            {line2}
+          </tspan>
+        )}
+      </motion.text>
+    </AnimatePresence>
+  );
+}
+
 function renderFrame(frame: Frame<TLSState>): ReactNode {
-  const { phase, visibleMessages, highlightedMessageId, message } = frame.state;
+  const { step, phase, visibleMessages, highlightedMessageId, message } = frame.state;
   const showAttacker = phase >= 3;
+  const showMitigations = phase === 4;
 
   // Layout messages vertically by appearance order
   const slotCount = Math.max(visibleMessages.length, 1);
@@ -126,106 +255,188 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
 
   return (
     <>
-      {/* Phase indicator */}
-      <text x={20} y={20} fontFamily={FONT_FAMILY} fontSize={11} fontWeight={700} fill={INK} opacity={0.7}>
-        TLS 1.3 — Phase {phase}{phase === 1 ? ": initial 1-RTT" : phase === 2 ? ": 0-RTT resume" : phase === 3 ? ": REPLAY ATTACK" : ": mitigations"}
+      {/* Phase indicator — cross-fade as phase changes */}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.text
+          key={`phase-${phase}`}
+          x={20}
+          y={20}
+          fontFamily={FONT_FAMILY}
+          fontSize={11}
+          fontWeight={700}
+          fill={INK}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.7 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          TLS 1.3 — Phase {phase}
+          {phase === 1
+            ? ": initial 1-RTT"
+            : phase === 2
+            ? ": 0-RTT resume"
+            : phase === 3
+            ? ": REPLAY ATTACK"
+            : ": mitigations"}
+        </motion.text>
+      </AnimatePresence>
+
+      {/* CLIENT column (always visible) */}
+      <rect
+        x={CLIENT_X}
+        y={ACTOR_Y}
+        width={COL_W}
+        height={ACTOR_LABEL_H}
+        fill={PAPER}
+        stroke={INK}
+        strokeWidth={1}
+      />
+      <text
+        x={CLIENT_X + COL_W / 2}
+        y={ACTOR_Y + 19}
+        textAnchor="middle"
+        fontFamily={FONT_FAMILY}
+        fontSize={11}
+        fontWeight={700}
+        fill={INK}
+      >
+        CLIENT
       </text>
+      <line
+        x1={CLIENT_X + COL_W / 2}
+        y1={ACTOR_Y + ACTOR_LABEL_H}
+        x2={CLIENT_X + COL_W / 2}
+        y2={MSG_BOTTOM}
+        stroke={INK}
+        strokeWidth={1}
+        opacity={0.4}
+        strokeDasharray="2 2"
+      />
 
-      {/* Actor columns */}
-      <rect x={CLIENT_X} y={ACTOR_Y} width={COL_W} height={ACTOR_LABEL_H} fill={PAPER} stroke={INK} strokeWidth={1} />
-      <text x={CLIENT_X + COL_W / 2} y={ACTOR_Y + 19} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={11} fontWeight={700} fill={INK}>CLIENT</text>
-      <line x1={CLIENT_X + COL_W / 2} y1={ACTOR_Y + ACTOR_LABEL_H} x2={CLIENT_X + COL_W / 2} y2={MSG_BOTTOM} stroke={INK} strokeWidth={1} opacity={0.4} strokeDasharray="2 2" />
+      {/* SERVER column (always visible) */}
+      <rect
+        x={SERVER_X}
+        y={ACTOR_Y}
+        width={COL_W}
+        height={ACTOR_LABEL_H}
+        fill={PAPER}
+        stroke={INK}
+        strokeWidth={1}
+      />
+      <text
+        x={SERVER_X + COL_W / 2}
+        y={ACTOR_Y + 19}
+        textAnchor="middle"
+        fontFamily={FONT_FAMILY}
+        fontSize={11}
+        fontWeight={700}
+        fill={INK}
+      >
+        SERVER
+      </text>
+      <line
+        x1={SERVER_X + COL_W / 2}
+        y1={ACTOR_Y + ACTOR_LABEL_H}
+        x2={SERVER_X + COL_W / 2}
+        y2={MSG_BOTTOM}
+        stroke={INK}
+        strokeWidth={1}
+        opacity={0.4}
+        strokeDasharray="2 2"
+      />
 
-      <rect x={SERVER_X} y={ACTOR_Y} width={COL_W} height={ACTOR_LABEL_H} fill={PAPER} stroke={INK} strokeWidth={1} />
-      <text x={SERVER_X + COL_W / 2} y={ACTOR_Y + 19} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={11} fontWeight={700} fill={INK}>SERVER</text>
-      <line x1={SERVER_X + COL_W / 2} y1={ACTOR_Y + ACTOR_LABEL_H} x2={SERVER_X + COL_W / 2} y2={MSG_BOTTOM} stroke={INK} strokeWidth={1} opacity={0.4} strokeDasharray="2 2" />
-
-      {showAttacker && (
-        <>
-          <rect x={ATTACKER_X} y={ACTOR_Y} width={COL_W} height={ACTOR_LABEL_H} fill={ACCENT} stroke={INK} strokeWidth={1} />
-          <text x={ATTACKER_X + COL_W / 2} y={ACTOR_Y + 19} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={11} fontWeight={700} fill={INK}>ATTACKER</text>
-          <line x1={ATTACKER_X + COL_W / 2} y1={ACTOR_Y + ACTOR_LABEL_H} x2={ATTACKER_X + COL_W / 2} y2={MSG_BOTTOM} stroke={INK} strokeWidth={1} opacity={0.4} strokeDasharray="2 2" />
-        </>
-      )}
-
-      {/* Messages */}
-      {visibleMessages.map((m, i) => {
-        const y = MSG_TOP + i * slotHeight + slotHeight / 2;
-        const fromX = actorX(m.from);
-        const toX = actorX(m.to);
-        const dir = toX > fromX ? 1 : -1;
-        const isHighlighted = m.id === highlightedMessageId;
-        const strokeC = m.replay ? ACCENT : INK;
-        const strokeW = m.replay || isHighlighted ? 2 : 1;
-        const midX = (fromX + toX) / 2;
-
-        return (
-          <g key={`msg-${m.id}`} opacity={isHighlighted ? 1 : 0.85}>
-            {/* Line */}
-            <line
-              x1={fromX}
-              y1={y}
-              x2={toX}
-              y2={y}
-              stroke={strokeC}
-              strokeWidth={strokeW}
-              strokeDasharray={m.encrypted ? undefined : "4 3"}
-            />
-            {/* Arrowhead */}
-            <polygon
-              points={`${toX},${y} ${toX - dir * 6},${y - 3} ${toX - dir * 6},${y + 3}`}
-              fill={strokeC}
-            />
-            {/* Label box */}
+      {/* ATTACKER column — appears in phase 3+ */}
+      <AnimatePresence>
+        {showAttacker && (
+          <PopIn key="attacker-col" durationMs={400}>
             <rect
-              x={midX - 70}
-              y={y - 10}
-              width={140}
-              height={20}
-              fill={isHighlighted ? ACCENT : "#fff"}
+              x={ATTACKER_X}
+              y={ACTOR_Y}
+              width={COL_W}
+              height={ACTOR_LABEL_H}
+              fill={ACCENT}
               stroke={INK}
               strokeWidth={1}
-              opacity={isHighlighted ? 1 : 0.95}
             />
             <text
-              x={midX}
-              y={y + 4}
+              x={ATTACKER_X + COL_W / 2}
+              y={ACTOR_Y + 19}
               textAnchor="middle"
               fontFamily={FONT_FAMILY}
-              fontSize={8}
+              fontSize={11}
+              fontWeight={700}
               fill={INK}
-              fontWeight={isHighlighted ? 700 : 500}
             >
-              {m.label.length > 28 ? m.label.slice(0, 28) + "…" : m.label}
+              ATTACKER
             </text>
-          </g>
-        );
-      })}
+            <line
+              x1={ATTACKER_X + COL_W / 2}
+              y1={ACTOR_Y + ACTOR_LABEL_H}
+              x2={ATTACKER_X + COL_W / 2}
+              y2={MSG_BOTTOM}
+              stroke={INK}
+              strokeWidth={1}
+              opacity={0.4}
+              strokeDasharray="2 2"
+            />
+          </PopIn>
+        )}
+      </AnimatePresence>
 
-      {/* Message at bottom — two-line wrap */}
-      <rect x={10} y={MSG_Y_FOOTER - 28} width={460} height={36} fill={PAPER} stroke={INK} strokeWidth={1} />
-      {(() => {
-        const maxCharsPerLine = 78;
-        const words = message.split(' ');
-        let line1 = '';
-        let line2 = '';
-        for (const w of words) {
-          if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
-            line1 = line1 ? `${line1} ${w}` : w;
-          } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
-            line2 = line2 ? `${line2} ${w}` : w;
-          } else {
-            line2 = line2 + '…';
-            break;
-          }
-        }
-        return (
-          <text x={16} y={MSG_Y_FOOTER - 12} fontFamily={FONT_FAMILY} fontSize={9} fontWeight={700} fill={INK}>
-            <tspan x={16} dy={0}>{line1}</tspan>
-            {line2 && <tspan x={16} dy={12}>{line2}</tspan>}
-          </text>
-        );
-      })()}
+      {/* Messages — each draws on with DrawLine; key by msg.id so AnimatePresence
+          tracks each as a stable identity. */}
+      <AnimatePresence>
+        {visibleMessages.map((m, i) => {
+          const y = MSG_TOP + i * slotHeight + slotHeight / 2;
+          const isHighlighted = m.id === highlightedMessageId;
+          return (
+            <PopIn key={`msg-${m.id}`} durationMs={50}>
+              <MessageRow msg={m} y={y} isHighlighted={isHighlighted} />
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
+
+      {/* Mitigation badges — only in phase 4; staggered pop-in */}
+      <AnimatePresence>
+        {showMitigations &&
+          MITIGATION_BADGES.filter((b) => step >= b.appearOn).map((b, i) => (
+            <PopIn key={b.id} durationMs={300} delayMs={i * 60}>
+              <rect
+                x={140 + i * 110}
+                y={MSG_BOTTOM + 4}
+                width={100}
+                height={20}
+                fill={ACCENT}
+                stroke={INK}
+                strokeWidth={1}
+              />
+              <text
+                x={140 + i * 110 + 50}
+                y={MSG_BOTTOM + 18}
+                textAnchor="middle"
+                fontFamily={FONT_FAMILY}
+                fontSize={8}
+                fontWeight={700}
+                fill={INK}
+              >
+                {b.text}
+              </text>
+            </PopIn>
+          ))}
+      </AnimatePresence>
+
+      {/* Footer message — cross-fade on change */}
+      <rect
+        x={10}
+        y={MSG_Y_FOOTER - 28}
+        width={460}
+        height={36}
+        fill={PAPER}
+        stroke={INK}
+        strokeWidth={1}
+      />
+      <FooterMessage message={message} />
     </>
   );
 }

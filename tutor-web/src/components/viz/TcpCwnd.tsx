@@ -1,12 +1,15 @@
 import type { ReactNode } from "react";
-import { Group } from "@visx/group";
 import { scaleLinear } from "@visx/scale";
-import { Line, LinePath } from "@visx/shape";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
-
-// Suppress unused import lint for Group (kept for pattern consistency)
-void Group;
+import {
+  AnimatePresence,
+  DrawLine,
+  FadeText,
+  PopIn,
+  TweenText,
+  motion,
+} from "./motion-helpers";
 
 type Mode = "SLOW_START" | "CONG_AVOIDANCE" | "FAST_RECOVERY";
 type CwndPoint = { rtt: number; cwnd: number; mode: Mode; event?: string };
@@ -36,7 +39,7 @@ function buildFrames(): Frame<TCPState>[] {
       event = "INIT — cwnd=1, ssthresh=16";
     } else if (LOSS_RTTS.has(rtt)) {
       ssthresh = Math.floor(cwnd / 2);
-      cwnd = ssthresh + 3; // Reno fast-recovery
+      cwnd = ssthresh + 3;
       mode = "CONG_AVOIDANCE";
       event = `PACKET LOSS! ssthresh = cwnd/2 = ${ssthresh}, cwnd = ssthresh+3 = ${cwnd}`;
     } else if (mode === "SLOW_START") {
@@ -72,7 +75,6 @@ function buildFrames(): Frame<TCPState>[] {
     });
   }
 
-  // Final summary frame
   frames.push({
     state: {
       step: MAX_RTT + 1,
@@ -93,12 +95,6 @@ function buildFrames(): Frame<TCPState>[] {
 export const FRAMES = buildFrames();
 export const FRAME_COUNT = FRAMES.length;
 
-const SVG_W = 480;
-const SVG_H = 360;
-void SVG_W;
-void SVG_H;
-
-// Plot pane
 const PLOT_X = 50;
 const PLOT_Y = 30;
 const PLOT_W = 280;
@@ -107,7 +103,6 @@ const PLOT_H = 200;
 const MAX_CWND = 30;
 const MAX_RTT_PLOT = 30;
 
-// State pane
 const STATE_X = 350;
 const STATE_Y = 30;
 const STATE_W = 120;
@@ -131,22 +126,14 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
     range: [PLOT_Y + PLOT_H, PLOT_Y],
   });
 
-  // Build segments split by mode change for color coding
-  const segments: CwndPoint[][] = [];
-  let cur: CwndPoint[] = [];
-  history.forEach((p, i) => {
-    if (i === 0 || history[i - 1].mode === p.mode) {
-      cur.push(p);
-    } else {
-      if (cur.length > 0) segments.push(cur);
-      cur = [history[i - 1], p];
-    }
-  });
-  if (cur.length > 0) segments.push(cur);
+  const lossRtts = history.filter((p) => p.event && p.event.includes("LOSS"));
+
+  const segmentsInFlight = Math.min(cwnd, 24);
+  const overflowCount = cwnd > 24 ? cwnd - 24 : 0;
 
   return (
     <>
-      {/* Pane labels */}
+      {/* Pane labels (static) */}
       <text
         x={PLOT_X - 30}
         y={PLOT_Y - 12}
@@ -181,26 +168,32 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         strokeWidth={1}
       />
 
-      {/* Axes */}
-      <Line
-        from={{ x: PLOT_X, y: PLOT_Y + PLOT_H }}
-        to={{ x: PLOT_X + PLOT_W, y: PLOT_Y + PLOT_H }}
+      {/* Axes (static) */}
+      <line
+        x1={PLOT_X}
+        y1={PLOT_Y + PLOT_H}
+        x2={PLOT_X + PLOT_W}
+        y2={PLOT_Y + PLOT_H}
         stroke={INK}
         strokeWidth={1}
       />
-      <Line
-        from={{ x: PLOT_X, y: PLOT_Y }}
-        to={{ x: PLOT_X, y: PLOT_Y + PLOT_H }}
+      <line
+        x1={PLOT_X}
+        y1={PLOT_Y}
+        x2={PLOT_X}
+        y2={PLOT_Y + PLOT_H}
         stroke={INK}
         strokeWidth={1}
       />
 
-      {/* Y-axis ticks */}
+      {/* Y-axis ticks (static) */}
       {[0, 10, 20, 30].map((v) => (
         <g key={`y-${v}`}>
-          <Line
-            from={{ x: PLOT_X - 3, y: yScale(v) }}
-            to={{ x: PLOT_X, y: yScale(v) }}
+          <line
+            x1={PLOT_X - 3}
+            y1={yScale(v)}
+            x2={PLOT_X}
+            y2={yScale(v)}
             stroke={INK}
             strokeWidth={1}
           />
@@ -218,12 +211,14 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         </g>
       ))}
 
-      {/* X-axis ticks */}
+      {/* X-axis ticks (static) */}
       {[0, 10, 20, 30].map((v) => (
         <g key={`x-${v}`}>
-          <Line
-            from={{ x: xScale(v), y: PLOT_Y + PLOT_H }}
-            to={{ x: xScale(v), y: PLOT_Y + PLOT_H + 3 }}
+          <line
+            x1={xScale(v)}
+            y1={PLOT_Y + PLOT_H}
+            x2={xScale(v)}
+            y2={PLOT_Y + PLOT_H + 3}
             stroke={INK}
             strokeWidth={1}
           />
@@ -241,48 +236,57 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         </g>
       ))}
 
-      {/* ssthresh horizontal dashed line */}
-      <Line
-        from={{ x: PLOT_X, y: yScale(ssthresh) }}
-        to={{ x: PLOT_X + PLOT_W, y: yScale(ssthresh) }}
+      {/* ssthresh horizontal dashed line — slides smoothly when ssthresh changes */}
+      <motion.line
+        x1={PLOT_X}
+        x2={PLOT_X + PLOT_W}
+        animate={{ y1: yScale(ssthresh), y2: yScale(ssthresh) }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
         stroke={INK}
         strokeWidth={1}
         strokeDasharray="3 3"
         opacity={0.5}
       />
-      <text
+      <motion.text
         x={PLOT_X + PLOT_W - 4}
-        y={yScale(ssthresh) - 4}
+        animate={{ y: yScale(ssthresh) - 4 }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
         textAnchor="end"
         fontFamily={FONT_FAMILY}
         fontSize={8}
         fill={INK}
         opacity={0.7}
       >
-        ssthresh = {ssthresh}
-      </text>
+        <tspan>ssthresh = </tspan>
+        <tspan>{ssthresh}</tspan>
+      </motion.text>
 
-      {/* cwnd trajectory — colored by mode */}
-      {segments.map((seg, i) => (
-        <LinePath
-          key={`seg-${i}`}
-          data={seg}
-          x={(d) => xScale(d.rtt)}
-          y={(d) => yScale(d.cwnd)}
-          stroke={modeColor(seg[0]?.mode ?? "SLOW_START")}
-          strokeWidth={2.5}
-          fill="none"
-        />
-      ))}
+      {/* cwnd trajectory — one DrawLine per consecutive RTT pair, draws on as history grows */}
+      {history.slice(1).map((p, i) => {
+        const prev = history[i];
+        return (
+          <DrawLine
+            key={`edge-${prev.rtt}-${p.rtt}`}
+            x1={xScale(prev.rtt)}
+            y1={yScale(prev.cwnd)}
+            x2={xScale(p.rtt)}
+            y2={yScale(p.cwnd)}
+            stroke={modeColor(p.mode)}
+            strokeWidth={2.5}
+            durationMs={350}
+          />
+        );
+      })}
 
-      {/* Loss markers — vertical dashed lines + X glyph */}
-      {history
-        .filter((p) => p.event && p.event.includes("LOSS"))
-        .map((p) => (
-          <g key={`loss-${p.rtt}`}>
-            <Line
-              from={{ x: xScale(p.rtt), y: PLOT_Y }}
-              to={{ x: xScale(p.rtt), y: PLOT_Y + PLOT_H }}
+      {/* Loss markers — pop in dramatically */}
+      <AnimatePresence>
+        {lossRtts.map((p) => (
+          <PopIn key={`loss-${p.rtt}`} durationMs={500}>
+            <line
+              x1={xScale(p.rtt)}
+              y1={PLOT_Y}
+              x2={xScale(p.rtt)}
+              y2={PLOT_Y + PLOT_H}
               stroke={INK}
               strokeWidth={1}
               strokeDasharray="2 2"
@@ -293,19 +297,20 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
               y={PLOT_Y + 12}
               textAnchor="middle"
               fontFamily={FONT_FAMILY}
-              fontSize={9}
+              fontSize={11}
               fontWeight={700}
               fill={INK}
             >
-              X
+              ×
             </text>
-          </g>
+          </PopIn>
         ))}
+      </AnimatePresence>
 
-      {/* Current point — yellow dot */}
-      <circle
-        cx={xScale(rtt)}
-        cy={yScale(cwnd)}
+      {/* Current data point — yellow dot, slides smoothly via framer-motion */}
+      <motion.circle
+        animate={{ cx: xScale(rtt), cy: yScale(cwnd) }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
         r={5}
         fill={ACCENT}
         stroke={INK}
@@ -322,35 +327,36 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         stroke={INK}
         strokeWidth={1}
       />
-      <text
+
+      <TweenText
         x={STATE_X + 8}
         y={STATE_Y + 18}
         fontFamily={FONT_FAMILY}
         fontSize={10}
         fontWeight={700}
         fill={INK}
-      >
-        RTT: {rtt}
-      </text>
-      <text
+        value={rtt}
+        formatter={(n) => `RTT: ${Math.round(n)}`}
+      />
+      <TweenText
         x={STATE_X + 8}
         y={STATE_Y + 36}
         fontFamily={FONT_FAMILY}
         fontSize={10}
         fontWeight={700}
         fill={INK}
-      >
-        cwnd: {cwnd}
-      </text>
-      <text
+        value={cwnd}
+        formatter={(n) => `cwnd: ${Math.round(n)}`}
+      />
+      <TweenText
         x={STATE_X + 8}
         y={STATE_Y + 54}
         fontFamily={FONT_FAMILY}
         fontSize={10}
         fill={INK}
-      >
-        ssthresh: {ssthresh}
-      </text>
+        value={ssthresh}
+        formatter={(n) => `ssthresh: ${Math.round(n)}`}
+      />
       <text
         x={STATE_X + 8}
         y={STATE_Y + 78}
@@ -362,16 +368,17 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
       >
         MODE
       </text>
-      <rect
+      <motion.rect
         x={STATE_X + 8}
         y={STATE_Y + 84}
         width={STATE_W - 16}
         height={20}
-        fill={mode === "SLOW_START" ? ACCENT : "#fff"}
+        animate={{ fill: mode === "SLOW_START" ? ACCENT : "#fff" }}
+        transition={{ duration: 0.4 }}
         stroke={INK}
         strokeWidth={1}
       />
-      <text
+      <FadeText
         x={STATE_X + 12}
         y={STATE_Y + 98}
         fontFamily={FONT_FAMILY}
@@ -380,7 +387,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         fill={INK}
       >
         {mode.replace(/_/g, " ")}
-      </text>
+      </FadeText>
       <text
         x={STATE_X + 8}
         y={STATE_Y + 124}
@@ -402,8 +409,8 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         Mult. Decrease
       </text>
 
-      {/* Segment pipe — visualize cwnd segments in flight */}
-      <text
+      {/* Segments-in-flight count + animated bars */}
+      <TweenText
         x={PLOT_X}
         y={PLOT_Y + PLOT_H + 35}
         fontFamily={FONT_FAMILY}
@@ -411,59 +418,92 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         fontWeight={700}
         fill={INK}
         opacity={0.7}
-      >
-        SEGMENTS IN FLIGHT ({cwnd})
-      </text>
+        value={cwnd}
+        formatter={(n) => `SEGMENTS IN FLIGHT (${Math.round(n)})`}
+      />
       <g transform={`translate(${PLOT_X}, ${PLOT_Y + PLOT_H + 42})`}>
-        {Array.from({ length: Math.min(cwnd, 24) }, (_, i) => (
-          <rect
-            key={`seg-${i}`}
-            x={i * 11}
-            y={0}
-            width={9}
-            height={14}
-            fill={INK}
-            opacity={Math.max(0.2, 0.7 - i * 0.02)}
-          />
-        ))}
-        {cwnd > 24 && (
-          <text
+        <AnimatePresence>
+          {Array.from({ length: segmentsInFlight }, (_, i) => (
+            <PopIn key={`bar-${i}`} durationMs={250} delayMs={i * 15}>
+              <rect
+                x={i * 11}
+                y={0}
+                width={9}
+                height={14}
+                fill={INK}
+                opacity={Math.max(0.2, 0.7 - i * 0.02)}
+              />
+            </PopIn>
+          ))}
+        </AnimatePresence>
+        {overflowCount > 0 && (
+          <TweenText
             x={24 * 11 + 4}
             y={11}
             fontFamily={FONT_FAMILY}
             fontSize={9}
             fill={INK}
-          >
-            +{cwnd - 24}
-          </text>
+            value={overflowCount}
+            formatter={(n) => `+${Math.round(n)}`}
+          />
         )}
       </g>
 
-      {/* Footer message (2-line wrap) */}
-      <rect x={10} y={MSG_Y - 28} width={460} height={36} fill={PAPER} stroke={INK} strokeWidth={1} />
-      {(() => {
-        const maxCharsPerLine = 78;
-        const words = message.split(' ');
-        let line1 = '';
-        let line2 = '';
-        for (const w of words) {
-          if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
-            line1 = line1 ? `${line1} ${w}` : w;
-          } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
-            line2 = line2 ? `${line2} ${w}` : w;
-          } else {
-            line2 = line2 + '…';
-            break;
-          }
-        }
-        return (
-          <text x={16} y={MSG_Y - 12} fontFamily={FONT_FAMILY} fontSize={9} fontWeight={700} fill={INK}>
-            <tspan x={16} dy={0}>{line1}</tspan>
-            {line2 && <tspan x={16} dy={12}>{line2}</tspan>}
-          </text>
-        );
-      })()}
+      {/* Footer message — cross-fade on change */}
+      <rect
+        x={10}
+        y={MSG_Y - 28}
+        width={460}
+        height={36}
+        fill={PAPER}
+        stroke={INK}
+        strokeWidth={1}
+      />
+      <FooterMessage message={message} />
     </>
+  );
+}
+
+function FooterMessage({ message }: { message: string }) {
+  const maxCharsPerLine = 78;
+  const words = message.split(" ");
+  let line1 = "";
+  let line2 = "";
+  for (const w of words) {
+    if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+      line1 = line1 ? `${line1} ${w}` : w;
+    } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+      line2 = line2 ? `${line2} ${w}` : w;
+    } else {
+      line2 = line2 + "…";
+      break;
+    }
+  }
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.text
+        key={message}
+        x={16}
+        y={MSG_Y - 12}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fontWeight={700}
+        fill={INK}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <tspan x={16} dy={0}>
+          {line1}
+        </tspan>
+        {line2 && (
+          <tspan x={16} dy={12}>
+            {line2}
+          </tspan>
+        )}
+      </motion.text>
+    </AnimatePresence>
   );
 }
 

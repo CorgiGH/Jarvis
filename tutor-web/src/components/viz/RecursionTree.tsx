@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "./theme";
+import {
+  AnimatePresence,
+  DrawLine,
+  PopIn,
+  TweenText,
+  motion,
+} from "./motion-helpers";
 
 type CallStep = {
   kind: "CALL" | "RETURN";
@@ -97,7 +104,6 @@ function buildFibTrace(N: number): Frame<RecursionState>[] {
 const FRAMES = buildFibTrace(5);
 
 // Layout constants
-const SVG_W = 480;
 const SVG_H = 360;
 
 // Stack pane (left)
@@ -141,7 +147,7 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
 
   return (
     <>
-      {/* Pane labels */}
+      {/* Pane labels (static) */}
       <text
         x={STACK_LABEL_X}
         y={STACK_LABEL_Y}
@@ -176,117 +182,150 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
         opacity={0.3}
       />
 
-      {/* Stack cards — index 0 = bottom of logical stack (oldest frame), renders highest on screen */}
-      {stack.map((nodeId, i) => {
-        const node = tree.find((t) => t.id === nodeId);
-        if (!node) return null;
-        // i=0 oldest (bottom of stack), i=stack.length-1 newest (top)
-        // Render newest at top of screen (smallest y)
-        const idxFromTop = stack.length - 1 - i;
-        const y = STACK_Y_TOP + idxFromTop * (STACK_FRAME_H + STACK_FRAME_GAP);
-        const isCurrent = nodeId === currentId;
-        return (
-          <g key={`stack-${nodeId}`}>
-            <rect
-              x={STACK_X}
-              y={y}
-              width={STACK_W}
-              height={STACK_FRAME_H}
-              fill={isCurrent ? ACCENT : "#fff"}
-              stroke={INK}
-              strokeWidth={isCurrent ? 2 : 1}
-            />
-            <text
-              x={STACK_X + 8}
-              y={y + STACK_FRAME_H / 2 + 4}
-              fontFamily={FONT_FAMILY}
-              fontSize={11}
-              fontWeight={700}
-              fill={INK}
-            >
-              fib({node.n})
-            </text>
-            {node.value !== null && (
-              <text
-                x={STACK_X + STACK_W - 8}
-                y={y + STACK_FRAME_H / 2 + 4}
-                textAnchor="end"
-                fontFamily={FONT_FAMILY}
-                fontSize={11}
-                fill={INK}
-                opacity={0.7}
+      {/* Stack cards — newest at top of screen, slide as stack grows/shrinks.
+          AnimatePresence handles fade-in on push + fade-out on pop. */}
+      <AnimatePresence>
+        {stack.map((nodeId, i) => {
+          const node = tree.find((t) => t.id === nodeId);
+          if (!node) return null;
+          // i=0 oldest (bottom of stack), i=stack.length-1 newest (top)
+          // Render newest at top of screen (smallest y)
+          const idxFromTop = stack.length - 1 - i;
+          const cardY = STACK_Y_TOP + idxFromTop * (STACK_FRAME_H + STACK_FRAME_GAP);
+          const isCurrent = nodeId === currentId;
+          return (
+            <PopIn key={`stack-${nodeId}`}>
+              <motion.g
+                animate={{ y: cardY }}
+                transition={{ duration: 0.4, ease: "easeInOut" }}
               >
-                = {node.value}
-              </text>
-            )}
-          </g>
-        );
-      })}
+                <motion.rect
+                  x={STACK_X}
+                  y={0}
+                  width={STACK_W}
+                  height={STACK_FRAME_H}
+                  animate={{
+                    fill: isCurrent ? ACCENT : "#fff",
+                    strokeWidth: isCurrent ? 2 : 1,
+                  }}
+                  transition={{ duration: 0.4 }}
+                  stroke={INK}
+                />
+                <text
+                  x={STACK_X + 8}
+                  y={STACK_FRAME_H / 2 + 4}
+                  fontFamily={FONT_FAMILY}
+                  fontSize={11}
+                  fontWeight={700}
+                  fill={INK}
+                >
+                  fib({node.n})
+                </text>
+                <AnimatePresence>
+                  {node.value !== null && (
+                    <PopIn key={`stack-val-${nodeId}`}>
+                      <TweenText
+                        x={STACK_X + STACK_W - 8}
+                        y={STACK_FRAME_H / 2 + 4}
+                        textAnchor="end"
+                        fontFamily={FONT_FAMILY}
+                        fontSize={11}
+                        fill={INK}
+                        opacity={0.7}
+                        value={node.value}
+                        formatter={(v) => `= ${Math.round(v)}`}
+                      />
+                    </PopIn>
+                  )}
+                </AnimatePresence>
+              </motion.g>
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
 
-      {/* Tree edges (parent -> child) */}
-      {tree.flatMap((node) => {
-        if (node.parentId === null) return [];
-        const from = positions.get(node.parentId);
-        const to = positions.get(node.id);
-        if (!from || !to) return [];
-        return [
-          <line
-            key={`edge-${node.parentId}-${node.id}`}
-            x1={from.x}
-            y1={from.y + TREE_NODE_R}
-            x2={to.x}
-            y2={to.y - TREE_NODE_R}
-            stroke={INK}
-            strokeWidth={1}
-            opacity={node.status === "returned" ? 0.4 : 0.8}
-          />,
-        ];
-      })}
-
-      {/* Tree nodes */}
-      {tree.map((node) => {
-        const pos = positions.get(node.id);
-        if (!pos) return null;
-        const isCurrent = node.id === currentId;
-        const returned = node.status === "returned";
-        return (
-          <g key={`node-${node.id}`}>
-            <circle
-              cx={pos.x}
-              cy={pos.y}
-              r={TREE_NODE_R}
-              fill={isCurrent ? ACCENT : "#fff"}
-              stroke={INK}
-              strokeWidth={isCurrent ? 2 : 1}
-              opacity={returned ? 1 : 0.85}
-            />
-            <text
-              x={pos.x}
-              y={pos.y + 4}
-              textAnchor="middle"
-              fontFamily={FONT_FAMILY}
-              fontSize={10}
-              fontWeight={700}
-              fill={INK}
+      {/* Tree edges (parent -> child) — draw on when child node appears.
+          Outer motion.g fades opacity for returned subtrees. */}
+      <AnimatePresence>
+        {tree.flatMap((node) => {
+          if (node.parentId === null) return [];
+          const from = positions.get(node.parentId);
+          const to = positions.get(node.id);
+          if (!from || !to) return [];
+          return [
+            <motion.g
+              key={`edge-${node.parentId}-${node.id}`}
+              animate={{ opacity: node.status === "returned" ? 0.4 : 0.8 }}
+              transition={{ duration: 0.4 }}
+              initial={{ opacity: 0.8 }}
+              exit={{ opacity: 0 }}
             >
-              {node.value !== null ? node.value : node.n}
-            </text>
-            {node.value === null && (
-              <text
+              <DrawLine
+                x1={from.x}
+                y1={from.y + TREE_NODE_R}
+                x2={to.x}
+                y2={to.y - TREE_NODE_R}
+                stroke={INK}
+                strokeWidth={1}
+                durationMs={400}
+              />
+            </motion.g>,
+          ];
+        })}
+      </AnimatePresence>
+
+      {/* Tree nodes — pop in on creation, slide smoothly when layout shifts. */}
+      <AnimatePresence>
+        {tree.map((node) => {
+          const pos = positions.get(node.id);
+          if (!pos) return null;
+          const isCurrent = node.id === currentId;
+          const returned = node.status === "returned";
+          return (
+            <PopIn key={`node-${node.id}`}>
+              <motion.circle
+                animate={{
+                  cx: pos.x,
+                  cy: pos.y,
+                  fill: isCurrent ? ACCENT : "#fff",
+                  strokeWidth: isCurrent ? 2 : 1,
+                  opacity: returned ? 1 : 0.85,
+                }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+                r={TREE_NODE_R}
+                stroke={INK}
+              />
+              <TweenText
                 x={pos.x}
-                y={pos.y + TREE_NODE_R + 11}
+                y={pos.y + 4}
                 textAnchor="middle"
                 fontFamily={FONT_FAMILY}
-                fontSize={8}
+                fontSize={10}
+                fontWeight={700}
                 fill={INK}
-                opacity={0.6}
-              >
-                fib({node.n})
-              </text>
-            )}
-          </g>
-        );
-      })}
+                value={node.value !== null ? node.value : node.n}
+              />
+              <AnimatePresence>
+                {node.value === null && (
+                  <PopIn key={`node-sub-${node.id}`}>
+                    <text
+                      x={pos.x}
+                      y={pos.y + TREE_NODE_R + 11}
+                      textAnchor="middle"
+                      fontFamily={FONT_FAMILY}
+                      fontSize={8}
+                      fill={INK}
+                      opacity={0.6}
+                    >
+                      fib({node.n})
+                    </text>
+                  </PopIn>
+                )}
+              </AnimatePresence>
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
     </>
   );
 }

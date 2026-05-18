@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import {
+  AnimatePresence,
+  DrawLine,
+  FadeText,
+  PopIn,
+  motion,
+} from "./motion-helpers";
 
 type Literal = { var: number; negated: boolean };
 type Node = {
@@ -166,44 +173,73 @@ function renderFrame(frame: Frame<NPState>): ReactNode {
   const { phase, nodes, edges, showEdges, assignment, cliqueNodes, message } = frame.state;
 
   // Determine which clauses are "satisfied" under current assignment
+  const hasAsn = Object.keys(assignment).length > 0;
   const clauseSat = CLAUSES.map((c) =>
-    Object.keys(assignment).length > 0 && c.some((lit) => evalLit(lit, assignment))
+    hasAsn && c.some((lit) => evalLit(lit, assignment))
   );
 
   return (
     <>
-      {/* Pane labels */}
+      {/* Pane labels (static) */}
       <text x={FORMULA_X} y={FORMULA_Y - 12} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK} opacity={0.7}>3-SAT φ</text>
       <text x={GRAPH_X} y={GRAPH_Y - 12} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK} opacity={0.7}>GRAPH G — find k-CLIQUE (k = 3)</text>
 
-      {/* Formula pane */}
+      {/* Formula pane (static) */}
       <rect x={FORMULA_X} y={FORMULA_Y} width={FORMULA_W} height={FORMULA_H} fill={PAPER} stroke={INK} strokeWidth={1} />
       {CLAUSES.map((clause, ci) => {
         const y = FORMULA_Y + 20 + ci * 50;
-        const sat = clauseSat[ci];
-        const hasAsn = Object.keys(assignment).length > 0;
         return (
           <g key={`clause-${ci}`}>
             <text x={FORMULA_X + 8} y={y} fontFamily={FONT_FAMILY} fontSize={11} fontWeight={700} fill={INK}>
               C{ci + 1}: ({clause.map(literalToStr).join(" ∨ ")})
             </text>
-            {hasAsn && (
-              <text x={FORMULA_X + 8} y={y + 14} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.7}>
-                = {clause.map((lit) => (evalLit(lit, assignment) ? "T" : "F")).join(" ∨ ")} = {sat ? "T" : "F"}
-              </text>
-            )}
           </g>
         );
       })}
-      {Object.keys(assignment).length > 0 && (
-        <text x={FORMULA_X + 8} y={FORMULA_Y + FORMULA_H - 10} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
-          α: x1={assignment[1] ? "T" : "F"}, x2={assignment[2] ? "T" : "F"}, x3={assignment[3] ? "T" : "F"}
-        </text>
-      )}
 
-      {/* Graph pane */}
+      {/* Per-clause evaluation line — fade in when assignment exists */}
+      <AnimatePresence>
+        {hasAsn &&
+          CLAUSES.map((clause, ci) => {
+            const y = FORMULA_Y + 20 + ci * 50;
+            const sat = clauseSat[ci];
+            return (
+              <PopIn key={`clause-eval-${ci}`} durationMs={300} delayMs={ci * 80}>
+                <text
+                  x={FORMULA_X + 8}
+                  y={y + 14}
+                  fontFamily={FONT_FAMILY}
+                  fontSize={9}
+                  fill={INK}
+                  opacity={0.7}
+                >
+                  = {clause.map((lit) => (evalLit(lit, assignment) ? "T" : "F")).join(" ∨ ")} = {sat ? "T" : "F"}
+                </text>
+              </PopIn>
+            );
+          })}
+      </AnimatePresence>
+
+      {/* Assignment label — fade-in when assignment becomes available */}
+      <AnimatePresence>
+        {hasAsn && (
+          <PopIn key="alpha-label" durationMs={350} delayMs={240}>
+            <text
+              x={FORMULA_X + 8}
+              y={FORMULA_Y + FORMULA_H - 10}
+              fontFamily={FONT_FAMILY}
+              fontSize={10}
+              fontWeight={700}
+              fill={INK}
+            >
+              α: x1={assignment[1] ? "T" : "F"}, x2={assignment[2] ? "T" : "F"}, x3={assignment[3] ? "T" : "F"}
+            </text>
+          </PopIn>
+        )}
+      </AnimatePresence>
+
+      {/* Graph pane background + cluster outlines + labels (static) */}
       <rect x={GRAPH_X} y={GRAPH_Y} width={GRAPH_W} height={GRAPH_H} fill={PAPER} stroke={INK} strokeWidth={1} />
-      {/* Cluster outlines */}
       {[0, 1, 2].map((ci) => {
         const c = clusterCenter(ci);
         return (
@@ -220,7 +256,6 @@ function renderFrame(frame: Frame<NPState>): ReactNode {
           />
         );
       })}
-      {/* Cluster labels */}
       {[0, 1, 2].map((ci) => {
         const c = clusterCenter(ci);
         return (
@@ -239,40 +274,79 @@ function renderFrame(frame: Frame<NPState>): ReactNode {
           </text>
         );
       })}
-      {/* Edges */}
-      {showEdges &&
-        edges.map((e) => {
-          const a = nodes.find((n) => n.id === e.from)!;
-          const b = nodes.find((n) => n.id === e.to)!;
-          const pa = nodePosition(a);
-          const pb = nodePosition(b);
-          const inCliqueEdge = cliqueNodes.includes(a.id) && cliqueNodes.includes(b.id);
-          return (
-            <line
-              key={`edge-${e.from}-${e.to}`}
-              x1={pa.x}
-              y1={pa.y}
-              x2={pb.x}
-              y2={pb.y}
-              stroke={inCliqueEdge ? ACCENT : INK}
-              strokeWidth={inCliqueEdge ? 2.5 : 0.6}
-              opacity={inCliqueEdge ? 1 : 0.3}
-            />
-          );
-        })}
-      {/* Nodes */}
+
+      {/* Edges — wrapped in AnimatePresence so they draw on sequentially with staggered delay.
+          Stable key per edge means edges only mount/animate once (or remount cleanly on show toggle).
+          Clique edges render in a separate layer ON TOP so highlight always wins z-order. */}
+      <AnimatePresence>
+        {showEdges &&
+          edges.map((e, i) => {
+            const a = nodes.find((n) => n.id === e.from)!;
+            const b = nodes.find((n) => n.id === e.to)!;
+            const pa = nodePosition(a);
+            const pb = nodePosition(b);
+            return (
+              <DrawLine
+                key={`edge-${e.from}-${e.to}`}
+                x1={pa.x}
+                y1={pa.y}
+                x2={pb.x}
+                y2={pb.y}
+                stroke={INK}
+                strokeWidth={0.6}
+                opacity={0.3}
+                durationMs={350}
+                delayMs={i * 40}
+              />
+            );
+          })}
+      </AnimatePresence>
+
+      {/* Clique-highlight edges — pop in over the base edges with a slight cascade.
+          Each highlight is keyed by the unordered pair so toggling cliqueNodes
+          cleanly mounts/unmounts these instead of mutating opacity on base edges. */}
+      <AnimatePresence>
+        {showEdges && cliqueNodes.length > 0 &&
+          edges
+            .filter((e) => cliqueNodes.includes(e.from) && cliqueNodes.includes(e.to))
+            .map((e, i) => {
+              const a = nodes.find((n) => n.id === e.from)!;
+              const b = nodes.find((n) => n.id === e.to)!;
+              const pa = nodePosition(a);
+              const pb = nodePosition(b);
+              return (
+                <DrawLine
+                  key={`clique-edge-${e.from}-${e.to}`}
+                  x1={pa.x}
+                  y1={pa.y}
+                  x2={pb.x}
+                  y2={pb.y}
+                  stroke={ACCENT}
+                  strokeWidth={2.5}
+                  opacity={1}
+                  durationMs={400}
+                  delayMs={i * 80}
+                />
+              );
+            })}
+      </AnimatePresence>
+
+      {/* Nodes — motion.circle for color/stroke transition; text label is static per-node */}
       {nodes.map((node) => {
         const pos = nodePosition(node);
         const isClique = cliqueNodes.includes(node.id);
         return (
           <g key={`node-${node.id}`}>
-            <circle
+            <motion.circle
               cx={pos.x}
               cy={pos.y}
               r={11}
-              fill={isClique ? ACCENT : "#fff"}
               stroke={INK}
-              strokeWidth={isClique ? 2 : 1}
+              animate={{
+                fill: isClique ? ACCENT : "#fff",
+                strokeWidth: isClique ? 2 : 1,
+              }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
             />
             <text
               x={pos.x}
@@ -289,38 +363,84 @@ function renderFrame(frame: Frame<NPState>): ReactNode {
         );
       })}
 
-      {/* Phase indicator above message */}
-      <text x={FORMULA_X} y={MSG_Y - 34} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.5}>
-        Phase: {phase}
-      </text>
-      {/* Footer message (2-line wrap) */}
+      {/* Clique-pick ring — pop in around each clique node so the selection reads as a positive event */}
+      <AnimatePresence>
+        {cliqueNodes.map((id, i) => {
+          const node = nodes.find((n) => n.id === id);
+          if (!node) return null;
+          const pos = nodePosition(node);
+          return (
+            <PopIn key={`clique-ring-${id}`} durationMs={320} delayMs={i * 90}>
+              <circle
+                cx={pos.x}
+                cy={pos.y}
+                r={15}
+                fill="none"
+                stroke={ACCENT}
+                strokeWidth={1.5}
+                opacity={0.8}
+              />
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
+
+      {/* Phase indicator — cross-fade on change */}
+      <FadeText
+        x={FORMULA_X}
+        y={MSG_Y - 34}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fill={INK}
+        opacity={0.5}
+      >
+        {`Phase: ${phase}`}
+      </FadeText>
+
+      {/* Footer message (2-line wrap) — cross-fade on change */}
       <rect x={10} y={MSG_Y - 28} width={460} height={36} fill={PAPER} stroke={INK} strokeWidth={1} />
-      {(() => {
-        const maxCharsPerLine = 78;
-        const words = message.split(' ');
-        let line1 = '';
-        let line2 = '';
-        for (const w of words) {
-          if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
-            line1 = line1 ? `${line1} ${w}` : w;
-          } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
-            line2 = line2 ? `${line2} ${w}` : w;
-          } else {
-            line2 = line2 + '…';
-            break;
-          }
-        }
-        return (
-          <text x={16} y={MSG_Y - 12} fontFamily={FONT_FAMILY} fontSize={9} fontWeight={700} fill={INK}>
-            <tspan x={16} dy={0}>{line1}</tspan>
-            {line2 && <tspan x={16} dy={12}>{line2}</tspan>}
-          </text>
-        );
-      })()}
+      <FooterMessage message={message} />
 
       {/* Bounds anchor */}
       <rect x={0} y={0} width={480} height={360} fill="none" stroke="none" />
     </>
+  );
+}
+
+function FooterMessage({ message }: { message: string }) {
+  const maxCharsPerLine = 78;
+  const words = message.split(" ");
+  let line1 = "";
+  let line2 = "";
+  for (const w of words) {
+    if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+      line1 = line1 ? `${line1} ${w}` : w;
+    } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+      line2 = line2 ? `${line2} ${w}` : w;
+    } else {
+      line2 = line2 + "…";
+      break;
+    }
+  }
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.text
+        key={message}
+        x={16}
+        y={MSG_Y - 12}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fontWeight={700}
+        fill={INK}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <tspan x={16} dy={0}>{line1}</tspan>
+        {line2 && <tspan x={16} dy={12}>{line2}</tspan>}
+      </motion.text>
+    </AnimatePresence>
   );
 }
 

@@ -1,6 +1,15 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import {
+  AnimatePresence,
+  DrawLine,
+  DrawPath,
+  FadeText,
+  PopIn,
+  TweenText,
+  motion,
+} from "./motion-helpers";
 
 type Phase = 1 | 2;
 type CodeLine = { text: string; highlighted: boolean };
@@ -24,6 +33,7 @@ type CPPState = {
   highlightedPointerIdx: number | null;
   message: string;
   isLeak: boolean;
+  showDispatch?: boolean;
 };
 
 function clone<T>(x: T): T {
@@ -153,6 +163,7 @@ function buildFrames(): Frame<CPPState>[] {
     highlightedPointerIdx: 1,
     message: "1) Deref a -> object; 2) read vptr -> vtable-Dog; 3) call vtable[0] = &Dog::speak.",
     isLeak: false,
+    showDispatch: true,
   }));
 
   frames.push(mk(6, {
@@ -168,6 +179,7 @@ function buildFrames(): Frame<CPPState>[] {
     highlightedPointerIdx: null,
     message: 'Dog::speak() runs -> prints "Woof". Polymorphism: O(1) dispatch via indirection.',
     isLeak: false,
+    showDispatch: true,
   }));
 
   // ============ PHASE 2: shared_ptr cycle ============
@@ -379,6 +391,7 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
     highlightedPointerIdx,
     message,
     isLeak,
+    showDispatch,
   } = frame.state;
 
   // Position heap objects
@@ -399,7 +412,9 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
     objPos.set(vt.id, { x, y, w, h });
   });
 
-  // Pointer source/sink positions
+  // Pointer source/sink positions. stackPtrY y-aligns stack pointer
+  // (pa/pb/a) to the vertical center of its current target so the line
+  // stays level when targets pop in/out.
   function stackPtrY(name: string): number {
     const ptrId = `ptr-${name}`;
     const ptr = pointers.find((p) => p.from === ptrId);
@@ -423,8 +438,8 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
 
   return (
     <>
-      {/* Phase indicator */}
-      <text
+      {/* Phase indicator — cross-fades when phase swaps */}
+      <FadeText
         x={CODE_X}
         y={20}
         fontFamily={FONT_FAMILY}
@@ -433,13 +448,12 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
         fill={INK}
         opacity={0.7}
       >
-        Phase {phase}
         {phase === 1
-          ? ": POO-1 virtual dispatch (vtable)"
-          : ": POO-4 shared_ptr ref-count cycle"}
-      </text>
+          ? "Phase 1: POO-1 virtual dispatch (vtable)"
+          : "Phase 2: POO-4 shared_ptr ref-count cycle"}
+      </FadeText>
 
-      {/* Code pane */}
+      {/* Code pane (static frame) */}
       <rect
         x={CODE_X}
         y={CODE_Y}
@@ -460,11 +474,13 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
       >
         SOURCE
       </text>
-      {code.map((line, i) => {
-        const y = CODE_Y + 30 + i * 18;
-        return (
-          <g key={`code-${i}`}>
-            {line.highlighted && (
+      {/* Code line highlight rects — AnimatePresence so the yellow bar pops in/out */}
+      <AnimatePresence>
+        {code.map((line, i) => {
+          if (!line.highlighted) return null;
+          const y = CODE_Y + 30 + i * 18;
+          return (
+            <PopIn key={`code-hl-${phase}-${i}`} durationMs={250}>
               <rect
                 x={CODE_X + 4}
                 y={y - 12}
@@ -473,15 +489,31 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                 fill={ACCENT}
                 opacity={0.7}
               />
-            )}
-            <text x={CODE_X + 6} y={y} fontFamily={FONT_FAMILY} fontSize={9} fill={INK}>
-              {line.text.length > 36 ? line.text.slice(0, 36) + "..." : line.text}
-            </text>
-          </g>
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
+      {/* Code line text — keyed by phase so text content swaps cleanly */}
+      {code.map((line, i) => {
+        const y = CODE_Y + 30 + i * 18;
+        const text =
+          line.text.length > 36 ? line.text.slice(0, 36) + "..." : line.text;
+        return (
+          <FadeText
+            key={`code-${phase}-${i}-${text}`}
+            x={CODE_X + 6}
+            y={y}
+            fontFamily={FONT_FAMILY}
+            fontSize={9}
+            fill={INK}
+            durationMs={200}
+          >
+            {text}
+          </FadeText>
         );
       })}
 
-      {/* Heap pane */}
+      {/* Heap pane (static frame) */}
       <rect
         x={HEAP_X}
         y={HEAP_Y}
@@ -500,223 +532,381 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
         fill={INK}
         opacity={0.6}
       >
-        {isLeak ? "HEAP · LEAK" : "HEAP"}
+        HEAP
       </text>
-
-      {/* Stack pointer labels */}
-      {["pa", "pb"].map((name, _i) => {
-        const ptrId = `ptr-${name}`;
-        const hasPtr = pointers.some((p) => p.from === ptrId);
-        if (!hasPtr && phase !== 1) return null;
-        const showInPhase1 = phase === 1 && name === "pa";
-        if (phase === 1 && !showInPhase1) return null;
-        const y = stackPtrY(name);
-        const label = phase === 1 ? "a" : name;
-        return (
-          <text
-            key={`stk-${name}`}
-            x={HEAP_X - 30}
-            y={y + 4}
-            textAnchor="end"
-            fontFamily={FONT_FAMILY}
-            fontSize={9}
-            fontWeight={700}
-            fill={INK}
-          >
-            {label} {"->"}{" "}
-          </text>
-        );
-      })}
-
-      {/* Heap objects */}
-      {heap.map((obj) => {
-        const p = objPos.get(obj.id);
-        if (!p) return null;
-        const highlighted = obj.id === highlightedObjectId;
-        return (
-          <g key={obj.id}>
+      {/* LEAK badge — pops in dramatically when refcount cycle leaves objects unreachable */}
+      <AnimatePresence>
+        {isLeak && (
+          <PopIn key="leak-badge" durationMs={400}>
             <rect
-              x={p.x}
-              y={p.y}
-              width={p.w}
-              height={p.h}
-              fill={highlighted ? ACCENT : "#fff"}
+              x={HEAP_X + HEAP_W - 50}
+              y={HEAP_Y + 3}
+              width={44}
+              height={14}
+              fill={INK}
               stroke={INK}
-              strokeWidth={highlighted ? 2 : 1}
+              strokeWidth={1}
             />
             <text
-              x={p.x + p.w / 2}
-              y={p.y + 13}
+              x={HEAP_X + HEAP_W - 28}
+              y={HEAP_Y + 13}
               textAnchor="middle"
               fontFamily={FONT_FAMILY}
               fontSize={9}
               fontWeight={700}
-              fill={INK}
+              fill={ACCENT}
             >
-              {obj.className}
+              LEAK
             </text>
-            <line
-              x1={p.x}
-              y1={p.y + 18}
-              x2={p.x + p.w}
-              y2={p.y + 18}
-              stroke={INK}
-              strokeWidth={0.5}
-            />
-            {obj.fields.map((f, i) => (
-              <text
-                key={`f-${i}`}
-                x={p.x + 4}
-                y={p.y + 30 + i * 14}
-                fontFamily={FONT_FAMILY}
-                fontSize={8}
-                fill={INK}
-              >
-                {f.name}: {f.value.length > 10 ? f.value.slice(0, 10) + "..." : f.value}
-              </text>
-            ))}
-            {obj.refcount !== undefined && (
-              <text
-                x={p.x + p.w - 4}
-                y={p.y + p.h - 4}
+          </PopIn>
+        )}
+      </AnimatePresence>
+
+      {/* Stack pointer labels — appear/disappear via PopIn; motion.text inside follows
+          the y as the target rect changes (stackPtrY recomputes per render). */}
+      <AnimatePresence>
+        {["pa", "pb"].map((name) => {
+          const ptrId = `ptr-${name}`;
+          const hasPtr = pointers.some((p) => p.from === ptrId);
+          if (!hasPtr) return null;
+          if (phase === 1 && name !== "pa") return null;
+          const y = stackPtrY(name);
+          const label = phase === 1 ? "a" : name;
+          return (
+            <PopIn key={`stk-${phase}-${name}`} durationMs={250}>
+              <motion.text
+                x={HEAP_X - 30}
+                animate={{ y: y + 4 }}
+                transition={{ duration: 0.4, ease: "easeInOut" }}
                 textAnchor="end"
                 fontFamily={FONT_FAMILY}
-                fontSize={8}
+                fontSize={9}
                 fontWeight={700}
                 fill={INK}
               >
-                refcnt={obj.refcount}
-              </text>
-            )}
-          </g>
-        );
-      })}
+                {label} {"->"}{" "}
+              </motion.text>
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
 
-      {/* vtables */}
-      {vtables.map((vt) => {
-        const p = objPos.get(vt.id);
-        if (!p) return null;
-        return (
-          <g key={vt.id}>
-            <rect
-              x={p.x}
-              y={p.y}
-              width={p.w}
-              height={p.h}
-              fill="#fff"
-              stroke={INK}
-              strokeWidth={1}
-              strokeDasharray="2 2"
-            />
-            <text
-              x={p.x + p.w / 2}
-              y={p.y + 9}
-              textAnchor="middle"
-              fontFamily={FONT_FAMILY}
-              fontSize={7}
-              fontWeight={700}
-              fill={INK}
-            >
-              {vt.id.replace("vtable-", "vtable ")}
-            </text>
-            {vt.entries.map((e, i) => (
+      {/* Heap objects — PopIn on mount/unmount; persistent rects use motion.rect for highlight tween */}
+      <AnimatePresence>
+        {heap.map((obj) => {
+          const p = objPos.get(obj.id);
+          if (!p) return null;
+          const highlighted = obj.id === highlightedObjectId;
+          return (
+            <PopIn key={`obj-${obj.id}`} durationMs={300}>
+              <motion.rect
+                x={p.x}
+                y={p.y}
+                width={p.w}
+                height={p.h}
+                animate={{
+                  fill: highlighted ? ACCENT : "#fff",
+                  strokeWidth: highlighted ? 2 : 1,
+                }}
+                transition={{ duration: 0.35, ease: "easeInOut" }}
+                stroke={INK}
+              />
               <text
-                key={`vt-e-${i}`}
-                x={p.x + 4}
-                y={p.y + 20 + i * 11}
+                x={p.x + p.w / 2}
+                y={p.y + 13}
+                textAnchor="middle"
                 fontFamily={FONT_FAMILY}
-                fontSize={7}
+                fontSize={9}
+                fontWeight={700}
                 fill={INK}
               >
-                [{i}] {e.name}
+                {obj.className}
               </text>
-            ))}
-          </g>
-        );
-      })}
-
-      {/* Pointers */}
-      {pointers.map((p, i) => {
-        const from = ptrPos(p.from, true);
-        const to = ptrPos(p.to, false);
-        const highlighted = i === highlightedPointerIdx;
-        const stroke = highlighted ? ACCENT : INK;
-        const sw = highlighted ? 2 : 1;
-        const dash = p.kind === "weak" ? "3 3" : p.kind === "vptr" ? "1 2" : undefined;
-
-        // Detect reverse pair → curve apart vertically
-        const hasReverse = pointers.some(
-          (q) => q !== p && q.from === p.to && q.to === p.from,
-        );
-        const arcOffset = hasReverse ? (i % 2 === 0 ? -18 : 18) : 0;
-        const midX = (from.x + to.x) / 2;
-        const midY = (from.y + to.y) / 2 + arcOffset;
-        const pathD = hasReverse
-          ? `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`
-          : null;
-
-        return (
-          <g key={`ptr-${i}`} opacity={0.85}>
-            {pathD ? (
-              <path d={pathD} fill="none" stroke={stroke} strokeWidth={sw} strokeDasharray={dash} />
-            ) : (
               <line
-                x1={from.x}
-                y1={from.y}
-                x2={to.x}
-                y2={to.y}
-                stroke={stroke}
-                strokeWidth={sw}
-                strokeDasharray={dash}
+                x1={p.x}
+                y1={p.y + 18}
+                x2={p.x + p.w}
+                y2={p.y + 18}
+                stroke={INK}
+                strokeWidth={0.5}
               />
-            )}
-            <polygon
-              points={`${to.x},${to.y} ${to.x - 5},${to.y - 3} ${to.x - 5},${to.y + 3}`}
-              fill={stroke}
-              transform={pathD && to.x < from.x ? `rotate(180 ${to.x} ${to.y})` : undefined}
-            />
-            {p.kind === "weak" && (
+              {obj.fields.map((f, i) => {
+                const valShort =
+                  f.value.length > 10 ? f.value.slice(0, 10) + "..." : f.value;
+                return (
+                  <FadeText
+                    key={`f-${obj.id}-${i}-${f.value}`}
+                    x={p.x + 4}
+                    y={p.y + 30 + i * 14}
+                    fontFamily={FONT_FAMILY}
+                    fontSize={8}
+                    fill={INK}
+                    durationMs={200}
+                  >
+                    {f.name}: {valShort}
+                  </FadeText>
+                );
+              })}
+              {obj.refcount !== undefined && (
+                <TweenText
+                  x={p.x + p.w - 4}
+                  y={p.y + p.h - 4}
+                  textAnchor="end"
+                  fontFamily={FONT_FAMILY}
+                  fontSize={8}
+                  fontWeight={700}
+                  fill={INK}
+                  value={obj.refcount}
+                  formatter={(n) => `refcnt=${Math.round(n)}`}
+                />
+              )}
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
+
+      {/* vtables — PopIn so the dashed boxes ease in alongside the heap allocation */}
+      <AnimatePresence>
+        {vtables.map((vt) => {
+          const p = objPos.get(vt.id);
+          if (!p) return null;
+          return (
+            <PopIn key={`vt-${vt.id}`} durationMs={300}>
+              <rect
+                x={p.x}
+                y={p.y}
+                width={p.w}
+                height={p.h}
+                fill="#fff"
+                stroke={INK}
+                strokeWidth={1}
+                strokeDasharray="2 2"
+              />
               <text
-                x={midX}
-                y={midY - 4}
+                x={p.x + p.w / 2}
+                y={p.y + 9}
                 textAnchor="middle"
                 fontFamily={FONT_FAMILY}
                 fontSize={7}
                 fontWeight={700}
                 fill={INK}
               >
-                weak
+                {vt.id.replace("vtable-", "vtable ")}
               </text>
-            )}
-          </g>
-        );
-      })}
+              {vt.entries.map((e, i) => (
+                <text
+                  key={`vt-e-${i}`}
+                  x={p.x + 4}
+                  y={p.y + 20 + i * 11}
+                  fontFamily={FONT_FAMILY}
+                  fontSize={7}
+                  fill={INK}
+                >
+                  [{i}] {e.name}
+                </text>
+              ))}
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
 
-      {/* Footer message (2-line wrap) */}
-      <rect x={10} y={MSG_Y_FOOTER - 28} width={460} height={36} fill={PAPER} stroke={INK} strokeWidth={1} />
-      {(() => {
-        const maxCharsPerLine = 78;
-        const words = message.split(' ');
-        let line1 = '';
-        let line2 = '';
-        for (const w of words) {
-          if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
-            line1 = line1 ? `${line1} ${w}` : w;
-          } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
-            line2 = line2 ? `${line2} ${w}` : w;
-          } else {
-            line2 = line2 + '…';
-            break;
-          }
-        }
-        return (
-          <text x={16} y={MSG_Y_FOOTER - 12} fontFamily={FONT_FAMILY} fontSize={9} fontWeight={700} fill={INK}>
-            <tspan x={16} dy={0}>{line1}</tspan>
-            {line2 && <tspan x={16} dy={12}>{line2}</tspan>}
-          </text>
-        );
-      })()}
+      {/* Pointers — keyed by from->to so framer-motion animates endpoint changes.
+          Curved (Phase 2 cycle) edges use DrawPath so the bezier draws on via
+          pathLength. Straight edges use motion.line for position tweens. */}
+      <AnimatePresence>
+        {pointers.map((p, i) => {
+          const from = ptrPos(p.from, true);
+          const to = ptrPos(p.to, false);
+          const highlighted = i === highlightedPointerIdx;
+          const stroke = highlighted ? ACCENT : INK;
+          const sw = highlighted ? 2 : 1;
+          const dash =
+            p.kind === "weak" ? "3 3" : p.kind === "vptr" ? "1 2" : undefined;
+
+          const hasReverse = pointers.some(
+            (q) => q !== p && q.from === p.to && q.to === p.from,
+          );
+          const arcOffset = hasReverse ? (i % 2 === 0 ? -18 : 18) : 0;
+          const midX = (from.x + to.x) / 2;
+          const midY = (from.y + to.y) / 2 + arcOffset;
+          const pathD = hasReverse
+            ? `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`
+            : null;
+          const key = `ptr-${p.from}->${p.to}-${p.kind}`;
+          const arrowPoints = `${to.x},${to.y} ${to.x - 5},${to.y - 3} ${to.x - 5},${to.y + 3}`;
+
+          return (
+            <PopIn key={key} durationMs={300}>
+              {pathD ? (
+                <DrawPath
+                  d={pathD}
+                  fill="none"
+                  stroke={stroke}
+                  strokeWidth={sw}
+                  strokeDasharray={dash}
+                  durationMs={500}
+                />
+              ) : (
+                <motion.line
+                  animate={{
+                    x1: from.x,
+                    y1: from.y,
+                    x2: to.x,
+                    y2: to.y,
+                    stroke,
+                  }}
+                  transition={{ duration: 0.45, ease: "easeInOut" }}
+                  strokeWidth={sw}
+                  strokeDasharray={dash}
+                />
+              )}
+              <motion.polygon
+                animate={{ points: arrowPoints, fill: stroke }}
+                transition={{ duration: 0.45, ease: "easeInOut" }}
+                transform={
+                  pathD && to.x < from.x ? `rotate(180 ${to.x} ${to.y})` : undefined
+                }
+              />
+              {p.kind === "weak" && (
+                <text
+                  x={midX}
+                  y={midY - 4}
+                  textAnchor="middle"
+                  fontFamily={FONT_FAMILY}
+                  fontSize={7}
+                  fontWeight={700}
+                  fill={INK}
+                >
+                  weak
+                </text>
+              )}
+            </PopIn>
+          );
+        })}
+      </AnimatePresence>
+
+      {/* Phase-1 polymorphic dispatch resolution — three staggered DrawLines
+          tracing the lookup path: a -> object -> vptr -> vtable slot. */}
+      <AnimatePresence>
+        {phase === 1 && showDispatch && (() => {
+          const dog = objPos.get("obj-dog");
+          const vt = objPos.get("vtable-Dog");
+          if (!dog || !vt) return null;
+          const aY = stackPtrY("pa");
+          // 1) a -> object body
+          const step1 = {
+            x1: HEAP_X - 10,
+            y1: aY,
+            x2: dog.x + dog.w / 2,
+            y2: dog.y + dog.h / 2,
+          };
+          // 2) object vptr field -> vtable header
+          const step2 = {
+            x1: dog.x + dog.w / 2,
+            y1: dog.y + 30,
+            x2: vt.x + vt.w / 2,
+            y2: vt.y,
+          };
+          // 3) vtable speak slot -> conceptual function (off-pane edge)
+          const step3 = {
+            x1: vt.x + vt.w,
+            y1: vt.y + 20,
+            x2: vt.x + vt.w + 14,
+            y2: vt.y + 20,
+          };
+          return (
+            <PopIn key="dispatch-resolution" durationMs={200}>
+              <DrawLine
+                {...step1}
+                stroke={ACCENT}
+                strokeWidth={2}
+                durationMs={350}
+                delayMs={0}
+              />
+              <DrawLine
+                {...step2}
+                stroke={ACCENT}
+                strokeWidth={2}
+                durationMs={350}
+                delayMs={350}
+              />
+              <DrawLine
+                {...step3}
+                stroke={ACCENT}
+                strokeWidth={2}
+                durationMs={300}
+                delayMs={700}
+              />
+              <text
+                x={vt.x + vt.w + 16}
+                y={vt.y + 23}
+                fontFamily={FONT_FAMILY}
+                fontSize={7}
+                fontWeight={700}
+                fill={INK}
+              >
+                Dog::speak
+              </text>
+            </PopIn>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* Footer message (2-line wrap, fade-on-change) */}
+      <rect
+        x={10}
+        y={MSG_Y_FOOTER - 28}
+        width={460}
+        height={36}
+        fill={PAPER}
+        stroke={INK}
+        strokeWidth={1}
+      />
+      <FooterMessage message={message} />
     </>
+  );
+}
+
+function FooterMessage({ message }: { message: string }) {
+  const maxCharsPerLine = 78;
+  const words = message.split(" ");
+  let line1 = "";
+  let line2 = "";
+  for (const w of words) {
+    if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+      line1 = line1 ? `${line1} ${w}` : w;
+    } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+      line2 = line2 ? `${line2} ${w}` : w;
+    } else {
+      line2 = line2 + "…";
+      break;
+    }
+  }
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.text
+        key={message}
+        x={16}
+        y={MSG_Y_FOOTER - 12}
+        fontFamily={FONT_FAMILY}
+        fontSize={9}
+        fontWeight={700}
+        fill={INK}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <tspan x={16} dy={0}>
+          {line1}
+        </tspan>
+        {line2 && (
+          <tspan x={16} dy={12}>
+            {line2}
+          </tspan>
+        )}
+      </motion.text>
+    </AnimatePresence>
   );
 }
 
