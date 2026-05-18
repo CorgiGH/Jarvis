@@ -438,6 +438,37 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
 
   return (
     <>
+      {/* Arrowhead markers. orient="auto" rotates the marker to match the
+          tangent of the path/line at its endpoint, so curved beziers get an
+          arrowhead pointing along the curve (not stuck at 0/90/180 degrees).
+          refX positions the marker tip exactly at the line endpoint. */}
+      <defs>
+        <marker
+          id="cpp-arrow-ink"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+          markerUnits="userSpaceOnUse"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={INK} />
+        </marker>
+        <marker
+          id="cpp-arrow-accent"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+          markerUnits="userSpaceOnUse"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={ACCENT} stroke={INK} strokeWidth="0.5" />
+        </marker>
+      </defs>
+
       {/* Phase indicator — cross-fades when phase swaps */}
       <FadeText
         x={CODE_X}
@@ -797,28 +828,53 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
               midX = (from.x + to.x) / 2;
               midY = (from.y + to.y) / 2;
             } else if (hasReverse) {
-              // Phase 2 cycle pair — ±45 vertical arc.
-              const arcOffset = i % 2 === 0 ? -45 : 45;
+              // Phase 2 cycle pair — pick the edge closest to the target so
+              // the line stays in the gap between the objects, then arc
+              // above for forward and below for reverse.
+              const src = objPos.get(p.from)!;
+              const tgt = objPos.get(p.to)!;
+              const forward = tgt.x > src.x;
+              from = {
+                x: forward ? src.x + src.w : src.x,
+                y: src.y + src.h / 2,
+              };
+              to = {
+                x: forward ? tgt.x : tgt.x + tgt.w,
+                y: tgt.y + tgt.h / 2,
+              };
               midX = (from.x + to.x) / 2;
-              midY = (from.y + to.y) / 2 + arcOffset;
+              midY = (from.y + to.y) / 2 + (forward ? -45 : 45);
               pathD = `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`;
-              arrowAngleDeg = to.x < from.x ? 180 : 0;
+              arrowAngleDeg = forward ? 0 : 180;
             }
           } else if (hasReverse) {
-            const arcOffset = i % 2 === 0 ? -45 : 45;
-            midX = (from.x + to.x) / 2;
-            midY = (from.y + to.y) / 2 + arcOffset;
-            pathD = `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`;
-            arrowAngleDeg = to.x < from.x ? 180 : 0;
+            // Generic object↔object reverse-pair (same-y siblings).
+            const src = objPos.get(p.from);
+            const tgt = objPos.get(p.to);
+            if (src && tgt) {
+              const forward = tgt.x > src.x;
+              from = {
+                x: forward ? src.x + src.w : src.x,
+                y: src.y + src.h / 2,
+              };
+              to = {
+                x: forward ? tgt.x : tgt.x + tgt.w,
+                y: tgt.y + tgt.h / 2,
+              };
+              midX = (from.x + to.x) / 2;
+              midY = (from.y + to.y) / 2 + (forward ? -45 : 45);
+              pathD = `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`;
+              arrowAngleDeg = forward ? 0 : 180;
+            }
           }
 
           const key = `ptr-${p.from}->${p.to}-${p.kind}`;
-          // Arrowhead points right by default; rotate around tip for other directions.
-          // Slightly larger than before so the tip reads at a glance.
-          const arrowPoints = `${to.x},${to.y} ${to.x - 8},${to.y - 4} ${to.x - 8},${to.y + 4}`;
-          const arrowTransform = arrowAngleDeg
-            ? `rotate(${arrowAngleDeg} ${to.x} ${to.y})`
-            : undefined;
+          void arrowAngleDeg; // not used now that SVG markers handle orientation
+          // SVG <marker orient="auto"> rotates the arrowhead to match the
+          // path/line tangent at its endpoint, so it stays glued to the line
+          // along curves and straight diagonals alike.
+          const markerEnd =
+            stroke === ACCENT ? "url(#cpp-arrow-accent)" : "url(#cpp-arrow-ink)";
 
           return (
             <PopIn key={key} durationMs={300}>
@@ -830,6 +886,7 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                   strokeWidth={sw}
                   strokeDasharray={dash}
                   durationMs={500}
+                  markerEnd={markerEnd}
                 />
               ) : (
                 <motion.line
@@ -841,17 +898,12 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                     y2: to.y,
                     stroke,
                   }}
-                  transition={{ duration: 0.45, ease: "easeInOut" }}
+                  transition={{ type: "tween", duration: 0.45, ease: "easeInOut" }}
                   strokeWidth={sw}
                   strokeDasharray={dash}
+                  markerEnd={markerEnd}
                 />
               )}
-              <motion.polygon
-                initial={false}
-                animate={{ points: arrowPoints, fill: stroke }}
-                transition={{ duration: 0.45, ease: "easeInOut" }}
-                transform={arrowTransform}
-              />
               {p.kind === "weak" && (
                 <text
                   x={midX}
@@ -960,10 +1012,16 @@ function FooterMessage({ message }: { message: string }) {
   const words = message.split(" ");
   let line1 = "";
   let line2 = "";
+  let onLine2 = false;
   for (const w of words) {
-    if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
-      line1 = line1 ? `${line1} ${w}` : w;
-    } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+    if (!onLine2) {
+      if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+        line1 = line1 ? `${line1} ${w}` : w;
+        continue;
+      }
+      onLine2 = true;
+    }
+    if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
       line2 = line2 ? `${line2} ${w}` : w;
     } else {
       line2 = line2 + "…";

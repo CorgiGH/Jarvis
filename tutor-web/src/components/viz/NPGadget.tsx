@@ -413,10 +413,16 @@ function FooterMessage({ message }: { message: string }) {
   const words = message.split(" ");
   let line1 = "";
   let line2 = "";
+  let onLine2 = false;
   for (const w of words) {
-    if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
-      line1 = line1 ? `${line1} ${w}` : w;
-    } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+    if (!onLine2) {
+      if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+        line1 = line1 ? `${line1} ${w}` : w;
+        continue;
+      }
+      onLine2 = true;
+    }
+    if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
       line2 = line2 ? `${line2} ${w}` : w;
     } else {
       line2 = line2 + "…";
