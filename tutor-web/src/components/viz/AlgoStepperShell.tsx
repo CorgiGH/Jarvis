@@ -247,6 +247,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
         aria-labelledby={`${titleId} ${descId}`}
         tabIndex={0}
         onKeyDown={onKey}
+        className="algo-stepper-shell-svg"
         style={{
           background: "#fff",
           outline: `2px solid transparent`,
@@ -262,6 +263,24 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           e.currentTarget.style.outline = `2px solid transparent`;
         }}
       >
+        <style>{`
+          .algo-stepper-shell-svg * {
+            transition: cx 250ms ease-in-out, cy 250ms ease-in-out,
+                        x 250ms ease-in-out, y 250ms ease-in-out,
+                        x1 250ms ease-in-out, y1 250ms ease-in-out,
+                        x2 250ms ease-in-out, y2 250ms ease-in-out,
+                        width 250ms ease-in-out, height 250ms ease-in-out,
+                        opacity 250ms ease-in-out,
+                        fill 250ms ease-in-out,
+                        stroke 250ms ease-in-out,
+                        fill-opacity 250ms ease-in-out;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .algo-stepper-shell-svg * {
+              transition: none;
+            }
+          }
+        `}</style>
         <title id={titleId}>{title}</title>
         <desc id={descId}>{desc}</desc>
         {currentFrame && renderFrame(currentFrame, idx)}
