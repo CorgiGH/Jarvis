@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AlgoStepperShellSmoke } from "./AlgoStepperShellSmoke";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
+import { SumPlotTracker } from "./SumPlotTracker";
 import { FONT_FAMILY, INK, PAPER } from "./theme";
 
 const tileStyle: CSSProperties = {
@@ -92,6 +93,17 @@ export function VizDemoPage() {
           data={[1, 3, 4, 5, 6, 8, 11]}
           mu={numLineMu}
           onMu={setNumLineMu}
+        />
+      </section>
+
+      <section data-testid="viz-demo-sumplot" style={tileStyle}>
+        <h2 style={headingStyle}>SumPlotTracker (PS basis)</h2>
+        <p style={subheadingStyle}>
+          Σ|xᵢ − μ| curve · marker tracks μ · brutalist mono
+        </p>
+        <SumPlotTracker
+          data={[1, 3, 4, 5, 6, 8, 11]}
+          mu={numLineMu}
         />
       </section>
     </div>

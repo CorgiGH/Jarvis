@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { ACCENT, INK } from "./theme";
 
 export interface SumPlotTrackerProps {
   data: number[];
@@ -84,11 +85,11 @@ export function SumPlotTracker({ data, mu, range }: SumPlotTrackerProps) {
 
   return (
     <svg width={SVG_W} height={SVG_H} viewBox={`0 0 ${SVG_W} ${SVG_H}`} data-testid="sum-plot-tracker">
-      <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + USABLE_H} stroke="currentColor" strokeWidth={1} opacity={0.3} />
-      <line x1={PAD_L} y1={PAD_T + USABLE_H} x2={PAD_L + USABLE_W} y2={PAD_T + USABLE_H} stroke="currentColor" strokeWidth={1} opacity={0.3} />
-      <text data-testid="sum-axis-label" x={10} y={PAD_T + USABLE_H / 2} fontSize={10} textAnchor="middle" transform={`rotate(-90, 10, ${PAD_T + USABLE_H / 2})`} fill="currentColor" opacity={0.6}>Σ|xᵢ − μ|</text>
-      <path data-testid="sum-curve" d={pathStr} fill="none" stroke="var(--color-accent, #3b82f6)" strokeWidth={2} />
-      <circle ref={markerRef} data-testid="sum-marker" cx={initialPos.x} cy={initialPos.y} r={6} fill="var(--color-accent, #3b82f6)" stroke="white" strokeWidth={2} />
+      <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + USABLE_H} stroke={INK} strokeWidth={1} opacity={0.3} />
+      <line x1={PAD_L} y1={PAD_T + USABLE_H} x2={PAD_L + USABLE_W} y2={PAD_T + USABLE_H} stroke={INK} strokeWidth={1} opacity={0.3} />
+      <text data-testid="sum-axis-label" x={10} y={PAD_T + USABLE_H / 2} fontSize={10} textAnchor="middle" transform={`rotate(-90, 10, ${PAD_T + USABLE_H / 2})`} fill={INK} opacity={0.6}>Σ|xᵢ − μ|</text>
+      <path data-testid="sum-curve" d={pathStr} fill="none" stroke={INK} strokeWidth={2} />
+      <circle ref={markerRef} data-testid="sum-marker" cx={initialPos.x} cy={initialPos.y} r={6} fill={ACCENT} stroke={INK} strokeWidth={2} />
     </svg>
   );
 }
