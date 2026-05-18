@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AlgoStepperShellSmoke } from "./AlgoStepperShellSmoke";
 import { CompareFrames } from "./CompareFrames";
 import { DPWastedWork } from "./DPWastedWork";
+import { PageTableWalk } from "./PageTableWalk";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
 import { RecursionTree } from "./RecursionTree";
@@ -150,6 +151,14 @@ export function VizDemoPage() {
           Naïve recursion vs DP, side-by-side. Watch duplicate subproblems shade darker as wasted work accumulates.
         </p>
         <DPWastedWork />
+      </section>
+
+      <section data-testid="viz-demo-so4-pagetable" style={tileStyle}>
+        <h2 style={headingStyle}>SO-4 · Page table walk + TLB + page fault + COW ⭐</h2>
+        <p style={subheadingStyle}>
+          Virtual address → TLB → page table → physical memory. Includes hit, miss, page fault, fork+COW.
+        </p>
+        <PageTableWalk />
       </section>
     </div>
   );
