@@ -578,7 +578,7 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                 x={HEAP_X - 30}
                 initial={false}
                 animate={{ y: y + 4 }}
-                transition={{ duration: 0.4, ease: "easeInOut" }}
+                transition={{ type: "tween", duration: 0.4, ease: "easeInOut" }}
                 textAnchor="end"
                 fontFamily={FONT_FAMILY}
                 fontSize={9}

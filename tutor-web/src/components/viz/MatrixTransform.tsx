@@ -35,7 +35,7 @@ const CX = 240;
 const CY = 180;
 const UNIT = 70;
 
-const TWEEN = { duration: 0.5, ease: "easeInOut" as const };
+const TWEEN = { type: "tween" as const, duration: 0.5, ease: "easeInOut" as const };
 
 function apply(M: Mat2, v: Vec2): Vec2 {
   return [M[0][0] * v[0] + M[0][1] * v[1], M[1][0] * v[0] + M[1][1] * v[1]];

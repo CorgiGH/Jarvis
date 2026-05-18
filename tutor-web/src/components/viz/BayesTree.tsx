@@ -459,7 +459,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         y={AREA_Y + (AREA_H * fpr) / 2 + 6}
         initial={false}
         animate={{ x: AREA_X + AREA_W * visualPrior + 8 }}
-        transition={{ duration: 0.55, ease: "easeInOut" }}
+        transition={{ type: "tween", duration: 0.55, ease: "easeInOut" }}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fontWeight={700}
@@ -471,7 +471,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         y={AREA_Y + AREA_H * (fpr + (1 - fpr) / 2) + 4}
         initial={false}
         animate={{ x: AREA_X + AREA_W * visualPrior + 8 }}
-        transition={{ duration: 0.55, ease: "easeInOut" }}
+        transition={{ type: "tween", duration: 0.55, ease: "easeInOut" }}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fill={INK}

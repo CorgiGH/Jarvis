@@ -399,7 +399,7 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
               <motion.g
                 initial={false}
                 animate={{ y: targetY }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
+                transition={{ type: "tween", duration: 0.5, ease: "easeInOut" }}
               >
                 <MessageRow msg={m} y={0} isHighlighted={isHighlighted} />
               </motion.g>

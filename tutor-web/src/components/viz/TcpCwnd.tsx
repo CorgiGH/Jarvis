@@ -252,7 +252,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         x={PLOT_X + PLOT_W - 4}
         initial={false}
         animate={{ y: yScale(ssthresh) - 4 }}
-        transition={{ duration: 0.5, ease: "easeInOut" }}
+        transition={{ type: "tween", duration: 0.5, ease: "easeInOut" }}
         textAnchor="end"
         fontFamily={FONT_FAMILY}
         fontSize={8}

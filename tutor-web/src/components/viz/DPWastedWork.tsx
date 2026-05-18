@@ -397,7 +397,7 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
               <motion.g
                 initial={false}
                 animate={{ x: pos.x, y: pos.y }}
-                transition={{ duration: 0.5, ease: "easeInOut" }}
+                transition={{ type: "tween", duration: 0.5, ease: "easeInOut" }}
               >
                 <motion.circle
                   cx={0}
