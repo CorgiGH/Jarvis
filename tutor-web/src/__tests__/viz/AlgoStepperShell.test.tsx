@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { AlgoStepperShell, type Frame } from "../../components/viz/AlgoStepperShell";
 
 type CounterState = { n: number };
@@ -63,8 +62,7 @@ describe("AlgoStepperShell — initial render", () => {
 });
 
 describe("AlgoStepperShell — stepping", () => {
-  test("scrubber changes frame", async () => {
-    const user = userEvent.setup();
+  test("scrubber changes frame", () => {
     render(
       <AlgoStepperShell
         title="Counter"
@@ -75,14 +73,11 @@ describe("AlgoStepperShell — stepping", () => {
     );
     const scrubber = screen.getByTestId("stepper-scrubber") as HTMLInputElement;
     expect(scrubber.value).toBe("0");
-    await user.clear(scrubber);
-    scrubber.value = "2";
-    scrubber.dispatchEvent(new Event("input", { bubbles: true }));
-    scrubber.dispatchEvent(new Event("change", { bubbles: true }));
+    fireEvent.change(scrubber, { target: { value: "2" } });
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("2");
   });
 
-  test("ArrowRight steps forward; ArrowLeft steps back", async () => {
+  test("ArrowRight steps forward; ArrowLeft steps back", () => {
     render(
       <AlgoStepperShell
         title="Counter"
@@ -92,14 +87,9 @@ describe("AlgoStepperShell — stepping", () => {
       />
     );
     const svg = screen.getByRole("img");
-    svg.focus();
-    svg.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })
-    );
+    fireEvent.keyDown(svg, { key: "ArrowRight" });
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("1");
-    svg.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })
-    );
+    fireEvent.keyDown(svg, { key: "ArrowLeft" });
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("0");
   });
 
@@ -113,13 +103,9 @@ describe("AlgoStepperShell — stepping", () => {
       />
     );
     const svg = screen.getByRole("img");
-    svg.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "k", bubbles: true })
-    );
+    fireEvent.keyDown(svg, { key: "k" });
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("1");
-    svg.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "j", bubbles: true })
-    );
+    fireEvent.keyDown(svg, { key: "j" });
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("0");
   });
 
@@ -133,14 +119,10 @@ describe("AlgoStepperShell — stepping", () => {
       />
     );
     const svg = screen.getByRole("img");
-    svg.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })
-    );
+    fireEvent.keyDown(svg, { key: "ArrowLeft" });
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("0");
     for (let i = 0; i < 10; i++) {
-      svg.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })
-      );
+      fireEvent.keyDown(svg, { key: "ArrowRight" });
     }
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("2");
   });

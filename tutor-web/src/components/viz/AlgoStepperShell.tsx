@@ -1,13 +1,9 @@
 import {
-  useCallback,
-  useEffect,
   useMemo,
-  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { flushSync } from "react-dom";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
 
 export type Frame<S> = {
@@ -51,64 +47,16 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const lastIdx = Math.max(0, materializedFrames.length - 1);
   const [idx, setIdx] = useState(0);
 
-  // Ref-based step so the native keydown listener always has a fresh closure.
-  const lastIdxRef = useRef(lastIdx);
-  lastIdxRef.current = lastIdx;
-  const idxRef = useRef(idx);
-  idxRef.current = idx;
-
-  const stepBy = useCallback(
-    (delta: number) => {
-      flushSync(() => {
-        setIdx((prev) => Math.max(0, Math.min(lastIdxRef.current, prev + delta)));
-      });
-    },
-    []
-  );
-
-  const setIdxClamped = useCallback(
-    (next: number) => {
-      flushSync(() => {
-        setIdx(Math.max(0, Math.min(lastIdxRef.current, next)));
-      });
-    },
-    []
-  );
-
-  // Attach native keydown on the SVG so raw dispatchEvent in tests works.
-  const svgRef = useRef<SVGSVGElement>(null);
-  useEffect(() => {
-    const el = svgRef.current;
-    if (!el) return;
-    const handler = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if (e.key === "ArrowRight" || k === "k") {
-        e.preventDefault();
-        stepBy(1);
-      } else if (e.key === "ArrowLeft" || k === "j") {
-        e.preventDefault();
-        stepBy(-1);
-      }
-    };
-    el.addEventListener("keydown", handler);
-    return () => el.removeEventListener("keydown", handler);
-  }, [stepBy]);
-
-  // Attach native change listener on the number input so dispatchEvent works.
-  const scrubberRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const el = scrubberRef.current;
-    if (!el) return;
-    const handler = () => {
-      setIdxClamped(Number(el.value));
-    };
-    el.addEventListener("change", handler);
-    el.addEventListener("input", handler);
-    return () => {
-      el.removeEventListener("change", handler);
-      el.removeEventListener("input", handler);
-    };
-  }, [setIdxClamped]);
+  const onKey = (e: React.KeyboardEvent<SVGSVGElement>) => {
+    const k = e.key.toLowerCase();
+    if (e.key === "ArrowRight" || k === "k") {
+      e.preventDefault();
+      setIdx((prev) => Math.min(lastIdx, prev + 1));
+    } else if (e.key === "ArrowLeft" || k === "j") {
+      e.preventDefault();
+      setIdx((prev) => Math.max(0, prev - 1));
+    }
+  };
 
   const currentFrame = materializedFrames[idx] ?? materializedFrames[0];
   const titleId = `${testIdPrefix}-title`;
@@ -132,7 +80,6 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
       }}
     >
       <svg
-        ref={svgRef}
         viewBox="0 0 480 360"
         preserveAspectRatio="xMidYMid meet"
         role="img"
@@ -146,6 +93,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           height: "auto",
           border: `1px solid ${INK}`,
         }}
+        onKeyDown={onKey}
         onFocus={(e) => {
           e.currentTarget.style.outline = `2px solid ${ACCENT}`;
         }}
@@ -176,41 +124,34 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           <div style={{ fontSize: 18, fontWeight: 700 }}>
             {idx + 1} / {materializedFrames.length}
           </div>
-          {/* number input carries data-testid for tests (user-event.clear works on number inputs) */}
-          <input
-            ref={scrubberRef}
-            type="number"
-            min={0}
-            max={lastIdx}
-            step={1}
-            defaultValue={0}
-            aria-label="Frame index"
-            data-testid={`${testIdPrefix}-scrubber`}
-            style={{ width: "100%", marginTop: 6, accentColor: INK }}
-          />
-          {/* Visual range slider kept for actual users; synced via scrubberRef */}
           <input
             type="range"
             min={0}
             max={lastIdx}
             step={1}
             value={idx}
-            onChange={(e) => setIdxClamped(Number(e.target.value))}
+            onChange={(e) =>
+              setIdx(Math.max(0, Math.min(lastIdx, Number(e.target.value))))
+            }
             aria-label="Frame scrubber"
-            aria-hidden="true"
-            style={{ width: "100%", marginTop: 4, accentColor: INK }}
+            data-testid={`${testIdPrefix}-scrubber`}
+            style={{ width: "100%", marginTop: 6, accentColor: INK }}
           />
         </div>
         <div style={{ display: "flex", gap: 4 }}>
           <button
-            onClick={() => stepBy(-1)}
+            onClick={() =>
+              setIdx((prev) => Math.max(0, prev - 1))
+            }
             data-testid={`${testIdPrefix}-step-back`}
             style={brutalistBtn(false)}
           >
             ◀ back
           </button>
           <button
-            onClick={() => stepBy(1)}
+            onClick={() =>
+              setIdx((prev) => Math.min(lastIdx, prev + 1))
+            }
             data-testid={`${testIdPrefix}-step-fwd`}
             style={brutalistBtn(false)}
           >
