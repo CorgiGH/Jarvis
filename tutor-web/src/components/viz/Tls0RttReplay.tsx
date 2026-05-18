@@ -145,10 +145,15 @@ function MessageRow({
   const strokeW = msg.replay || isHighlighted ? 2 : 1;
   const midX = (fromX + toX) / 2;
   const labelText = msg.label.length > 28 ? msg.label.slice(0, 28) + "…" : msg.label;
+  const labelBoxFill = isHighlighted ? ACCENT : "#fff";
+
+  // Coordinated enter: line draws on while box + text + arrowhead fade in
+  // simultaneously. All complete within ~450ms — one synchronized beat per row.
+  const ENTER = { duration: 0.3, delay: 0.1, ease: "easeOut" as const };
 
   return (
     <>
-      {/* Animated line — draws on left→right via DrawLine */}
+      {/* Line draws on left→right */}
       <DrawLine
         x1={fromX}
         y1={y}
@@ -157,32 +162,22 @@ function MessageRow({
         stroke={strokeC}
         strokeWidth={strokeW}
         strokeDasharray={msg.encrypted ? undefined : "4 3"}
-        durationMs={450}
+        durationMs={400}
       />
-      {/* Arrowhead — fades in alongside the line */}
-      <motion.polygon
-        points={`${toX},${y} ${toX - dir * 6},${y - 3} ${toX - dir * 6},${y + 3}`}
-        fill={strokeC}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.25, delay: 0.35 }}
-      />
-      {/* Label box — fade-in with highlight color animated */}
+      {/* Label box — fill is a plain prop (no color-shift on mount). Only opacity animates. */}
       <motion.rect
         x={midX - 70}
         y={y - 10}
         width={140}
         height={20}
+        fill={labelBoxFill}
         stroke={INK}
         strokeWidth={1}
         initial={{ opacity: 0 }}
-        animate={{
-          opacity: isHighlighted ? 1 : 0.95,
-          fill: isHighlighted ? ACCENT : "#fff",
-        }}
-        transition={{ duration: 0.35, delay: 0.15 }}
+        animate={{ opacity: isHighlighted ? 1 : 0.95 }}
+        transition={ENTER}
       />
-      {/* Label text — fade in alongside box */}
+      {/* Label text — fades with box */}
       <motion.text
         x={midX}
         y={y + 4}
@@ -193,10 +188,18 @@ function MessageRow({
         fontWeight={isHighlighted ? 700 : 500}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.3, delay: 0.25 }}
+        transition={ENTER}
       >
         {labelText}
       </motion.text>
+      {/* Arrowhead — fades with box. Fill is plain prop. */}
+      <motion.polygon
+        points={`${toX},${y} ${toX - dir * 6},${y - 3} ${toX - dir * 6},${y + 3}`}
+        fill={strokeC}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={ENTER}
+      />
     </>
   );
 }

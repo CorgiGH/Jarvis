@@ -263,7 +263,8 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         <tspan>{ssthresh}</tspan>
       </motion.text>
 
-      {/* cwnd trajectory — one DrawLine per consecutive RTT pair, draws on as history grows */}
+      {/* cwnd trajectory — one DrawLine per consecutive RTT pair, draws on as history grows.
+          Duration matches the data point's slide so line + dot arrive together each step. */}
       {history.slice(1).map((p, i) => {
         const prev = history[i];
         return (
@@ -275,7 +276,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
             y2={yScale(p.cwnd)}
             stroke={modeColor(p.mode)}
             strokeWidth={2.5}
-            durationMs={350}
+            durationMs={500}
           />
         );
       })}
@@ -378,7 +379,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         height={20}
         initial={false}
         animate={{ fill: mode === "SLOW_START" ? ACCENT : "#fff" }}
-        transition={{ duration: 0.4 }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
         stroke={INK}
         strokeWidth={1}
       />
@@ -428,7 +429,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
       <g transform={`translate(${PLOT_X}, ${PLOT_Y + PLOT_H + 42})`}>
         <AnimatePresence>
           {Array.from({ length: segmentsInFlight }, (_, i) => (
-            <PopIn key={`bar-${i}`} durationMs={250} delayMs={i * 15}>
+            <PopIn key={`bar-${i}`} durationMs={400}>
               <rect
                 x={i * 11}
                 y={0}
