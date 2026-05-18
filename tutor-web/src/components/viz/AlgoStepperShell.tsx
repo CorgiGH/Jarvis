@@ -42,6 +42,20 @@ function readReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+function parseHashIdx(prefix: string): number | null {
+  if (typeof window === "undefined") return null;
+  const m = window.location.hash.match(
+    new RegExp(`#${prefix}-idx-(\\d+)`)
+  );
+  if (!m) return null;
+  return Number(m[1]);
+}
+
+function writeHashIdx(prefix: string, idx: number): void {
+  if (typeof window === "undefined") return;
+  window.location.hash = `${prefix}-idx-${idx}`;
+}
+
 export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const {
     title,
@@ -58,16 +72,25 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   }, [frames]);
 
   const lastIdx = Math.max(0, materializedFrames.length - 1);
-  const [idx, setIdx] = useState(0);
+
+  const initialIdx = useMemo(() => {
+    const fromHash = parseHashIdx(testIdPrefix);
+    if (fromHash === null) return 0;
+    return Math.max(0, Math.min(lastIdx, fromHash));
+  }, [testIdPrefix, lastIdx]);
+
+  const [idx, setIdx] = useState(initialIdx);
   const [playing, setPlaying] = useState(false);
+  const [predictionLocked, setPredictionLocked] = useState(!!props.predictionGate);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reducedMotion = readReducedMotion();
 
   const stepBy = useCallback(
     (delta: number) => {
+      if (predictionLocked) return;
       setIdx((prev) => Math.max(0, Math.min(lastIdx, prev + delta)));
     },
-    [lastIdx]
+    [lastIdx, predictionLocked]
   );
 
   const reset = useCallback(() => {
@@ -76,12 +99,13 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   }, []);
 
   const togglePlay = useCallback(() => {
+    if (predictionLocked) return;
     if (reducedMotion) {
       stepBy(1);
       return;
     }
     setPlaying((p) => !p);
-  }, [reducedMotion, stepBy]);
+  }, [reducedMotion, stepBy, predictionLocked]);
 
   useEffect(() => {
     if (!playing || reducedMotion) {
@@ -106,7 +130,24 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     };
   }, [playing, reducedMotion, autoplayMsPerFrame, lastIdx]);
 
+  useEffect(() => {
+    writeHashIdx(testIdPrefix, idx);
+  }, [idx, testIdPrefix]);
+
+  const onPredict = useCallback(
+    (isCorrect: boolean) => {
+      setPredictionLocked(false);
+      props.predictionGate?.onAnswered?.(isCorrect);
+    },
+    [props.predictionGate]
+  );
+
+  const onShareClick = useCallback(() => {
+    props.onShare?.(`${testIdPrefix}-idx-${idx}`);
+  }, [props.onShare, testIdPrefix, idx]);
+
   const onKey = (e: ReactKeyboardEvent<SVGSVGElement>) => {
+    if (predictionLocked) return;
     const k = e.key.toLowerCase();
     if (e.key === "ArrowRight" || k === "k") {
       e.preventDefault();
@@ -172,7 +213,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
       </svg>
       <div
         data-testid={`${testIdPrefix}-controls`}
-        style={{ display: "flex", flexDirection: "column", gap: 14 }}
+        style={{ display: "flex", flexDirection: "column", gap: 14, position: "relative" }}
       >
         <div>
           <div
@@ -195,6 +236,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             max={lastIdx}
             step={1}
             value={idx}
+            disabled={predictionLocked}
             onChange={(e) =>
               setIdx(
                 Math.max(0, Math.min(lastIdx, Number(e.target.value)))
@@ -208,24 +250,25 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           <button
             onClick={togglePlay}
+            disabled={predictionLocked}
             data-testid={`${testIdPrefix}-play`}
-            style={brutalistBtn(playing, false)}
+            style={brutalistBtn(playing, predictionLocked)}
           >
             {playing ? "⏸ pause" : "▶ play"}
           </button>
           <button
             onClick={() => stepBy(-1)}
-            disabled={idx === 0}
+            disabled={predictionLocked || idx === 0}
             data-testid={`${testIdPrefix}-step-back`}
-            style={brutalistBtn(false, idx === 0)}
+            style={brutalistBtn(false, predictionLocked || idx === 0)}
           >
             ◀
           </button>
           <button
             onClick={() => stepBy(1)}
-            disabled={idx === lastIdx}
+            disabled={predictionLocked || idx === lastIdx}
             data-testid={`${testIdPrefix}-step-fwd`}
-            style={brutalistBtn(false, idx === lastIdx)}
+            style={brutalistBtn(false, predictionLocked || idx === lastIdx)}
           >
             ▶
           </button>
@@ -236,6 +279,13 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           >
             reset
           </button>
+          <button
+            onClick={onShareClick}
+            data-testid={`${testIdPrefix}-share`}
+            style={brutalistBtn(false, false)}
+          >
+            🔗 share
+          </button>
         </div>
         {reducedMotion && (
           <div
@@ -245,6 +295,63 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             Reduced-motion on · play steps once per click.
           </div>
         )}
+        {props.predictionGate && predictionLocked && (
+          <div
+            data-testid="predict-gate"
+            style={{ border: `2px solid ${INK}`, padding: 10, background: PAPER }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                marginBottom: 6,
+              }}
+            >
+              ⚡ Predict
+            </div>
+            <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {props.predictionGate.question}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 4,
+                marginTop: 8,
+              }}
+            >
+              {props.predictionGate.answers.map((a, i) => (
+                <button
+                  key={i}
+                  onClick={() => onPredict(a.isCorrect)}
+                  style={{
+                    background: PAPER,
+                    color: INK,
+                    border: `1px solid ${INK}`,
+                    padding: "4px 8px",
+                    fontFamily: FONT_FAMILY,
+                    fontSize: 10,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div
+          aria-live="polite"
+          role="status"
+          data-testid={`${testIdPrefix}-live`}
+          style={{ position: "absolute", left: -9999 }}
+        >
+          {currentFrame?.aria ?? ""}
+        </div>
       </div>
     </div>
   );

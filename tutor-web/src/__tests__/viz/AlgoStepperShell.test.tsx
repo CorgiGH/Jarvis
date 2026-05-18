@@ -1,6 +1,11 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { AlgoStepperShell, type Frame } from "../../components/viz/AlgoStepperShell";
+
+// Reset location hash between every test to prevent hash state leakage
+afterEach(() => {
+  window.location.hash = "";
+});
 
 type CounterState = { n: number };
 
@@ -216,5 +221,126 @@ describe("AlgoStepperShell — play/pause/reset", () => {
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("1");
     vi.useRealTimers();
     matchMediaSpy.mockRestore();
+  });
+});
+
+describe("AlgoStepperShell — predict-gate", () => {
+  test("locks scrubber + play until answered, then unlocks", () => {
+    const onAnswered = vi.fn();
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+        predictionGate={{
+          question: "Pick the right one",
+          answers: [
+            { label: "wrong", isCorrect: false },
+            { label: "right", isCorrect: true },
+          ],
+          onAnswered,
+        }}
+      />
+    );
+    const scrubber = screen.getByTestId("stepper-scrubber") as HTMLInputElement;
+    expect(scrubber.disabled).toBe(true);
+    expect((screen.getByTestId("stepper-play") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId("predict-gate")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("right"));
+    expect(onAnswered).toHaveBeenCalledWith(true);
+    expect(scrubber.disabled).toBe(false);
+    expect(screen.queryByTestId("predict-gate")).toBeNull();
+  });
+
+  test("incorrect answer still unlocks but reports isCorrect=false", () => {
+    const onAnswered = vi.fn();
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+        predictionGate={{
+          question: "Pick",
+          answers: [
+            { label: "wrong", isCorrect: false },
+            { label: "right", isCorrect: true },
+          ],
+          onAnswered,
+        }}
+      />
+    );
+    fireEvent.click(screen.getByText("wrong"));
+    expect(onAnswered).toHaveBeenCalledWith(false);
+    expect(screen.queryByTestId("predict-gate")).toBeNull();
+  });
+});
+
+describe("AlgoStepperShell — share-link", () => {
+  beforeEach(() => {
+    window.location.hash = "";
+  });
+
+  test("on mount, reads idx from hash if present", () => {
+    window.location.hash = "#stepper-idx-2";
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+      />
+    );
+    expect(screen.getByTestId("counter-readout")).toHaveTextContent("2");
+  });
+
+  test("on step, writes idx to hash", () => {
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+      />
+    );
+    const svg = screen.getByRole("img");
+    fireEvent.keyDown(svg, { key: "ArrowRight" });
+    expect(window.location.hash).toBe("#stepper-idx-1");
+  });
+
+  test("share button calls onShare with current hash payload", () => {
+    const onShare = vi.fn();
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+        onShare={onShare}
+      />
+    );
+    const svg = screen.getByRole("img");
+    fireEvent.keyDown(svg, { key: "ArrowRight" });
+    fireEvent.click(screen.getByTestId("stepper-share"));
+    expect(onShare).toHaveBeenCalledWith("stepper-idx-1");
+  });
+});
+
+describe("AlgoStepperShell — ARIA live", () => {
+  test("live region updates with frame.aria", () => {
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+      />
+    );
+    const live = screen.getByTestId("stepper-live");
+    expect(live).toHaveTextContent("count is 0");
+    const svg = screen.getByRole("img");
+    fireEvent.keyDown(svg, { key: "ArrowRight" });
+    expect(live).toHaveTextContent("count is 1");
   });
 });
