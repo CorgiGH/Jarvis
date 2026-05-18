@@ -713,29 +713,61 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
       </AnimatePresence>
 
       {/* Pointers — keyed by from->to so framer-motion animates endpoint changes.
-          Curved (Phase 2 cycle) edges use DrawPath so the bezier draws on via
-          pathLength. Straight edges use motion.line for position tweens. */}
+          Stack→heap pointers route via bezier above the heap (arrows arc over any
+          other objects between source and target). Cycle pairs (Phase 2) use
+          larger ±35px arcOffset so the two curved edges don't collide with the
+          objects they pass between. */}
       <AnimatePresence>
         {pointers.map((p, i) => {
-          const from = ptrPos(p.from, true);
-          const to = ptrPos(p.to, false);
+          const fromSrc = ptrPos(p.from, true);
+          const toSink = ptrPos(p.to, false);
           const highlighted = i === highlightedPointerIdx;
           const stroke = highlighted ? ACCENT : INK;
           const sw = highlighted ? 2 : 1;
           const dash =
             p.kind === "weak" ? "3 3" : p.kind === "vptr" ? "1 2" : undefined;
 
+          const isStackPtr = p.from.startsWith("ptr-");
+          const isObjectTarget = objPos.has(p.to);
           const hasReverse = pointers.some(
             (q) => q !== p && q.from === p.to && q.to === p.from,
           );
-          const arcOffset = hasReverse ? (i % 2 === 0 ? -18 : 18) : 0;
-          const midX = (from.x + to.x) / 2;
-          const midY = (from.y + to.y) / 2 + arcOffset;
-          const pathD = hasReverse
-            ? `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`
-            : null;
+
+          // Compute the final geometric `from`/`to` and whether to use a bezier.
+          let from = fromSrc;
+          let to = toSink;
+          let pathD: string | null = null;
+          let midX = (from.x + to.x) / 2;
+          let midY = (from.y + to.y) / 2;
+          let arrowAngleDeg = 0; // 0 = points right (default arrow direction)
+
+          if (isStackPtr && isObjectTarget) {
+            // Arc OVER the heap. Land on the top edge of the target so the
+            // arrow tip points downward into the object.
+            const target = objPos.get(p.to)!;
+            const targetCx = target.x + target.w / 2;
+            const arcTop = HEAP_Y - 14;
+            to = { x: targetCx, y: target.y };
+            midX = (from.x + to.x) / 2;
+            midY = arcTop;
+            pathD = `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`;
+            arrowAngleDeg = 90; // tip points down
+          } else if (hasReverse) {
+            // Phase 2 ref-count cycle: wider arc (±35) so curves clear the
+            // objects sitting between A and B.
+            const arcOffset = i % 2 === 0 ? -35 : 35;
+            midX = (from.x + to.x) / 2;
+            midY = (from.y + to.y) / 2 + arcOffset;
+            pathD = `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`;
+            arrowAngleDeg = to.x < from.x ? 180 : 0;
+          }
+
           const key = `ptr-${p.from}->${p.to}-${p.kind}`;
-          const arrowPoints = `${to.x},${to.y} ${to.x - 5},${to.y - 3} ${to.x - 5},${to.y + 3}`;
+          // Arrowhead points right by default; rotate around tip for other directions.
+          const arrowPoints = `${to.x},${to.y} ${to.x - 6},${to.y - 3.5} ${to.x - 6},${to.y + 3.5}`;
+          const arrowTransform = arrowAngleDeg
+            ? `rotate(${arrowAngleDeg} ${to.x} ${to.y})`
+            : undefined;
 
           return (
             <PopIn key={key} durationMs={300}>
@@ -767,9 +799,7 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                 initial={false}
                 animate={{ points: arrowPoints, fill: stroke }}
                 transition={{ duration: 0.45, ease: "easeInOut" }}
-                transform={
-                  pathD && to.x < from.x ? `rotate(180 ${to.x} ${to.y})` : undefined
-                }
+                transform={arrowTransform}
               />
               {p.kind === "weak" && (
                 <text

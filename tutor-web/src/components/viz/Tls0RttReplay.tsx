@@ -400,23 +400,24 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
         })}
       </AnimatePresence>
 
-      {/* Mitigation badges — only in phase 4; staggered pop-in */}
+      {/* Mitigation badges — only in phase 4. Placed under the phase indicator
+          (y ~44) so they don't collide with the footer rect (y 312-348). */}
       <AnimatePresence>
         {showMitigations &&
           MITIGATION_BADGES.filter((b) => step >= b.appearOn).map((b, i) => (
             <PopIn key={b.id} durationMs={300} delayMs={i * 60}>
               <rect
                 x={140 + i * 110}
-                y={MSG_BOTTOM + 4}
+                y={44}
                 width={100}
-                height={20}
+                height={18}
                 fill={ACCENT}
                 stroke={INK}
                 strokeWidth={1}
               />
               <text
                 x={140 + i * 110 + 50}
-                y={MSG_BOTTOM + 18}
+                y={57}
                 textAnchor="middle"
                 fontFamily={FONT_FAMILY}
                 fontSize={8}
