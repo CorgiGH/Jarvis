@@ -90,17 +90,18 @@ export function DrawLine(props: {
   const y1 = Number(lineProps.y1 ?? 0);
   const x2 = Number(lineProps.x2 ?? 0);
   const y2 = Number(lineProps.y2 ?? 0);
-  const len = Math.max(1, Math.hypot(x2 - x1, y2 - y1));
-  // opacity + strokeDashoffset share the same duration so the line draws on
-  // and reveals at the same beat (instead of opacity flashing in at 150ms
-  // while the stroke is still drawing for another ~350ms).
+  // The line actually GROWS from (x1,y1) toward (x2,y2). SVG <marker> at the
+  // endpoint follows the moving x2/y2 so the arrowhead stays glued to the
+  // line tip as it extends, instead of sitting at the final destination
+  // while the line is still being drawn (strokeDashoffset behaviour).
   return (
     <motion.line
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       {...(lineProps as any)}
-      strokeDasharray={len}
-      initial={{ strokeDashoffset: len, opacity: 0 }}
-      animate={{ strokeDashoffset: 0, opacity: 1 }}
+      x1={x1}
+      y1={y1}
+      initial={{ x2: x1, y2: y1, opacity: 0 }}
+      animate={{ x2, y2, opacity: 1 }}
       transition={{
         duration: durationMs / 1000,
         delay: delayMs / 1000,
@@ -119,12 +120,18 @@ export function DrawPath(props: {
   delayMs?: number;
 } & SvgPathRest) {
   const { durationMs = 600, delayMs = 0, ...pathProps } = props;
+  // pathLength-based draw-on caused the SVG <marker> to sit at the path's
+  // geometric endpoint while the visible stroke was still being drawn from
+  // the start, so the arrowhead appeared detached. SVG has no clean way to
+  // animate the marker along the unfolding path. The least-jank option for
+  // curved paths is to fade the whole path in: stroke + marker appear
+  // together as one shape.
   return (
     <motion.path
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       {...(pathProps as any)}
-      initial={{ pathLength: 0, opacity: 0 }}
-      animate={{ pathLength: 1, opacity: 1 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       transition={{
         duration: durationMs / 1000,
         delay: delayMs / 1000,

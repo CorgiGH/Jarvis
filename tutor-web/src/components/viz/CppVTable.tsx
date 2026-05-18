@@ -922,59 +922,28 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
         })}
       </AnimatePresence>
 
-      {/* Phase-1 polymorphic dispatch resolution — three staggered DrawLines
-          tracing the lookup path: a -> object -> vptr -> vtable slot. */}
+      {/* Phase-1 polymorphic dispatch resolution — only the UNIQUE final
+          edge (vtable slot -> resolved function). The earlier steps in the
+          lookup (a -> object, vptr -> vtable header) are already shown by
+          the regular stack-pointer arc and vptr arrow; drawing them again
+          here produced overlapping yellow lines. */}
       <AnimatePresence>
         {phase === 1 && showDispatch && (() => {
-          const dog = objPos.get("obj-dog");
           const vt = objPos.get("vtable-Dog");
-          if (!dog || !vt) return null;
-          const aY = stackPtrY("pa");
-          // 1) a -> object body
-          const step1 = {
-            x1: HEAP_X - 10,
-            y1: aY,
-            x2: dog.x + dog.w / 2,
-            y2: dog.y + dog.h / 2,
-          };
-          // 2) object vptr field -> vtable header
-          const step2 = {
-            x1: dog.x + dog.w / 2,
-            y1: dog.y + 30,
-            x2: vt.x + vt.w / 2,
-            y2: vt.y,
-          };
-          // 3) vtable speak slot -> conceptual function below the vtable
-          // (placed below so the label doesn't overlap the adjacent vtable-Cat).
+          if (!vt) return null;
           const labelY = vt.y + vt.h + 14;
-          const step3 = {
-            x1: vt.x + vt.w / 2,
-            y1: vt.y + vt.h,
-            x2: vt.x + vt.w / 2,
-            y2: labelY - 6,
-          };
           return (
             <PopIn key="dispatch-resolution" durationMs={200}>
               <DrawLine
-                {...step1}
+                x1={vt.x + vt.w / 2}
+                y1={vt.y + vt.h}
+                x2={vt.x + vt.w / 2}
+                y2={labelY - 6}
                 stroke={ACCENT}
                 strokeWidth={2}
                 durationMs={350}
                 delayMs={0}
-              />
-              <DrawLine
-                {...step2}
-                stroke={ACCENT}
-                strokeWidth={2}
-                durationMs={350}
-                delayMs={350}
-              />
-              <DrawLine
-                {...step3}
-                stroke={ACCENT}
-                strokeWidth={2}
-                durationMs={300}
-                delayMs={700}
+                markerEnd="url(#cpp-arrow-accent)"
               />
               <text
                 x={vt.x + vt.w / 2}
