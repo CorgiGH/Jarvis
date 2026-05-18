@@ -344,3 +344,99 @@ describe("AlgoStepperShell — ARIA live", () => {
     expect(live).toHaveTextContent("count is 1");
   });
 });
+
+describe("AlgoStepperShell — voice", () => {
+  let originalAudio: typeof Audio;
+  const audioInstances: Array<{ src: string | null; played: boolean; paused: boolean }> = [];
+
+  beforeEach(() => {
+    audioInstances.length = 0;
+    originalAudio = window.Audio;
+    window.Audio = class FakeAudio {
+      _src: string | null = null;
+      played = false;
+      paused = true;
+      onended: (() => void) | null = null;
+      currentTime = 0;
+      constructor() {
+        const inst = { src: null as string | null, played: false, paused: true };
+        audioInstances.push(inst);
+        Object.defineProperty(this, "src", {
+          get: () => inst.src,
+          set: (v: string) => { inst.src = v; },
+        });
+        Object.defineProperty(this, "paused", { get: () => inst.paused });
+        this.play = () => {
+          inst.played = true;
+          inst.paused = false;
+          return Promise.resolve();
+        };
+        this.pause = () => {
+          inst.paused = true;
+        };
+      }
+      play: () => Promise<void>;
+      pause: () => void;
+    } as unknown as typeof Audio;
+  });
+
+  afterEach(() => {
+    window.Audio = originalAudio;
+  });
+
+  test("voice off by default", () => {
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+        voiceMap={{ 0: "/a.mp3", 1: "/b.mp3" }}
+      />
+    );
+    const voiceBtn = screen.getByTestId("stepper-voice") as HTMLButtonElement;
+    expect(voiceBtn.textContent?.toLowerCase()).toContain("off");
+  });
+
+  test("voice on + frame change triggers Audio.play with voiceMap url", () => {
+    vi.useFakeTimers();
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+        voiceMap={{ 0: "/a.mp3", 1: "/b.mp3" }}
+      />
+    );
+    fireEvent.click(screen.getByTestId("stepper-voice"));
+    const svg = screen.getByRole("img");
+    fireEvent.keyDown(svg, { key: "ArrowRight" });
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+    expect(audioInstances.some((a) => a.src === "/b.mp3" && a.played)).toBe(true);
+    vi.useRealTimers();
+  });
+
+  test("voiceMap miss is a no-op", () => {
+    vi.useFakeTimers();
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+        voiceMap={{ 0: "/a.mp3" }}
+      />
+    );
+    fireEvent.click(screen.getByTestId("stepper-voice"));
+    const svg = screen.getByRole("img");
+    fireEvent.keyDown(svg, { key: "ArrowRight" });
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+    expect(audioInstances.some((a) => a.src === "/b.mp3")).toBe(false);
+    vi.useRealTimers();
+  });
+});

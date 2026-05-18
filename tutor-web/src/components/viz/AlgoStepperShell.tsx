@@ -82,7 +82,11 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const [idx, setIdx] = useState(initialIdx);
   const [playing, setPlaying] = useState(false);
   const [predictionLocked, setPredictionLocked] = useState(!!props.predictionGate);
+  const [voiceOn, setVoiceOn] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const pendingNextSrcRef = useRef<string | null>(null);
+  const voiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reducedMotion = readReducedMotion();
 
   const stepBy = useCallback(
@@ -133,6 +137,57 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   useEffect(() => {
     writeHashIdx(testIdPrefix, idx);
   }, [idx, testIdPrefix]);
+
+  const playSrc = useCallback((src: string) => {
+    if (!src) return;
+    let a = audioRef.current;
+    if (!a) {
+      a = new Audio();
+      a.onended = () => {
+        if (pendingNextSrcRef.current) {
+          const next = pendingNextSrcRef.current;
+          pendingNextSrcRef.current = null;
+          a!.src = next;
+          a!.play().catch(() => {});
+        }
+      };
+      audioRef.current = a;
+    }
+    if (a.paused) {
+      a.src = src;
+      a.play().catch(() => {});
+    } else {
+      pendingNextSrcRef.current = src;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!voiceOn) {
+      if (voiceTimerRef.current) clearTimeout(voiceTimerRef.current);
+      return;
+    }
+    const src = props.voiceMap?.[idx];
+    if (!src) return;
+    if (voiceTimerRef.current) clearTimeout(voiceTimerRef.current);
+    voiceTimerRef.current = setTimeout(() => playSrc(src), 200);
+    return () => {
+      if (voiceTimerRef.current) clearTimeout(voiceTimerRef.current);
+    };
+  }, [voiceOn, idx, props.voiceMap, playSrc]);
+
+  useEffect(() => {
+    if (!voiceOn && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      pendingNextSrcRef.current = null;
+    }
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, [voiceOn]);
 
   const onPredict = useCallback(
     (isCorrect: boolean) => {
@@ -285,6 +340,13 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             style={brutalistBtn(false, false)}
           >
             🔗 share
+          </button>
+          <button
+            onClick={() => setVoiceOn((v) => !v)}
+            data-testid={`${testIdPrefix}-voice`}
+            style={brutalistBtn(voiceOn, false)}
+          >
+            {voiceOn ? "🔊 voice on" : "🔇 voice off"}
           </button>
         </div>
         {reducedMotion && (
