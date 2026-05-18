@@ -204,12 +204,13 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
 
   return (
     <>
-      {/* Pane separator */}
+      {/* Pane separator — stops above the bottom tally band so WASTED WORK
+          can span the full width without being visually cut by the divider. */}
       <line
         x1={DIVIDER_X}
         y1={8}
         x2={DIVIDER_X}
-        y2={SVG_H - 8}
+        y2={SVG_H - 28}
         stroke={INK}
         strokeWidth={1}
         opacity={0.25}
