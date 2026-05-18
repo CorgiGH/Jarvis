@@ -400,11 +400,21 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
   });
 
   // Pointer source/sink positions
+  function stackPtrY(name: string): number {
+    const ptrId = `ptr-${name}`;
+    const ptr = pointers.find((p) => p.from === ptrId);
+    if (ptr) {
+      const target = objPos.get(ptr.to);
+      if (target) return target.y + target.h / 2;
+    }
+    const ix = ["pa", "pb", "a"].indexOf(name);
+    return HEAP_Y + 40 + ix * 30;
+  }
+
   function ptrPos(id: string, isFrom: boolean): { x: number; y: number } {
     if (id.startsWith("ptr-")) {
       const name = id.replace("ptr-", "");
-      const ix = ["pa", "pb", "a"].indexOf(name);
-      return { x: HEAP_X - 10, y: HEAP_Y + 40 + ix * 30 };
+      return { x: HEAP_X - 10, y: stackPtrY(name) };
     }
     const p = objPos.get(id);
     if (!p) return { x: 0, y: 0 };
@@ -494,13 +504,13 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
       </text>
 
       {/* Stack pointer labels */}
-      {["pa", "pb"].map((name, i) => {
+      {["pa", "pb"].map((name, _i) => {
         const ptrId = `ptr-${name}`;
         const hasPtr = pointers.some((p) => p.from === ptrId);
         if (!hasPtr && phase !== 1) return null;
         const showInPhase1 = phase === 1 && name === "pa";
         if (phase === 1 && !showInPhase1) return null;
-        const y = HEAP_Y + 40 + i * 30;
+        const y = stackPtrY(name);
         const label = phase === 1 ? "a" : name;
         return (
           <text
@@ -633,25 +643,42 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
         const stroke = highlighted ? ACCENT : INK;
         const sw = highlighted ? 2 : 1;
         const dash = p.kind === "weak" ? "3 3" : p.kind === "vptr" ? "1 2" : undefined;
+
+        // Detect reverse pair → curve apart vertically
+        const hasReverse = pointers.some(
+          (q) => q !== p && q.from === p.to && q.to === p.from,
+        );
+        const arcOffset = hasReverse ? (i % 2 === 0 ? -18 : 18) : 0;
+        const midX = (from.x + to.x) / 2;
+        const midY = (from.y + to.y) / 2 + arcOffset;
+        const pathD = hasReverse
+          ? `M ${from.x} ${from.y} Q ${midX} ${midY} ${to.x} ${to.y}`
+          : null;
+
         return (
           <g key={`ptr-${i}`} opacity={0.85}>
-            <line
-              x1={from.x}
-              y1={from.y}
-              x2={to.x}
-              y2={to.y}
-              stroke={stroke}
-              strokeWidth={sw}
-              strokeDasharray={dash}
-            />
+            {pathD ? (
+              <path d={pathD} fill="none" stroke={stroke} strokeWidth={sw} strokeDasharray={dash} />
+            ) : (
+              <line
+                x1={from.x}
+                y1={from.y}
+                x2={to.x}
+                y2={to.y}
+                stroke={stroke}
+                strokeWidth={sw}
+                strokeDasharray={dash}
+              />
+            )}
             <polygon
               points={`${to.x},${to.y} ${to.x - 5},${to.y - 3} ${to.x - 5},${to.y + 3}`}
               fill={stroke}
+              transform={pathD && to.x < from.x ? `rotate(180 ${to.x} ${to.y})` : undefined}
             />
             {p.kind === "weak" && (
               <text
-                x={(from.x + to.x) / 2}
-                y={(from.y + to.y) / 2 - 4}
+                x={midX}
+                y={midY - 4}
                 textAnchor="middle"
                 fontFamily={FONT_FAMILY}
                 fontSize={7}
