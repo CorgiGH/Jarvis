@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AlgoStepperShellSmoke } from "./AlgoStepperShellSmoke";
 import { CompareFrames } from "./CompareFrames";
 import { DPWastedWork } from "./DPWastedWork";
+import { BayesTree } from "./BayesTree";
 import { PageTableWalk } from "./PageTableWalk";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
@@ -159,6 +160,14 @@ export function VizDemoPage() {
           Virtual address → TLB → page table → physical memory. Includes hit, miss, page fault, fork+COW.
         </p>
         <PageTableWalk />
+      </section>
+
+      <section data-testid="viz-demo-ps2-bayes" style={tileStyle}>
+        <h2 style={headingStyle}>PS-2 · Bayes tree ⭐</h2>
+        <p style={subheadingStyle}>
+          Disease/test scenario. Watch P(D|+) emerge from prior × likelihood / evidence.
+        </p>
+        <BayesTree />
       </section>
     </div>
   );
