@@ -140,10 +140,10 @@ function MessageRow({
 }) {
   const fromX = actorX(msg.from);
   const toX = actorX(msg.to);
-  const dir = toX > fromX ? 1 : -1;
   const strokeC = msg.replay ? ACCENT : INK;
   const strokeW = msg.replay || isHighlighted ? 2 : 1;
   const midX = (fromX + toX) / 2;
+  const markerEnd = msg.replay ? "url(#tls-arrow-accent)" : "url(#tls-arrow-ink)";
   // Shrink label width so it never overhangs into the arrowhead zone at the
   // receiving column (was 140, hit the arrow tip on short hops like
   // server↔attacker which sit 120px apart).
@@ -162,7 +162,8 @@ function MessageRow({
 
   return (
     <>
-      {/* Line draws on left→right */}
+      {/* Line geometrically grows toward toX; SVG <marker> sits at the
+          line endpoint and rotates with the line's direction. */}
       <DrawLine
         x1={fromX}
         y1={y}
@@ -172,14 +173,7 @@ function MessageRow({
         strokeWidth={strokeW}
         strokeDasharray={msg.encrypted ? undefined : "4 3"}
         durationMs={400}
-      />
-      {/* Arrowhead — at the receiving end, pointing toward the target column. */}
-      <motion.polygon
-        points={`${toX},${y} ${toX - dir * 7},${y - 3.5} ${toX - dir * 7},${y + 3.5}`}
-        fill={strokeC}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={ENTER}
+        markerEnd={markerEnd}
       />
       {/* Label box ABOVE the line (out of the arrow path). */}
       <motion.rect
@@ -272,6 +266,36 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
 
   return (
     <>
+      {/* SVG markers for message arrowheads. orient="auto-start-reverse"
+          rotates the marker to follow the line direction. refX positions
+          the tip exactly at the line endpoint. */}
+      <defs>
+        <marker
+          id="tls-arrow-ink"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+          markerUnits="userSpaceOnUse"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={INK} />
+        </marker>
+        <marker
+          id="tls-arrow-accent"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+          markerUnits="userSpaceOnUse"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={ACCENT} stroke={INK} strokeWidth="0.5" />
+        </marker>
+      </defs>
+
       {/* Phase indicator — cross-fade as phase changes */}
       <AnimatePresence initial={false}>
         <motion.text

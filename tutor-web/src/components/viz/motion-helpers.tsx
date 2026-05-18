@@ -115,17 +115,44 @@ export function DrawLine(props: {
  * DrawPath — animates an SVG path drawing on via pathLength (0 → 1).
  * Use for curves, arrows, bezier paths, etc.
  */
+/**
+ * DrawPath — fade-in (default) OR draw-on via pathLength.
+ *
+ * Paths that carry an `markerEnd` arrow should keep `drawOn={false}` (the
+ * marker sits at the geometric endpoint of the path regardless of how much
+ * of the stroke is visible, so a pathLength animation makes the arrowhead
+ * detach from the stroke tip until the animation completes).
+ *
+ * Paths WITHOUT a marker (decorative curves, DP dependency arrows) look
+ * better with `drawOn={true}` — the stroke emerges from the start point
+ * over `durationMs`.
+ */
 export function DrawPath(props: {
   durationMs?: number;
   delayMs?: number;
+  drawOn?: boolean;
 } & SvgPathRest) {
-  const { durationMs = 600, delayMs = 0, ...pathProps } = props;
-  // pathLength-based draw-on caused the SVG <marker> to sit at the path's
-  // geometric endpoint while the visible stroke was still being drawn from
-  // the start, so the arrowhead appeared detached. SVG has no clean way to
-  // animate the marker along the unfolding path. The least-jank option for
-  // curved paths is to fade the whole path in: stroke + marker appear
-  // together as one shape.
+  const {
+    durationMs = 600,
+    delayMs = 0,
+    drawOn = true,
+    ...pathProps
+  } = props;
+  if (drawOn) {
+    return (
+      <motion.path
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        {...(pathProps as any)}
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{
+          duration: durationMs / 1000,
+          delay: delayMs / 1000,
+          ease: "easeInOut",
+        }}
+      />
+    );
+  }
   return (
     <motion.path
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

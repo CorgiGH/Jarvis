@@ -886,6 +886,7 @@ function renderFrame(frame: Frame<CPPState>): ReactNode {
                   strokeWidth={sw}
                   strokeDasharray={dash}
                   durationMs={500}
+                  drawOn={false}
                   markerEnd={markerEnd}
                 />
               ) : (
