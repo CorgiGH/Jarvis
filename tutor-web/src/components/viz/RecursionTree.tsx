@@ -222,18 +222,20 @@ function TreeNodeGlyph({
   const returned = node.status === "returned";
   return (
     <>
+      {/* No animate/transition prop -- those route through motion's
+          animation system and were giving cx/cy slightly different paint
+          timing than the line endpoints bound to the same MotionValue.
+          fill/strokeWidth/opacity now snap as plain SVG attrs; cx/cy is
+          a pure MotionValue subscription, same setAttribute path as the
+          line endpoints. */}
       <motion.circle
         cx={mv.x}
         cy={mv.y}
-        initial={false}
-        animate={{
-          fill: isCurrent ? ACCENT : "#fff",
-          strokeWidth: isCurrent ? 2 : 1,
-          opacity: returned ? 1 : 0.85,
-        }}
-        transition={{ duration: 0.5, ease: "easeInOut" }}
         r={TREE_NODE_R}
+        fill={isCurrent ? ACCENT : "#fff"}
         stroke={INK}
+        strokeWidth={isCurrent ? 2 : 1}
+        opacity={returned ? 1 : 0.85}
       />
       <FadeText
         x={mv.x as unknown as number}
