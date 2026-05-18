@@ -8,6 +8,7 @@ import { NPGadget } from "./NPGadget";
 import { TcpCwnd } from "./TcpCwnd";
 import { PageTableWalk } from "./PageTableWalk";
 import { Tls0RttReplay } from "./Tls0RttReplay";
+import { CppVTable } from "./CppVTable";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
 import { RecursionTree } from "./RecursionTree";
@@ -195,6 +196,14 @@ export function VizDemoPage() {
           Resumption + EarlyData → attacker replays the captured ClientHello → server processes twice. Mitigations: idempotent-only, single-use tickets, anti-replay window.
         </p>
         <Tls0RttReplay />
+      </section>
+
+      <section data-testid="viz-demo-poo1-poo4-vtable" style={tileStyle}>
+        <h2 style={headingStyle}>POO-1/POO-4 · C++ vtable + shared_ptr cycle ⭐ world-first</h2>
+        <p style={subheadingStyle}>
+          Virtual dispatch through vptr/vtable. shared_ptr cycles cause memory leaks; weak_ptr breaks the cycle.
+        </p>
+        <CppVTable />
       </section>
     </div>
   );
