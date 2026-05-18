@@ -4,6 +4,7 @@ import { AlgoStepperShellSmoke } from "./AlgoStepperShellSmoke";
 import { CompareFrames } from "./CompareFrames";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
+import { RecursionTree } from "./RecursionTree";
 import { SigmaStackedBar } from "./SigmaStackedBar";
 import { SlopeCounter } from "./SlopeCounter";
 import { SumPlotTracker } from "./SumPlotTracker";
@@ -132,6 +133,14 @@ export function VizDemoPage() {
           Mean vs median estimator · animate-frames button cycles modes · visx scatter + line
         </p>
         <CompareFrames data={[1, 3, 4, 5, 6, 8, 11]} />
+      </section>
+
+      <section data-testid="viz-demo-pa1-recursion" style={tileStyle}>
+        <h2 style={headingStyle}>PA-1 · Recursion tree (fib 5)</h2>
+        <p style={subheadingStyle}>
+          Call stack + recursion tree side-by-side. Step through fib(5) execution. Yellow = current call.
+        </p>
+        <RecursionTree />
       </section>
     </div>
   );
