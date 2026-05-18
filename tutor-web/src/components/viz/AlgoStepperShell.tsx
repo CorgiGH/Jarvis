@@ -269,26 +269,10 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             to { opacity: var(--algo-stepper-target-opacity, 1); }
           }
           .algo-stepper-shell-svg * {
-            transition: cx 400ms ease-in-out, cy 400ms ease-in-out,
-                        x 400ms ease-in-out, y 400ms ease-in-out,
-                        x1 400ms ease-in-out, y1 400ms ease-in-out,
-                        x2 400ms ease-in-out, y2 400ms ease-in-out,
-                        width 400ms ease-in-out, height 400ms ease-in-out,
-                        r 400ms ease-in-out,
-                        d 400ms ease-in-out,
-                        transform 400ms ease-in-out,
-                        opacity 400ms ease-in-out,
-                        fill 400ms ease-in-out,
-                        stroke 400ms ease-in-out,
-                        stroke-width 400ms ease-in-out,
-                        stroke-dasharray 400ms ease-in-out,
-                        fill-opacity 400ms ease-in-out,
-                        stroke-opacity 400ms ease-in-out;
             animation: algoStepperFadeIn 350ms ease-out;
           }
           @media (prefers-reduced-motion: reduce) {
             .algo-stepper-shell-svg * {
-              transition: none;
               animation: none;
             }
           }
