@@ -139,7 +139,6 @@ const FRAMES = buildFrames();
 export const FRAME_COUNT = FRAMES.length;
 
 // Layout constants — must fit within AlgoStepperShell's fixed viewBox="0 0 480 360"
-const SVG_W = 480;
 const SVG_H = 360;
 
 // LEFT — DP table pane (x 0..175)
@@ -158,7 +157,6 @@ const TREE_NODE_R = 11;
 const TREE_LEVEL_GAP = 44;
 
 // BOTTOM — wasted-work tally
-const TALLY_Y = SVG_H - 30;
 
 function dupShade(count: number): { fill: string; fillOpacity: number } {
   // 1 call = white; 2+ calls → increasingly yellow (ACCENT)
@@ -430,46 +428,31 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
       </AnimatePresence>
 
       {/* ---- WASTED-WORK TALLY ----
-          Full-width band at the bottom of the SVG so the text doesn't cross
-          the DP-vs-naïve pane separator. Wasted entries truncated to fit. */}
+          Full-width single line at the bottom of the SVG. DP/Naïve count
+          dropped (info lives in ARIA narration) so the wasted-entries
+          list can use the entire width without colliding. */}
       {(() => {
         const fullEntries =
           wastedEntries.length > 0
             ? wastedEntries.map(([n, count]) => `fib(${n})×${count}`).join("  ")
             : "(none yet)";
-        const MAX_WW_CHARS = 80;
+        const MAX_WW_CHARS = 90;
         const wwTrimmed =
           fullEntries.length > MAX_WW_CHARS
             ? fullEntries.slice(0, MAX_WW_CHARS - 1) + "…"
             : fullEntries;
-        const tally = `DP: ${N + 1} cells computed.${
-          tree.length > 0 ? `  Naïve: ${tree.length} calls so far.` : ""
-        }`;
         return (
-          <>
-            <FadeText
-              x={DP_X}
-              y={SVG_H - 16}
-              fontFamily={FONT_FAMILY}
-              fontSize={9}
-              fontWeight={700}
-              fill={INK}
-              opacity={0.75}
-            >
-              {`WASTED WORK: ${wwTrimmed}`}
-            </FadeText>
-            <FadeText
-              x={SVG_W - 8}
-              y={SVG_H - 16}
-              textAnchor="end"
-              fontFamily={FONT_FAMILY}
-              fontSize={8}
-              fill={INK}
-              opacity={0.5}
-            >
-              {tally}
-            </FadeText>
-          </>
+          <FadeText
+            x={DP_X}
+            y={SVG_H - 16}
+            fontFamily={FONT_FAMILY}
+            fontSize={9}
+            fontWeight={700}
+            fill={INK}
+            opacity={0.75}
+          >
+            {`WASTED WORK: ${wwTrimmed}`}
+          </FadeText>
         );
       })()}
 
