@@ -1,7 +1,11 @@
 import {
+  useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
@@ -30,12 +34,21 @@ export interface AlgoStepperShellProps<S> {
   testIdPrefix?: string;
 }
 
+const DEFAULT_AUTOPLAY_MS = 800;
+
+function readReducedMotion(): boolean {
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const {
     title,
     desc,
     frames,
     renderFrame,
+    autoplayMsPerFrame = DEFAULT_AUTOPLAY_MS,
     testIdPrefix = "stepper",
   } = props;
 
@@ -46,15 +59,67 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
 
   const lastIdx = Math.max(0, materializedFrames.length - 1);
   const [idx, setIdx] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reducedMotion = readReducedMotion();
 
-  const onKey = (e: React.KeyboardEvent<SVGSVGElement>) => {
+  const stepBy = useCallback(
+    (delta: number) => {
+      setIdx((prev) => Math.max(0, Math.min(lastIdx, prev + delta)));
+    },
+    [lastIdx]
+  );
+
+  const reset = useCallback(() => {
+    setIdx(0);
+    setPlaying(false);
+  }, []);
+
+  const togglePlay = useCallback(() => {
+    if (reducedMotion) {
+      stepBy(1);
+      return;
+    }
+    setPlaying((p) => !p);
+  }, [reducedMotion, stepBy]);
+
+  useEffect(() => {
+    if (!playing || reducedMotion) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+    intervalRef.current = setInterval(() => {
+      setIdx((prev) => {
+        const next = prev + 1;
+        if (next > lastIdx) {
+          setPlaying(false);
+          return lastIdx;
+        }
+        return next;
+      });
+    }, autoplayMsPerFrame);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [playing, reducedMotion, autoplayMsPerFrame, lastIdx]);
+
+  const onKey = (e: ReactKeyboardEvent<SVGSVGElement>) => {
     const k = e.key.toLowerCase();
     if (e.key === "ArrowRight" || k === "k") {
       e.preventDefault();
-      setIdx((prev) => Math.min(lastIdx, prev + 1));
+      stepBy(1);
     } else if (e.key === "ArrowLeft" || k === "j") {
       e.preventDefault();
-      setIdx((prev) => Math.max(0, prev - 1));
+      stepBy(-1);
+    } else if (e.key === " ") {
+      e.preventDefault();
+      togglePlay();
+    } else if (k === "r") {
+      e.preventDefault();
+      reset();
     }
   };
 
@@ -85,6 +150,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
         role="img"
         aria-labelledby={`${titleId} ${descId}`}
         tabIndex={0}
+        onKeyDown={onKey}
         style={{
           background: "#fff",
           outline: `2px solid transparent`,
@@ -93,7 +159,6 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           height: "auto",
           border: `1px solid ${INK}`,
         }}
-        onKeyDown={onKey}
         onFocus={(e) => {
           e.currentTarget.style.outline = `2px solid ${ACCENT}`;
         }}
@@ -131,42 +196,64 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             step={1}
             value={idx}
             onChange={(e) =>
-              setIdx(Math.max(0, Math.min(lastIdx, Number(e.target.value))))
+              setIdx(
+                Math.max(0, Math.min(lastIdx, Number(e.target.value)))
+              )
             }
             aria-label="Frame scrubber"
             data-testid={`${testIdPrefix}-scrubber`}
             style={{ width: "100%", marginTop: 6, accentColor: INK }}
           />
         </div>
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           <button
-            onClick={() =>
-              setIdx((prev) => Math.max(0, prev - 1))
-            }
-            data-testid={`${testIdPrefix}-step-back`}
-            style={brutalistBtn(false)}
+            onClick={togglePlay}
+            data-testid={`${testIdPrefix}-play`}
+            style={brutalistBtn(playing, false)}
           >
-            ◀ back
+            {playing ? "⏸ pause" : "▶ play"}
           </button>
           <button
-            onClick={() =>
-              setIdx((prev) => Math.min(lastIdx, prev + 1))
-            }
-            data-testid={`${testIdPrefix}-step-fwd`}
-            style={brutalistBtn(false)}
+            onClick={() => stepBy(-1)}
+            disabled={idx === 0}
+            data-testid={`${testIdPrefix}-step-back`}
+            style={brutalistBtn(false, idx === 0)}
           >
-            fwd ▶
+            ◀
+          </button>
+          <button
+            onClick={() => stepBy(1)}
+            disabled={idx === lastIdx}
+            data-testid={`${testIdPrefix}-step-fwd`}
+            style={brutalistBtn(false, idx === lastIdx)}
+          >
+            ▶
+          </button>
+          <button
+            onClick={reset}
+            data-testid={`${testIdPrefix}-reset`}
+            style={brutalistBtn(false, false)}
+          >
+            reset
           </button>
         </div>
+        {reducedMotion && (
+          <div
+            data-testid={`${testIdPrefix}-reduced-motion-hint`}
+            style={{ fontSize: 10, opacity: 0.6, lineHeight: 1.4 }}
+          >
+            Reduced-motion on · play steps once per click.
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function brutalistBtn(active: boolean): CSSProperties {
+function brutalistBtn(active: boolean, disabled: boolean): CSSProperties {
   return {
-    background: active ? INK : PAPER,
-    color: active ? ACCENT : INK,
+    background: disabled ? PAPER : active ? INK : PAPER,
+    color: disabled ? INK : active ? ACCENT : INK,
     border: `2px solid ${INK}`,
     padding: "6px 10px",
     fontFamily: FONT_FAMILY,
@@ -174,6 +261,7 @@ function brutalistBtn(active: boolean): CSSProperties {
     fontWeight: 700,
     letterSpacing: "0.06em",
     textTransform: "uppercase",
-    cursor: "pointer",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.4 : 1,
   };
 }
