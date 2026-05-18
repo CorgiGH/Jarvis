@@ -50,9 +50,9 @@ function buildFrames(): Frame<BayesState>[] {
   // Step 1: add conditionals
   frames.push(mk(1, 0.01, false, false, false, false, "Test sensitivity P(+|D) = 0.95. Specificity P(-|H) = 0.95 → P(+|H) = 0.05."));
   // Step 2: joint DP
-  frames.push(mk(2, 0.01, true, false, false, false, "Joint P(D ∩ +) = P(D) \xd7 P(+|D) = 0.01 \xd7 0.95 = 0.0095.", "DP"));
+  frames.push(mk(2, 0.01, true, false, false, false, "Joint P(D ∩ +) = P(D) × P(+|D) = 0.01 × 0.95 = 0.0095.", "DP"));
   // Step 3: joint HP
-  frames.push(mk(3, 0.01, true, true, false, false, "Joint P(H ∩ +) = P(H) \xd7 P(+|H) = 0.99 \xd7 0.05 = 0.0495.", "HP"));
+  frames.push(mk(3, 0.01, true, true, false, false, "Joint P(H ∩ +) = P(H) × P(+|H) = 0.99 × 0.05 = 0.0495.", "HP"));
   // Step 4: total positive
   frames.push(mk(4, 0.01, true, true, true, false, "Total P(+) = 0.0095 + 0.0495 = 0.0590.", "ALL"));
   // Step 5: posterior
@@ -62,7 +62,7 @@ function buildFrames(): Frame<BayesState>[] {
   // Step 7: prior 0.10
   frames.push(mk(7, 0.10, true, true, true, true, "If prior were P(D)=0.10 (less rare), posterior jumps to ~0.679 (67.9%)."));
   // Step 8: prior 0.50
-  frames.push(mk(8, 0.50, true, true, true, true, "If prior P(D)=0.50, posterior ≈ 0.950. Strong evidence \xd7 moderate prior."));
+  frames.push(mk(8, 0.50, true, true, true, true, "If prior P(D)=0.50, posterior ≈ 0.950. Strong evidence × moderate prior."));
   // Step 9: summary
   frames.push(mk(9, 0.01, true, true, true, true, "Lesson: base rate (prior) matters enormously. Test alone isn’t enough."));
 
@@ -78,7 +78,7 @@ const SVG_W = 480;
 // Tree pane (left)
 const TREE_X = 20;
 const TREE_Y = 30;
-const TREE_W = 230;
+const TREE_W = 220;
 const TREE_H = 200;
 
 // Area pane (right)
@@ -120,13 +120,17 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
   const pPlus = pDP + pHP;
   const posterior = pPlus > 0 ? pDP / pPlus : 0;
 
+  // Visual floor for disease column so tiny priors remain visible
+  const PRIOR_MIN_VISUAL = 0.05;
+  const visualPrior = Math.max(prior, PRIOR_MIN_VISUAL);
+
   // Tree layout
   const rootX = TREE_X + 20;
   const branch1Y = TREE_Y + 80;
   const branch2Y = TREE_Y + 160;
   const rootY = (branch1Y + branch2Y) / 2;
-  const branchX1 = TREE_X + 120;
-  const leafX = TREE_X + 200;
+  const branchX1 = TREE_X + 90;
+  const leafX = TREE_X + 160;
 
   return (
     <>
@@ -181,7 +185,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         fontWeight={700}
         fill={INK}
       >
-        D \xb7 P={pct(prior)}
+        D · P={pct(prior)}
       </text>
       {/* H node */}
       <circle cx={branchX1} cy={branch2Y} r={5} fill="#fff" stroke={INK} strokeWidth={1} />
@@ -192,7 +196,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         fontSize={10}
         fill={INK}
       >
-        H \xb7 P={pct(pH)}
+        H · P={pct(pH)}
       </text>
 
       {/* Sub-branches: D → +/-, H → +/- */}
@@ -201,27 +205,27 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       <line x1={branchX1} y1={branch2Y} x2={leafX} y2={branch2Y - 18} stroke={INK} strokeWidth={1} opacity={0.6} />
       <line x1={branchX1} y1={branch2Y} x2={leafX} y2={branch2Y + 14} stroke={INK} strokeWidth={1} opacity={0.6} />
       <text x={leafX + 4} y={branch1Y - 14} fontFamily={FONT_FAMILY} fontSize={9} fill={INK}>
-        + \xb7 {pct(sensitivity)}
+        + · {pct(sensitivity)}
       </text>
       <text x={leafX + 4} y={branch1Y + 18} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.5}>
-        − \xb7 {pct(1 - sensitivity)}
+        − · {pct(1 - sensitivity)}
       </text>
       <text x={leafX + 4} y={branch2Y - 14} fontFamily={FONT_FAMILY} fontSize={9} fill={INK}>
-        + \xb7 {pct(fpr)}
+        + · {pct(fpr)}
       </text>
       <text x={leafX + 4} y={branch2Y + 18} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.5}>
-        − \xb7 {pct(1 - fpr)}
+        − · {pct(1 - fpr)}
       </text>
 
       {/* === AREA PANE === */}
-      {/* 100\xd7100 unit square; map disease/healthy split + positive/negative */}
+      {/* 100×100 unit square; map disease/healthy split + positive/negative */}
       <rect x={AREA_X} y={AREA_Y} width={AREA_W} height={AREA_H} fill={PAPER} stroke={INK} strokeWidth={1} />
 
       {/* Disease ∩ positive (top-left of area) */}
       <rect
         x={AREA_X}
         y={AREA_Y}
-        width={AREA_W * prior}
+        width={AREA_W * visualPrior}
         height={AREA_H * sensitivity}
         fill={ACCENT}
         stroke={INK}
@@ -232,7 +236,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       <rect
         x={AREA_X}
         y={AREA_Y + AREA_H * sensitivity}
-        width={AREA_W * prior}
+        width={AREA_W * visualPrior}
         height={AREA_H * (1 - sensitivity)}
         fill={ACCENT}
         stroke={INK}
@@ -241,9 +245,9 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       />
       {/* Healthy ∩ positive (top-right) */}
       <rect
-        x={AREA_X + AREA_W * prior}
+        x={AREA_X + AREA_W * visualPrior}
         y={AREA_Y}
-        width={AREA_W * pH}
+        width={AREA_W * (1 - visualPrior)}
         height={AREA_H * fpr}
         fill={INK}
         stroke={INK}
@@ -252,14 +256,20 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       />
       {/* Healthy ∩ negative (bottom-right) */}
       <rect
-        x={AREA_X + AREA_W * prior}
+        x={AREA_X + AREA_W * visualPrior}
         y={AREA_Y + AREA_H * fpr}
-        width={AREA_W * pH}
+        width={AREA_W * (1 - visualPrior)}
         height={AREA_H * (1 - fpr)}
         fill="#fff"
         stroke={INK}
         strokeWidth={highlightArea === "HN" ? 2 : 0.5}
       />
+      {/* Min-width note when prior is very small */}
+      {prior < PRIOR_MIN_VISUAL && (
+        <text x={AREA_X + 2} y={AREA_Y + AREA_H + 12} fontFamily={FONT_FAMILY} fontSize={7} fill={INK} opacity={0.6}>
+          (min width 5% for visibility)
+        </text>
+      )}
 
       {/* Labels on area */}
       <text
@@ -273,7 +283,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         D ∩ +
       </text>
       <text
-        x={AREA_X + AREA_W * prior + 8}
+        x={AREA_X + AREA_W * visualPrior + 8}
         y={AREA_Y + (AREA_H * fpr) / 2 + 6}
         fontFamily={FONT_FAMILY}
         fontSize={9}
@@ -283,7 +293,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         H ∩ +
       </text>
       <text
-        x={AREA_X + AREA_W * prior + 8}
+        x={AREA_X + AREA_W * visualPrior + 8}
         y={AREA_Y + AREA_H * (fpr + (1 - fpr) / 2) + 4}
         fontFamily={FONT_FAMILY}
         fontSize={9}
@@ -295,16 +305,16 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
 
       {/* === NUMERIC PANE === */}
       <text x={NUM_X} y={NUM_Y + 12} fontFamily={FONT_FAMILY} fontSize={10} fill={INK}>
-        P(D) = {pct(prior)} \xb7 P(+|D) = {pct(sensitivity)} \xb7 P(+|H) = {pct(fpr)}
+        P(D) = {pct(prior)} · P(+|D) = {pct(sensitivity)} · P(+|H) = {pct(fpr)}
       </text>
       {showJointDP && (
         <text x={NUM_X} y={NUM_Y + 28} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
-          P(D ∩ +) = {pct(prior)} \xd7 {pct(sensitivity)} = {pct(pDP)}
+          P(D ∩ +) = {pct(prior)} × {pct(sensitivity)} = {pct(pDP)}
         </text>
       )}
       {showJointHP && (
         <text x={NUM_X} y={NUM_Y + 44} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
-          P(H ∩ +) = {pct(pH)} \xd7 {pct(fpr)} = {pct(pHP)}
+          P(H ∩ +) = {pct(pH)} × {pct(fpr)} = {pct(pHP)}
         </text>
       )}
       {showTotal && (
@@ -343,8 +353,8 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
 export function BayesTree(): ReactNode {
   return (
     <AlgoStepperShell<BayesState>
-      title="PS-2 \xb7 Bayes tree + area overlay ⭐"
-      desc="Disease/test scenario. Forward tree shows P(D)\xb7P(+|D); area shows joint probabilities; posterior P(D|+) computed via Bayes."
+      title="PS-2 · Bayes tree + area overlay ⭐"
+      desc="Disease/test scenario. Forward tree shows P(D)·P(+|D); area shows joint probabilities; posterior P(D|+) computed via Bayes."
       frames={FRAMES}
       renderFrame={renderFrame}
       testIdPrefix="bayes-tree"

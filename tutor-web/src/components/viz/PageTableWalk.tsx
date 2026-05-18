@@ -407,7 +407,7 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
         fontSize={10}
         fill={INK}
       >
-        VA: vpn={va.vpn} \xb7 offset=0x{va.offset.toString(16).padStart(3, "0")}
+        VA: vpn={va.vpn} · offset=0x{va.offset.toString(16).padStart(3, "0")}
       </text>
       {pa && (
         <text
@@ -419,7 +419,7 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
           fontWeight={700}
           fill={INK}
         >
-          → PA: pfn={pa.pfn} \xb7 offset=0x{pa.offset.toString(16).padStart(3, "0")}
+          → PA: pfn={pa.pfn} · offset=0x{pa.offset.toString(16).padStart(3, "0")}
         </text>
       )}
 
@@ -582,7 +582,7 @@ function renderFrame(frame: Frame<PageTableState>): ReactNode {
 export function PageTableWalk(): ReactNode {
   return (
     <AlgoStepperShell<PageTableState>
-      title="SO-4 \xb7 Page table walk + TLB + page fault + COW"
+      title="SO-4 · Page table walk + TLB + page fault + COW"
       desc="Virtual address translation through TLB → page table → physical memory. Includes TLB miss + hit + page fault + copy-on-write after fork."
       frames={FRAMES}
       renderFrame={renderFrame}

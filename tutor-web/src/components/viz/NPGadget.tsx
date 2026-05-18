@@ -307,7 +307,7 @@ function renderFrame(frame: Frame<NPState>): ReactNode {
 export function NPGadget(): ReactNode {
   return (
     <AlgoStepperShell<NPState>
-      title="PA-7 \xb7 3-SAT → CLIQUE reduction ⭐"
+      title="PA-7 · 3-SAT → CLIQUE reduction ⭐"
       desc="Bidirectional iff reduction. 3-SAT formula transforms to graph G; φ satisfiable IFF G has k-clique."
       frames={FRAMES}
       renderFrame={renderFrame}
