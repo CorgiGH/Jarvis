@@ -1,6 +1,8 @@
 import type { CSSProperties } from "react";
+import { useState } from "react";
 import { AlgoStepperShellSmoke } from "./AlgoStepperShellSmoke";
 import { MatrixTransform } from "./MatrixTransform";
+import { NumLineDirect } from "./NumLineDirect";
 import { FONT_FAMILY, INK, PAPER } from "./theme";
 
 const tileStyle: CSSProperties = {
@@ -23,6 +25,7 @@ const subheadingStyle: CSSProperties = {
 };
 
 export function VizDemoPage() {
+  const [numLineMu, setNumLineMu] = useState(5);
   return (
     <div
       data-testid="viz-demo-page"
@@ -78,6 +81,18 @@ export function VizDemoPage() {
           Subclass demo · 8 frames · scrubber + keyboard + Space + R + share + voice (no audio map)
         </p>
         <AlgoStepperShellSmoke />
+      </section>
+
+      <section data-testid="viz-demo-numline" style={tileStyle}>
+        <h2 style={headingStyle}>NumLineDirect (PS basis)</h2>
+        <p style={subheadingStyle}>
+          Drag μ marker · 7 sample ticks · retrofit theme · drag-RAF flow
+        </p>
+        <NumLineDirect
+          data={[1, 3, 4, 5, 6, 8, 11]}
+          mu={numLineMu}
+          onMu={setNumLineMu}
+        />
       </section>
     </div>
   );

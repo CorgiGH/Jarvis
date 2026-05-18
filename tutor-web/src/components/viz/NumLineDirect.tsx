@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from "react";
+import { ACCENT, INK } from "./theme";
 
 export interface NumLineDirectProps {
   data: number[];
@@ -89,27 +90,27 @@ export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) 
       data-testid="num-line-direct"
       style={{ userSelect: "none", touchAction: "none" }}
     >
-      <line x1={PAD} y1={AXIS_Y} x2={SVG_W - PAD} y2={AXIS_Y} stroke="currentColor" strokeWidth={1.5} opacity={0.35} />
+      <line x1={PAD} y1={AXIS_Y} x2={SVG_W - PAD} y2={AXIS_Y} stroke={INK} strokeWidth={1.5} opacity={0.35} />
       {data.map((v, i) => (
         <line
           key={i}
           data-testid="sample-tick"
           x1={toSvgX(v, lo, hi)} y1={AXIS_Y - TICK_H / 2}
           x2={toSvgX(v, lo, hi)} y2={AXIS_Y + TICK_H / 2}
-          stroke="currentColor" strokeWidth={2} opacity={0.6}
+          stroke={INK} strokeWidth={2} opacity={0.6}
         />
       ))}
       <circle
         ref={markerRef}
         data-testid="mu-marker"
         cx={toSvgX(mu, lo, hi)} cy={AXIS_Y} r={MARKER_R}
-        fill="var(--color-accent, #3b82f6)" stroke="white" strokeWidth={2}
+        fill={ACCENT} stroke={INK} strokeWidth={2}
         style={{ cursor: "ew-resize" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       />
-      <text x={toSvgX(mu, lo, hi)} y={AXIS_Y - MARKER_R - 4} textAnchor="middle" fontSize={11} fill="var(--color-accent, #3b82f6)" fontWeight="bold">μ</text>
+      <text x={toSvgX(mu, lo, hi)} y={AXIS_Y - MARKER_R - 4} textAnchor="middle" fontSize={11} fill={INK} fontWeight="bold">μ</text>
     </svg>
   );
 }
