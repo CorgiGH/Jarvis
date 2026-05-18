@@ -1,6 +1,14 @@
+import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+
 export interface SigmaStackedBarProps { data: number[]; mu: number; }
 
-const SEGMENT_COLORS = ["#3b82f6", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#06b6d4", "#f97316"];
+const segmentFor = (i: number): { fill: string; opacity: number } => {
+  const cycle = i % 4;
+  if (cycle === 0) return { fill: INK, opacity: 1 };
+  if (cycle === 1) return { fill: ACCENT, opacity: 1 };
+  if (cycle === 2) return { fill: INK, opacity: 0.55 };
+  return { fill: ACCENT, opacity: 0.55 };
+};
 
 export function SigmaStackedBar({ data, mu }: SigmaStackedBarProps) {
   const prefersReduced =
@@ -16,8 +24,9 @@ export function SigmaStackedBar({ data, mu }: SigmaStackedBarProps) {
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: "0.4rem",
-        fontFamily: "var(--font-mono, monospace)",
+        gap: "0.5rem",
+        fontFamily: FONT_FAMILY,
+        color: INK,
       }}
     >
       <div
@@ -25,13 +34,15 @@ export function SigmaStackedBar({ data, mu }: SigmaStackedBarProps) {
           display: "flex",
           height: "28px",
           width: "100%",
-          borderRadius: "4px",
+          borderRadius: 0,
           overflow: "hidden",
-          background: "var(--color-panel-bg, #f1f5f9)",
+          background: PAPER,
+          border: `2px solid ${INK}`,
         }}
       >
         {deviations.map((dev, i) => {
           const pct = total > 0 ? (dev / total) * 100 : 0;
+          const { fill, opacity } = segmentFor(i);
           return (
             <div
               key={i}
@@ -39,10 +50,12 @@ export function SigmaStackedBar({ data, mu }: SigmaStackedBarProps) {
               data-value={dev}
               style={{
                 width: `${pct}%`,
-                background: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+                background: fill,
+                opacity,
                 transition: prefersReduced ? "none" : "width 120ms ease-out",
                 height: "100%",
                 minWidth: dev > 0 ? "2px" : "0px",
+                borderRight: i === deviations.length - 1 ? "none" : `1px solid ${INK}`,
               }}
               title={`|x${i + 1} − μ| = ${dev.toFixed(2)}`}
             />
@@ -50,29 +63,19 @@ export function SigmaStackedBar({ data, mu }: SigmaStackedBarProps) {
         })}
       </div>
 
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", fontSize: "0.7rem", fontWeight: 700 }}>
         {deviations.map((dev, i) => (
           <span
             key={i}
-            style={{
-              fontSize: "0.7rem",
-              color: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
-              fontWeight: 600,
-            }}
+            style={{ color: INK, opacity: 0.8 }}
           >
-            |x<sub>{i + 1}</sub>&minus;&mu;|={dev.toFixed(1)}
+            |x<sub>{i + 1}</sub>−μ|={dev.toFixed(1)}
           </span>
         ))}
       </div>
 
-      <div style={{ fontSize: "0.8rem", fontWeight: 700, textAlign: "right" }}>
-        &Sigma; ={" "}
-        <span
-          data-testid="sigma-sum"
-          style={{ color: "var(--color-accent, #3b82f6)" }}
-        >
-          {total.toFixed(1)}
-        </span>
+      <div style={{ fontSize: "0.8rem", fontWeight: 900, textAlign: "right" }}>
+        Σ = <span data-testid="sigma-sum" style={{ color: INK, background: ACCENT, padding: "0 0.3em" }}>{total.toFixed(1)}</span>
       </div>
     </div>
   );

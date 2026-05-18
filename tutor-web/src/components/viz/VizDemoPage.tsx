@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AlgoStepperShellSmoke } from "./AlgoStepperShellSmoke";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
+import { SigmaStackedBar } from "./SigmaStackedBar";
 import { SlopeCounter } from "./SlopeCounter";
 import { SumPlotTracker } from "./SumPlotTracker";
 import { FONT_FAMILY, INK, PAPER } from "./theme";
@@ -114,6 +115,14 @@ export function VizDemoPage() {
           Left/right count chips · diff readout · brutalist hard edges
         </p>
         <SlopeCounter data={[1, 3, 4, 5, 6, 8, 11]} mu={numLineMu} />
+      </section>
+
+      <section data-testid="viz-demo-sigma" style={tileStyle}>
+        <h2 style={headingStyle}>SigmaStackedBar (PS basis)</h2>
+        <p style={subheadingStyle}>
+          Stacked deviations · ink + accent + opacity alternation · hard edges
+        </p>
+        <SigmaStackedBar data={[1, 3, 4, 5, 6, 8, 11]} mu={numLineMu} />
       </section>
     </div>
   );
