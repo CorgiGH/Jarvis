@@ -1,120 +1,154 @@
-import { useCallback, useRef } from "react";
-import { PlotlyEmbed, PlotlyFrame } from "../PlotlyEmbed";
+import { useMemo, useState } from "react";
+import { Group } from "@visx/group";
+import { scaleLinear } from "@visx/scale";
+import { Line } from "@visx/shape";
+import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
 
 export interface CompareFramesProps { data: number[]; }
 
-function buildFrames(data: number[]): PlotlyFrame[] {
-  const sorted = [...data].sort((a, b) => a - b);
-  const mean = data.reduce((a, b) => a + b, 0) / data.length;
-  const median =
-    sorted.length % 2 === 0
-      ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-      : sorted[Math.floor(sorted.length / 2)];
+const SVG_W = 480;
+const SVG_H = 220;
+const PAD_L = 48;
+const PAD_R = 16;
+const PAD_T = 16;
+const PAD_B = 32;
 
-  const scatter = (est: number, label: string) => [
-    {
-      type: "scatter",
-      mode: "markers",
-      x: data.map((_, i) => i + 1),
-      y: data,
-      name: "data",
-      marker: { color: "#64748b", size: 8 },
-    },
-    {
-      type: "scatter",
-      mode: "lines",
-      x: [1, data.length],
-      y: [est, est],
-      name: label,
-      line: { color: "#3b82f6", width: 2, dash: "dash" },
-    },
-  ];
+type Mode = "baseline" | "mean" | "median";
 
-  return [
-    { name: "baseline", data: scatter(mean, "baseline mean") },
-    { name: "mean", data: scatter(mean, `mean (${mean.toFixed(2)})`) },
-    { name: "median", data: scatter(median, `median (${median.toFixed(2)})`) },
-  ];
+function computeMean(data: number[]): number {
+  if (data.length === 0) return 0;
+  return data.reduce((a, b) => a + b, 0) / data.length;
+}
+
+function computeMedian(data: number[]): number {
+  if (data.length === 0) return 0;
+  const s = [...data].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
 }
 
 export function CompareFrames({ data }: CompareFramesProps) {
-  const frames = buildFrames(data);
-  const mean = data.reduce((a, b) => a + b, 0) / data.length;
-  const containerRef = useRef<HTMLDivElement>(null);
+  const mean = useMemo(() => computeMean(data), [data]);
+  const median = useMemo(() => computeMedian(data), [data]);
+  const [mode, setMode] = useState<Mode>("baseline");
 
-  const handlePlay = useCallback(async () => {
-    const mod = await import("plotly.js-dist-min");
-    const Plotly = (mod as any).default ?? mod;
-    if (typeof Plotly.animate !== "function") return;
-    // In production, prefer the Plotly graph div (has _fullLayout); fall back
-    // to the container so tests (which use a mock without .js-plotly-plot) can
-    // still trigger the spy and validate arguments.
-    const el =
-      (containerRef.current?.querySelector(".js-plotly-plot") as Element | null) ??
-      containerRef.current;
-    if (!el) return;
-    const prefersReduced =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const dur = prefersReduced ? 0 : 600;
-    await Plotly.animate(el, frames, {
-      transition: { duration: dur, easing: "cubic-bezier(.4,0,.2,1)" },
-      frame: { duration: dur },
-    });
-  }, [frames]);
+  const xMax = data.length + 1;
+  const yMin = Math.min(...data, mean, median) - 1;
+  const yMax = Math.max(...data, mean, median) + 1;
+
+  const xScale = scaleLinear<number>({ domain: [0, xMax], range: [PAD_L, SVG_W - PAD_R] });
+  const yScale = scaleLinear<number>({ domain: [yMin, yMax], range: [SVG_H - PAD_B, PAD_T] });
+
+  const estimate = mode === "median" ? median : mean;
+  const label =
+    mode === "baseline"
+      ? "baseline (mean)"
+      : mode === "mean"
+        ? `mean ${mean.toFixed(2)}`
+        : `median ${median.toFixed(2)}`;
 
   return (
     <div
-      ref={containerRef}
       data-testid="compare-frames-plotly"
-      style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        fontFamily: FONT_FAMILY,
+        color: INK,
+      }}
     >
-      <PlotlyEmbed
-        indexLabel="FIG"
-        figure={{
-          data: [
-            {
-              type: "scatter",
-              mode: "markers",
-              x: data.map((_, i) => i + 1),
-              y: data,
-              name: "data",
-              marker: { color: "#64748b", size: 8 },
-            },
-            {
-              type: "scatter",
-              mode: "lines",
-              x: [1, data.length],
-              y: [mean, mean],
-              name: "mean",
-              line: { color: "#3b82f6", width: 2, dash: "dash" },
-            },
-          ],
-          layout: {
-            title: { text: "Mean vs Median — frame morph" },
-            showlegend: true,
-            margin: { t: 20, b: 30, l: 40, r: 10 },
-          },
-        }}
-      />
-      <button
-        data-testid="compare-frames-play"
-        onClick={handlePlay}
-        style={{
-          alignSelf: "flex-start",
-          padding: "0.35em 0.8em",
-          border: "1.5px solid var(--color-accent, #3b82f6)",
-          borderRadius: "4px",
-          background: "transparent",
-          color: "var(--color-accent, #3b82f6)",
-          fontFamily: "var(--font-mono, monospace)",
-          fontSize: "0.75rem",
-          fontWeight: 700,
-          cursor: "pointer",
-        }}
+      <svg
+        width={SVG_W}
+        height={SVG_H}
+        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+        role="img"
+        aria-label="Compare estimators — mean vs median"
+        style={{ background: PAPER, border: `2px solid ${INK}` }}
       >
-        ▶ ANIMATE FRAMES
-      </button>
+        <Group>
+          <Line
+            from={{ x: PAD_L, y: SVG_H - PAD_B }}
+            to={{ x: SVG_W - PAD_R, y: SVG_H - PAD_B }}
+            stroke={INK}
+            strokeWidth={1}
+            opacity={0.3}
+          />
+          <Line
+            from={{ x: PAD_L, y: PAD_T }}
+            to={{ x: PAD_L, y: SVG_H - PAD_B }}
+            stroke={INK}
+            strokeWidth={1}
+            opacity={0.3}
+          />
+          {data.map((v, i) => (
+            <circle
+              key={i}
+              data-testid="compare-data-point"
+              cx={xScale(i + 1)}
+              cy={yScale(v)}
+              r={4}
+              fill={INK}
+              stroke={INK}
+              strokeWidth={1}
+            />
+          ))}
+          <Line
+            data-testid="compare-estimate-line"
+            from={{ x: PAD_L, y: yScale(estimate) }}
+            to={{ x: SVG_W - PAD_R, y: yScale(estimate) }}
+            stroke={ACCENT}
+            strokeWidth={3}
+            style={{ transition: "all 600ms cubic-bezier(0.4, 0, 0.2, 1)" }}
+          />
+          <text
+            x={SVG_W - PAD_R - 8}
+            y={yScale(estimate) - 6}
+            textAnchor="end"
+            fontFamily={FONT_FAMILY}
+            fontSize={11}
+            fontWeight={700}
+            fill={INK}
+          >
+            {label}
+          </text>
+        </Group>
+      </svg>
+      <div style={{ display: "flex", gap: 4 }}>
+        <button
+          data-testid="compare-frames-play"
+          onClick={() => {
+            setMode((m) =>
+              m === "baseline" ? "mean" : m === "mean" ? "median" : "baseline"
+            );
+          }}
+          style={{
+            background: PAPER,
+            color: INK,
+            border: `2px solid ${INK}`,
+            padding: "0.4em 0.8em",
+            fontFamily: FONT_FAMILY,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}
+        >
+          ▶ animate frames
+        </button>
+        <span
+          data-testid="compare-mode-readout"
+          style={{
+            alignSelf: "center",
+            fontSize: 10,
+            opacity: 0.7,
+            letterSpacing: "0.04em",
+          }}
+        >
+          mode: {mode}
+        </span>
+      </div>
     </div>
   );
 }

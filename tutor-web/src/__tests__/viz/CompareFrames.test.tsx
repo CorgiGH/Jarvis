@@ -1,52 +1,29 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, expect, test } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { CompareFrames } from "../../components/viz/CompareFrames";
 
-const animateSpy = vi.fn().mockResolvedValue(undefined);
-
-vi.mock("plotly.js-dist-min", () => ({
-  default: { animate: animateSpy },
-}));
-
-beforeEach(() => { animateSpy.mockClear(); });
-
-describe("CompareFrames", () => {
-  const data = [3, 7, 8, 9, 14];
-
-  test("renders without crashing", () => { render(<CompareFrames data={data} />); });
-
-  test("renders play button", () => {
-    render(<CompareFrames data={data} />);
+describe("CompareFrames (visx impl)", () => {
+  test("renders root, play button, and N data points", () => {
+    render(<CompareFrames data={[1, 2, 3, 4, 5]} />);
+    expect(screen.getByTestId("compare-frames-plotly")).toBeInTheDocument();
     expect(screen.getByTestId("compare-frames-play")).toBeInTheDocument();
+    expect(screen.getAllByTestId("compare-data-point")).toHaveLength(5);
   });
 
-  test("play calls Plotly.animate with 3 frames", async () => {
-    render(<CompareFrames data={data} />);
+  test("clicking play cycles baseline → mean → median → baseline", () => {
+    render(<CompareFrames data={[1, 2, 3, 4, 5]} />);
+    const readout = screen.getByTestId("compare-mode-readout");
+    expect(readout).toHaveTextContent("mode: baseline");
     fireEvent.click(screen.getByTestId("compare-frames-play"));
-    await waitFor(() => expect(animateSpy).toHaveBeenCalled());
-    const [, frames] = animateSpy.mock.calls[0];
-    expect(Array.isArray(frames)).toBe(true);
-    expect(frames.length).toBe(3);
+    expect(readout).toHaveTextContent("mode: mean");
+    fireEvent.click(screen.getByTestId("compare-frames-play"));
+    expect(readout).toHaveTextContent("mode: median");
+    fireEvent.click(screen.getByTestId("compare-frames-play"));
+    expect(readout).toHaveTextContent("mode: baseline");
   });
 
-  test("transition duration = 600ms by default", async () => {
-    render(<CompareFrames data={data} />);
-    fireEvent.click(screen.getByTestId("compare-frames-play"));
-    await waitFor(() => expect(animateSpy).toHaveBeenCalled());
-    const [, , opts] = animateSpy.mock.calls[0];
-    expect(opts.transition.duration).toBe(600);
-  });
-
-  test("transition duration = 0 under reduced-motion", async () => {
-    const original = window.matchMedia;
-    window.matchMedia = vi.fn().mockReturnValue({
-      matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn(),
-    }) as any;
-    render(<CompareFrames data={data} />);
-    fireEvent.click(screen.getByTestId("compare-frames-play"));
-    await waitFor(() => expect(animateSpy).toHaveBeenCalled());
-    const [, , opts] = animateSpy.mock.calls[0];
-    expect(opts.transition.duration).toBe(0);
-    window.matchMedia = original;
+  test("renders an estimate line", () => {
+    render(<CompareFrames data={[1, 2, 3, 4, 5]} />);
+    expect(screen.getByTestId("compare-estimate-line")).toBeInTheDocument();
   });
 });

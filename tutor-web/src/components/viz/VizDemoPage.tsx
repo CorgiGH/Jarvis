@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { AlgoStepperShellSmoke } from "./AlgoStepperShellSmoke";
+import { CompareFrames } from "./CompareFrames";
 import { MatrixTransform } from "./MatrixTransform";
 import { NumLineDirect } from "./NumLineDirect";
 import { SigmaStackedBar } from "./SigmaStackedBar";
@@ -123,6 +124,14 @@ export function VizDemoPage() {
           Stacked deviations · ink + accent + opacity alternation · hard edges
         </p>
         <SigmaStackedBar data={[1, 3, 4, 5, 6, 8, 11]} mu={numLineMu} />
+      </section>
+
+      <section data-testid="viz-demo-compare-frames" style={tileStyle}>
+        <h2 style={headingStyle}>CompareFrames (PS basis)</h2>
+        <p style={subheadingStyle}>
+          Mean vs median estimator · animate-frames button cycles modes · visx scatter + line
+        </p>
+        <CompareFrames data={[1, 3, 4, 5, 6, 8, 11]} />
       </section>
     </div>
   );
