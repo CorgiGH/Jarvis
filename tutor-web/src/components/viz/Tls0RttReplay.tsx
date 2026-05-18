@@ -202,11 +202,30 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
         );
       })}
 
-      {/* Message at bottom */}
-      <rect x={10} y={MSG_Y_FOOTER - 14} width={460} height={20} fill={PAPER} stroke={INK} strokeWidth={1} />
-      <text x={16} y={MSG_Y_FOOTER} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
-        {message}
-      </text>
+      {/* Message at bottom — two-line wrap */}
+      <rect x={10} y={MSG_Y_FOOTER - 28} width={460} height={36} fill={PAPER} stroke={INK} strokeWidth={1} />
+      {(() => {
+        const maxCharsPerLine = 78;
+        const words = message.split(' ');
+        let line1 = '';
+        let line2 = '';
+        for (const w of words) {
+          if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+            line1 = line1 ? `${line1} ${w}` : w;
+          } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+            line2 = line2 ? `${line2} ${w}` : w;
+          } else {
+            line2 = line2 + '…';
+            break;
+          }
+        }
+        return (
+          <text x={16} y={MSG_Y_FOOTER - 12} fontFamily={FONT_FAMILY} fontSize={9} fontWeight={700} fill={INK}>
+            <tspan x={16} dy={0}>{line1}</tspan>
+            {line2 && <tspan x={16} dy={12}>{line2}</tspan>}
+          </text>
+        );
+      })()}
     </>
   );
 }
