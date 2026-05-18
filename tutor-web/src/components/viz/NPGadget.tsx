@@ -290,13 +290,33 @@ function renderFrame(frame: Frame<NPState>): ReactNode {
       })}
 
       {/* Phase indicator above message */}
-      <text x={FORMULA_X} y={MSG_Y - 16} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.5}>
+      <text x={FORMULA_X} y={MSG_Y - 34} fontFamily={FONT_FAMILY} fontSize={9} fill={INK} opacity={0.5}>
         Phase: {phase}
       </text>
-      {/* Message */}
-      <text x={FORMULA_X} y={MSG_Y} fontFamily={FONT_FAMILY} fontSize={10} fontWeight={700} fill={INK}>
-        {message}
-      </text>
+      {/* Footer message (2-line wrap) */}
+      <rect x={10} y={MSG_Y - 28} width={460} height={36} fill={PAPER} stroke={INK} strokeWidth={1} />
+      {(() => {
+        const maxCharsPerLine = 78;
+        const words = message.split(' ');
+        let line1 = '';
+        let line2 = '';
+        for (const w of words) {
+          if (!line1.length || (line1.length + w.length + 1) <= maxCharsPerLine) {
+            line1 = line1 ? `${line1} ${w}` : w;
+          } else if (!line2.length || (line2.length + w.length + 1) <= maxCharsPerLine) {
+            line2 = line2 ? `${line2} ${w}` : w;
+          } else {
+            line2 = line2 + '…';
+            break;
+          }
+        }
+        return (
+          <text x={16} y={MSG_Y - 12} fontFamily={FONT_FAMILY} fontSize={9} fontWeight={700} fill={INK}>
+            <tspan x={16} dy={0}>{line1}</tspan>
+            {line2 && <tspan x={16} dy={12}>{line2}</tspan>}
+          </text>
+        );
+      })()}
 
       {/* Bounds anchor */}
       <rect x={0} y={0} width={480} height={360} fill="none" stroke="none" />
