@@ -117,11 +117,11 @@ function buildFrames(): Frame<FSMState>[] {
     { from: "RUNNING", to: "WAITING", pid: 101 }
   );
 
-  // F7 — P2 I/O completes → READY.
+  // F7 — P2 I/O completes → READY. (P1 still WAITING on child.)
   processes[1].state = "READY";
   processes[1].ioReason = undefined;
   push(
-    "Disk interrupt fires. P2 unblocked, state=READY — back in run queue.",
+    "Disk interrupt fires. P2 unblocks: WAITING → READY (back in run queue). P1 still WAITING on child.",
     101,
     { from: "WAITING", to: "READY", pid: 101 }
   );
@@ -228,9 +228,15 @@ const EDGES: Edge[] = [
 
 // Process table (bottom half).
 const TABLE_X = 10;
-const TABLE_Y = 200;
+const TABLE_Y = 228;
 const TABLE_W = 460;
 const ROW_H = 22;
+// Reserved data rows below the header (max processes alive concurrently = 2).
+// Originally 3 rows reserved, but we shave to 2 to make room for the chip strip
+// above the table without colliding with the footer below.
+const TABLE_DATA_ROWS = 2;
+const TABLE_INNER_PAD = 4;
+const TABLE_FULL_H = ROW_H + ROW_H * TABLE_DATA_ROWS + TABLE_INNER_PAD;
 type ColSpec = { key: keyof Process_t | "pid" | "ppid" | "name" | "state" | "ioReason"; label: string; x: number; w: number };
 const COLS: ColSpec[] = [
   { key: "pid", label: "PID", x: TABLE_X + 8, w: 50 },
@@ -291,10 +297,23 @@ function edgeLabelPos(
   from: State_t,
   to: State_t,
   bend: number
-): { x: number; y: number } {
+): { x: number; y: number; anchor: "start" | "middle" | "end" } {
   const mid = edgeMidpoint(from, to, bend);
-  // Nudge slightly perpendicular to keep label off the line.
-  return { x: mid.mx, y: mid.my + (bend >= 0 ? 12 : -4) };
+  const a = NODE_POS[from];
+  const b = NODE_POS[to];
+  // Detect vertical edge (same cx) so we can offset label sideways rather than
+  // placing it on top of the arrow body.
+  if (a.cx === b.cx) {
+    // Vertical edge — offset to the right of the line.
+    return { x: mid.mx + 10, y: mid.my + 3, anchor: "start" };
+  }
+  // Horizontal-ish edge — offset perpendicular (along Y) far enough that the
+  // text ascenders clear the (possibly active stroke=3) arrow body.
+  return {
+    x: mid.mx,
+    y: mid.my + (bend >= 0 ? 16 : -8),
+    anchor: "middle",
+  };
 }
 
 function statesOccupied(processes: Process_t[]): Set<State_t> {
@@ -388,7 +407,7 @@ function renderFrame(frame: Frame<FSMState>): ReactNode {
               <text
                 x={lp.x}
                 y={lp.y}
-                textAnchor="middle"
+                textAnchor={lp.anchor}
                 fontFamily={FONT_FAMILY}
                 fontSize={8}
                 fontWeight={active ? 700 : 400}
@@ -447,7 +466,11 @@ function renderFrame(frame: Frame<FSMState>): ReactNode {
               fontWeight={700}
               fill={INK}
             >
-              {s}
+              {/* Abbreviate TERMINATED inside the 22px-radius circle (10 chars
+                  otherwise overflow the rim). Full word surfaced via <title>
+                  tooltip + the activeTransition chip + footer narration. */}
+              {s === "TERMINATED" && <title>TERMINATED</title>}
+              {s === "TERMINATED" ? "TERM" : s}
             </text>
             {/* Occupancy dot — small pid chip below the node */}
             {processes
@@ -478,21 +501,21 @@ function renderFrame(frame: Frame<FSMState>): ReactNode {
         );
       })}
 
-      {/* ── Focus highlight chip on top-left ─────────────────────────── */}
+      {/* ── Focus highlight chip on bottom-left of FSM ───────────────── */}
       {focusedProc && (
         <g>
           <rect
             x={TABLE_X}
-            y={175}
+            y={194}
             width={210}
-            height={18}
+            height={16}
             fill={PAPER}
             stroke={INK}
             strokeWidth={1}
           />
           <FadeText
             x={TABLE_X + 6}
-            y={188}
+            y={206}
             fontFamily={FONT_FAMILY}
             fontSize={9}
             fontWeight={700}
@@ -503,21 +526,21 @@ function renderFrame(frame: Frame<FSMState>): ReactNode {
         </g>
       )}
 
-      {/* ── Active transition chip on top-right ──────────────────────── */}
+      {/* ── Active transition chip on bottom-right of FSM ────────────── */}
       {activeTransition && (
         <g>
           <rect
             x={TABLE_X + 240}
-            y={175}
+            y={194}
             width={220}
-            height={18}
+            height={16}
             fill={ACCENT}
             stroke={INK}
             strokeWidth={1}
           />
           <FadeText
             x={TABLE_X + 246}
-            y={188}
+            y={206}
             fontFamily={FONT_FAMILY}
             fontSize={9}
             fontWeight={700}
@@ -546,7 +569,7 @@ function renderFrame(frame: Frame<FSMState>): ReactNode {
         x={TABLE_X}
         y={TABLE_Y}
         width={TABLE_W}
-        height={ROW_H * 3 + 4}
+        height={TABLE_FULL_H}
         fill={PAPER}
         stroke={INK}
         strokeWidth={1}
@@ -695,6 +718,12 @@ function FooterMessage({ message }: { message: string }) {
       line2 = line2 + "…";
       break;
     }
+  }
+  // Preserve the joining space between line1's tail word and line2's lead word
+  // so screen readers / TTS / textContent reads "the grandparent" rather than
+  // "thegrandparent". The trailing space is invisible at the wrap boundary.
+  if (line2) {
+    line1 = line1 + " ";
   }
   return (
     <AnimatePresence initial={false}>
