@@ -474,7 +474,7 @@ function buildFrames(): Frame<State>[] {
     mk(
       step++,
       "SUMMARY",
-      "Comparison",
+      "COMPARISON",
       26,
       [],
       "SRTF wins on avg turnaround; FCFS is simplest; RR is fairest. MLFQ adapts without burst foreknowledge.",
@@ -708,9 +708,10 @@ function renderFrame(frame: Frame<State>): ReactNode {
       )}
 
       {/* ROW 2 — Jobs table (always visible) */}
+      {/* Label moved up to y=TABLE_Y - 18 (=82) so it clears the Gantt tick row at y=94 */}
       <text
         x={TABLE_X}
-        y={TABLE_Y - 4}
+        y={TABLE_Y - 18}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fontWeight={700}
@@ -1155,6 +1156,12 @@ function FooterMessage({ message }: { message: string }) {
       line2 = line2 + "…";
       break;
     }
+  }
+  // Append a single trailing space to line1 when line2 exists so concatenated
+  // textContent reads correctly ("foo bar" not "foobar") for a11y / TTS.
+  // Trailing whitespace at a wrap boundary is visually invisible.
+  if (line2) {
+    line1 = line1 + " ";
   }
   return (
     <AnimatePresence initial={false}>
