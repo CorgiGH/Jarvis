@@ -293,6 +293,7 @@ function threadPaneX(t: ThreadName): number {
 
 function renderFrame(frame: Frame<State>): ReactNode {
   const {
+    step,
     phase,
     counter,
     raceCounterFinal,
@@ -345,7 +346,9 @@ function renderFrame(frame: Frame<State>): ReactNode {
         </marker>
       </defs>
 
-      {/* Phase indicator (top center) */}
+      {/* Phase indicator (top center) — sits in the 150px gap between thread
+          panes (T1 ends at x=160, T2 starts at x=310). Parentheticals were
+          dropped so the centered text doesn't clip the thread boxes. */}
       <FadeText
         x={240}
         y={20}
@@ -357,10 +360,10 @@ function renderFrame(frame: Frame<State>): ReactNode {
         opacity={0.7}
       >
         {phase === "RACE"
-          ? "PHASE 1 · RACE (no mutex)"
+          ? "PHASE 1 · RACE"
           : phase === "MUTEX"
-          ? "PHASE 2 · MUTEX (lock guards counter)"
-          : "PHASE 3 · RACE vs MUTEX"}
+          ? "PHASE 2 · MUTEX"
+          : "PHASE 3 · COMPARE"}
       </FadeText>
 
       {/* ===== T1 PANE ===== */}
@@ -502,6 +505,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
       />
       <ComparisonStrip
         phase={phase}
+        step={step}
         counter={counter}
         raceCounterFinal={raceCounterFinal}
       />
@@ -753,16 +757,26 @@ function DataFlowArrow(props: {
   );
 }
 
+// Last frame of each phase — the verdict is only honest at end-of-phase.
+// PHASE 1 (RACE) runs F0..F7, so step 7 is the result frame.
+// PHASE 2 (MUTEX) runs F8..F16, so step 16 is the result frame.
+const RACE_RESULT_STEP = 7;
+const MUTEX_RESULT_STEP = 16;
+
 function ComparisonStrip(props: {
   phase: Phase;
+  step: number;
   counter: number;
   raceCounterFinal: number | undefined;
 }) {
-  const { phase, counter, raceCounterFinal } = props;
+  const { phase, step, counter, raceCounterFinal } = props;
 
   // Three layouts: RACE shows just race line. MUTEX shows just mutex line.
-  // SUMMARY shows both side by side.
+  // SUMMARY shows both side by side. During mid-phase execution we show a
+  // neutral "computing…" placeholder instead of a lie — the verdict only
+  // becomes truthful at the phase's last frame.
   if (phase === "RACE") {
+    const revealed = step >= RACE_RESULT_STEP;
     return (
       <>
         <text
@@ -776,20 +790,41 @@ function ComparisonStrip(props: {
         >
           RACE (no mutex)
         </text>
-        <TweenText
-          x={20}
-          y={COMPARE_Y + 42}
-          fontFamily={FONT_FAMILY}
-          fontSize={14}
-          fontWeight={700}
-          fill={INK}
-          value={counter}
-          formatter={(n) => `counter ends at ${Math.round(n)}  ≠  2 expected`}
-        />
+        {revealed ? (
+          <text
+            x={20}
+            y={COMPARE_Y + 42}
+            fontFamily={FONT_FAMILY}
+            fontSize={14}
+            fontWeight={700}
+            fill={INK}
+          >
+            {`counter ends at ${counter}  ≠  2 expected  (LOST UPDATE)`}
+          </text>
+        ) : (
+          <text
+            x={20}
+            y={COMPARE_Y + 42}
+            fontFamily={FONT_FAMILY}
+            fontSize={12}
+            fontWeight={700}
+            fill={INK}
+            opacity={0.55}
+          >
+            watch ops execute — verdict at end of phase
+          </text>
+        )}
       </>
     );
   }
   if (phase === "MUTEX") {
+    const revealed = step >= MUTEX_RESULT_STEP;
+    // Operator + tag depend on outcome: ≠ if the mutex still failed (counter
+    // didn't reach 2), = if it succeeded. Defensive — current frame ladder
+    // always lands on counter=2, but the code shouldn't lie if that changes.
+    const correct = counter === 2;
+    const op = correct ? "=" : "≠";
+    const tag = correct ? "CORRECT" : "STILL WRONG";
     return (
       <>
         <text
@@ -803,16 +838,30 @@ function ComparisonStrip(props: {
         >
           MUTEX (lock guards counter)
         </text>
-        <TweenText
-          x={20}
-          y={COMPARE_Y + 42}
-          fontFamily={FONT_FAMILY}
-          fontSize={14}
-          fontWeight={700}
-          fill={INK}
-          value={counter}
-          formatter={(n) => `counter ends at ${Math.round(n)}  =  2 expected`}
-        />
+        {revealed ? (
+          <text
+            x={20}
+            y={COMPARE_Y + 42}
+            fontFamily={FONT_FAMILY}
+            fontSize={14}
+            fontWeight={700}
+            fill={INK}
+          >
+            {`counter ends at ${counter}  ${op}  2 expected  (${tag})`}
+          </text>
+        ) : (
+          <text
+            x={20}
+            y={COMPARE_Y + 42}
+            fontFamily={FONT_FAMILY}
+            fontSize={12}
+            fontWeight={700}
+            fill={INK}
+            opacity={0.55}
+          >
+            watch ops execute — verdict at end of phase
+          </text>
+        )}
       </>
     );
   }
@@ -838,7 +887,7 @@ function ComparisonStrip(props: {
         fontWeight={700}
         fill={INK}
       >
-        {`counter = ${raceCounterFinal ?? "?"}  (LOST UPDATE)`}
+        {`counter = ${raceCounterFinal ?? "?"}  ≠  2  (LOST UPDATE)`}
       </text>
       <line
         x1={240}
@@ -868,7 +917,7 @@ function ComparisonStrip(props: {
         fontWeight={700}
         fill={INK}
       >
-        {`counter = ${counter}  (CORRECT)`}
+        {`counter = ${counter}  =  2  (CORRECT)`}
       </text>
     </>
   );
@@ -894,6 +943,12 @@ function FooterMessage({ message }: { message: string }) {
       line2 = line2 + "…";
       break;
     }
+  }
+  // Restore the joining space between line1 and line2 in the flat textContent
+  // (SVG <tspan> elements concatenate without whitespace). Without this, words
+  // straddling the wrap boundary fuse together when read via .textContent.
+  if (line2) {
+    line1 = line1 + " ";
   }
   return (
     <AnimatePresence initial={false}>
