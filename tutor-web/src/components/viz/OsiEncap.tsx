@@ -671,7 +671,7 @@ function PacketGlyph({ p, event }: { p: Packet; event?: EventKind }) {
   );
 }
 
-function LayerRow({
+function LayerRowRect({
   side,
   layer,
   isActive,
@@ -683,30 +683,42 @@ function LayerRow({
   const spec = LAYER_SPECS[layer];
   const x = layerBoxX(side);
   return (
-    <g>
-      <motion.rect
-        x={x}
-        y={spec.y}
-        width={COL_W}
-        height={spec.h}
-        initial={false}
-        animate={{ fill: isActive ? ACCENT : PAPER }}
-        transition={{ type: "tween", duration: 0.35, ease: "easeInOut" }}
-        stroke={INK}
-        strokeWidth={1}
-      />
-      <text
-        x={x + 6}
-        y={spec.y + 11}
-        fontFamily={FONT_FAMILY}
-        fontSize={9}
-        fontWeight={700}
-        fill={INK}
-        opacity={0.85}
-      >
-        {spec.label}
-      </text>
-    </g>
+    <motion.rect
+      x={x}
+      y={spec.y}
+      width={COL_W}
+      height={spec.h}
+      initial={false}
+      animate={{ fill: isActive ? ACCENT : PAPER }}
+      transition={{ type: "tween", duration: 0.35, ease: "easeInOut" }}
+      stroke={INK}
+      strokeWidth={1}
+    />
+  );
+}
+
+function LayerRowLabel({
+  side,
+  layer,
+}: {
+  side: Side;
+  layer: Layer;
+}) {
+  const spec = LAYER_SPECS[layer];
+  const x = layerBoxX(side);
+  return (
+    <text
+      x={x + 6}
+      y={spec.y + 11}
+      fontFamily={FONT_FAMILY}
+      fontSize={9}
+      fontWeight={700}
+      fill={INK}
+      opacity={0.85}
+      pointerEvents="none"
+    >
+      {spec.label}
+    </text>
   );
 }
 
@@ -730,6 +742,11 @@ function FooterMessage({ message }: { message: string }) {
       line2 = line2 + "…";
       break;
     }
+  }
+  // SVG concatenates tspan textContent without inter-tspan whitespace.
+  // Ensure a wrap-induced word boundary survives screen-reader / textContent reads.
+  if (line2) {
+    line1 = line1 + " ";
   }
   return (
     <AnimatePresence initial={false}>
@@ -838,10 +855,10 @@ function renderFrame(frame: Frame<State>): ReactNode {
         opacity={0.5}
       />
 
-      {/* All 7 layer rows on each side */}
+      {/* All 7 layer-row rectangles on each side (drawn FIRST so packets + labels paint on top) */}
       {LAYERS_ORDER.map((L) => (
-        <LayerRow
-          key={`s-${L}`}
+        <LayerRowRect
+          key={`s-rect-${L}`}
           side="SENDER"
           layer={L}
           isActive={
@@ -852,8 +869,8 @@ function renderFrame(frame: Frame<State>): ReactNode {
         />
       ))}
       {LAYERS_ORDER.map((L) => (
-        <LayerRow
-          key={`r-${L}`}
+        <LayerRowRect
+          key={`r-rect-${L}`}
           side="RECEIVER"
           layer={L}
           isActive={
@@ -887,10 +904,10 @@ function renderFrame(frame: Frame<State>): ReactNode {
         wire
       </text>
 
-      {/* MTU label near the L2/L1 boundary */}
+      {/* MTU label sits BELOW the wire so it doesn't collide with the L1 BITS receiver-side row label */}
       <text
         x={SENDER_X + COL_W + 4}
-        y={LAYER_SPECS.L1.y + 14}
+        y={WIRE_Y + 12}
         fontFamily={FONT_FAMILY}
         fontSize={8}
         fontStyle="italic"
@@ -935,6 +952,14 @@ function renderFrame(frame: Frame<State>): ReactNode {
           <PacketGlyph key={p.id + "-" + p.side + "-" + p.layer} p={p} event={event} />
         ))}
       </AnimatePresence>
+
+      {/* Layer labels drawn AFTER packets so layer names stay legible when a chip occupies the row */}
+      {LAYERS_ORDER.map((L) => (
+        <LayerRowLabel key={`s-label-${L}`} side="SENDER" layer={L} />
+      ))}
+      {LAYERS_ORDER.map((L) => (
+        <LayerRowLabel key={`r-label-${L}`} side="RECEIVER" layer={L} />
+      ))}
 
       {/* Footer rect + message */}
       <rect
