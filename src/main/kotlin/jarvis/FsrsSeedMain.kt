@@ -110,7 +110,9 @@ internal fun runSeedFsrs(args: List<String>) {
     for ((idx, mdPath) in docs.withIndex()) {
         val subj = subjectOverride ?: deriveSubject(mdPath)
         val raw = try {
-            mdPath.readText()
+            // Explicit UTF-8 — Windows JVM default is windows-1252 which mojibakes
+            // em-dashes (—) and × in lecture markdown and ships them malformed.
+            mdPath.readText(Charsets.UTF_8)
         } catch (e: Exception) {
             System.err.println("[${idx + 1}/${docs.size}] read failed: $mdPath — ${e.message?.take(120)}")
             failedDocs++
@@ -235,8 +237,10 @@ internal fun runClaudeCardGen(prompt: String, model: String, json: Json): List<C
             // Otherwise the CLI waits ~3s for piped stdin before proceeding.
             .redirectInput(ProcessBuilder.Redirect.from(java.io.File(if (isWindows()) "NUL" else "/dev/null")))
         val process = pb.start()
-        val stdout = process.inputStream.bufferedReader().readText()
-        val stderr = process.errorStream.bufferedReader().readText()
+        // Explicit UTF-8 on both streams — Windows JVM defaults to windows-1252
+        // which mojibakes Romanian diacritics + em-dashes + math glyphs.
+        val stdout = process.inputStream.bufferedReader(Charsets.UTF_8).readText()
+        val stderr = process.errorStream.bufferedReader(Charsets.UTF_8).readText()
         val exit = process.waitFor()
         if (exit != 0) {
             System.err.println("  claude exit=$exit stderr=${stderr.take(200)}")
