@@ -490,6 +490,11 @@ function FooterMessage({ message }: { message: string }) {
       break;
     }
   }
+  // tspan textContent concatenates without a separator — pad line1 so the
+  // last word of line1 stays separated from the first word of line2.
+  if (line2) {
+    line1 = line1 + " ";
+  }
   return (
     <AnimatePresence initial={false}>
       <motion.text
