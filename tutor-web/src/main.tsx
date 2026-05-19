@@ -7,6 +7,7 @@ import { App } from "./App";
 import { TrustSettings } from "./components/TrustSettings";
 import { TasksScreen } from "./components/TasksScreen";
 import { FsrsReview } from "./components/FsrsReview";
+import { VizDemoPage } from "./components/viz/VizDemoPage";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -16,6 +17,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/tasks" element={<TasksScreen />} />
         <Route path="/settings/trust" element={<TrustSettings />} />
         <Route path="/review" element={<FsrsReview streak={0} />} />
+        <Route path="/viz-demo" element={<VizDemoPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
