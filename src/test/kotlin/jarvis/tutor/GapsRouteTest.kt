@@ -158,6 +158,59 @@ class GapsRouteTest {
     }
 
     @Test
+    fun `GET gaps nulls out taskId when underlying task was deleted (S-24)`(@TempDir tmp: Path) = testApplication {
+        var ctx: TutorContext? = null
+        application { freshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (userId, sid) = seed(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        // Seed one real task; the second gap will reference a phantom (never-inserted) id.
+        val realTaskId = TutorTypes.ulid()
+        val now = Instant.now()
+        TaskRepo(ctx!!.db).insert(Task(
+            id = realTaskId, userId = userId, subject = "PA", title = "real-task",
+            deadline = now.plusSeconds(86400),
+            problemRef = ContentRef("user", "p.pdf", "x"),
+            conceptRefs = emptyList(),
+            rubricRef = ContentRef("user", "p.pdf", "x"),
+            scratchpad = null, submission = null, grade = null,
+            cardRefs = emptyList(),
+            status = TaskStatus.ACTIVE,
+            createdAt = now, updatedAt = now,
+        ))
+        // Gap A: bound to the real task — taskId should survive the response.
+        val rA = client.post("/api/v1/gap") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"topic":"alive","type":"CONCEPT","trigger":"EXPLICIT_ASK","content":"x","taskId":"$realTaskId"}""")
+        }
+        assertEquals(HttpStatusCode.Created, rA.status, rA.bodyAsText())
+        // Gap B: bound to a phantom task id — taskId must come back null.
+        val phantomTaskId = TutorTypes.ulid()
+        val rB = client.post("/api/v1/gap") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"topic":"dangling","type":"CONCEPT","trigger":"EXPLICIT_ASK","content":"x","taskId":"$phantomTaskId"}""")
+        }
+        assertEquals(HttpStatusCode.Created, rB.status, rB.bodyAsText())
+        val r = client.get("/api/v1/gaps") { cookie("jarvis_session", sid) }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        // Real-task gap keeps its taskId.
+        assertTrue(body.contains("\"topic\":\"alive\""), "alive gap missing: $body")
+        assertTrue(body.contains("\"taskId\":\"$realTaskId\""), "alive taskId stripped: $body")
+        // Phantom-task gap has taskId nulled.
+        assertTrue(body.contains("\"topic\":\"dangling\""), "dangling gap missing: $body")
+        assertTrue(body.contains("\"taskId\":null"), "dangling taskId not nulled (S-24 regressed): $body")
+        // Sanity: the literal phantom id MUST NOT appear in the response.
+        assertTrue(!body.contains(phantomTaskId), "phantom taskId leaked into response: $body")
+    }
+
+    @Test
     fun `POST gap with similar topic from different task bumps reusedCount`(@TempDir tmp: Path) = testApplication {
         var ctx: TutorContext? = null
         application { freshTutor(tmp); ctx = attributes[TutorContextKey] }

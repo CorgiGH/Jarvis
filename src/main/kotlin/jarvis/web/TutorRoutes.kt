@@ -1296,9 +1296,16 @@ fun Application.installTutorRoutes() {
             val taskId = call.request.queryParameters["taskId"]
             val repo = jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir)
             val gaps = if (taskId != null) repo.listForTask(userId, taskId) else repo.listForUser(userId)
+            // S-24 fix: gap.taskId may point to a task that's since been deleted.
+            // Null it out so the ledger UI renders the row as non-clickable
+            // (KnowledgeLedger.tsx already gates the button on g.taskId != null)
+            // instead of navigating to /?taskId=DELETED and 404ing on /prep.
+            val knownTaskIds = TaskRepo(ctx.db).listForUser(userId).mapTo(mutableSetOf()) { it.id }
             call.respond(HttpStatusCode.OK, ApiGapsList(gaps.map { g ->
                 ApiGapView(
-                    id = g.id, taskId = g.taskId, topic = g.topic, language = g.language,
+                    id = g.id,
+                    taskId = g.taskId?.takeIf { it in knownTaskIds },
+                    topic = g.topic, language = g.language,
                     type = g.type.name, trigger = g.trigger.name,
                     content = g.content, exampleCode = g.exampleCode, sourceCitation = g.sourceCitation,
                     resolvedBy = g.resolvedBy?.name, reusedCount = g.reusedCount,
@@ -1599,8 +1606,10 @@ fun Application.installTutorRoutes() {
                 if (req.grade !in 1..4) {
                     call.respond(HttpStatusCode.BadRequest, "grade must be 1..4"); return@csrfProtect
                 }
-                val card = jarvis.tutor.FsrsCardRepo(ctx.db).findDueForUser(userId, java.time.Instant.MAX)
-                    .firstOrNull { it.id == cardId }
+                // Previously: findDueForUser(userId, Instant.MAX) — used as a hack
+                // to bypass the dueAt filter and look up by id. SQLite's timestamp
+                // serializer overflows on Instant.MAX → uncaught 500. Use findById.
+                val card = jarvis.tutor.FsrsCardRepo(ctx.db).findById(cardId, userId)
                     ?: run { call.respond(HttpStatusCode.NotFound, "card not found"); return@csrfProtect }
                 val now = java.time.Instant.now()
                 val elapsed = java.time.Duration.between(card.state.lastReviewedAt, now).toMinutes() / (60.0 * 24.0)
@@ -1637,7 +1646,7 @@ fun Application.installTutorRoutes() {
                 ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
             val f = jarvis.tutor.FsrsDueQueue.forecast(ctx.db, userId, java.time.Instant.now())
             call.respond(HttpStatusCode.OK, ApiFsrsForecastReply(
-                tomorrow = f.tomorrow, thisWeek = f.thisWeek, thisMonth = f.thisMonth,
+                dueNow = f.dueNow, tomorrow = f.tomorrow, thisWeek = f.thisWeek, thisMonth = f.thisMonth,
             ))
         }
 
@@ -2077,7 +2086,7 @@ private data class ApiFsrsGradeReply(
 )
 
 @Serializable
-private data class ApiFsrsForecastReply(val tomorrow: Int, val thisWeek: Int, val thisMonth: Int)
+private data class ApiFsrsForecastReply(val dueNow: Int, val tomorrow: Int, val thisWeek: Int, val thisMonth: Int)
 
 /**
  * Wires the Tutor Layer A persistence + ledger context onto the running

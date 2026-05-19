@@ -50,4 +50,16 @@ class FsrsDueQueueTest {
         assertTrue(f.tomorrow >= 1)
         assertTrue(f.thisWeek >= 1)
     }
+
+    @Test
+    fun `forecast dueNow counts only cards past due as of now`(@TempDir tmp: Path) {
+        val db = freshDb(tmp)
+        val u = seedUserAndCards(db)
+        val now = Instant.now()
+        // seedUserAndCards: c1 due now-60s, c2 due now+1d.
+        val f = FsrsDueQueue.forecast(db, u, now)
+        assertEquals(1, f.dueNow)       // only c1 is past due
+        assertEquals(2, f.tomorrow)     // c1 + c2 both within 24h
+        assertEquals(2, f.thisMonth)
+    }
 }
