@@ -1606,8 +1606,10 @@ fun Application.installTutorRoutes() {
                 if (req.grade !in 1..4) {
                     call.respond(HttpStatusCode.BadRequest, "grade must be 1..4"); return@csrfProtect
                 }
-                val card = jarvis.tutor.FsrsCardRepo(ctx.db).findDueForUser(userId, java.time.Instant.MAX)
-                    .firstOrNull { it.id == cardId }
+                // Previously: findDueForUser(userId, Instant.MAX) — used as a hack
+                // to bypass the dueAt filter and look up by id. SQLite's timestamp
+                // serializer overflows on Instant.MAX → uncaught 500. Use findById.
+                val card = jarvis.tutor.FsrsCardRepo(ctx.db).findById(cardId, userId)
                     ?: run { call.respond(HttpStatusCode.NotFound, "card not found"); return@csrfProtect }
                 val now = java.time.Instant.now()
                 val elapsed = java.time.Duration.between(card.state.lastReviewedAt, now).toMinutes() / (60.0 * 24.0)

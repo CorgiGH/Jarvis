@@ -67,6 +67,13 @@ class FsrsCardRepo(private val db: Database) {
             .map { it.toCard() }
     }
 
+    /** Lookup by card id, scoped to user. Used by the grade route. */
+    fun findById(cardId: String, userId: String): TutorCard? = transaction(db) {
+        FsrsCardsTable.selectAll()
+            .where { (FsrsCardsTable.id eq cardId) and (FsrsCardsTable.userId eq userId) }
+            .singleOrNull()?.toCard()
+    }
+
     private fun ResultRow.toCard() = TutorCard(
         id = this[FsrsCardsTable.id],
         userId = this[FsrsCardsTable.userId],
