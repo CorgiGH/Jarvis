@@ -12,11 +12,17 @@ import { recordTelemetry } from "./lib/telemetry";
 const LAST_TASK_KEY = "jarvis.lastTaskId";
 
 /** Bootstrap a tutor session via /api/v1/tutor/auto-session — sets
- *  jarvis_session + csrf cookies if missing. Idempotent. */
+ *  jarvis_session + csrf cookies if missing. Idempotent server-side.
+ *
+ *  S-30 fix: the prior early-exit on `if (csrf) return;` was unsound. The
+ *  csrf cookie is non-httpOnly (visible to JS) but jarvis_session is
+ *  httpOnly. If the server-side session expired in the DB while the csrf
+ *  cookie was still cached client-side, the early-exit skipped /auto-session
+ *  and the first /api/v1/last-task GET hit with a dead session → 401.
+ *  Always call /auto-session; the server is idempotent (returns OK without
+ *  rotating when session+csrf are both valid). */
 async function ensureTutorSession(): Promise<void> {
   try {
-    const csrf = document.cookie.match(/(?:^|;\s*)csrf=([^;]+)/)?.[1];
-    if (csrf) return;
     await fetch("/api/v1/tutor/auto-session", { credentials: "include" });
   } catch (_) {}
 }

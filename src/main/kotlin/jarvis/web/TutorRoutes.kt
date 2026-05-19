@@ -1296,9 +1296,16 @@ fun Application.installTutorRoutes() {
             val taskId = call.request.queryParameters["taskId"]
             val repo = jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir)
             val gaps = if (taskId != null) repo.listForTask(userId, taskId) else repo.listForUser(userId)
+            // S-24 fix: gap.taskId may point to a task that's since been deleted.
+            // Null it out so the ledger UI renders the row as non-clickable
+            // (KnowledgeLedger.tsx already gates the button on g.taskId != null)
+            // instead of navigating to /?taskId=DELETED and 404ing on /prep.
+            val knownTaskIds = TaskRepo(ctx.db).listForUser(userId).mapTo(mutableSetOf()) { it.id }
             call.respond(HttpStatusCode.OK, ApiGapsList(gaps.map { g ->
                 ApiGapView(
-                    id = g.id, taskId = g.taskId, topic = g.topic, language = g.language,
+                    id = g.id,
+                    taskId = g.taskId?.takeIf { it in knownTaskIds },
+                    topic = g.topic, language = g.language,
                     type = g.type.name, trigger = g.trigger.name,
                     content = g.content, exampleCode = g.exampleCode, sourceCitation = g.sourceCitation,
                     resolvedBy = g.resolvedBy?.name, reusedCount = g.reusedCount,
