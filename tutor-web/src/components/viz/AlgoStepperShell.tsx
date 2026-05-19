@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -8,6 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+import { MotionConfig } from "motion/react";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
 
 export type Frame<S> = {
@@ -224,63 +226,72 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const descId = `${testIdPrefix}-desc`;
 
   return (
-    <div
-      role="group"
-      aria-labelledby={titleId}
-      data-testid={`${testIdPrefix}-root`}
-      style={{
-        background: PAPER,
-        border: `2px solid ${INK}`,
-        padding: 20,
-        display: "grid",
-        gridTemplateColumns: "1fr 260px",
-        gap: 24,
-        fontFamily: FONT_FAMILY,
-        color: INK,
-        maxWidth: 1100,
-      }}
-    >
-      <svg
-        viewBox="0 0 480 360"
-        preserveAspectRatio="xMidYMid meet"
-        role="img"
-        aria-labelledby={`${titleId} ${descId}`}
-        tabIndex={0}
-        onKeyDown={onKey}
-        className="algo-stepper-shell-svg"
-        style={{
-          background: "#fff",
-          outline: `2px solid transparent`,
-          outlineOffset: 2,
-          width: "100%",
-          height: "auto",
-          border: `1px solid ${INK}`,
-        }}
-        onFocus={(e) => {
-          e.currentTarget.style.outline = `2px solid ${ACCENT}`;
-        }}
-        onBlur={(e) => {
-          e.currentTarget.style.outline = `2px solid transparent`;
-        }}
-      >
-        <style>{`
-          @keyframes algoStepperFadeIn {
-            from { opacity: 0; }
-            to { opacity: var(--algo-stepper-target-opacity, 1); }
+    <Fragment>
+      <style>{`
+        .algo-stepper-shell-wrapper {
+          background: ${PAPER};
+          border: 2px solid ${INK};
+          padding: 20px;
+          display: grid;
+          grid-template-columns: 1fr 260px;
+          gap: 24px;
+          font-family: ${FONT_FAMILY};
+          color: ${INK};
+          max-width: 1100px;
+        }
+        @media (max-width: 720px) {
+          .algo-stepper-shell-wrapper {
+            grid-template-columns: 1fr;
           }
+        }
+        @keyframes algoStepperFadeIn {
+          from { opacity: 0; }
+          to { opacity: var(--algo-stepper-target-opacity, 1); }
+        }
+        .algo-stepper-shell-svg * {
+          animation: algoStepperFadeIn 350ms ease-out;
+        }
+        @media (prefers-reduced-motion: reduce) {
           .algo-stepper-shell-svg * {
-            animation: algoStepperFadeIn 350ms ease-out;
+            animation: none;
           }
-          @media (prefers-reduced-motion: reduce) {
-            .algo-stepper-shell-svg * {
-              animation: none;
-            }
-          }
-        `}</style>
-        <title id={titleId}>{title}</title>
-        <desc id={descId}>{desc}</desc>
-        {currentFrame && renderFrame(currentFrame, idx)}
-      </svg>
+        }
+      `}</style>
+      <div
+        role="group"
+        aria-labelledby={titleId}
+        data-testid={`${testIdPrefix}-root`}
+        className="algo-stepper-shell-wrapper"
+      >
+        <MotionConfig reducedMotion="user">
+          <svg
+            viewBox="0 0 480 360"
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-labelledby={`${titleId} ${descId}`}
+            tabIndex={0}
+            onKeyDown={onKey}
+            className="algo-stepper-shell-svg"
+            style={{
+              background: "#fff",
+              outline: `2px solid transparent`,
+              outlineOffset: 2,
+              width: "100%",
+              height: "auto",
+              border: `1px solid ${INK}`,
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.outline = `2px solid ${ACCENT}`;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.outline = `2px solid transparent`;
+            }}
+          >
+            <title id={titleId}>{title}</title>
+            <desc id={descId}>{desc}</desc>
+            {currentFrame && renderFrame(currentFrame, idx)}
+          </svg>
+        </MotionConfig>
       <div
         data-testid={`${testIdPrefix}-controls`}
         style={{ display: "flex", flexDirection: "column", gap: 14, position: "relative" }}
@@ -330,6 +341,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             onClick={() => stepBy(-1)}
             disabled={predictionLocked || idx === 0}
             data-testid={`${testIdPrefix}-step-back`}
+            aria-label="Step back one frame"
             style={brutalistBtn(false, predictionLocked || idx === 0)}
           >
             ◀
@@ -338,6 +350,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             onClick={() => stepBy(1)}
             disabled={predictionLocked || idx === lastIdx}
             data-testid={`${testIdPrefix}-step-fwd`}
+            aria-label="Step forward one frame"
             style={brutalistBtn(false, predictionLocked || idx === lastIdx)}
           >
             ▶
@@ -345,6 +358,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           <button
             onClick={reset}
             data-testid={`${testIdPrefix}-reset`}
+            aria-label="Reset to first frame"
             style={brutalistBtn(false, false)}
           >
             reset
@@ -352,6 +366,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           <button
             onClick={onShareClick}
             data-testid={`${testIdPrefix}-share`}
+            aria-label="Copy share link to current frame"
             style={brutalistBtn(false, false)}
           >
             🔗 share
@@ -430,7 +445,8 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           {currentFrame?.aria ?? ""}
         </div>
       </div>
-    </div>
+      </div>
+    </Fragment>
   );
 }
 
