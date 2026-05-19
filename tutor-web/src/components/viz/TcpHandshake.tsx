@@ -115,7 +115,7 @@ function buildFrames(): Frame<State>[] {
         message:
           "INIT. Server LISTEN with backlog (capacity 4). Client CLOSED. About to dial.",
       },
-      "Frame 0: INIT. Client CLOSED, server LISTEN."
+      "INIT. Client CLOSED, server LISTEN."
     )
   );
 
@@ -142,11 +142,13 @@ function buildFrames(): Frame<State>[] {
         attackerActive: false,
         message: `Client → Server: SYN seq=${ISN_CLIENT}. ISN is a random 32-bit integer, not 0.`,
       },
-      "Frame 1: client sends SYN."
+      "client sends SYN."
     )
   );
 
-  // F2 — server receives SYN, allocates backlog slot
+  // F2 — server receives SYN, allocates backlog slot.
+  // Keep the SYN arrow visible so the user sees the message that just arrived;
+  // the new backlog slot animates in alongside.
   frames.push(
     mk(
       {
@@ -154,7 +156,16 @@ function buildFrames(): Frame<State>[] {
         phase: "NORMAL",
         clientState: "SYN_SENT",
         serverState: "SYN_RCVD",
-        inFlight: [],
+        inFlight: [
+          {
+            id: "n-syn",
+            from: "CLIENT",
+            to: "SERVER",
+            kind: "SYN",
+            seq: ISN_CLIENT,
+            y: MSG_TOP,
+          },
+        ],
         backlog: setBacklogSlot(EMPTY_BACKLOG, 0, {
           src: "client",
           isn: ISN_CLIENT,
@@ -167,7 +178,7 @@ function buildFrames(): Frame<State>[] {
           ISN_CLIENT +
           "}. State = SYN_RCVD.",
       },
-      "Frame 2: server allocates backlog slot."
+      "server allocates backlog slot."
     )
   );
 
@@ -199,11 +210,12 @@ function buildFrames(): Frame<State>[] {
         attackerActive: false,
         message: `Server → Client: SYN-ACK seq=${ISN_SERVER} ack=${ISN_CLIENT + 1}. Server picks its own random ISN.`,
       },
-      "Frame 3: server sends SYN-ACK."
+      "server sends SYN-ACK."
     )
   );
 
-  // F4 — client receives SYN-ACK → ESTABLISHED on client side
+  // F4 — client receives SYN-ACK → ESTABLISHED on client side.
+  // Keep the SYN-ACK arrow visible to show what the client just validated.
   frames.push(
     mk(
       {
@@ -211,7 +223,17 @@ function buildFrames(): Frame<State>[] {
         phase: "NORMAL",
         clientState: "ESTABLISHED",
         serverState: "SYN_RCVD",
-        inFlight: [],
+        inFlight: [
+          {
+            id: "n-synack",
+            from: "SERVER",
+            to: "CLIENT",
+            kind: "SYN-ACK",
+            seq: ISN_SERVER,
+            ack: ISN_CLIENT + 1,
+            y: MSG_TOP + MSG_ROW_H,
+          },
+        ],
         backlog: setBacklogSlot(EMPTY_BACKLOG, 0, {
           src: "client",
           isn: ISN_CLIENT,
@@ -224,7 +246,7 @@ function buildFrames(): Frame<State>[] {
           (ISN_CLIENT + 1) +
           ". State = ESTABLISHED on client side.",
       },
-      "Frame 4: client moves to ESTABLISHED."
+      "client moves to ESTABLISHED."
     )
   );
 
@@ -256,11 +278,13 @@ function buildFrames(): Frame<State>[] {
         attackerActive: false,
         message: `Client → Server: ACK seq=${ISN_CLIENT + 1} ack=${ISN_SERVER + 1}.`,
       },
-      "Frame 5: client sends ACK."
+      "client sends ACK."
     )
   );
 
-  // F6 — server moves slot → accept queue, ESTABLISHED on both sides
+  // F6 — server moves slot → accept queue, ESTABLISHED on both sides.
+  // Keep the ACK arrow visible so the viewer can see the message that triggered
+  // the transition; backlog drains (slot moves to the accept queue, off-stage).
   frames.push(
     mk(
       {
@@ -268,14 +292,24 @@ function buildFrames(): Frame<State>[] {
         phase: "NORMAL",
         clientState: "ESTABLISHED",
         serverState: "ESTABLISHED",
-        inFlight: [],
+        inFlight: [
+          {
+            id: "n-ack",
+            from: "CLIENT",
+            to: "SERVER",
+            kind: "ACK",
+            seq: ISN_CLIENT + 1,
+            ack: ISN_SERVER + 1,
+            y: MSG_TOP + 2 * MSG_ROW_H,
+          },
+        ],
         backlog: EMPTY_BACKLOG,
         cookiesEnabled: false,
         attackerActive: false,
         message:
           "Server moves slot 1 to accept queue. Both ESTABLISHED. ISN randomization stops off-path attackers from guessing seq to inject data.",
       },
-      "Frame 6: both ESTABLISHED."
+      "both ESTABLISHED."
     )
   );
 
@@ -305,7 +339,7 @@ function buildFrames(): Frame<State>[] {
         message:
           "ATTACKER appears. Sends SYN with spoofed src=fake_1. Server can't tell it's fake.",
       },
-      "Frame 7: SYN flood begins."
+      "SYN flood begins."
     )
   );
 
@@ -328,7 +362,7 @@ function buildFrames(): Frame<State>[] {
         message:
           "Server allocates slot 1 = {src=fake_1, ...}. Sends SYN-ACK into the void — fake_1 doesn't exist so no ACK comes back.",
       },
-      "Frame 8: slot 1 filled by spoofed SYN."
+      "slot 1 filled by spoofed SYN."
     )
   );
 
@@ -357,7 +391,7 @@ function buildFrames(): Frame<State>[] {
           message:
             "Attacker SYN spoofed src=fake_2 → slot 2 filled. Backlog growing.",
         },
-        "Frame 9: slot 2 filled."
+        "slot 2 filled."
       )
     );
   }
@@ -384,7 +418,7 @@ function buildFrames(): Frame<State>[] {
           message:
             "Attacker SYN spoofed src=fake_3 → slot 3 filled. One slot remaining.",
         },
-        "Frame 10: slot 3 filled."
+        "slot 3 filled."
       )
     );
   }
@@ -411,7 +445,7 @@ function buildFrames(): Frame<State>[] {
           message:
             "⚠ BACKLOG FULL. Server cannot accept any new SYNs until these half-open connections time out.",
         },
-        "Frame 11: backlog full."
+        "backlog full."
       )
     );
   }
@@ -448,7 +482,7 @@ function buildFrames(): Frame<State>[] {
           message:
             "Legitimate client SYN arrives → backlog full → SERVER DROPS. Connection refused. Denial of service.",
         },
-        "Frame 12: legitimate SYN dropped."
+        "legitimate SYN dropped."
       )
     );
   }
@@ -469,7 +503,7 @@ function buildFrames(): Frame<State>[] {
         message:
           "SYN COOKIES ON. Server stops allocating backlog state. Cookie = hash(src_ip, dst_ip, t, secret) embedded in SYN-ACK seq.",
       },
-      "Frame 13: SYN cookies enabled."
+      "SYN cookies enabled."
     )
   );
 
@@ -508,7 +542,7 @@ function buildFrames(): Frame<State>[] {
         message:
           "Attacker SYN → server SYN-ACK with seq=cookie. NO backlog allocated. Reply goes to fake_x — attacker never hears it, no ACK arrives.",
       },
-      "Frame 14: cookie reply to spoofed src, no state."
+      "cookie reply to spoofed src, no state."
     )
   );
 
@@ -554,7 +588,7 @@ function buildFrames(): Frame<State>[] {
         message:
           "Legitimate client: ACK arrives. Server re-hashes → matches cookie → ESTABLISHED. Backlog never grew under attack.",
       },
-      "Frame 15: cookie verified, both ESTABLISHED."
+      "cookie verified, both ESTABLISHED."
     )
   );
 
@@ -573,7 +607,7 @@ function buildFrames(): Frame<State>[] {
         message:
           "Lesson: ISN randomization defeats seq-prediction injection. SYN cookies defeat backlog exhaustion. Defenses layer.",
       },
-      "Frame 16: summary."
+      "summary."
     )
   );
 
@@ -717,12 +751,19 @@ function FooterMessage({ message }: { message: string }) {
       break;
     }
   }
+  // SVG <tspan>s concatenate without a separator when serialized as
+  // textContent (and when read by screen readers), so the last word of line1
+  // would butt against the first word of line2 ("randomISN" instead of
+  // "random ISN"). Pad line1 with a trailing space whenever there's a line2.
+  if (line2) {
+    line1 = line1 + " ";
+  }
   return (
-    <AnimatePresence initial={false}>
+    <AnimatePresence initial={false} mode="wait">
       <motion.text
         key={message}
         x={16}
-        y={FOOTER_Y - 12}
+        y={FOOTER_Y + 14}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fontWeight={700}
@@ -730,7 +771,7 @@ function FooterMessage({ message }: { message: string }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.3 }}
+        transition={{ duration: 0.18 }}
       >
         <tspan x={16} dy={0}>
           {line1}
@@ -797,8 +838,11 @@ function renderFrame(frame: Frame<State>): ReactNode {
         </marker>
       </defs>
 
-      {/* Phase indicator (top) — cross-fade as phase changes */}
-      <AnimatePresence initial={false}>
+      {/* Phase indicator (top) — single static title that updates on phase
+          change. AnimatePresence with mode="wait" guarantees the previous title
+          fully exits before the next one enters, so two titles never overlap at
+          mid-opacity (previous bug: residual stacked titles). */}
+      <AnimatePresence initial={false} mode="wait">
         <motion.text
           key={`phase-${phase}`}
           x={16}
@@ -810,7 +854,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
           initial={{ opacity: 0 }}
           animate={{ opacity: 0.75 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.18 }}
         >
           TCP HANDSHAKE —{" "}
           {phase === "NORMAL"
@@ -819,17 +863,19 @@ function renderFrame(frame: Frame<State>): ReactNode {
             ? "SYN FLOOD ATTACK"
             : phase === "COOKIES"
             ? "SYN COOKIES DEFENSE"
-            : "summary"}
+            : "SUMMARY"}
         </motion.text>
       </AnimatePresence>
 
-      {/* CLIENT actor column */}
+      {/* CLIENT actor column. On the SUMMARY frame both endpoints are
+          ESTABLISHED (the "winning" state), so the column flips to accent fill
+          to make the victory visible at a glance. */}
       <rect
         x={CLIENT_X - 32}
         y={ACTOR_LABEL_BAR_Y}
         width={64}
         height={ACTOR_LABEL_BAR_H}
-        fill={PAPER}
+        fill={phase === "SUMMARY" ? ACCENT : PAPER}
         stroke={INK}
         strokeWidth={1}
       />
@@ -867,13 +913,13 @@ function renderFrame(frame: Frame<State>): ReactNode {
         {formatStateLabel(clientState)}
       </FadeText>
 
-      {/* SERVER actor column */}
+      {/* SERVER actor column. Same SUMMARY-frame accent treatment as CLIENT. */}
       <rect
         x={SERVER_X - 32}
         y={ACTOR_LABEL_BAR_Y}
         width={64}
         height={ACTOR_LABEL_BAR_H}
-        fill={PAPER}
+        fill={phase === "SUMMARY" ? ACCENT : PAPER}
         stroke={INK}
         strokeWidth={1}
       />
@@ -911,7 +957,10 @@ function renderFrame(frame: Frame<State>): ReactNode {
         {formatStateLabel(serverState)}
       </FadeText>
 
-      {/* ATTACKER actor column — only visible when active */}
+      {/* ATTACKER actor column — only visible when active. On the SUMMARY
+          frame the attack is defeated by both defenses, so the column drops
+          its accent fill and gets a strikethrough across the label (mutual
+          ESTABLISHED is the winning state, ATTACKER is the losing state). */}
       <AnimatePresence>
         {attackerActive && (
           <PopIn key="attacker-col" durationMs={350}>
@@ -920,7 +969,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
               y={ACTOR_LABEL_BAR_Y}
               width={72}
               height={ACTOR_LABEL_BAR_H}
-              fill={ACCENT}
+              fill={phase === "SUMMARY" ? PAPER : ACCENT}
               stroke={INK}
               strokeWidth={1}
             />
@@ -932,9 +981,24 @@ function renderFrame(frame: Frame<State>): ReactNode {
               fontSize={11}
               fontWeight={700}
               fill={INK}
+              opacity={phase === "SUMMARY" ? 0.45 : 1}
+              textDecoration={phase === "SUMMARY" ? "line-through" : undefined}
             >
               ATTACKER
             </text>
+            {phase === "SUMMARY" && (
+              <text
+                x={ATTACKER_X}
+                y={ACTOR_LABEL_BAR_Y + ACTOR_LABEL_BAR_H + 12}
+                textAnchor="middle"
+                fontFamily={FONT_FAMILY}
+                fontSize={8}
+                fontWeight={700}
+                fill={INK}
+              >
+                DEFEATED
+              </text>
+            )}
             <line
               x1={ATTACKER_X}
               y1={LIFELINE_TOP}
@@ -942,7 +1006,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
               y2={LIFELINE_BOTTOM}
               stroke={INK}
               strokeWidth={1}
-              opacity={0.4}
+              opacity={phase === "SUMMARY" ? 0.15 : 0.4}
               strokeDasharray="2 2"
             />
           </PopIn>
