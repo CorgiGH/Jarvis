@@ -4,12 +4,19 @@ import { TutorWorkspace } from "./components/TutorWorkspace";
 import { TaskQuickStart } from "./components/TaskQuickStart";
 import { ActiveTaskDashboard } from "./components/ActiveTaskDashboard";
 import { FsrsReview } from "./components/FsrsReview";
+import { TasksScreen } from "./components/TasksScreen";
+import { TrustSettings } from "./components/TrustSettings";
 import { DaemonHealthPill } from "./components/DaemonHealthPill";
 import { KnowledgeLedger } from "./components/KnowledgeLedger";
 import { jarvisFetch } from "./lib/api";
 import { recordTelemetry } from "./lib/telemetry";
 
 const LAST_TASK_KEY = "jarvis.lastTaskId";
+
+// Daily review batch cap. The nav count shows min(dueNow, cap) — surfacing the
+// raw FSRS backlog (can be 800+ right after a corpus seed) reads as a cram pile,
+// the metacognitive illusion spaced repetition exists to fight. One day's ration.
+const REVIEW_DAILY_CAP = 20;
 
 /** Bootstrap a tutor session via /api/v1/tutor/auto-session — sets
  *  jarvis_session + csrf cookies if missing. Idempotent server-side.
@@ -85,6 +92,9 @@ export function App() {
   const restoredOnce = useRef(false);
   useEffect(() => {
     if (restoredOnce.current) return;
+    // Only restore the workspace taskId on the workspace route. On /tasks etc.
+    // a setParams() here would graft ?taskId= onto a non-workspace URL.
+    if (here.pathname !== "/") return;
     if (explicitTaskId) {
       restoredOnce.current = true;
       try { localStorage.setItem(LAST_TASK_KEY, explicitTaskId); } catch (_) {}
@@ -103,7 +113,7 @@ export function App() {
         setParams({ taskId: last }, { replace: true });
       }
     } catch (_) {}
-  }, [explicitTaskId, pickMode, setParams, serverLastTask, serverLastTaskLoaded]);
+  }, [explicitTaskId, pickMode, setParams, serverLastTask, serverLastTaskLoaded, here.pathname]);
 
   // Persist subsequent explicit taskId changes to localStorage so cold-reload
   // returns here. Not in the cold-start effect — that runs once. This fires
@@ -114,6 +124,22 @@ export function App() {
       try { localStorage.setItem(LAST_TASK_KEY, explicitTaskId); } catch (_) {}
     }
   }, [explicitTaskId]);
+
+  // FSRS due count for the nav-link wayfinding indicator. Refetched on route
+  // change so the count drops after a review session. Gated on sessionReady —
+  // /api/v1/fsrs/forecast needs the jarvis_session cookie.
+  const [reviewDue, setReviewDue] = useState(0);
+  useEffect(() => {
+    if (!sessionReady) return;
+    let cancelled = false;
+    jarvisFetch("/api/v1/fsrs/forecast")
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: { dueNow?: number } | null) => {
+        if (!cancelled) setReviewDue(d?.dueNow ?? 0);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [sessionReady, here.pathname]);
 
   // POST cookie when explicit task id changes so other devices sync.
   // Gate on sessionReady: CSRF token only exists after ensureTutorSession()
@@ -195,9 +221,17 @@ export function App() {
           <Link
             to="/review"
             aria-current={here.pathname === "/review" ? "page" : undefined}
+            aria-label={reviewDue > 0
+              ? `review, ${Math.min(reviewDue, REVIEW_DAILY_CAP)} cards due`
+              : "review"}
             className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
           >
             review
+            {reviewDue > 0 && (
+              <span aria-hidden="true" className="opacity-70 font-bold">
+                {" · "}{Math.min(reviewDue, REVIEW_DAILY_CAP)}
+              </span>
+            )}
           </Link>
           <Link
             to="/settings/trust"
@@ -241,14 +275,18 @@ export function App() {
           couldn't open last task ({taskId}) — pick another below
         </div>
       )}
-      <main className="flex-1 min-h-0 overflow-hidden bg-page-bg">
+      <main className="flex-1 min-h-0 overflow-hidden overflow-y-auto bg-page-bg">
         {here.pathname === "/review"
           ? <FsrsReview streak={0} />
-          : !sessionReady
-            ? <div className="p-6 font-mono text-sm text-page-fg/80">setting up tutor session…</div>
-            : showQuickStart
-              ? <ActiveTaskDashboard />
-              : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
+          : here.pathname === "/tasks"
+            ? <TasksScreen />
+            : here.pathname === "/settings/trust"
+              ? <TrustSettings />
+              : !sessionReady
+                ? <div className="p-6 font-mono text-sm text-page-fg/80">setting up tutor session…</div>
+                : showQuickStart
+                  ? <ActiveTaskDashboard />
+                  : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
       </main>
       {ledgerOpen && <KnowledgeLedger onClose={() => setLedgerOpen(false)} />}
     </div>

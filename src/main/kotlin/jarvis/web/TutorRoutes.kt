@@ -1646,7 +1646,7 @@ fun Application.installTutorRoutes() {
                 ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@get }
             val f = jarvis.tutor.FsrsDueQueue.forecast(ctx.db, userId, java.time.Instant.now())
             call.respond(HttpStatusCode.OK, ApiFsrsForecastReply(
-                tomorrow = f.tomorrow, thisWeek = f.thisWeek, thisMonth = f.thisMonth,
+                dueNow = f.dueNow, tomorrow = f.tomorrow, thisWeek = f.thisWeek, thisMonth = f.thisMonth,
             ))
         }
 
@@ -2086,7 +2086,7 @@ private data class ApiFsrsGradeReply(
 )
 
 @Serializable
-private data class ApiFsrsForecastReply(val tomorrow: Int, val thisWeek: Int, val thisMonth: Int)
+private data class ApiFsrsForecastReply(val dueNow: Int, val tomorrow: Int, val thisWeek: Int, val thisMonth: Int)
 
 /**
  * Wires the Tutor Layer A persistence + ledger context onto the running

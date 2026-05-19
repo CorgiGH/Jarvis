@@ -33,6 +33,34 @@ const GRADE_LABELS: Record<Grade, string> = {
   4: "EASY ~12d",
 };
 
+// In-progress review session persisted to localStorage so navigating away
+// (review → tasks → review) resumes mid-queue instead of re-fetching from
+// card 1. Scoped to one calendar day — a stale overnight session re-fetches.
+const SESSION_KEY = "jarvis.review.session";
+interface SavedSession { cards: FsrsCardView[]; index: number; day: string; }
+const todayStr = (): string => new Date().toISOString().slice(0, 10);
+
+function loadSession(): SavedSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as SavedSession;
+    if (s.day !== todayStr() || !Array.isArray(s.cards) || s.index >= s.cards.length) {
+      return null;
+    }
+    return s;
+  } catch { return null; }
+}
+function saveSession(cards: FsrsCardView[], index: number): void {
+  try {
+    if (index >= cards.length) { localStorage.removeItem(SESSION_KEY); return; }
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ cards, index, day: todayStr() }));
+  } catch { /* quota / disabled — non-fatal, session just won't resume */ }
+}
+function clearSession(): void {
+  try { localStorage.removeItem(SESSION_KEY); } catch { /* non-fatal */ }
+}
+
 export function FsrsReview({ streak }: Props) {
   const [cards, setCards] = useState<FsrsCardView[]>([]);
   const [index, setIndex] = useState(0);
@@ -44,6 +72,19 @@ export function FsrsReview({ streak }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    // Resume an in-progress session if one exists for today — skips the
+    // re-fetch so the user continues mid-queue. Forecast is still fetched
+    // (cheap, keeps the bottom strip current).
+    const saved = loadSession();
+    if (saved) {
+      setCards(saved.cards);
+      setIndex(saved.index);
+      setLoading(false);
+      getForecast()
+        .then(fc => { if (!cancelled) setForecast(fc); })
+        .catch(() => { /* forecast strip just stays hidden */ });
+      return () => { cancelled = true; };
+    }
     setLoading(true);
     Promise.all([getDue(50), getForecast()])
       .then(([dueCards, fc]) => {
@@ -68,14 +109,17 @@ export function FsrsReview({ streak }: Props) {
     setGrading(true);
     try {
       await gradeCard(currentCard.id, grade);
-      setIndex(prev => prev + 1);
+      const nextIndex = index + 1;
+      setIndex(nextIndex);
       setFlipped(false);
+      if (nextIndex >= cards.length) clearSession();
+      else saveSession(cards, nextIndex);
     } catch (_) {
       // silent — user can retry
     } finally {
       setGrading(false);
     }
-  }, [currentCard, grading]);
+  }, [currentCard, grading, index, cards]);
 
   return (
     <>
@@ -83,13 +127,13 @@ export function FsrsReview({ streak }: Props) {
       <div data-testid="fsrs-review" className="flex flex-col h-full font-mono bg-page-bg text-page-fg">
         <header
           data-testid="fsrs-header"
-          className="bg-panel-dark-bg text-panel-dark-fg px-4 py-3 flex items-center gap-4 border-b-4 border-accent tracking-widest font-bold text-sm"
+          className="bg-page-bg text-page-fg px-4 py-2 flex items-center gap-4 border-b-2 border-border-strong tracking-widest font-bold text-xs"
         >
-          <span>JARVIS · REVIEW</span>
+          <span>REVIEW</span>
           {!loading && !error && (
             <>
-              <span className="text-accent">{totalDue} DUE</span>
-              {streak > 0 && <span className="text-orange-400">🔥 {streak}-DAY STREAK</span>}
+              <span className="text-page-fg/70">{totalDue} DUE</span>
+              {streak > 0 && <span className="text-orange-500">{streak}-DAY STREAK</span>}
             </>
           )}
         </header>

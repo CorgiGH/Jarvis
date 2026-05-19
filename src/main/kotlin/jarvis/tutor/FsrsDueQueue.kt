@@ -8,7 +8,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.Duration
 import java.time.Instant
 
-data class FsrsForecast(val tomorrow: Int, val thisWeek: Int, val thisMonth: Int)
+data class FsrsForecast(val dueNow: Int, val tomorrow: Int, val thisWeek: Int, val thisMonth: Int)
 
 object FsrsDueQueue {
     fun due(db: Database, userId: String, asOf: Instant, limit: Int = 50): List<TutorCard> =
@@ -23,6 +23,7 @@ object FsrsDueQueue {
             .orderBy(FsrsCardsTable.dueAt, SortOrder.ASC)
             .toList()
         FsrsForecast(
+            dueNow = rows.count { it[FsrsCardsTable.dueAt] <= now },
             tomorrow = rows.count { it[FsrsCardsTable.dueAt] <= tomorrow },
             thisWeek = rows.count { it[FsrsCardsTable.dueAt] <= week },
             thisMonth = rows.size,
