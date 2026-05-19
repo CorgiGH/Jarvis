@@ -120,7 +120,9 @@ internal fun runSeedFsrs(args: List<String>) {
             println("[${idx + 1}/${docs.size}] $subj/${mdPath.fileName} SKIP (empty)")
             continue
         }
-        val content = raw.take(8000)
+        // Strip NUL bytes — they sneak in from PDF-extracted markdown and
+        // ProcessBuilder rejects them in command args ("invalid null character").
+        val content = raw.filter { it.code != 0 }.take(8000)
         val prompt = buildCardGenPrompt(content, subj, cardsPerDoc)
         val cards = runClaudeCardGen(prompt, model, json)
         if (cards == null || cards.isEmpty()) {
