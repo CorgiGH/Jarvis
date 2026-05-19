@@ -4,7 +4,7 @@ import jarvis.web.runWeb
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
-private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web | reindex | import-anki <subject> <path> | google-auth-bootstrap]
+private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web | reindex | import-anki <subject> <path> | google-auth-bootstrap | seed-fsrs [opts]]
 
   chat                       Start interactive chat REPL (default).
   logger                     Always-on activity logger (5-min interval).
@@ -16,6 +16,9 @@ private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | s
   reindex                    Embed any wiki entries not yet in the vector store.
   import-anki <subj> <apkg>  Import an Anki .apkg deck as concepts under archival/<subj>/.
   ingest-corpus              Build / refresh the knowledge graph from archival/ markdown.
+  seed-fsrs [opts]           Walk one or more corpus dirs and generate FSRS cards via
+                             the claude CLI (free OAuth, NOT paid API). Run
+                             'jarvis seed-fsrs --help' for the flag list.
   google-auth-bootstrap      One-time OAuth 2.0 consent flow — opens browser, writes
                              google-token.json. Run on your PC (needs a browser).
                              Reads client_secrets.json from GOOGLE_CREDS_PATH or
@@ -43,6 +46,7 @@ fun main(args: Array<String>) {
             )
         }
         "migrate-concept-refs" -> runMigrateConceptRefs()
+        "seed-fsrs" -> runSeedFsrs(args.drop(1).toList())
         "import-anki" -> {
             val subject = args.getOrNull(1)
             val path = args.getOrNull(2)
