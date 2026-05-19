@@ -22,6 +22,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.file.Files
 import java.nio.file.Path
@@ -56,6 +57,7 @@ internal fun runSeedFsrs(args: List<String>) {
     var limitDocs = Int.MAX_VALUE
     var dryRun = false
     var model = "haiku"
+    var skipSeeded = false
 
     var i = 0
     while (i < args.size) {
@@ -67,6 +69,7 @@ internal fun runSeedFsrs(args: List<String>) {
             "--limit" -> limitDocs = args[++i].toInt()
             "--dry-run" -> dryRun = true
             "--model" -> model = args[++i]
+            "--skip-seeded" -> skipSeeded = true
             "-h", "--help" -> { printSeedUsage(); return }
             else -> {
                 System.err.println("seed-fsrs: unknown arg '$a'")
@@ -93,7 +96,22 @@ internal fun runSeedFsrs(args: List<String>) {
     }
 
     val repo = FsrsCardRepo(db)
-    val docs = collectMarkdownFiles(corpusDirs).take(limitDocs)
+    val allDocs = collectMarkdownFiles(corpusDirs)
+    val docs = run {
+        val filtered = if (skipSeeded) {
+            val seededRefs = transaction(db) {
+                FsrsCardsTable.selectAll()
+                    .where { FsrsCardsTable.userId eq userId }
+                    .map { it[FsrsCardsTable.sourceRef] }
+                    .toSet()
+            }
+            val kept = filterUnseeded(allDocs, seededRefs, subjectOverride)
+            val skipped = allDocs.size - kept.size
+            println("[seed-fsrs] --skip-seeded: ${seededRefs.size} existing refs, dropped $skipped already-seeded docs")
+            kept
+        } else allDocs
+        filtered.take(limitDocs)
+    }
     if (docs.isEmpty()) {
         System.err.println("seed-fsrs: no .md files under ${corpusDirs.joinToString(", ")}")
         exitProcess(2)
@@ -186,8 +204,22 @@ private fun printSeedUsage() {
           --limit <n>           Cap total docs processed (useful for sanity passes)
           --model <alias>       Claude CLI model alias (default: haiku)
           --dry-run             Generate + print, do not insert
+          --skip-seeded         Skip docs whose source_ref already in DB (idempotent re-seed)
         """.trimIndent(),
     )
+}
+
+/** Filter docs whose derived source_ref ("SUBJ:filename" truncated to 32 chars)
+ *  is already in [seededRefs]. Mirrors the sourceRef construction at the insert
+ *  site (line ~145) so the filter matches what's actually persisted. */
+internal fun filterUnseeded(
+    docs: List<Path>,
+    seededRefs: Set<String>,
+    subjectOverride: String?,
+): List<Path> = docs.filter { mdPath ->
+    val subj = subjectOverride ?: deriveSubject(mdPath)
+    val ref = "${subj}:${mdPath.fileName}".take(32)
+    ref !in seededRefs
 }
 
 private fun collectMarkdownFiles(dirs: List<Path>): List<Path> = dirs.flatMap { dir ->
@@ -226,18 +258,22 @@ $content
  *  uses Alex's OAuth session — no ANTHROPIC_API_KEY required. */
 internal fun runClaudeCardGen(prompt: String, model: String, json: Json): List<CardPair>? {
     return try {
+        // Pass prompt via STDIN (not arg). Romanian course markdown contains
+        // tokens like `-𝒂sau` that claude's arg-parser misreads as a CLI
+        // option ("unknown option '-𝒂sau'"). Stdin path skips arg-parsing
+        // entirely. Empty positional arg required so the CLI knows to read stdin.
         val pb = ProcessBuilder(
             "claude",
             "--print",
             "--output-format", "json",
             "--model", model,
             "--no-session-persistence",
-            prompt,
         ).redirectErrorStream(false)
-            // Otherwise the CLI waits ~3s for piped stdin before proceeding.
-            .redirectInput(ProcessBuilder.Redirect.from(java.io.File(if (isWindows()) "NUL" else "/dev/null")))
         val process = pb.start()
-        // Explicit UTF-8 on both streams — Windows JVM defaults to windows-1252
+        // Write prompt via UTF-8 to subprocess stdin, then close so claude knows
+        // input is complete. Without close() the CLI hangs waiting for EOF.
+        process.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(prompt) }
+        // Explicit UTF-8 on read streams — Windows JVM defaults to windows-1252
         // which mojibakes Romanian diacritics + em-dashes + math glyphs.
         val stdout = process.inputStream.bufferedReader(Charsets.UTF_8).readText()
         val stderr = process.errorStream.bufferedReader(Charsets.UTF_8).readText()
@@ -286,4 +322,3 @@ private fun innerText(obj: JsonObject): String? {
     return null
 }
 
-private fun isWindows(): Boolean = System.getProperty("os.name")?.lowercase()?.startsWith("windows") == true

@@ -2,10 +2,12 @@ package jarvis
 
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.Json
+import java.nio.file.Paths
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class FsrsSeedMainTest {
 
@@ -115,5 +117,43 @@ class FsrsSeedMainTest {
         val cards = extractCards(stdout, json)
         assertNotNull(cards)
         assertEquals(0, cards.size)
+    }
+
+    @Test
+    fun `filterUnseeded drops docs whose derived source_ref is in seeded set`() {
+        val docs = listOf(
+            Paths.get("tmp-md", "PA", "courses", "lecture11_en.md"),
+            Paths.get("tmp-md", "PA", "courses", "lecture12_en.md"),
+            Paths.get("tmp-md", "PS", "courses", "ps1.md"),
+            Paths.get("tmp-md", "PS", "courses", "ps2.md"),
+        )
+        val seeded = setOf("PA:lecture11_en.md", "PS:ps1.md")
+        val kept = filterUnseeded(docs, seeded, subjectOverride = null)
+        assertEquals(2, kept.size)
+        assertTrue(kept.any { it.fileName.toString() == "lecture12_en.md" })
+        assertTrue(kept.any { it.fileName.toString() == "ps2.md" })
+    }
+
+    @Test
+    fun `filterUnseeded keeps everything when seeded set is empty`() {
+        val docs = listOf(
+            Paths.get("tmp-md", "ALO", "courses", "alo_c01.md"),
+            Paths.get("tmp-md", "ALO", "courses", "alo_c02.md"),
+        )
+        val kept = filterUnseeded(docs, emptySet(), subjectOverride = null)
+        assertEquals(2, kept.size)
+    }
+
+    @Test
+    fun `filterUnseeded respects subjectOverride when deriving ref`() {
+        // Path doesn't contain a known subject segment — override decides.
+        val docs = listOf(
+            Paths.get("scratch", "notes", "doc1.md"),
+            Paths.get("scratch", "notes", "doc2.md"),
+        )
+        val seeded = setOf("XX:doc1.md")
+        val kept = filterUnseeded(docs, seeded, subjectOverride = "XX")
+        assertEquals(1, kept.size)
+        assertEquals("doc2.md", kept[0].fileName.toString())
     }
 }
