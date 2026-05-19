@@ -11,6 +11,7 @@ import {
 } from "react";
 import { MotionConfig } from "motion/react";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import { HatchDefs } from "./HatchDefs";
 
 export type Frame<S> = {
   state: S;
@@ -289,6 +290,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           >
             <title id={titleId}>{title}</title>
             <desc id={descId}>{desc}</desc>
+            <HatchDefs />
             {currentFrame && renderFrame(currentFrame, idx)}
           </svg>
         </MotionConfig>

@@ -16,3 +16,8 @@ export const FONT_SIZE_TINY = 9;
 export const FONT_SIZE_LABEL = 11;
 export const FONT_SIZE_BODY = 13;
 export const FONT_SIZE_VALUE = 18;
+
+// Hatch fills — V6 "hatching density for magnitude/category" (NOT opacity).
+// Reference via fill={HATCH_LIGHT}; the consuming SVG must render <HatchDefs/>.
+export const HATCH_LIGHT = "url(#hatch-light)";
+export const HATCH_DENSE = "url(#hatch-dense)";
