@@ -39,7 +39,9 @@ import jarvis.tutor.SensorPayload
 import jarvis.tutor.SensorRepo
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.SessionsTable
+import jarvis.tutor.AI_LITERACY_VERSION
 import jarvis.tutor.AiLiteracyConfirmationTable
+import jarvis.tutor.AiLiteracyRepo
 import jarvis.tutor.MagicLinkRepo
 import jarvis.tutor.MagicLinkTokensTable
 import jarvis.tutor.UserRepo
@@ -1874,6 +1876,27 @@ fun Application.installTutorRoutes() {
                 }
             }
         }
+
+        // Gate 2: AI-literacy confirmation.
+        // Records the authenticated user's acceptance of the AI-literacy notice
+        // (AI Act Art. 4). requireUser is OUTER (401 on no session) so a bare
+        // POST with no cookies short-circuits before the CSRF check. csrfProtect
+        // is INNER (403 on mismatch). /api/v1/me/ is whitelisted from the legacy
+        // jarvis_auth static gate in WebMain.kt — this route does its own auth.
+        post("/api/v1/me/ai-literacy/confirm") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: return@post call.respond(HttpStatusCode.InternalServerError, "no ctx")
+            requireUser { uid ->
+                call.csrfProtect {
+                    val body = runCatching {
+                        sensorJson.decodeFromString(ConfirmLiteracyBody.serializer(), call.receiveText())
+                    }.getOrNull()
+                    val lang = if (body?.lang == "en") "en" else "ro"
+                    AiLiteracyRepo(ctx.db).confirm(uid, AI_LITERACY_VERSION, lang)
+                    call.respond(HttpStatusCode.OK, """{"ok":true}""")
+                }
+            }
+        }
     }
 }
 
@@ -1882,6 +1905,10 @@ private val sensorJson = Json { ignoreUnknownKeys = true; encodeDefaults = true 
 // Gate 2: request body for POST /auth/request-link.
 @kotlinx.serialization.Serializable
 private data class RequestLinkBody(val email: String, val lang: String = "ro")
+
+// Gate 2: request body for POST /api/v1/me/ai-literacy/confirm.
+@kotlinx.serialization.Serializable
+private data class ConfirmLiteracyBody(val lang: String = "ro")
 
 /** RFC-5322 simplified: at least one non-whitespace/@ char, @, domain with dot. */
 private val EMAIL_REGEX = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")

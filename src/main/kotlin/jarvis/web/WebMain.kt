@@ -92,6 +92,7 @@ internal suspend fun runWeb() {
                 path.startsWith("/api/v1/effector/") ||
                 path.startsWith("/api/v1/grants") ||
                 path.startsWith("/api/v1/tasks") ||
+                path.startsWith("/api/v1/me/") ||
                 path == "/api/v1/tutor/auto-session" ||
                 path == "/api/v1/gateway/inbound") return@intercept
 
