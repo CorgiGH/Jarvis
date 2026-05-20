@@ -7,7 +7,6 @@ import kotlin.io.path.exists
 import kotlin.io.path.extension
 import kotlin.io.path.name
 import kotlin.io.path.readText
-import kotlin.streams.toList
 
 /** All authored content for one subject, loaded from disk. */
 data class LoadedSubject(
