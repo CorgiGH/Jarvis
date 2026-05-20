@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
-import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import { ACCENT, FONT_FAMILY, HATCH_CROSS, HATCH_DENSE, HATCH_LIGHT, INK, PAPER } from "./theme";
 import {
   AnimatePresence,
   DrawPath,
@@ -158,12 +158,26 @@ const TREE_LEVEL_GAP = 44;
 
 // BOTTOM — wasted-work tally
 
-function dupShade(count: number): { fill: string; fillOpacity: number } {
-  // 1 call = white; 2+ calls → increasingly yellow (ACCENT)
-  if (count <= 1) return { fill: "#fff", fillOpacity: 1 };
-  // max observable for fib(5): fib(1) called 8 times, fib(2) 5x, fib(3) 3x
-  const opacity = Math.min(1, 0.25 + (count - 1) * 0.18);
-  return { fill: ACCENT, fillOpacity: opacity };
+/**
+ * Map a duplicate-call count to a hatch fill for wasted-work magnitude encoding.
+ *
+ * V6: magnitude encoded by HATCH DENSITY, not color or opacity.
+ * V12: ACCENT (#facc15) is reserved for the single per-frame focal element (isCurrent).
+ *
+ * fib(5) duplicate-count ranges:
+ *   count=1  — called once (fib(4), fib(5))           → PAPER (plain, no mark)
+ *   count=2  — mild duplication                        → HATCH_LIGHT (sparse)
+ *   count=3-4 — moderate duplication (fib(3) max=3)   → HATCH_DENSE (medium)
+ *   count=5+ — heavy duplication (fib(2)=5×, fib(1)=8×) → HATCH_CROSS (densest)
+ *
+ * Denser hatch = more recomputation = heavier wasted work.
+ * INK labels remain readable on all hatch fills (INK-on-PAPER texture).
+ */
+function dupShade(count: number): string {
+  if (count <= 1) return PAPER;
+  if (count === 2) return HATCH_LIGHT;
+  if (count <= 4) return HATCH_DENSE;
+  return HATCH_CROSS;
 }
 
 function renderFrame(frame: Frame<DPWastedState>): ReactNode {
@@ -379,18 +393,22 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
         })}
       </AnimatePresence>
 
-      {/* Tree nodes — shaded by duplicate count. Whole node (circle + text)
-          wraps in motion.g animating its translate so the label slides with
-          the circle when tree layout shifts between frames. */}
+      {/* Tree nodes — shaded by duplicate count via hatch density (V6/V12).
+          - Non-current nodes: fill=dupShade(count) as a STATIC SVG prop
+            (PAPER | HATCH_LIGHT | HATCH_DENSE | HATCH_CROSS — never ACCENT).
+          - Current node: fill=ACCENT as a STATIC SVG prop — single focal element.
+          Fill is static (not inside animate{}) so the hatch URL is a real SVG
+          attribute that the test can query via getAttribute("fill").
+          The motion.g still animates translate for smooth tree layout shifts. */}
       <AnimatePresence>
         {tree.map((node) => {
           const pos = positions.get(node.id);
           if (!pos) return null;
           const isCurrent = node.id === currentTreeNodeId;
           const dupCount = duplicates[node.n] ?? 1;
-          const { fill, fillOpacity } = dupShade(dupCount);
-          const targetFill = isCurrent ? ACCENT : fill;
-          const targetFillOpacity = isCurrent ? 1 : fillOpacity;
+          const hatchFill = dupShade(dupCount);
+          // ACCENT only on the single current node (V12); hatch on all others (V6).
+          const nodeFill = isCurrent ? ACCENT : hatchFill;
           return (
             <PopIn key={`node-${node.id}`} durationMs={300}>
               <motion.g
@@ -402,11 +420,10 @@ function renderFrame(frame: Frame<DPWastedState>): ReactNode {
                   cx={0}
                   cy={0}
                   r={TREE_NODE_R}
+                  fill={nodeFill}
                   stroke={INK}
                   initial={false}
                   animate={{
-                    fill: targetFill,
-                    fillOpacity: targetFillOpacity,
                     strokeWidth: isCurrent ? 2 : 1,
                   }}
                   transition={{ duration: 0.4, ease: "easeInOut" }}
