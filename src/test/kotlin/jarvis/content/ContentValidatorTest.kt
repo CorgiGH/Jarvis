@@ -80,4 +80,31 @@ class ContentValidatorTest {
         assertEquals(1, issues.size)
         assertEquals("exam_weight", issues.single().rule)
     }
+
+    @Test
+    fun `kc with both names passes bilingual check`() {
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kc("a", weight = 1.0, tier = 1)),
+            edges = emptyList(), misconceptions = emptyList())
+        assertTrue(ContentValidator.checkBilingual(sub).isEmpty())
+    }
+
+    @Test
+    fun `kc missing a romanian name is reported`() {
+        val bad = kc("a", weight = 1.0, tier = 1).copy(name_ro = "  ")
+        val sub = LoadedSubject("PA", kcs = listOf(bad), edges = emptyList(), misconceptions = emptyList())
+        val issues = ContentValidator.checkBilingual(sub)
+        assertEquals(1, issues.size)
+        assertEquals("bilingual", issues.single().rule)
+    }
+
+    @Test
+    fun `misconception missing a label is reported`() {
+        val m = Misconception("m1", "a", label_ro = "ok", label_en = "",
+            trigger = "t", refutation = "r", source = emptyList(), version = 1)
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kc("a", weight = 1.0, tier = 1)),
+            edges = emptyList(), misconceptions = listOf(m))
+        assertEquals(1, ContentValidator.checkBilingual(sub).size)
+    }
 }

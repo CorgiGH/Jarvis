@@ -103,4 +103,22 @@ object ContentValidator {
         }
         return emptyList()
     }
+
+    /** Every KC and misconception must carry non-blank RO and EN text. */
+    fun checkBilingual(sub: LoadedSubject): List<ValidationIssue> {
+        val issues = mutableListOf<ValidationIssue>()
+        for (kc in sub.kcs) {
+            if (kc.name_ro.isBlank() || kc.name_en.isBlank()) {
+                issues += ValidationIssue("error", "bilingual", sub.subject,
+                    "KC '${kc.id}' missing name_ro or name_en")
+            }
+        }
+        for (m in sub.misconceptions) {
+            if (m.label_ro.isBlank() || m.label_en.isBlank()) {
+                issues += ValidationIssue("error", "bilingual", sub.subject,
+                    "misconception '${m.id}' missing label_ro or label_en")
+            }
+        }
+        return issues
+    }
 }
