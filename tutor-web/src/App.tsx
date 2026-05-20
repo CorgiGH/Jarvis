@@ -9,6 +9,7 @@ import { TrustSettings } from "./components/TrustSettings";
 import { DaemonHealthPill } from "./components/DaemonHealthPill";
 import { KnowledgeLedger } from "./components/KnowledgeLedger";
 import { LoginPage } from "./components/LoginPage";
+import { AiLiteracyGate } from "./components/AiLiteracyGate";
 import { jarvisFetch } from "./lib/api";
 import { recordTelemetry } from "./lib/telemetry";
 
@@ -49,6 +50,7 @@ export function App() {
   const dedupedFlag = params.get("deduped") === "1";  // surfaced when POST /tasks deduped
   const debug = params.get("debug") === "1";  // ?debug=1 shows DaemonHealthPill + full domain footer
   const [sessionReady, setSessionReady] = useState(false);
+  const [gateLang, setGateLang] = useState<"ro" | "en">("ro");
   const [ledgerOpen, setLedgerOpen] = useState(false);
 
   // Strip ?deduped=1 after a tick so a refresh doesn't re-flash the banner.
@@ -69,7 +71,7 @@ export function App() {
     if (sessionBootstrapped.current) return;
     sessionBootstrapped.current = true;
     const pathname = here.pathname;
-    ensureTutorSession().then(status => {
+    ensureTutorSession().then(async status => {
       if (
         status === 401 &&
         pathname !== "/login" &&
@@ -77,6 +79,31 @@ export function App() {
       ) {
         navigate("/login", { replace: true });
         return;
+      }
+      // Logged-in: check AI-literacy confirmation. On 401 we already redirected
+      // above; any other status means a session was established (or network err).
+      if (status !== 401 && status !== 0) {
+        try {
+          const r = await jarvisFetch("/api/v1/me/export");
+          if (r.ok) {
+            const data: {
+              aiLiteracyConfirmed: boolean;
+              user?: { lang?: string } | null;
+            } = await r.json();
+            // Derive lang from the user record (falls back to "ro").
+            const userLang = data.user?.lang;
+            if (userLang === "en") setGateLang("en");
+            if (
+              !data.aiLiteracyConfirmed &&
+              pathname !== "/welcome/ai-literacy"
+            ) {
+              navigate("/welcome/ai-literacy", { replace: true });
+              return;
+            }
+          }
+        } catch (_) {
+          // export fetch failed — don't block the user; gate skipped
+        }
       }
       setSessionReady(true);
     }).catch(() => setSessionReady(true));
@@ -295,7 +322,9 @@ export function App() {
       <main className="flex-1 min-h-0 overflow-hidden overflow-y-auto bg-page-bg">
         {here.pathname === "/login"
           ? <LoginPage />
-          : here.pathname === "/review"
+          : here.pathname === "/welcome/ai-literacy"
+            ? <AiLiteracyGate lang={gateLang} onConfirmed={() => navigate("/")} />
+            : here.pathname === "/review"
             ? <FsrsReview streak={0} />
             : here.pathname === "/tasks"
               ? <TasksScreen />

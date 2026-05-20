@@ -18,6 +18,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/settings/trust" element={<App />} />
         <Route path="/review" element={<App />} />
         <Route path="/login" element={<App />} />
+        <Route path="/welcome/ai-literacy" element={<App />} />
         <Route path="/viz-demo" element={<VizDemoPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
