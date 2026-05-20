@@ -16,6 +16,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/" element={<App />} />
         <Route path="/tasks" element={<App />} />
         <Route path="/settings/trust" element={<App />} />
+        <Route path="/me" element={<App />} />
         <Route path="/review" element={<App />} />
         <Route path="/login" element={<App />} />
         <Route path="/welcome/ai-literacy" element={<App />} />

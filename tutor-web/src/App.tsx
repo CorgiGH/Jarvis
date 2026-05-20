@@ -6,6 +6,7 @@ import { ActiveTaskDashboard } from "./components/ActiveTaskDashboard";
 import { FsrsReview } from "./components/FsrsReview";
 import { TasksScreen } from "./components/TasksScreen";
 import { TrustSettings } from "./components/TrustSettings";
+import { SettingsMe } from "./components/SettingsMe";
 import { DaemonHealthPill } from "./components/DaemonHealthPill";
 import { KnowledgeLedger } from "./components/KnowledgeLedger";
 import { LoginPage } from "./components/LoginPage";
@@ -284,6 +285,13 @@ export function App() {
           >
             trust
           </Link>
+          <Link
+            to="/me"
+            aria-current={here.pathname === "/me" ? "page" : undefined}
+            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+          >
+            me
+          </Link>
           <button
             data-testid="header-ledger-btn"
             onClick={() => {
@@ -330,6 +338,8 @@ export function App() {
               ? <TasksScreen />
               : here.pathname === "/settings/trust"
                 ? <TrustSettings />
+                : here.pathname === "/me"
+                ? <SettingsMe />
                 : !sessionReady
                   ? <div className="p-6 font-mono text-sm text-page-fg/80">setting up tutor session…</div>
                   : showQuickStart
