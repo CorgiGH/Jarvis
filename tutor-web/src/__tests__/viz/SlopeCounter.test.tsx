@@ -53,7 +53,7 @@ describe("SlopeCounter", () => {
     render(<SlopeCounter data={data} mu={8} />);
     const readout = screen.getByRole("status");
     // diff = left(2) - right(2) = 0, label should read "slope: +0" or "slope: 0"
-    expect(readout.getAttribute("aria-label")).toMatch(/slope:\s*\+?0/);
+    expect(readout.getAttribute("aria-label")).toMatch(/slope:\s*\+0/);
   });
 
   test("aria-label updates when diff changes (mu=3 → diff=-4)", () => {
@@ -66,5 +66,12 @@ describe("SlopeCounter", () => {
     render(<SlopeCounter data={data} mu={14} />);
     const readout = screen.getByRole("status");
     expect(readout.getAttribute("aria-label")).toMatch(/slope:\s*\+4/);
+  });
+
+  test("V12: LEFT and RIGHT chips share a background — accent is not a category color", () => {
+    render(<SlopeCounter data={data} mu={8} />);
+    const leftBg = screen.getByTestId("slope-left-chip").style.background;
+    const rightBg = screen.getByTestId("slope-right-chip").style.background;
+    expect(rightBg).toBe(leftBg);
   });
 });

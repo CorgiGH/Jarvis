@@ -1,6 +1,6 @@
 // Intentionally non-SVG: SlopeCounter is a numeric readout chip (left/right sample counts
 // + slope diff), not a diagram. Spec V7 "SVG over canvas" governs diagrams only.
-import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import { FONT_FAMILY, INK, PAPER } from "./theme";
 
 export interface SlopeCounterProps { data: number[]; mu: number; }
 
@@ -22,6 +22,8 @@ export function SlopeCounter({ data, mu }: SlopeCounterProps) {
   const left = data.filter((x) => x < mu).length;
   const right = data.filter((x) => x > mu).length;
   const diff = left - right;
+  // Single source of truth — the visible value and the aria-label must not drift.
+  const signedDiff = diff >= 0 ? `+${diff}` : `${diff}`;
 
   return (
     <div
@@ -35,6 +37,8 @@ export function SlopeCounter({ data, mu }: SlopeCounterProps) {
         color: INK,
       }}
     >
+      {/* V12: LEFT/RIGHT are categories, not focus — both chips are PAPER,
+          distinguished by their text labels, not by an accent fill. */}
       <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
         <span
           data-testid="slope-left-chip"
@@ -44,14 +48,14 @@ export function SlopeCounter({ data, mu }: SlopeCounterProps) {
         </span>
         <span
           data-testid="slope-right-chip"
-          style={{ ...chipBase, background: ACCENT, color: INK }}
+          style={{ ...chipBase, background: PAPER, color: INK }}
         >
           RIGHT: {right}
         </span>
       </div>
       <div
         role="status"
-        aria-label={`slope: ${diff >= 0 ? `+${diff}` : `${diff}`}`}
+        aria-label={`slope: ${signedDiff}`}
         style={{ fontSize: "0.75rem", opacity: 0.7, marginTop: "0.1rem" }}
       >
         slope ={" "}
@@ -59,7 +63,7 @@ export function SlopeCounter({ data, mu }: SlopeCounterProps) {
           data-testid="slope-diff"
           style={{ fontWeight: 900, color: INK }}
         >
-          {diff >= 0 ? `+${diff}` : `${diff}`}
+          {signedDiff}
         </span>{" "}
         ({left} − {right})
       </div>
