@@ -63,8 +63,8 @@ class MagicLinkRepo(private val db: Database) {
         if (updated != 1) return@transaction null
         MagicLinkTokensTable.selectAll()
             .where { MagicLinkTokensTable.tokenHash eq hash }
-            .single()
-            .let { MagicLinkClaim(it[MagicLinkTokensTable.email], it[MagicLinkTokensTable.lang]) }
+            .singleOrNull()
+            ?.let { MagicLinkClaim(it[MagicLinkTokensTable.email], it[MagicLinkTokensTable.lang]) }
     }
 
     private fun sha256Hex(s: String): String =
