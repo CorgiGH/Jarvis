@@ -53,4 +53,24 @@ class AutoSessionGuardTest {
         val setCookies = r.headers.getAll(HttpHeaders.SetCookie) ?: emptyList()
         assertNotNull(setCookies.firstOrNull { it.startsWith("csrf=") }, "Set-Cookie csrf= header must be present")
     }
+
+    @Test fun `auto-session echoes a well-formed csrf cookie and does not rotate it`() = testApplication {
+        val dbDir = Files.createTempDirectory("autosess3")
+        val db = TutorDb.connect(dbDir.resolve("t.db").toString())
+        transaction(db) { SchemaUtils.create(UsersTable, SessionsTable, MagicLinkTokensTable) }
+        val uid = TutorTypes.ulid()
+        UserRepo(db).insert(User(uid, "tester", UserScope.OWNER, java.time.Instant.now(), java.time.Instant.now()))
+        val sid = SessionRepo(db).create(uid, 3600)
+        application {
+            attributes.put(TutorContextKey, testTutorContext(db, dbDir, mailer = FakeMailer()))
+            installTutorRoutes()
+        }
+        val r = client.get("/api/v1/tutor/auto-session") {
+            header("Cookie", "jarvis_session=$sid; csrf=aabbccdd00112233aabbccdd00112233")
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val setCookies = r.headers.getAll(HttpHeaders.SetCookie) ?: emptyList()
+        assertTrue(setCookies.none { it.startsWith("csrf=") }, "should not rotate a well-formed csrf")
+        assertTrue(r.bodyAsText().contains("\"csrf\":\"aabbccdd00112233aabbccdd00112233\""))
+    }
 }

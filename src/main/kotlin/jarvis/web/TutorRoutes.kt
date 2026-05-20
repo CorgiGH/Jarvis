@@ -288,7 +288,11 @@ fun Application.installTutorRoutes() {
                 return@get call.respond(HttpStatusCode.Unauthorized, """{"error":"login required"}""")
             }
             // Already authenticated — ensure csrf is always a real token, never null.
-            val csrf = if (existingCsrf.isNullOrBlank()) {
+            // Only echo the existing cookie if it matches the exact [0-9a-f]{32} format;
+            // a tampered/malformed value would otherwise be interpolated raw into JSON.
+            val csrf = if (existingCsrf != null && Regex("^[0-9a-f]{32}$").matches(existingCsrf)) {
+                existingCsrf
+            } else {
                 val fresh = ByteArray(16).also { rng.nextBytes(it) }.joinToString("") { "%02x".format(it) }
                 call.response.cookies.append(
                     Cookie(
@@ -302,8 +306,6 @@ fun Application.installTutorRoutes() {
                     ),
                 )
                 fresh
-            } else {
-                existingCsrf
             }
             call.respond(HttpStatusCode.OK, """{"ok":true,"userId":"$uid","csrf":"$csrf"}""")
         }
