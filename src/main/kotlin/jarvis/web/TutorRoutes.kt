@@ -270,45 +270,25 @@ fun Application.installTutorRoutes() {
             call.respondRedirect("/tutor/")
         }
 
-        // Single-user auto-session: SPA hits this on mount. If session
-        // cookie is missing OR invalid, mint a fresh session bound to
-        // the canonical "owner" user + set the matching csrf cookie.
-        // Idempotent — repeated calls with a valid session no-op.
-        // The legacy bearer JARVIS_AUTH_TOKEN cookie still gates this
-        // route (interceptor allowlist exempts /api/v1/tutor/auto-session
-        // so logged-in users via /login can bootstrap their tutor side).
+        // Multi-user auto-session bootstrap. SPA hits this on mount to
+        // check whether the visitor already has a valid session.
+        // - Valid jarvis_session cookie → return current userId + csrf (no
+        //   rotation) so the SPA can resume without a round-trip to /login.
+        // - No cookie / invalid / expired → 401 so the SPA routes the
+        //   visitor to /login. We no longer auto-mint an OWNER session —
+        //   doing so would silently elevate any unauthenticated visitor to
+        //   the owner role, which is a security hole in multi-user mode.
         get("/api/v1/tutor/auto-session") {
             val ctx = application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@get }
             val existingSid = call.request.cookies["jarvis_session"]
             val existingCsrf = call.request.cookies["csrf"]
-            val valid = existingSid?.let { SessionRepo(ctx.db).findUserId(it) }
-            if (valid != null && !existingCsrf.isNullOrBlank()) {
-                // Already set up — return current state without rotating.
-                call.respond(HttpStatusCode.OK, """{"ok":true,"userId":"$valid","csrf":"$existingCsrf"}""")
-                return@get
+            val uid = existingSid?.let { SessionRepo(ctx.db).findUserId(it) }
+            if (uid == null) {
+                return@get call.respond(HttpStatusCode.Unauthorized, """{"error":"login required"}""")
             }
-            // Mint new session for owner.
-            val sid = SessionRepo(ctx.db).create("owner", ttlSeconds = 60L * 60 * 24 * 14)
-            val csrf = ByteArray(16).also { rng.nextBytes(it) }
-                .joinToString("") { "%02x".format(it) }
-            call.response.cookies.append(
-                Cookie(
-                    name = "jarvis_session", value = sid,
-                    httpOnly = true, secure = true,
-                    extensions = mapOf("SameSite" to "Strict"),
-                    path = "/", maxAge = 60 * 60 * 24 * 14,
-                ),
-            )
-            call.response.cookies.append(
-                Cookie(
-                    name = "csrf", value = csrf,
-                    httpOnly = false, secure = true,
-                    extensions = mapOf("SameSite" to "Strict"),
-                    path = "/", maxAge = 60 * 60 * 24 * 14,
-                ),
-            )
-            call.respond(HttpStatusCode.OK, """{"ok":true,"userId":"owner","csrf":"$csrf"}""")
+            // Already authenticated — return current state without rotating.
+            call.respond(HttpStatusCode.OK, """{"ok":true,"userId":"$uid","csrf":"$existingCsrf"}""")
         }
 
         // Layer B Task 1 — vision-LLM screenshot sensor.
