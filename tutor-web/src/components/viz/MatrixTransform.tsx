@@ -22,7 +22,7 @@ interface MatrixTransformProps {
   eigenvectors: Eigenvector[];
   w: Vec2;
   testRayCount?: number;
-  predictionGate?: PredictionGate;
+  predictionGates?: Map<number, PredictionGate>;
   /** @deprecated Shell owns ARIA live region; this prop is ignored. */
   liveRegionId?: string;
 }
@@ -98,7 +98,7 @@ export function MatrixTransform({
   eigenvectors,
   w,
   testRayCount = 8,
-  predictionGate,
+  predictionGates,
 }: MatrixTransformProps): ReactNode {
   const testRays = buildTestRays(testRayCount);
 
@@ -280,7 +280,7 @@ export function MatrixTransform({
       desc="Interactive demo of eigenvectors. Cartesian plane with test rays, yellow eigenvectors, and one non-eigenvector w. Scrub from t=0 (identity) to t=1 (full matrix). Yellow rays stay parallel; gray rays rotate."
       frames={FRAMES}
       renderFrame={renderFrame}
-      predictionGate={predictionGate}
+      predictionGates={predictionGates}
       voiceMap={VOICE_MAP}
       testIdPrefix="matrix-transform"
     />

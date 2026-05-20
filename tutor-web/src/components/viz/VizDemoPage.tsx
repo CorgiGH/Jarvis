@@ -79,7 +79,7 @@ export function VizDemoPage() {
           ]}
           w={[0.8, 0.3]}
           testRayCount={8}
-          predictionGate={{
+          predictionGates={new Map([[0, {
             question:
               "Which colored ray stays in the same direction after applying M?",
             answers: [
@@ -87,7 +87,7 @@ export function VizDemoPage() {
               { label: "yellow eigenvector", isCorrect: true },
               { label: "black w (non-eig)", isCorrect: false },
             ],
-          }}
+          }]])}
           liveRegionId="viz-live"
         />
       </section>
