@@ -39,6 +39,7 @@ import jarvis.tutor.SensorPayload
 import jarvis.tutor.SensorRepo
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.SessionsTable
+import jarvis.tutor.AiLiteracyConfirmationTable
 import jarvis.tutor.MagicLinkRepo
 import jarvis.tutor.MagicLinkTokensTable
 import jarvis.tutor.UserRepo
@@ -2203,6 +2204,7 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             TokensTable,
             SessionsTable,
             MagicLinkTokensTable,        // Gate 2 — magic-link auth
+            AiLiteracyConfirmationTable, // Gate 2 — AI-literacy confirmation (AI Act Art. 4)
             TasksTable,
             SensorEventsTable,
             TrustGrantsTable,
