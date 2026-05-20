@@ -35,6 +35,7 @@ import jarvis.tutor.SensorPayload
 import jarvis.tutor.SensorRepo
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.SessionsTable
+import jarvis.tutor.MagicLinkTokensTable
 import jarvis.tutor.TaskPrepTable
 import jarvis.tutor.TasksTable
 import jarvis.tutor.TokenRepo
@@ -2116,6 +2117,7 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             UsersTable,
             TokensTable,
             SessionsTable,
+            MagicLinkTokensTable,        // Gate 2 — magic-link auth
             TasksTable,
             SensorEventsTable,
             TrustGrantsTable,
