@@ -11,6 +11,7 @@ import java.nio.file.Files
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 
 class AiLiteracyGateTest {
     private fun seed(): Triple<String, String, java.nio.file.Path> {
@@ -55,6 +56,23 @@ class AiLiteracyGateTest {
             contentType(ContentType.Application.Json)
             setBody("""{"question":"hi"}""")
         }
-        assertEquals(true, r.status != HttpStatusCode.Forbidden)  // not blocked by the literacy gate
+        assertNotEquals(HttpStatusCode.Forbidden, r.status)  // not blocked by the literacy gate
+    }
+
+    @Test fun `screenshot endpoint is blocked 403 when the user has not confirmed literacy`() = testApplication {
+        val (_, sid, dbDir) = seed()
+        val db = TutorDb.connect(dbDir.resolve("t.db").toString())
+        application {
+            attributes.put(TutorContextKey, testTutorContext(db, dbDir, mailer = FakeMailer()))
+            installTutorRoutes()
+        }
+        val r = client.post("/api/v1/sensor/screenshot") {
+            header("Cookie", "jarvis_session=$sid; csrf=c")
+            header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+        assertEquals(HttpStatusCode.Forbidden, r.status)
+        assert(r.bodyAsText().contains("ai-literacy"))
     }
 }

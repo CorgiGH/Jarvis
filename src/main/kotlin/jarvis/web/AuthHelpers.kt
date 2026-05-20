@@ -33,17 +33,24 @@ suspend fun RoutingContext.requireUser(block: suspend (userId: String) -> Unit) 
     block(uid)
 }
 
-/** Require AI-literacy confirmation; respond 403 and skip [block] if not confirmed. */
-suspend fun ApplicationCall.requireAiLiteracy(userId: String, block: suspend () -> Unit) {
+/**
+ * AI-literacy gate. Responds 403 and returns false if [userId] has not confirmed the
+ * current AI-literacy version; returns true (and responds nothing) if confirmed.
+ * Caller pattern:  if (!call.aiLiteracyGate(userId)) return@csrfProtect
+ */
+suspend fun ApplicationCall.aiLiteracyGate(userId: String): Boolean {
     val ctx = application.attributes.getOrNull(TutorContextKey)
-        ?: return respond(HttpStatusCode.InternalServerError, "no ctx")
+        ?: run {
+            respond(HttpStatusCode.InternalServerError, "no ctx")
+            return false
+        }
     if (!AiLiteracyRepo(ctx.db).hasConfirmedCurrent(userId)) {
         respondText(
             """{"error":"ai-literacy-required"}""",
             ContentType.Application.Json,
             HttpStatusCode.Forbidden,
         )
-        return
+        return false
     }
-    block()
+    return true
 }
