@@ -118,16 +118,18 @@ describe("TcpHandshake — V12 palette compliance", () => {
     expect(accentElementCount(svg!)).toBeLessThanOrEqual(1);
   });
 
-  test("F12 (legit SYN dropped): at most 1 ACCENT element — drop × is not yellow", () => {
+  test("F12 (legit SYN dropped): exactly 1 ACCENT element — dropped SYN is the focal message", () => {
     const { container } = render(<TcpHandshake />);
     advanceTo(container, 12);
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
-    // Pre-fix: 4 spoofed slots (ACCENT) + ATTACKER header (ACCENT) +
-    //          FULL border (ACCENT stroke) + drop × (ACCENT fill) = many.
-    // Post-fix: ≤1 ACCENT (could be the focal dropped-message indicator if kept
-    //           accent, or 0 if the drop is encoded with INK + dash only).
-    expect(accentElementCount(svg!)).toBeLessThanOrEqual(1);
+    // F12's dropped SYN (id="f-syn-legit") is the focal message — the last
+    // (and only) entry in inFlight, and drop.msgId matches it.
+    // FocalIndicator now receives isDropped=true and uses the shortened
+    // effectiveToX formula matching MessageArrow, so the diamond lands on
+    // the visible (shortened) arrow, not on the ATTACKER lifeline.
+    // Exactly 1 ACCENT element must exist — the correctly-placed FocalIndicator.
+    expect(accentElementCount(svg!)).toBe(1);
   });
 
   test("F14 (COOKIES: spoofed SYN + server SYN-ACK response — 2 in-flight messages): at most 1 ACCENT element", () => {

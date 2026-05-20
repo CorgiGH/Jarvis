@@ -17,7 +17,7 @@ type TCPState =
   | "SYN_RCVD"
   | "ESTABLISHED";
 type Actor = "CLIENT" | "SERVER" | "ATTACKER";
-type MsgKind = "SYN" | "SYN-ACK" | "ACK" | "DROP";
+type MsgKind = "SYN" | "SYN-ACK" | "ACK";
 
 type Message = {
   id: string;
@@ -87,6 +87,15 @@ function setBacklogSlot(
   return next;
 }
 
+/**
+ * buildFrames — constructs the full TCP handshake animation sequence.
+ *
+ * Focal-message convention: in every frame that shows in-flight messages, the
+ * LAST entry in the inFlight array is that frame's focal (transition-causing)
+ * message. FocalIndicator (rendered outside AnimatePresence in renderFrame)
+ * reads inFlight[inFlight.length - 1] and draws an ACCENT diamond on it.
+ * Frame authors MUST append the focal message last.
+ */
 function buildFrames(): Frame<State>[] {
   const frames: Frame<State>[] = [];
 
@@ -632,7 +641,9 @@ function formatStateLabel(s: TCPState): string {
  *   SYN     → solid line  (no dash)
  *   SYN-ACK → long-dash   ("5 3")  — distinguishable as a reply
  *   ACK     → short-dash  ("2 3")  — the final completing stroke
- *   DROP    → dotted      ("3 2")  — message that never reaches destination
+ *
+ * Dropped-message dotted style ("3 2") is driven by isDropped (frame-level
+ * drop?.msgId), NOT by message kind — there is no "DROP" MsgKind.
  *
  * Spoofed messages additionally use a thinner stroke weight.
  * All arrow lines are INK. The focal-message indicator (V12 ACCENT) is
@@ -651,12 +662,19 @@ function kindDash(kind: MsgKind, isDropped: boolean): string | undefined {
  * message's arrow line. Rendered OUTSIDE AnimatePresence so it has no exit
  * animation; it simply appears or disappears synchronously with the frame
  * state, producing at most one ACCENT element per frame.
+ *
+ * For dropped messages, MessageArrow shortens the arrow to
+ *   effectiveToX = (fromX + toX) / 2 + 30
+ * We must replicate that formula here so the diamond lands on the visible
+ * (shortened) arrow rather than floating past the endpoint.
  */
-function FocalIndicator({ msg }: { msg: Message | null }) {
+function FocalIndicator({ msg, isDropped }: { msg: Message | null; isDropped: boolean }) {
   if (!msg) return null;
   const fromX = actorX(msg.from);
   const toX = actorX(msg.to);
-  const midX = (fromX + toX) / 2;
+  // Mirror MessageArrow's effectiveToX shortening for dropped messages.
+  const effectiveToX = isDropped ? (fromX + toX) / 2 + 30 : toX;
+  const midX = (fromX + effectiveToX) / 2;
   const y = msg.y;
   const r = 4; // half-width of diamond
   return (
@@ -1201,12 +1219,20 @@ function renderFrame(frame: Frame<State>): ReactNode {
       </AnimatePresence>
 
       {/* Focal-message indicator (V12 ACCENT) — rendered OUTSIDE AnimatePresence
-          so it has no exit animation. The last entry in inFlight is the focal
-          message (the event causing this frame's state transition). Frames with
-          empty inFlight (pure state / summary) render null → zero ACCENT. */}
-      <FocalIndicator
-        msg={inFlight.length > 0 ? inFlight[inFlight.length - 1] : null}
-      />
+          so it has no exit animation.
+          Convention: the LAST entry in a frame's inFlight array is that frame's
+          focal / transition-causing message. Frame authors must append the focal
+          message last when building inFlight in buildFrames().
+          Frames with empty inFlight (pure state / summary) render null → zero ACCENT. */}
+      {(() => {
+        const focalMsg = inFlight.length > 0 ? inFlight[inFlight.length - 1] : null;
+        return (
+          <FocalIndicator
+            msg={focalMsg}
+            isDropped={!!focalMsg && drop?.msgId === focalMsg.id}
+          />
+        );
+      })()}
 
       {/* Footer */}
       <rect
