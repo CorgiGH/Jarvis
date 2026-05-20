@@ -50,6 +50,7 @@ import jarvis.tutor.TutorContextKey
 import jarvis.tutor.TutorDb
 import jarvis.tutor.TutorEvent
 import jarvis.tutor.TutorEventLog
+import jarvis.tutor.MailResult
 import jarvis.tutor.RcodeRedacted
 import jarvis.tutor.UsersTable
 import jarvis.tutor.csrfProtect
@@ -215,7 +216,10 @@ fun Application.installTutorRoutes() {
             val baseUrl = System.getenv("JARVIS_PUBLIC_BASE_URL") ?: "https://corgflix.duckdns.org"
             val rawToken = jarvis.tutor.MagicLinkRepo(ctx.db).issue(email, lang, ttlSeconds = 15 * 60)
             val link = "$baseUrl/tutor/auth/verify?token=$rawToken"
-            ctx.mailer.send(email, link, lang)
+            val mailResult = ctx.mailer.send(email, link, lang)
+            if (mailResult == MailResult.FAILED) {
+                System.err.println("[request-link] mail delivery failed for $email")
+            }
             call.respond(HttpStatusCode.OK, """{"ok":true}""")
         }
 
@@ -1830,10 +1834,10 @@ private val sensorJson = Json { ignoreUnknownKeys = true; encodeDefaults = true 
 
 // Gate 2: request body for POST /auth/request-link.
 @kotlinx.serialization.Serializable
-data class RequestLinkBody(val email: String, val lang: String = "ro")
+private data class RequestLinkBody(val email: String, val lang: String = "ro")
 
 /** RFC-5322 simplified: at least one non-whitespace/@ char, @, domain with dot. */
-val EMAIL_REGEX = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+private val EMAIL_REGEX = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
 
 /**
  * SHA-256 of a UTF-8 string, lowercase hex (64 chars). Used by the drill-grade
