@@ -32,12 +32,9 @@ export interface AlgoStepperShellProps<S> {
   renderFrame: (frame: Frame<S>, idx: number) => ReactNode;
   predictionGates?: Map<number, PredictionGate>;
   voiceMap?: Record<number, string>;
-  autoplayMsPerFrame?: number;
   onShare?: (hashState: string) => void;
   testIdPrefix?: string;
 }
-
-const DEFAULT_AUTOPLAY_MS = 1400;
 
 function readReducedMotion(): boolean {
   if (typeof window === "undefined") return false;
@@ -65,7 +62,6 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     desc,
     frames,
     renderFrame,
-    autoplayMsPerFrame = DEFAULT_AUTOPLAY_MS,
     testIdPrefix = "stepper",
   } = props;
 
@@ -90,7 +86,6 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   }, [testIdPrefix, lastIdx, props.predictionGates]);
 
   const [idx, setIdx] = useState(initialIdx);
-  const [playing, setPlaying] = useState(false);
   const [answeredGates, setAnsweredGates] = useState<Set<number>>(new Set());
   const [voiceOn, setVoiceOn] = useState(false);
 
@@ -102,7 +97,6 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     }
     return lastIdx;
   }, [props.predictionGates, answeredGates, lastIdx]);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingNextSrcRef = useRef<string | null>(null);
   const voiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,39 +114,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
 
   const reset = useCallback(() => {
     setIdx(0);
-    setPlaying(false);
   }, []);
-
-  const togglePlay = useCallback(() => {
-    if (reducedMotion) {
-      stepBy(1);
-      return;
-    }
-    setPlaying((p) => !p);
-  }, [reducedMotion, stepBy]);
-
-  useEffect(() => {
-    if (!playing || reducedMotion) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      return;
-    }
-    intervalRef.current = setInterval(() => {
-      setIdx((prev) => {
-        const next = prev + 1;
-        if (next > maxReachable) {
-          setPlaying(false);
-          return maxReachable;
-        }
-        return next;
-      });
-    }, autoplayMsPerFrame);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [playing, reducedMotion, autoplayMsPerFrame, maxReachable]);
 
   useEffect(() => {
     writeHashIdx(testIdPrefix, idx);
@@ -231,7 +193,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
       stepBy(-1);
     } else if (e.key === " ") {
       e.preventDefault();
-      togglePlay();
+      stepBy(1);
     } else if (k === "r") {
       e.preventDefault();
       reset();
@@ -351,13 +313,6 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
         </div>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           <button
-            onClick={togglePlay}
-            data-testid={`${testIdPrefix}-play`}
-            style={brutalistBtn(playing, false)}
-          >
-            {playing ? "⏸ pause" : "▶ play"}
-          </button>
-          <button
             onClick={() => stepBy(-1)}
             disabled={idx === 0}
             data-testid={`${testIdPrefix}-step-back`}
@@ -399,14 +354,6 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             {voiceOn ? "🔊 voice on" : "🔇 voice off"}
           </button>
         </div>
-        {reducedMotion && (
-          <div
-            data-testid={`${testIdPrefix}-reduced-motion-hint`}
-            style={{ fontSize: 10, opacity: 0.6, lineHeight: 1.4 }}
-          >
-            Reduced-motion on · play steps once per click.
-          </div>
-        )}
         {gateLocked && activeGate && (
           <div
             data-testid="predict-gate"

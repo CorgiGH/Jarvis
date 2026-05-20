@@ -133,28 +133,35 @@ describe("AlgoStepperShell — stepping", () => {
   });
 });
 
-describe("AlgoStepperShell — play/pause/reset", () => {
-  test("play advances frames over time", () => {
-    vi.useFakeTimers();
+describe("AlgoStepperShell — manual advance + reset", () => {
+  test("step-fwd button advances frame; step-back button retreats", () => {
     render(
       <AlgoStepperShell
         title="Counter"
         desc="Demo"
         frames={counterFrames}
         renderFrame={renderCounter}
-        autoplayMsPerFrame={100}
       />
     );
-    const playBtn = screen.getByTestId("stepper-play");
-    fireEvent.click(playBtn);
-    act(() => { vi.advanceTimersByTime(105); });
+    fireEvent.click(screen.getByTestId("stepper-step-fwd"));
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("1");
-    act(() => { vi.advanceTimersByTime(105); });
-    expect(screen.getByTestId("counter-readout")).toHaveTextContent("2");
-    vi.useRealTimers();
+    fireEvent.click(screen.getByTestId("stepper-step-back"));
+    expect(screen.getByTestId("counter-readout")).toHaveTextContent("0");
   });
 
-  test("R resets to frame 0 + pauses", () => {
+  test("no play button rendered", () => {
+    render(
+      <AlgoStepperShell
+        title="Counter"
+        desc="Demo"
+        frames={counterFrames}
+        renderFrame={renderCounter}
+      />
+    );
+    expect(screen.queryByTestId("stepper-play")).toBeNull();
+  });
+
+  test("R resets to frame 0", () => {
     render(
       <AlgoStepperShell
         title="Counter"
@@ -171,56 +178,20 @@ describe("AlgoStepperShell — play/pause/reset", () => {
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("0");
   });
 
-  test("Space toggles play/pause", () => {
-    vi.useFakeTimers();
+  test("Space advances exactly one frame", () => {
     render(
       <AlgoStepperShell
         title="Counter"
         desc="Demo"
         frames={counterFrames}
         renderFrame={renderCounter}
-        autoplayMsPerFrame={100}
       />
     );
     const svg = screen.getByRole("img");
     fireEvent.keyDown(svg, { key: " " });
-    act(() => { vi.advanceTimersByTime(105); });
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("1");
     fireEvent.keyDown(svg, { key: " " });
-    act(() => { vi.advanceTimersByTime(500); });
-    expect(screen.getByTestId("counter-readout")).toHaveTextContent("1");
-    vi.useRealTimers();
-  });
-
-  test("reduced-motion disables auto-tick (play steps once per click)", () => {
-    const matchMediaSpy = vi
-      .spyOn(window, "matchMedia")
-      .mockImplementation((q) => ({
-        matches: q === "(prefers-reduced-motion: reduce)",
-        media: q,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-        onchange: null,
-      }));
-    vi.useFakeTimers();
-    render(
-      <AlgoStepperShell
-        title="Counter"
-        desc="Demo"
-        frames={counterFrames}
-        renderFrame={renderCounter}
-        autoplayMsPerFrame={100}
-      />
-    );
-    fireEvent.click(screen.getByTestId("stepper-play"));
-    expect(screen.getByTestId("counter-readout")).toHaveTextContent("1");
-    act(() => { vi.advanceTimersByTime(500); });
-    expect(screen.getByTestId("counter-readout")).toHaveTextContent("1");
-    vi.useRealTimers();
-    matchMediaSpy.mockRestore();
+    expect(screen.getByTestId("counter-readout")).toHaveTextContent("2");
   });
 });
 
@@ -379,6 +350,20 @@ describe("AlgoStepperShell — hash deep-link clamped to gate ceiling", () => {
     // Hash was idx-6 (7th frame), but gate at frame 2 is unanswered.
     // initialIdx must be clamped to 2 → displayed as "3 / 8".
     expect(screen.getByTestId("hg-frame-counter").textContent).toContain("3 / 8");
+  });
+});
+
+describe("AlgoStepperShell — V2 manual-advance-only", () => {
+  test("V2: no play button; Space advances exactly one frame", () => {
+    const frames = Array.from({ length: 5 }, (_, i) => ({ state: i, aria: `f${i}` }));
+    render(
+      <AlgoStepperShell title="t" desc="d" frames={frames}
+        renderFrame={(f) => <text>{String(f.state)}</text>} testIdPrefix="ap" />
+    );
+    expect(screen.queryByTestId("ap-play")).toBeNull();
+    const svg = screen.getByRole("img");
+    fireEvent.keyDown(svg, { key: " " });
+    expect(screen.getByTestId("ap-frame-counter").textContent).toContain("2 / 5");
   });
 });
 
