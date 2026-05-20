@@ -635,13 +635,38 @@ function formatStateLabel(s: TCPState): string {
  *   DROP    → dotted      ("3 2")  — message that never reaches destination
  *
  * Spoofed messages additionally use a thinner stroke weight.
- * All arrows are INK (not ACCENT). ACCENT is not used here.
+ * All arrow lines are INK. The focal-message indicator (V12 ACCENT) is
+ * rendered separately as a static element outside AnimatePresence — this
+ * avoids lingering ACCENT stroke on motion.line exit-animation remnants.
  */
 function kindDash(kind: MsgKind, isDropped: boolean): string | undefined {
   if (isDropped) return "3 2";
   if (kind === "SYN-ACK") return "5 3";
   if (kind === "ACK") return "2 3";
   return undefined; // SYN = solid
+}
+
+/**
+ * FocalIndicator — renders an ACCENT diamond at the midpoint of the focal
+ * message's arrow line. Rendered OUTSIDE AnimatePresence so it has no exit
+ * animation; it simply appears or disappears synchronously with the frame
+ * state, producing at most one ACCENT element per frame.
+ */
+function FocalIndicator({ msg }: { msg: Message | null }) {
+  if (!msg) return null;
+  const fromX = actorX(msg.from);
+  const toX = actorX(msg.to);
+  const midX = (fromX + toX) / 2;
+  const y = msg.y;
+  const r = 4; // half-width of diamond
+  return (
+    <polygon
+      points={`${midX},${y - r} ${midX + r},${y} ${midX},${y + r} ${midX - r},${y}`}
+      fill={ACCENT}
+      stroke="none"
+      data-focal="true"
+    />
+  );
 }
 
 function MessageArrow({
@@ -656,7 +681,7 @@ function MessageArrow({
   const midX = (fromX + toX) / 2;
   const y = msg.y;
 
-  // V12: all arrows are INK — kind is encoded by dash pattern, not color.
+  // V12: all arrows are INK — kind encoded by dash, focus by FocalIndicator.
   const strokeC = INK;
   const dash = kindDash(msg.kind, isDropped);
   // Spoofed messages use a slightly thinner stroke to signal "not a real source".
@@ -822,9 +847,9 @@ function renderFrame(frame: Frame<State>): ReactNode {
 
   return (
     <>
-      {/* SVG markers for message arrowheads — V12: only INK arrowhead.
-          The old tcp-arrow-accent marker is removed (yellow arrowheads
-          encoded kind, which violates V12). */}
+      {/* SVG markers for message arrowheads — V12: INK arrowhead only.
+          The focal-message ACCENT indicator is a FocalIndicator diamond
+          rendered outside AnimatePresence, not an arrowhead marker. */}
       <defs>
         <marker
           id="tcp-arrow-ink"
@@ -1162,7 +1187,8 @@ function renderFrame(frame: Frame<State>): ReactNode {
         )}
       </AnimatePresence>
 
-      {/* In-flight messages */}
+      {/* In-flight messages — all arrows are INK; dash encodes kind.
+          AnimatePresence manages enter/exit animations for each arrow. */}
       <AnimatePresence>
         {inFlight.map((m) => {
           const isDropped = drop?.msgId === m.id;
@@ -1173,6 +1199,14 @@ function renderFrame(frame: Frame<State>): ReactNode {
           );
         })}
       </AnimatePresence>
+
+      {/* Focal-message indicator (V12 ACCENT) — rendered OUTSIDE AnimatePresence
+          so it has no exit animation. The last entry in inFlight is the focal
+          message (the event causing this frame's state transition). Frames with
+          empty inFlight (pure state / summary) render null → zero ACCENT. */}
+      <FocalIndicator
+        msg={inFlight.length > 0 ? inFlight[inFlight.length - 1] : null}
+      />
 
       {/* Footer */}
       <rect

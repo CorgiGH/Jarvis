@@ -17,7 +17,7 @@
  * if any).  Categories (spoofed, ATTACKER, backlog-full, SYN-ACK kind, cookies-on)
  * are encoded via hatch fill, stroke-dash, or label — not yellow.
  */
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, beforeEach } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { TcpHandshake } from "../../components/viz/TcpHandshake";
 
@@ -63,6 +63,14 @@ function accentElementCount(svg: Element): number {
 }
 
 describe("TcpHandshake — V12 palette compliance", () => {
+  // AlgoStepperShell persists the current frame idx to window.location.hash
+  // (writeHashIdx / parseHashIdx). Without clearing the hash between tests,
+  // each test inherits the idx left by the previous test and advanceTo()
+  // lands on a wrong frame. Reset before each test.
+  beforeEach(() => {
+    window.location.hash = "";
+  });
+
   test("F0 (INIT, no messages): zero ACCENT elements", () => {
     const { container } = render(<TcpHandshake />);
     const svg = container.querySelector("svg");
@@ -133,25 +141,30 @@ describe("TcpHandshake — V12 palette compliance", () => {
     expect(accentElementCount(svg!)).toBeLessThanOrEqual(1);
   });
 
-  test("F15 (COOKIES: 3 in-flight messages — all 3 message kinds): at most 1 ACCENT element", () => {
+  test("F15 (COOKIES: 3 in-flight messages — all 3 message kinds): exactly 1 ACCENT element on focal (ACK) indicator", () => {
     const { container } = render(<TcpHandshake />);
     advanceTo(container, 15);
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
-    // Pre-fix: SYN-ACK arrow = ACCENT + ATTACKER header = ACCENT + COOKIES badge = ACCENT
-    //          = 3 ACCENT marks (even ignoring multiple SYN-ACK arrows).
-    // Post-fix: SYN-ACK kind via dash; COOKIES badge via INK stroke; ≤1 ACCENT total.
-    expect(accentElementCount(svg!)).toBeLessThanOrEqual(1);
+    // F15 has SYN + SYN-ACK + ACK simultaneously.  The ACK is the transition-
+    // causing message (server re-hashes → ESTABLISHED), so it is the focal
+    // message (last in inFlight, idx=2).  Exactly 1 ACCENT element must exist —
+    // the FocalIndicator diamond polygon rendered outside AnimatePresence at
+    // the midpoint of the focal ACK arrow.
+    // The ≤1 rule is still satisfied; we also verify it is not 0 (focus applied).
+    expect(accentElementCount(svg!)).toBe(1);
   });
 
-  test("F16 (SUMMARY — CLIENT + SERVER both ESTABLISHED): at most 1 ACCENT element", () => {
+  test("F16 (SUMMARY — no in-flight messages): exactly 0 ACCENT elements", () => {
     const { container } = render(<TcpHandshake />);
     advanceTo(container, 16);
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
+    // F16 is a pure summary frame: inFlight=[], phase="SUMMARY".
+    // No active transition → no focal arrow → zero ACCENT elements.
     // Pre-fix: CLIENT header ACCENT fill + SERVER header ACCENT fill = 2 yellows.
-    // Post-fix: SUMMARY victory encoded via INK + label text, not dual yellow headers.
-    expect(accentElementCount(svg!)).toBeLessThanOrEqual(1);
+    // Post-fix: SUMMARY victory encoded via INK border + label text, not yellow.
+    expect(accentElementCount(svg!)).toBe(0);
   });
 
   test("hatch patterns are present in SVG defs (Shell mounts HatchDefs)", () => {
