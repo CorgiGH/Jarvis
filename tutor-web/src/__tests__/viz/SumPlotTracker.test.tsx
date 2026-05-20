@@ -52,4 +52,47 @@ describe("SumPlotTracker", () => {
     const { container } = render(<SumPlotTracker data={data} mu={8} />);
     expect(container.querySelector("[data-testid='sum-axis-label']")).not.toBeNull();
   });
+
+  describe("ARIA — V19 compliance (display-only diagram)", () => {
+    test("svg has role=img", () => {
+      const { container } = render(<SumPlotTracker data={data} mu={8} />);
+      const svg = container.querySelector("svg[data-testid='sum-plot-tracker']")!;
+      expect(svg.getAttribute("role")).toBe("img");
+    });
+
+    test("svg has aria-labelledby referencing a <title> and <desc> inside it", () => {
+      const { container } = render(<SumPlotTracker data={data} mu={8} />);
+      const svg = container.querySelector("svg[data-testid='sum-plot-tracker']")!;
+      const labelledBy = svg.getAttribute("aria-labelledby") ?? "";
+      const ids = labelledBy.split(" ").filter(Boolean);
+      expect(ids.length).toBeGreaterThanOrEqual(2);
+      for (const id of ids) {
+        const el = svg.querySelector(`#${id}`);
+        expect(el).not.toBeNull();
+      }
+    });
+
+    test("first aria-labelledby id resolves to a <title> element", () => {
+      const { container } = render(<SumPlotTracker data={data} mu={8} />);
+      const svg = container.querySelector("svg[data-testid='sum-plot-tracker']")!;
+      const ids = (svg.getAttribute("aria-labelledby") ?? "").split(" ").filter(Boolean);
+      const titleEl = svg.querySelector(`#${ids[0]}`);
+      expect(titleEl?.tagName.toLowerCase()).toBe("title");
+      expect((titleEl?.textContent ?? "").trim().length).toBeGreaterThan(0);
+    });
+
+    test("second aria-labelledby id resolves to a <desc> element", () => {
+      const { container } = render(<SumPlotTracker data={data} mu={8} />);
+      const svg = container.querySelector("svg[data-testid='sum-plot-tracker']")!;
+      const ids = (svg.getAttribute("aria-labelledby") ?? "").split(" ").filter(Boolean);
+      const descEl = svg.querySelector(`#${ids[1]}`);
+      expect(descEl?.tagName.toLowerCase()).toBe("desc");
+      expect((descEl?.textContent ?? "").trim().length).toBeGreaterThan(0);
+    });
+
+    test("no aria-live region (display-only, no own interaction)", () => {
+      const { container } = render(<SumPlotTracker data={data} mu={8} />);
+      expect(container.querySelector("[aria-live]")).toBeNull();
+    });
+  });
 });

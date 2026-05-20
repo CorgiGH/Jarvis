@@ -1,6 +1,9 @@
 import { useRef, useEffect } from "react";
 import { ACCENT, INK } from "./theme";
 
+const TITLE_ID = "sum-plot-tracker-title";
+const DESC_ID = "sum-plot-tracker-desc";
+
 export interface SumPlotTrackerProps {
   data: number[];
   mu: number;
@@ -84,7 +87,19 @@ export function SumPlotTracker({ data, mu, range }: SumPlotTrackerProps) {
   const initialPos = interpolateMarker(mu, curve);
 
   return (
-    <svg width={SVG_W} height={SVG_H} viewBox={`0 0 ${SVG_W} ${SVG_H}`} data-testid="sum-plot-tracker">
+    <svg
+      width={SVG_W}
+      height={SVG_H}
+      viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+      data-testid="sum-plot-tracker"
+      role="img"
+      aria-labelledby={`${TITLE_ID} ${DESC_ID}`}
+    >
+      <title id={TITLE_ID}>Sum of absolute deviations — Σ|xᵢ − μ| curve</title>
+      <desc id={DESC_ID}>
+        A curve showing the total sum of absolute deviations Σ|xᵢ − μ| across the range of possible μ values.
+        The curve reaches its minimum at the median of the data. A filled circle marker tracks the current μ position on the curve.
+      </desc>
       <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + USABLE_H} stroke={INK} strokeWidth={1} opacity={0.3} />
       <line x1={PAD_L} y1={PAD_T + USABLE_H} x2={PAD_L + USABLE_W} y2={PAD_T + USABLE_H} stroke={INK} strokeWidth={1} opacity={0.3} />
       <text data-testid="sum-axis-label" x={10} y={PAD_T + USABLE_H / 2} fontSize={10} textAnchor="middle" transform={`rotate(-90, 10, ${PAD_T + USABLE_H / 2})`} fill={INK} opacity={0.6}>Σ|xᵢ − μ|</text>
