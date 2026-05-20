@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { scaleLinear } from "@visx/scale";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
-import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import { ACCENT, FONT_FAMILY, INK, PAPER, STROKE_FOCUS } from "./theme";
 import {
   AnimatePresence,
   PopIn,
@@ -619,7 +619,19 @@ function wireTransitX(side: Side, w: number): number {
   return RECEIVER_X + 6;
 }
 
-function PacketGlyph({ p, event }: { p: Packet; event?: EventKind }) {
+function PacketGlyph({
+  p,
+  event,
+  isFocal,
+  frameIdx,
+}: {
+  p: Packet;
+  event?: EventKind;
+  /** True for exactly the ONE packet that is the current focal element of this frame. */
+  isFocal: boolean;
+  /** Frame index — used as data-packet-step so tests can scope queries to active packets. */
+  frameIdx: number;
+}) {
   // For wire-transit, render packet near wire rather than inside the L1 box.
   const onWire = event === "wire-transit" && p.layer === "L1";
   let x: number, y: number, w: number, h: number;
@@ -637,11 +649,15 @@ function PacketGlyph({ p, event }: { p: Packet; event?: EventKind }) {
     h = pos.h;
   }
 
-  const fill = ACCENT;
-  const stroke = INK;
+  // V12 rule: ACCENT only for the single focal element; all other packets are INK.
+  const fill = isFocal ? ACCENT : INK;
+  // Focal packet label needs light ink to contrast against yellow; non-focal against dark.
+  const labelFill = isFocal ? INK : PAPER;
+  const strokeWidth = isFocal ? STROKE_FOCUS : 1;
 
   return (
     <motion.g
+      data-packet-step={frameIdx}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -652,8 +668,8 @@ function PacketGlyph({ p, event }: { p: Packet; event?: EventKind }) {
         animate={{ x, y, width: w, height: h }}
         transition={{ type: "tween", duration: 0.45, ease: "easeInOut" }}
         fill={fill}
-        stroke={stroke}
-        strokeWidth={1}
+        stroke={INK}
+        strokeWidth={strokeWidth}
       />
       <motion.text
         initial={false}
@@ -663,7 +679,7 @@ function PacketGlyph({ p, event }: { p: Packet; event?: EventKind }) {
         fontFamily={FONT_FAMILY}
         fontSize={8}
         fontWeight={700}
-        fill={INK}
+        fill={labelFill}
       >
         {p.label}
       </motion.text>
@@ -682,6 +698,8 @@ function LayerRowRect({
 }) {
   const spec = LAYER_SPECS[layer];
   const x = layerBoxX(side);
+  // V12: active row must NOT use ACCENT fill (yellow-on-yellow with focal packet).
+  // Indicate activity via a thicker INK stroke outline only.
   return (
     <motion.rect
       x={x}
@@ -689,10 +707,10 @@ function LayerRowRect({
       width={COL_W}
       height={spec.h}
       initial={false}
-      animate={{ fill: isActive ? ACCENT : PAPER }}
+      fill={PAPER}
+      animate={{ strokeWidth: isActive ? STROKE_FOCUS : 1 }}
       transition={{ type: "tween", duration: 0.35, ease: "easeInOut" }}
       stroke={INK}
-      strokeWidth={1}
     />
   );
 }
@@ -778,15 +796,26 @@ function FooterMessage({ message }: { message: string }) {
 
 const LAYERS_ORDER: Layer[] = ["L7", "L6", "L5", "L4", "L3", "L2", "L1"];
 
-function renderFrame(frame: Frame<State>): ReactNode {
+function renderFrame(frame: Frame<State>, frameIdx: number): ReactNode {
   const { packets, highlightLayer, event, message } = frame.state;
+
+  // Determine the single focal packet for this frame (V12: exactly one may be ACCENT).
+  // The focal packet is the FIRST packet whose layer+side matches highlightLayer.
+  const focalPacketId: string | null = (() => {
+    if (!highlightLayer) return packets.length > 0 ? packets[0].id : null;
+    const match = packets.find(
+      (p) => p.layer === highlightLayer.layer && p.side === highlightLayer.side
+    );
+    // If no packet lives in the highlighted layer, fall back to first packet.
+    return match ? match.id : (packets.length > 0 ? packets[0].id : null);
+  })();
 
   const fragmentFlash =
     event === "fragment" || event === "reassemble";
 
   return (
     <>
-      {/* SVG markers for arrows */}
+      {/* SVG marker for arrows (ink-only; V12: no ACCENT marker in defs) */}
       <defs>
         <marker
           id="osi-arrow-ink"
@@ -799,23 +828,6 @@ function renderFrame(frame: Frame<State>): ReactNode {
           markerUnits="userSpaceOnUse"
         >
           <path d="M 0 0 L 10 5 L 0 10 z" fill={INK} />
-        </marker>
-        <marker
-          id="osi-arrow-accent"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-          markerUnits="userSpaceOnUse"
-        >
-          <path
-            d="M 0 0 L 10 5 L 0 10 z"
-            fill={ACCENT}
-            stroke={INK}
-            strokeWidth="0.5"
-          />
         </marker>
       </defs>
 
@@ -918,7 +930,8 @@ function renderFrame(frame: Frame<State>): ReactNode {
         MTU = {MTU}B
       </text>
 
-      {/* Fragment / reassemble flash band */}
+      {/* Fragment / reassemble flash band — V12: use INK overlay (not ACCENT) so the
+          yellow slot remains available exclusively for the focal packet glyph. */}
       <AnimatePresence>
         {fragmentFlash && (
           <PopIn key={`flash-${event}`} durationMs={300}>
@@ -927,8 +940,8 @@ function renderFrame(frame: Frame<State>): ReactNode {
               y={LAYER_SPECS.L3.y - 2}
               width={COL_W + (SEP_X - (SENDER_X + COL_W)) + COL_W}
               height={LAYER_SPECS.L3.h + 4}
-              fill={ACCENT}
-              opacity={0.18}
+              fill={INK}
+              opacity={0.08}
               stroke="none"
             />
             <text
@@ -946,10 +959,16 @@ function renderFrame(frame: Frame<State>): ReactNode {
         )}
       </AnimatePresence>
 
-      {/* Packets */}
+      {/* Packets — only the focal packet gets fill=ACCENT (V12 rule). */}
       <AnimatePresence>
         {packets.map((p) => (
-          <PacketGlyph key={p.id + "-" + p.side + "-" + p.layer} p={p} event={event} />
+          <PacketGlyph
+            key={p.id + "-" + p.side + "-" + p.layer}
+            p={p}
+            event={event}
+            isFocal={p.id === focalPacketId}
+            frameIdx={frameIdx}
+          />
         ))}
       </AnimatePresence>
 
