@@ -398,6 +398,20 @@ describe("AlgoStepperShell — V17 keyboard parity", () => {
     fireEvent.keyDown(svg, { key: "Home" });
     expect(screen.getByTestId("he-frame-counter").textContent).toContain("1 / 7");
   });
+
+  test("V17: End stops at the gate ceiling, not the final frame", () => {
+    const frames = Array.from({ length: 7 }, (_, i) => ({ state: i, aria: `f${i}` }));
+    render(
+      <AlgoStepperShell title="t" desc="d" frames={frames}
+        renderFrame={(f) => <text>{String(f.state)}</text>}
+        predictionGates={new Map([[3, { question: "q", answers: [{ label: "A", isCorrect: true }] }]])}
+        testIdPrefix="he2" />
+    );
+    const svg = screen.getByRole("img");
+    fireEvent.keyDown(svg, { key: "End" });
+    // unanswered gate at frame index 3 caps End at 4/7, not 7/7
+    expect(screen.getByTestId("he2-frame-counter").textContent).toContain("4 / 7");
+  });
 });
 
 describe("AlgoStepperShell — voice", () => {
