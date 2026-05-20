@@ -78,10 +78,9 @@ function trajectoryLines(svg: Element): Element[] {
       if (ancestor.tagName.toLowerCase() === "defs") return false;
       ancestor = ancestor.parentElement;
     }
-    // Trajectory lines span between x-coordinates in the plot range (50–330)
-    // and are the only lines with strokeWidth="2.5" (set by DrawLine calls)
+    // Trajectory lines are the only lines with strokeWidth="2.5" (set by DrawLine calls).
     const sw = el.getAttribute("stroke-width") ?? el.getAttribute("strokeWidth") ?? "";
-    return sw === "2.5" || sw === "2";
+    return sw === "2.5";
   });
 }
 
@@ -137,7 +136,7 @@ describe("TcpCwnd — V12 palette compliance", () => {
   });
 
   test("F8 (cong-avoidance phase after ssthresh): all trajectory lines are INK", () => {
-    // F8 = RTT 8, mode should be CONG_AVOIDANCE (reached ssthresh at RTT 5).
+    // F8 = RTT 8, mode should be CONG_AVOIDANCE (reached ssthresh at RTT 4).
     // Pre-fix: CONG_AVOIDANCE lines were already INK (modeColor returned INK).
     // Post-fix: still INK (no regression).
     const { container } = render(<TcpCwnd />);
