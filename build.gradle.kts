@@ -31,6 +31,10 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    // Gate 3: YAML parsing for the content/ knowledge-concept corpus.
+    // kaml binds to kotlinx.serialization @Serializable classes (same classes
+    // serialize to JSON for the curator routes).
+    implementation("com.charleskorn.kaml:kaml:0.65.0")
     implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
 
     implementation("net.java.dev.jna:jna:5.14.0")
@@ -161,4 +165,13 @@ tasks.register<JavaExec>("migrateWiki") {
         "-Dstdout.encoding=UTF-8",
         "-Dstderr.encoding=UTF-8",
     )
+}
+
+tasks.register<JavaExec>("validateContent") {
+    group = "verification"
+    description = "Validate the content/ knowledge-concept corpus (DAG + structural checks)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("jarvis.content.ContentCliKt")
+    args = listOf("content")
+    jvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
 }
