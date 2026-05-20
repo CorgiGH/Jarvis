@@ -34,6 +34,8 @@ export interface AlgoStepperShellProps<S> {
   voiceMap?: Record<number, string>;
   onShare?: (hashState: string) => void;
   testIdPrefix?: string;
+  initialStep?: number;
+  onStep?: (idx: number) => void;
 }
 
 function parseHashIdx(prefix: string): number | null {
@@ -68,16 +70,16 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
 
   const initialIdx = useMemo(() => {
     const fromHash = parseHashIdx(testIdPrefix);
-    if (fromHash === null) return 0;
-    // On first mount no gates are answered yet — clamp the hash-restored frame to
-    // the lowest prediction-gate frame so a shared/stale hash cannot deep-link
-    // past an unanswered prediction gate.
+    const seed = fromHash ?? props.initialStep ?? 0;
+    // On first mount no gates are answered yet — clamp the seed frame to the
+    // lowest prediction-gate frame so a stale hash OR an initialStep cannot
+    // deep-link past an unanswered prediction gate.
     const gateFrames = props.predictionGates
       ? [...props.predictionGates.keys()].sort((a, b) => a - b)
       : [];
     const ceiling = Math.min(gateFrames[0] ?? lastIdx, lastIdx);
-    return Math.max(0, Math.min(ceiling, fromHash));
-  }, [testIdPrefix, lastIdx, props.predictionGates]);
+    return Math.max(0, Math.min(ceiling, seed));
+  }, [testIdPrefix, lastIdx, props.initialStep, props.predictionGates]);
 
   const [idx, setIdx] = useState(initialIdx);
   const [answeredGates, setAnsweredGates] = useState<Set<number>>(new Set());
@@ -111,7 +113,8 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
 
   useEffect(() => {
     writeHashIdx(testIdPrefix, idx);
-  }, [idx, testIdPrefix]);
+    props.onStep?.(idx);
+  }, [idx, testIdPrefix, props.onStep]);
 
   const playSrc = useCallback((src: string) => {
     if (!src) return;

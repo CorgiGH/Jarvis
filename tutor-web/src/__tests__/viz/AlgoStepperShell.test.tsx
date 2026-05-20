@@ -414,6 +414,34 @@ describe("AlgoStepperShell — V17 keyboard parity", () => {
   });
 });
 
+describe("AlgoStepperShell — initialStep/onStep contract (T5)", () => {
+  test("contract: initialStep seeds the frame, onStep fires on change", () => {
+    const seen: number[] = [];
+    const frames = Array.from({ length: 6 }, (_, i) => ({ state: i, aria: `f${i}` }));
+    render(
+      <AlgoStepperShell title="t" desc="d" frames={frames}
+        renderFrame={(f) => <text>{String(f.state)}</text>}
+        initialStep={3} onStep={(i) => seen.push(i)} testIdPrefix="cn" />
+    );
+    expect(screen.getByTestId("cn-frame-counter").textContent).toContain("4 / 6");
+    fireEvent.click(screen.getByTestId("cn-step-fwd"));
+    expect(seen).toContain(4);
+  });
+
+  test("contract: initialStep cannot seed past an unanswered gate", () => {
+    const frames = Array.from({ length: 8 }, (_, i) => ({ state: i, aria: `f${i}` }));
+    render(
+      <AlgoStepperShell title="t" desc="d" frames={frames}
+        renderFrame={(f) => <text>{String(f.state)}</text>}
+        initialStep={6}
+        predictionGates={new Map([[2, { question: "q", answers: [{ label: "A", isCorrect: true }] }]])}
+        testIdPrefix="cg" />
+    );
+    // initialStep 6, but a gate at frame 2 clamps the seed -> 3 / 8
+    expect(screen.getByTestId("cg-frame-counter").textContent).toContain("3 / 8");
+  });
+});
+
 describe("AlgoStepperShell — voice", () => {
   let originalAudio: typeof Audio;
   const audioInstances: Array<{ src: string | null; played: boolean; paused: boolean }> = [];
