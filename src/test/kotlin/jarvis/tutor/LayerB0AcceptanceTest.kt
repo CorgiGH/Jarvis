@@ -94,6 +94,8 @@ class LayerB0AcceptanceTest {
         val userId = TutorTypes.ulid()
         UserRepo(tutorCtx.db).insert(User(userId, "victor", UserScope.OWNER, Instant.now(), Instant.now()))
         val sid = SessionRepo(tutorCtx.db).create(userId, ttlSeconds = 3600)
+        // Seed AI-literacy confirmation so the gate passes for this pre-gate test.
+        AiLiteracyRepo(tutorCtx.db).confirm(userId, AI_LITERACY_VERSION, "ro")
         val csrf = "b0-accept-csrf-token"
 
         val client = createClient { install(HttpCookies) }

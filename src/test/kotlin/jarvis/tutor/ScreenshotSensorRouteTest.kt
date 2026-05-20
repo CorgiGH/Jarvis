@@ -60,6 +60,8 @@ class ScreenshotSensorRouteTest {
         UserRepo(ctx.db).insert(User(userId, "v", UserScope.OWNER, Instant.now(), Instant.now()))
         val raw = TokenRepo(ctx.db).issue(userId, "primary")
         val sid = SessionRepo(ctx.db).create(userId, ttlSeconds = 3600)
+        // Seed AI-literacy confirmation so the gate passes for pre-gate tests.
+        AiLiteracyRepo(ctx.db).confirm(userId, AI_LITERACY_VERSION, "ro")
         // Synthesize a CSRF cookie value the test will mirror in headers.
         val csrf = "test-csrf-12345"
         return Triple(userId, sid, csrf)

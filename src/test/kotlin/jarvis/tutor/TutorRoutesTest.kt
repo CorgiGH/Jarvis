@@ -97,6 +97,8 @@ class TutorRoutesTest {
         val userId = TutorTypes.ulid()
         UserRepo(ctx.db).insert(User(userId, "v", UserScope.OWNER, Instant.now(), Instant.now()))
         val sid = SessionRepo(ctx.db).create(userId, ttlSeconds = 3600)
+        // Seed AI-literacy confirmation so the gate passes for pre-gate tests.
+        AiLiteracyRepo(ctx.db).confirm(userId, AI_LITERACY_VERSION, "ro")
         return userId to sid
     }
 
