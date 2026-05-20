@@ -21,3 +21,5 @@ export const FONT_SIZE_VALUE = 18;
 // Reference via fill={HATCH_LIGHT}; the consuming SVG must render <HatchDefs/>.
 export const HATCH_LIGHT = "url(#hatch-light)";
 export const HATCH_DENSE = "url(#hatch-dense)";
+// Cross-hatch (two perpendicular line sets) — 4th category slot for 4-job Gantt.
+export const HATCH_CROSS = "url(#hatch-cross)";

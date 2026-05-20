@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { scaleLinear } from "@visx/scale";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
-import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import { ACCENT, FONT_FAMILY, HATCH_CROSS, HATCH_DENSE, HATCH_LIGHT, INK, PAPER } from "./theme";
 import {
   AnimatePresence,
   DrawPath,
@@ -516,17 +516,20 @@ const MSG_Y = 340;
 
 const T_MAX = 28;
 
-// ---- Job fill opacity tier -------------------------------------------------
-function jobOpacity(job: string): number {
-  if (job === "J1") return 0.85;
-  if (job === "J2") return 0.6;
-  if (job === "J3") return 0.4;
-  return 0.25; // J4
+// ---- Job category fill — V12/V6 compliant: hatch NOT opacity ---------------
+// J1 → solid INK, J2 → dense hatch, J3 → light hatch, J4 → cross-hatch.
+// ACCENT (#facc15) is reserved strictly for the current-time tick (focal element).
+function jobFill(job: string): string {
+  if (job === "J1") return INK;
+  if (job === "J2") return HATCH_DENSE;
+  if (job === "J3") return HATCH_LIGHT;
+  return HATCH_CROSS; // J4
 }
 
 function jobTextFill(job: string): string {
-  // For darker fills, the text inside should be PAPER so it's readable.
-  if (job === "J1" || job === "J2") return PAPER;
+  // Solid INK fill → text must be PAPER for contrast.
+  // Hatch fills are open patterns on PAPER background → INK text is readable.
+  if (job === "J1") return PAPER;
   return INK;
 }
 
@@ -618,8 +621,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
                   y={GANTT_Y + 8}
                   width={w}
                   height={26}
-                  fill={INK}
-                  opacity={jobOpacity(s.job)}
+                  fill={jobFill(s.job)}
                   stroke={INK}
                   strokeWidth={1}
                 />
@@ -794,8 +796,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
               y={rowY - 9}
               width={50}
               height={12}
-              fill={INK}
-              opacity={jobOpacity(j.id)}
+              fill={jobFill(j.id)}
               stroke={INK}
               strokeWidth={1}
             />
@@ -830,7 +831,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
             stroke={INK}
             strokeWidth={1}
           />
-          {/* Legend rows */}
+          {/* Legend rows — plain INK bullet squares, no opacity-as-category */}
           {[
             "FCFS — order by arrival; no preemption.",
             "SJF — pick shortest burst; non-preemptive.",
@@ -845,7 +846,6 @@ function renderFrame(frame: Frame<State>): ReactNode {
                 width={10}
                 height={10}
                 fill={INK}
-                opacity={0.4 + i * 0.1}
                 stroke={INK}
                 strokeWidth={0.5}
               />
@@ -969,8 +969,7 @@ function MlfqPanel({
                     y={y + 4}
                     width={26}
                     height={rowHeight - 8}
-                    fill={INK}
-                    opacity={jobOpacity(job)}
+                    fill={jobFill(job)}
                     stroke={INK}
                     strokeWidth={1}
                   />
@@ -1101,7 +1100,6 @@ function SummaryPanel({ bars }: { bars: SummaryBar[] }): ReactNode {
               width={w}
               height={rowH}
               fill={winner ? ACCENT : INK}
-              opacity={winner ? 1 : 0.6}
               stroke={INK}
               strokeWidth={1}
             />
