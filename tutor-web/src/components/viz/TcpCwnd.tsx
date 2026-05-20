@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { scaleLinear } from "@visx/scale";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
-import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import { ACCENT, FONT_FAMILY, HATCH_LIGHT, INK, PAPER } from "./theme";
 import {
   AnimatePresence,
   DrawLine,
@@ -108,11 +108,6 @@ const STATE_Y = 30;
 const STATE_W = 120;
 
 const MSG_Y = 340;
-
-function modeColor(mode: Mode): string {
-  if (mode === "SLOW_START") return ACCENT;
-  return INK;
-}
 
 function renderFrame(frame: Frame<TCPState>): ReactNode {
   const { rtt, cwnd, ssthresh, mode, history, message } = frame.state;
@@ -263,8 +258,29 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
         <tspan>{ssthresh}</tspan>
       </motion.text>
 
+      {/* Slow-start region hatch band — marks the x-range where mode===SLOW_START.
+          This visually distinguishes the slow-start phase without using color. */}
+      {(() => {
+        const slowStartPoints = history.filter((p) => p.mode === "SLOW_START");
+        if (slowStartPoints.length === 0) return null;
+        const minRtt = slowStartPoints[0].rtt;
+        const maxRtt = slowStartPoints[slowStartPoints.length - 1].rtt;
+        const x1 = xScale(minRtt);
+        const x2 = xScale(maxRtt);
+        return (
+          <rect
+            x={x1}
+            y={PLOT_Y}
+            width={Math.max(0, x2 - x1)}
+            height={PLOT_H}
+            fill={HATCH_LIGHT}
+            opacity={0.5}
+          />
+        );
+      })()}
+
       {/* cwnd trajectory — one DrawLine per consecutive RTT pair, draws on as history grows.
-          Duration matches the data point's slide so line + dot arrive together each step. */}
+          Uniformly INK end-to-end; mode is encoded by the hatch band above, not line color. */}
       {history.slice(1).map((p, i) => {
         const prev = history[i];
         return (
@@ -274,7 +290,7 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
             y1={yScale(prev.cwnd)}
             x2={xScale(p.rtt)}
             y2={yScale(p.cwnd)}
-            stroke={modeColor(p.mode)}
+            stroke={INK}
             strokeWidth={2.5}
             durationMs={500}
           />
@@ -372,14 +388,14 @@ function renderFrame(frame: Frame<TCPState>): ReactNode {
       >
         MODE
       </text>
-      <motion.rect
+      {/* Mode panel box — hatched background for slow-start, plain PAPER for others.
+          Category is encoded via hatch pattern, NOT via color. */}
+      <rect
         x={STATE_X + 8}
         y={STATE_Y + 84}
         width={STATE_W - 16}
         height={20}
-        initial={false}
-        animate={{ fill: mode === "SLOW_START" ? ACCENT : "#fff" }}
-        transition={{ duration: 0.5, ease: "easeInOut" }}
+        fill={mode === "SLOW_START" ? HATCH_LIGHT : PAPER}
         stroke={INK}
         strokeWidth={1}
       />
@@ -527,7 +543,7 @@ export function TcpCwnd(): ReactNode {
   return (
     <AlgoStepperShell<TCPState>
       title="RC-3 · TCP congestion window (Reno)"
-      desc="Slow-start → congestion avoidance → packet loss → fast recovery. AIMD pattern over time. Yellow = slow-start; black = congestion avoidance."
+      desc="Slow-start → congestion avoidance → packet loss → fast recovery. AIMD pattern over time. Hatched band = slow-start region; yellow dot = current cwnd position."
       frames={FRAMES}
       renderFrame={renderFrame}
       testIdPrefix="tcp-cwnd"
