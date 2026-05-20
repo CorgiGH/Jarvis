@@ -12,7 +12,10 @@ describe("AiLiteracyGate", () => {
     await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/api/v1/me/ai-literacy/confirm"),
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-CSRF-Token": expect.any(String) }),
+      }),
     );
   });
 });

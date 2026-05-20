@@ -95,7 +95,7 @@ export function AiLiteracyGate({
           type="button"
           onClick={handleConfirm}
           disabled={inFlight}
-          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-4 py-2 hover:bg-page-fg disabled:opacity-50 self-start"
+          className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-4 py-2 hover:bg-page-fg disabled:opacity-50 disabled:cursor-not-allowed self-start"
         >
           {lang === "ro" ? "AM ÎNȚELES — CONTINUĂ" : "CONFIRM — CONTINUE"}
         </button>

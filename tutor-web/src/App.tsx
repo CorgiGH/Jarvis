@@ -80,8 +80,8 @@ export function App() {
         navigate("/login", { replace: true });
         return;
       }
-      // Logged-in: check AI-literacy confirmation. On 401 we already redirected
-      // above; any other status means a session was established (or network err).
+      // 401 → already redirected to /login above. status 0 → network error: skip the
+      // literacy gate and proceed. Any other status → established session: check literacy.
       if (status !== 401 && status !== 0) {
         try {
           const r = await jarvisFetch("/api/v1/me/export");
@@ -323,7 +323,7 @@ export function App() {
         {here.pathname === "/login"
           ? <LoginPage />
           : here.pathname === "/welcome/ai-literacy"
-            ? <AiLiteracyGate lang={gateLang} onConfirmed={() => navigate("/")} />
+            ? <AiLiteracyGate lang={gateLang} onConfirmed={() => { setSessionReady(true); navigate("/"); }} />
             : here.pathname === "/review"
             ? <FsrsReview streak={0} />
             : here.pathname === "/tasks"
