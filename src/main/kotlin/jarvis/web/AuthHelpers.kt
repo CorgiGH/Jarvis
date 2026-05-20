@@ -1,9 +1,11 @@
 package jarvis.web
 
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.RoutingContext
+import jarvis.tutor.AiLiteracyRepo
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.TutorContextKey
 
@@ -29,4 +31,19 @@ suspend fun RoutingContext.requireUser(block: suspend (userId: String) -> Unit) 
         return
     }
     block(uid)
+}
+
+/** Require AI-literacy confirmation; respond 403 and skip [block] if not confirmed. */
+suspend fun ApplicationCall.requireAiLiteracy(userId: String, block: suspend () -> Unit) {
+    val ctx = application.attributes.getOrNull(TutorContextKey)
+        ?: return respond(HttpStatusCode.InternalServerError, "no ctx")
+    if (!AiLiteracyRepo(ctx.db).hasConfirmedCurrent(userId)) {
+        respondText(
+            """{"error":"ai-literacy-required"}""",
+            ContentType.Application.Json,
+            HttpStatusCode.Forbidden,
+        )
+        return
+    }
+    block()
 }

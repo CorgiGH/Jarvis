@@ -337,6 +337,14 @@ fun Application.installTutorRoutes() {
                         call.respond(HttpStatusCode.Unauthorized, "invalid session")
                         return@csrfProtect
                     }
+                if (!AiLiteracyRepo(ctx.db).hasConfirmedCurrent(userId)) {
+                    call.respondText(
+                        """{"error":"ai-literacy-required"}""",
+                        ContentType.Application.Json,
+                        HttpStatusCode.Forbidden,
+                    )
+                    return@csrfProtect
+                }
                 val vision = ctx.visionLlm
                 if (vision == null) {
                     call.respond(
@@ -1458,8 +1466,16 @@ fun Application.installTutorRoutes() {
             call.csrfProtect {
                 val t0 = System.currentTimeMillis()
                 val sid = call.request.cookies["jarvis_session"]
-                sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
                     ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                if (!AiLiteracyRepo(ctx.db).hasConfirmedCurrent(userId)) {
+                    call.respondText(
+                        """{"error":"ai-literacy-required"}""",
+                        ContentType.Application.Json,
+                        HttpStatusCode.Forbidden,
+                    )
+                    return@csrfProtect
+                }
                 val env = try {
                     sensorJson.decodeFromString(jarvis.tutor.SidekickEnvelope.serializer(), call.receiveText())
                 } catch (e: Exception) {
