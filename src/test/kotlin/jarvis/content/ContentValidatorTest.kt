@@ -62,4 +62,22 @@ class ContentValidatorTest {
         assertEquals("orphan", issues.single().rule)
         assertTrue(issues.single().detail.contains("floating"))
     }
+
+    @Test
+    fun `exam weights summing to 1 within tolerance pass`() {
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kc("a", weight = 0.6), kc("b", weight = 0.41)),
+            edges = emptyList(), misconceptions = emptyList())
+        assertTrue(ContentValidator.checkExamWeights(sub).isEmpty()) // 1.01 within 0.02
+    }
+
+    @Test
+    fun `exam weights outside tolerance are reported`() {
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kc("a", weight = 0.5), kc("b", weight = 0.3)),
+            edges = emptyList(), misconceptions = emptyList())
+        val issues = ContentValidator.checkExamWeights(sub) // sum 0.8
+        assertEquals(1, issues.size)
+        assertEquals("exam_weight", issues.single().rule)
+    }
 }

@@ -90,4 +90,17 @@ object ContentValidator {
         }
         return issues
     }
+
+    const val WEIGHT_TOLERANCE = 0.02
+
+    /** Per spec §13: the exam_weight of a subject's KCs must sum to 1.0 +/- 0.02. */
+    fun checkExamWeights(sub: LoadedSubject): List<ValidationIssue> {
+        if (sub.kcs.isEmpty()) return emptyList()
+        val sum = sub.kcs.sumOf { it.exam_weight }
+        if (kotlin.math.abs(sum - 1.0) > WEIGHT_TOLERANCE) {
+            return listOf(ValidationIssue("error", "exam_weight", sub.subject,
+                "exam_weight sum is %.4f — must be 1.0 +/- %.2f".format(sum, WEIGHT_TOLERANCE)))
+        }
+        return emptyList()
+    }
 }
