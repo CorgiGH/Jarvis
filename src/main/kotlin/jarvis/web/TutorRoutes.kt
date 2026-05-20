@@ -1893,7 +1893,7 @@ fun Application.installTutorRoutes() {
                     }.getOrNull()
                     val lang = if (body?.lang == "en") "en" else "ro"
                     AiLiteracyRepo(ctx.db).confirm(uid, AI_LITERACY_VERSION, lang)
-                    call.respond(HttpStatusCode.OK, """{"ok":true}""")
+                    call.respondText("""{"ok":true}""", ContentType.Application.Json)
                 }
             }
         }
