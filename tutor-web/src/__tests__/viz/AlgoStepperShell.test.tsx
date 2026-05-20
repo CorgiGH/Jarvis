@@ -385,6 +385,21 @@ describe("AlgoStepperShell — ARIA live", () => {
   });
 });
 
+describe("AlgoStepperShell — V17 keyboard parity", () => {
+  test("V17: Home jumps to first frame, End jumps to last reachable frame", () => {
+    const frames = Array.from({ length: 7 }, (_, i) => ({ state: i, aria: `f${i}` }));
+    render(
+      <AlgoStepperShell title="t" desc="d" frames={frames}
+        renderFrame={(f) => <text>{String(f.state)}</text>} testIdPrefix="he" />
+    );
+    const svg = screen.getByRole("img");
+    fireEvent.keyDown(svg, { key: "End" });
+    expect(screen.getByTestId("he-frame-counter").textContent).toContain("7 / 7");
+    fireEvent.keyDown(svg, { key: "Home" });
+    expect(screen.getByTestId("he-frame-counter").textContent).toContain("1 / 7");
+  });
+});
+
 describe("AlgoStepperShell — voice", () => {
   let originalAudio: typeof Audio;
   const audioInstances: Array<{ src: string | null; played: boolean; paused: boolean }> = [];

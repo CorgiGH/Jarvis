@@ -190,6 +190,12 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     } else if (k === "r") {
       e.preventDefault();
       reset();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setIdx(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setIdx(maxReachable);
     }
   };
 
