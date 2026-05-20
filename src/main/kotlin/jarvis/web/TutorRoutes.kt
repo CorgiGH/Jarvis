@@ -8,6 +8,10 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.routing.put
 import io.ktor.server.routing.delete
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json as ktorJson
 import jarvis.tutor.AuditLinesTable
 import jarvis.tutor.ContentRef
 import jarvis.tutor.DaemonClient
@@ -189,6 +193,30 @@ fun Application.installTutorRoutes() {
                 ),
             )
             call.respondRedirect("/tutor/")
+        }
+
+        // Gate 2: email-based magic-link request.
+        // User submits {email, lang} → server issues a token + emails the link.
+        // Always returns 200 for valid emails (no enumeration). Requires no auth.
+        // /auth/* is in the WebMain static-gate allowlist — no session needed.
+        post("/auth/request-link") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: return@post call.respond(HttpStatusCode.InternalServerError, "no ctx")
+            val body = try {
+                sensorJson.decodeFromString(RequestLinkBody.serializer(), call.receiveText())
+            } catch (e: Exception) {
+                return@post call.respond(HttpStatusCode.BadRequest, """{"error":"invalid body"}""")
+            }
+            val email = body.email.trim().lowercase()
+            if (!EMAIL_REGEX.matches(email)) {
+                return@post call.respond(HttpStatusCode.BadRequest, """{"error":"invalid email"}""")
+            }
+            val lang = if (body.lang == "en") "en" else "ro"
+            val baseUrl = System.getenv("JARVIS_PUBLIC_BASE_URL") ?: "https://corgflix.duckdns.org"
+            val rawToken = jarvis.tutor.MagicLinkRepo(ctx.db).issue(email, lang, ttlSeconds = 15 * 60)
+            val link = "$baseUrl/tutor/auth/verify?token=$rawToken"
+            ctx.mailer.send(email, link, lang)
+            call.respond(HttpStatusCode.OK, """{"ok":true}""")
         }
 
         // Single-user auto-session: SPA hits this on mount. If session
@@ -1800,6 +1828,13 @@ fun Application.installTutorRoutes() {
 
 private val sensorJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+// Gate 2: request body for POST /auth/request-link.
+@kotlinx.serialization.Serializable
+data class RequestLinkBody(val email: String, val lang: String = "ro")
+
+/** RFC-5322 simplified: at least one non-whitespace/@ char, @, domain with dot. */
+val EMAIL_REGEX = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+
 /**
  * SHA-256 of a UTF-8 string, lowercase hex (64 chars). Used by the drill-grade
  * envelope writer to hash R-code attempts before logging — keeps raw student
@@ -2154,7 +2189,24 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
     // unset — sensor route returns 503 with a helpful message rather than
     // 500ing on a NullPointerException.
     val vision = jarvis.VisionLlmFactory.create()
-    attributes.put(TutorContextKey, TutorContext(db, ledgerDir, vision))
+
+    // Gate 2: build mailer. Uses Resend when RESEND_API_KEY is set; falls
+    // back to LoggingMailer (prints link to stdout) in dev.
+    val resendKey = System.getenv("RESEND_API_KEY")
+        ?: io.github.cdimascio.dotenv.dotenv { ignoreIfMissing = true }["RESEND_API_KEY"]
+    val mailFrom = System.getenv("JARVIS_MAGIC_LINK_FROM") ?: "jarvis@corgflix.duckdns.org"
+    val mailer: jarvis.tutor.MagicLinkMailer = if (!resendKey.isNullOrBlank()) {
+        val mailClient = HttpClient(CIO) {
+            install(ContentNegotiation) {
+                ktorJson()
+            }
+        }
+        jarvis.tutor.ResendMailer(resendKey, mailFrom, mailClient)
+    } else {
+        jarvis.tutor.LoggingMailer()
+    }
+
+    attributes.put(TutorContextKey, TutorContext(db, ledgerDir, vision, mailer))
     // Layer B1: start the effector watchdog (default-OFF behind
     // EFFECTOR_WATCHDOG_ENABLED env). Reaps stale PRE_SEALED rows
     // every 1s.

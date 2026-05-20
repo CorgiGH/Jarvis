@@ -14,6 +14,10 @@ data class TutorContext(
      *  no vision provider is configured (e.g. OPENROUTER_API_KEY unset).
      *  Routes that need vision check this and respond 503 cleanly. */
     val visionLlm: VisionLlm? = null,
+    /** Gate 2: mailer used by POST /auth/request-link to send magic-link emails.
+     *  Defaults to LoggingMailer() (dev fallback) so all existing callers compile
+     *  unchanged. Production sets ResendMailer via installTutorContext(). */
+    val mailer: MagicLinkMailer = LoggingMailer(),
 )
 val TutorContextKey = AttributeKey<TutorContext>("TutorContext")
 
