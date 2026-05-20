@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getCsrfToken } from "../lib/api";
 import { useInFlight } from "../lib/inFlight";
 
@@ -52,8 +52,8 @@ export function SettingsMe() {
 
   // Delete confirm: "idle" | "confirm" (waiting for second click)
   const [deleteConfirmState, setDeleteConfirmState] = useState<"idle" | "confirm">("idle");
-  // Timeout ref for resetting the confirm state if user doesn't click again
-  const [deleteConfirmTimer, setDeleteConfirmTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  // Timer ref for resetting the confirm state — ref avoids extra re-renders on set/clear
+  const deleteConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pauseFlight = useInFlight();
   const deleteFlight = useInFlight();
@@ -84,12 +84,10 @@ export function SettingsMe() {
     return () => { cancelled = true; };
   }, []);
 
-  // Clean up delete-confirm timer on unmount
-  useEffect(() => {
-    return () => {
-      if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer);
-    };
-  }, [deleteConfirmTimer]);
+  // Clean up delete-confirm timer on unmount ([] dep = registers once, fires once)
+  useEffect(() => () => {
+    if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
+  }, []);
 
   async function handlePauseToggle() {
     setActionError(null);
@@ -115,16 +113,17 @@ export function SettingsMe() {
   function handleDeleteClick() {
     if (deleteConfirmState === "idle") {
       // First click — enter confirm state with 5s auto-reset
+      if (deleteConfirmTimerRef.current) clearTimeout(deleteConfirmTimerRef.current);
       setDeleteConfirmState("confirm");
-      const timer = setTimeout(() => {
+      deleteConfirmTimerRef.current = setTimeout(() => {
         setDeleteConfirmState("idle");
+        deleteConfirmTimerRef.current = null;
       }, 5000);
-      setDeleteConfirmTimer(timer);
     } else {
       // Second click — execute delete
-      if (deleteConfirmTimer) {
-        clearTimeout(deleteConfirmTimer);
-        setDeleteConfirmTimer(null);
+      if (deleteConfirmTimerRef.current) {
+        clearTimeout(deleteConfirmTimerRef.current);
+        deleteConfirmTimerRef.current = null;
       }
       executeDelete();
     }
