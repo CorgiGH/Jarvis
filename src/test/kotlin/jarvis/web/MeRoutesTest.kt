@@ -5,11 +5,17 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import io.ktor.server.testing.testApplication
 import jarvis.tutor.AiLiteracyConfirmationTable
+import jarvis.tutor.CardActionLogTable
 import jarvis.tutor.ConsentLogTable
+import jarvis.tutor.EffectorAttemptsTable
 import jarvis.tutor.FsrsCardsTable
 import jarvis.tutor.KnowledgeGapsTable
+import jarvis.tutor.SensorEventsTable
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.SessionsTable
+import jarvis.tutor.taskdetect.DetectedTaskMappingTable
+import jarvis.tutor.TasksTable
+import jarvis.tutor.TrustGrantsTable
 import jarvis.tutor.TutorContextKey
 import jarvis.tutor.TutorDb
 import jarvis.tutor.TutorTypes
@@ -48,7 +54,7 @@ class MeRoutesTest {
     @Test fun `delete removes the user and revokes the session`() = testApplication {
         val dbDir = Files.createTempDirectory("medelete")
         val db = TutorDb.connect(dbDir.resolve("t.db").toString())
-        transaction(db) { SchemaUtils.create(UsersTable, SessionsTable, ConsentLogTable, UserPreferencesTable, AiLiteracyConfirmationTable, FsrsCardsTable, KnowledgeGapsTable, TokensTable) }
+        transaction(db) { SchemaUtils.create(UsersTable, SessionsTable, ConsentLogTable, UserPreferencesTable, AiLiteracyConfirmationTable, TrustGrantsTable, SensorEventsTable, EffectorAttemptsTable, CardActionLogTable, DetectedTaskMappingTable, TasksTable, FsrsCardsTable, KnowledgeGapsTable, TokensTable) }
         val uid = TutorTypes.ulid()
         UserRepo(db).insert(User(uid, "u", UserScope.FRIEND, Instant.now(), Instant.now()))
         val sid = SessionRepo(db).create(uid, 3600)

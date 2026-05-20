@@ -62,6 +62,8 @@ import jarvis.tutor.TutorEventLog
 import jarvis.tutor.MailResult
 import jarvis.tutor.RcodeRedacted
 import jarvis.tutor.UsersTable
+import jarvis.tutor.CardActionLogTable
+import jarvis.tutor.taskdetect.DetectedTaskMappingTable
 import jarvis.tutor.csrfProtect
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -1941,14 +1943,23 @@ fun Application.installTutorRoutes() {
                 ?: return@post call.respond(HttpStatusCode.InternalServerError, "no ctx")
             requireUser { uid ->
                 call.csrfProtect {
-                    // GDPR Art 17 erasure. Covers tutor + auth tables. Legacy Layer-A/B
-                    // tables (TrustGrants, SensorEvents, EffectorAttempts, CardActionLog,
-                    // Tasks, DetectedTaskMapping) deferred to a follow-up; AuditLines is
-                    // retained by design (hash-chain integrity, Art 17(3)(b)).
+                    // GDPR Art 17 erasure — complete across all user-scoped tables.
+                    // Deletion order: child tables first (all FK to UsersTable only;
+                    // no cross-FKs between the tables below), then SessionsTable,
+                    // then the user row itself. AuditLinesTable is intentionally
+                    // EXCLUDED — it is an append-only hash-chained audit log retained
+                    // by design under GDPR Art 17(3)(b) (legal obligation / public
+                    // interest / accountability).
                     transaction(ctx.db) {
                         ConsentLogTable.deleteWhere { ConsentLogTable.userId eq uid }
                         UserPreferencesTable.deleteWhere { UserPreferencesTable.userId eq uid }
                         AiLiteracyConfirmationTable.deleteWhere { AiLiteracyConfirmationTable.userId eq uid }
+                        TrustGrantsTable.deleteWhere { TrustGrantsTable.userId eq uid }
+                        SensorEventsTable.deleteWhere { SensorEventsTable.userId eq uid }
+                        EffectorAttemptsTable.deleteWhere { EffectorAttemptsTable.userId eq uid }
+                        CardActionLogTable.deleteWhere { CardActionLogTable.userId eq uid }
+                        DetectedTaskMappingTable.deleteWhere { DetectedTaskMappingTable.userId eq uid }
+                        TasksTable.deleteWhere { TasksTable.userId eq uid }
                         FsrsCardsTable.deleteWhere { FsrsCardsTable.userId eq uid }
                         KnowledgeGapsTable.deleteWhere { KnowledgeGapsTable.userId eq uid }
                         TokensTable.deleteWhere { TokensTable.userId eq uid }
