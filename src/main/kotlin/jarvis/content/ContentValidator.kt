@@ -122,6 +122,27 @@ object ContentValidator {
         return issues
     }
 
+    /**
+     * Runs every structural check across all [subjects]. [sourceText] resolves a
+     * doc id to its extracted source text (see checkVerbatimSources).
+     * ok = true iff there are no "error"-severity issues; warnings do not fail.
+     */
+    fun validate(
+        subjects: List<LoadedSubject>,
+        sourceText: (doc: String) -> String?,
+    ): ValidationReport {
+        val issues = mutableListOf<ValidationIssue>()
+        for (sub in subjects) {
+            issues += detectCycles(sub)
+            issues += detectOrphans(sub)
+            issues += checkExamWeights(sub)
+            issues += checkBilingual(sub)
+            issues += checkVerbatimSources(sub, sourceText)
+        }
+        val ok = issues.none { it.severity == "error" }
+        return ValidationReport(ok = ok, disclaimer = DISCLAIMER, issues = issues)
+    }
+
     private fun normalizeWs(s: String): String = s.replace(Regex("\\s+"), " ").trim()
 
     /**
