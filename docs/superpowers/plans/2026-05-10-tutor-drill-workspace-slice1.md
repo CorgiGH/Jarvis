@@ -6015,7 +6015,7 @@ export function CompareFrames({ data }: CompareFramesProps) {
     const mod = await import("plotly.js-dist-min");
     const Plotly = (mod as any).default ?? mod;
     if (typeof Plotly.animate !== "function") return;
-    const el = document.querySelector("[data-testid='compare-frames-plotly'] .js-plotly-plot");
+    const el = document.querySelector("[data-testid='compare-frames'] .js-plotly-plot");
     if (!el) return;
     const prefersReduced = typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -6027,7 +6027,7 @@ export function CompareFrames({ data }: CompareFramesProps) {
   }, [frames]);
 
   return (
-    <div data-testid="compare-frames-plotly" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+    <div data-testid="compare-frames" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
       <PlotlyEmbed
         indexLabel="FIG"
         figure={{

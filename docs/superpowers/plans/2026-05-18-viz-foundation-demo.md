@@ -2629,7 +2629,7 @@ export function CompareFrames({ data }: CompareFramesProps) {
 
   return (
     <div
-      data-testid="compare-frames-plotly"
+      data-testid="compare-frames"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -2748,7 +2748,7 @@ Read `tutor-web/src/__tests__/viz/CompareFrames.test.tsx`. Identify plotly-speci
 
 Rewrite assertions to:
 - Render the component without throw
-- `getByTestId("compare-frames-plotly")` exists
+- `getByTestId("compare-frames")` exists
 - `getByTestId("compare-frames-play")` exists
 - Clicking play changes `getByTestId("compare-mode-readout")` text from "mode: baseline" → "mode: mean" → "mode: median"
 - `getByTestId("compare-data-point")` count equals `data.length`
@@ -2764,7 +2764,7 @@ import { CompareFrames } from "../../components/viz/CompareFrames";
 describe("CompareFrames (visx impl)", () => {
   test("renders root, play button, and N data points", () => {
     render(<CompareFrames data={[1, 2, 3, 4, 5]} />);
-    expect(screen.getByTestId("compare-frames-plotly")).toBeInTheDocument();
+    expect(screen.getByTestId("compare-frames")).toBeInTheDocument();
     expect(screen.getByTestId("compare-frames-play")).toBeInTheDocument();
     expect(screen.getAllByTestId("compare-data-point")).toHaveLength(5);
   });

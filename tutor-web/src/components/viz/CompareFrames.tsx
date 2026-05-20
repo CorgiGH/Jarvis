@@ -49,7 +49,7 @@ export function CompareFrames({ data }: CompareFramesProps) {
 
   return (
     <div
-      data-testid="compare-frames-plotly"
+      data-testid="compare-frames"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -63,9 +63,15 @@ export function CompareFrames({ data }: CompareFramesProps) {
         height={SVG_H}
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
         role="img"
-        aria-label="Compare estimators — mean vs median"
+        aria-labelledby="cf-title cf-desc"
         style={{ background: PAPER, border: `2px solid ${INK}` }}
       >
+        <title id="cf-title">Compare estimators — mean vs median</title>
+        <desc id="cf-desc">
+          Scatter plot of data points with a horizontal line showing the current
+          estimator. Toggle between the mean and median estimator to compare how
+          each line tracks the centre of the data.
+        </desc>
         <Group>
           <Line
             from={{ x: PAD_L, y: SVG_H - PAD_B }}
