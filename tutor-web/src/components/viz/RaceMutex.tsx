@@ -308,6 +308,8 @@ function renderFrame(frame: Frame<State>): ReactNode {
 
   // Active code line y for highlight rect, per thread.
   // pc=0 → no highlight; pc=1..3 → line index (pc-1)
+  // Highlight y is still driven by pc (where the current line IS), but
+  // the highlight only *shows* on the thread that owns this frame's focal op.
   const t1HighlightY =
     t1.pc >= 1 && t1.pc <= 3
       ? CODE_TOP_Y + (t1.pc - 1) * CODE_LINE_H
@@ -367,6 +369,10 @@ function renderFrame(frame: Frame<State>): ReactNode {
       </FadeText>
 
       {/* ===== T1 PANE ===== */}
+      {/* showHighlight: only when this thread is the focal op of the frame.
+          pc >= 1 positions the bar correctly but doesn't light it up on its
+          own — prevents two yellow bars painting simultaneously when both
+          threads have advanced their PCs. */}
       <ThreadPane
         x={T1_X}
         y={THREAD_Y}
@@ -375,7 +381,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
         label="THREAD T1"
         thread={t1}
         highlightY={t1HighlightY}
-        showHighlight={t1.pc >= 1 && t1.pc <= 3}
+        showHighlight={highlightOp?.thread === "T1"}
       />
 
       {/* ===== T2 PANE ===== */}
@@ -387,7 +393,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
         label="THREAD T2"
         thread={t2}
         highlightY={t2HighlightY}
-        showHighlight={t2.pc >= 1 && t2.pc <= 3}
+        showHighlight={highlightOp?.thread === "T2"}
       />
 
       {/* ===== SHARED HEAP ===== */}
@@ -458,17 +464,23 @@ function renderFrame(frame: Frame<State>): ReactNode {
               stroke={INK}
               strokeWidth={mutexAcquireFlash ? 2 : 1}
             />
+            {/* Mutex label: PAPER on the dark INK rect when LOCKED (contrast),
+                INK with reduced opacity when FREE.  Never ACCENT — LOCKED is a
+                persistent state, not the single focal action of a frame. */}
             <text
               x={MUTEX_X + 8}
               y={HEAP_Y + 16}
               fontFamily={FONT_FAMILY}
               fontSize={9}
               fontWeight={700}
-              fill={mutex.state === "LOCKED" ? ACCENT : INK}
+              fill={mutex.state === "LOCKED" ? PAPER : INK}
               opacity={mutex.state === "LOCKED" ? 1 : 0.7}
             >
               mutex M
             </text>
+            {/* Mutex state text: glyph (🔒/🔓) + label conveys LOCKED/FREE
+                without using yellow.  PAPER text sits legibly on the dark
+                INK rect fill; INK text on the light PAPER rect when FREE. */}
             <FadeText
               x={MUTEX_X + MUTEX_W / 2}
               y={HEAP_Y + 38}
@@ -476,11 +488,11 @@ function renderFrame(frame: Frame<State>): ReactNode {
               fontFamily={FONT_FAMILY}
               fontSize={12}
               fontWeight={700}
-              fill={mutex.state === "LOCKED" ? ACCENT : INK}
+              fill={mutex.state === "LOCKED" ? PAPER : INK}
             >
               {mutex.state === "LOCKED"
                 ? `🔒 LOCKED by ${mutex.owner ?? "?"}`
-                : "FREE"}
+                : "🔓 FREE"}
             </FadeText>
           </PopIn>
         )}
@@ -565,7 +577,10 @@ function ThreadPane(props: {
         {label}
       </text>
 
-      {/* active code line highlight — slides between line y-positions */}
+      {/* active code line highlight — slides between line y-positions.
+          fill is moved into animate so JSDOM/test environments see the
+          correct value: ACCENT only when this thread is focal (showHighlight),
+          "none" otherwise — prevents two yellow rects in the DOM at once. */}
       <motion.rect
         x={x + 4}
         width={w - 8}
@@ -574,9 +589,9 @@ function ThreadPane(props: {
         animate={{
           y: highlightY - 11,
           opacity: showHighlight ? 1 : 0,
+          fill: showHighlight ? ACCENT : "none",
         }}
         transition={{ type: "tween", duration: 0.4, ease: "easeInOut" }}
-        fill={ACCENT}
         stroke="none"
       />
 
@@ -631,18 +646,20 @@ function ThreadPane(props: {
         />
       )}
 
-      {/* status indicator */}
+      {/* status indicator — state conveyed by glyph/label, not by yellow.
+          "blocked" is a multi-frame state, not the single focal action.
+          A pulsing opacity draws attention without colour violation. */}
       <motion.text
         x={x + 8}
         y={y + 102}
         fontFamily={FONT_FAMILY}
         fontSize={9}
         fontWeight={700}
-        fill={thread.blocked ? ACCENT : INK}
+        fill={INK}
         initial={false}
         animate={
           thread.blocked
-            ? { opacity: [1, 0.45, 1] }
+            ? { opacity: [0.9, 0.4, 0.9] }
             : { opacity: 0.8 }
         }
         transition={
@@ -652,7 +669,7 @@ function ThreadPane(props: {
         }
       >
         {thread.blocked
-          ? "⚠ BLOCKED ON M"
+          ? "⊘ BLOCKED ON M"
           : thread.pc === 3
           ? "DONE"
           : thread.pc === 0
