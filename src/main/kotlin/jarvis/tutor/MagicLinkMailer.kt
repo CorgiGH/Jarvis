@@ -29,7 +29,7 @@ fun buildResendPayload(from: String, to: String, link: String, lang: String): Re
     } else {
         "Click the link to sign in (expires in 15 minutes):"
     }
-    val html = """<div style="font-family:monospace">
+    val html = """|<div style="font-family:monospace">
         |<p>$body</p>
         |<p><a href="$link">$link</a></p>
         |</div>""".trimMargin()
@@ -63,6 +63,8 @@ class ResendMailer(
                 setBody(payload)
             }
             if (resp.status.isSuccess()) MailResult.SENT else MailResult.FAILED
+        } catch (ce: kotlinx.coroutines.CancellationException) {
+            throw ce
         } catch (e: Exception) {
             println("[MagicLink] Resend send failed for $toEmail: ${e.message}")
             MailResult.FAILED
