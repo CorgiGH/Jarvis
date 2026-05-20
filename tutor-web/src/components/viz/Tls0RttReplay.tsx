@@ -15,8 +15,9 @@ type Message = {
   to: Actor;
   label: string;
   encrypted: boolean;
+  // replay=true means this message is a replayed (dangerous) transmission.
+  // V12: danger is conveyed by ⚠ glyph + stroke-dash, NOT by yellow fill/stroke.
   replay: boolean;
-  fillColor?: "ink" | "accent";
 };
 type Phase = 1 | 2 | 3 | 4;
 type TLSState = {
@@ -31,12 +32,12 @@ const ALL_MESSAGES: Message[] = [
   { id: 1, from: "client", to: "server", label: "ClientHello + key_share", encrypted: false, replay: false },
   { id: 2, from: "server", to: "client", label: "ServerHello + Certificate + Finished", encrypted: true, replay: false },
   { id: 3, from: "client", to: "server", label: "Finished + AppData (GET /home)", encrypted: true, replay: false },
-  { id: 4, from: "server", to: "client", label: "NewSessionTicket (PSK)", encrypted: true, replay: false, fillColor: "accent" },
-  { id: 5, from: "client", to: "server", label: "ClientHello + EarlyData('GET /transfer?amt=100')", encrypted: true, replay: false, fillColor: "accent" },
+  { id: 4, from: "server", to: "client", label: "NewSessionTicket (PSK)", encrypted: true, replay: false },
+  { id: 5, from: "client", to: "server", label: "ClientHello + EarlyData('GET /transfer?amt=100')", encrypted: true, replay: false },
   { id: 6, from: "server", to: "client", label: "Accept 0-RTT. Process GET /transfer (charge $100).", encrypted: true, replay: false },
   { id: 7, from: "server", to: "client", label: "ServerHello + Finished + Response", encrypted: true, replay: false },
   { id: 8, from: "client", to: "attacker", label: "Attacker on-path: captured msg #5 bytes", encrypted: false, replay: false },
-  { id: 9, from: "attacker", to: "server", label: "Re-send msg #5 bytes (REPLAY)", encrypted: true, replay: true, fillColor: "accent" },
+  { id: 9, from: "attacker", to: "server", label: "Re-send msg #5 bytes (REPLAY)", encrypted: true, replay: true },
   { id: 10, from: "server", to: "attacker", label: "Accept 0-RTT. Process GET /transfer AGAIN (charge $100 twice!).", encrypted: true, replay: true },
 ];
 
@@ -140,10 +141,18 @@ function MessageRow({
 }) {
   const fromX = actorX(msg.from);
   const toX = actorX(msg.to);
-  const strokeC = msg.replay ? ACCENT : INK;
-  const strokeW = msg.replay || isHighlighted ? 2 : 1;
+  // V12: arrow color is always INK — replay danger is NOT encoded with yellow.
+  // Replay messages instead use a thicker stroke-dash pattern and a ⚠ glyph.
+  const strokeC = INK;
+  const strokeW = isHighlighted ? 2 : 1;
   const midX = (fromX + toX) / 2;
-  const markerEnd = msg.replay ? "url(#tls-arrow-accent)" : "url(#tls-arrow-ink)";
+  // V12: always use the ink arrowhead — no ACCENT arrowhead variant.
+  const markerEnd = "url(#tls-arrow-ink)";
+  // replay=true: use a 6 3 dash to distinguish from encrypted (4 3) and plain
+  // (no dash) — encodes danger/replay KIND through line pattern, not color.
+  const replayDash = "6 3";
+  const encryptedDash = "4 3";
+  const strokeDash = msg.replay ? replayDash : msg.encrypted ? encryptedDash : undefined;
   // Shrink label width so it never overhangs into the arrowhead zone at the
   // receiving column (was 140, hit the arrow tip on short hops like
   // server↔attacker which sit 120px apart).
@@ -152,6 +161,7 @@ function MessageRow({
   const maxChars = Math.max(12, Math.floor(labelW / 4.5));
   const labelText =
     msg.label.length > maxChars ? msg.label.slice(0, maxChars - 1) + "…" : msg.label;
+  // V12: ACCENT label box is ONLY for the single highlighted (focal) message.
   const labelBoxFill = isHighlighted ? ACCENT : "#fff";
   // Place the label ABOVE the line so it never intersects with the arrowhead.
   const labelTop = y - 22;
@@ -171,11 +181,12 @@ function MessageRow({
         y2={y}
         stroke={strokeC}
         strokeWidth={strokeW}
-        strokeDasharray={msg.encrypted ? undefined : "4 3"}
+        strokeDasharray={strokeDash}
         durationMs={400}
         markerEnd={markerEnd}
       />
-      {/* Label box ABOVE the line (out of the arrow path). */}
+      {/* Label box ABOVE the line (out of the arrow path).
+          ACCENT fill = focal/highlighted message only (V12 single focal rule). */}
       <motion.rect
         x={midX - labelW / 2}
         y={labelTop}
@@ -202,6 +213,24 @@ function MessageRow({
       >
         {labelText}
       </motion.text>
+      {/* V12 replay danger: ⚠ glyph to the right of the label box encodes
+          that this message is a replayed (potentially malicious) transmission.
+          Uses INK — NOT yellow — so danger is communicated by shape/glyph, not color. */}
+      {msg.replay && (
+        <motion.text
+          x={midX + labelW / 2 + 6}
+          y={labelTextY}
+          fontFamily={FONT_FAMILY}
+          fontSize={9}
+          fill={INK}
+          fontWeight={700}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={ENTER}
+        >
+          ⚠
+        </motion.text>
+      )}
     </>
   );
 }
@@ -273,7 +302,8 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
     <>
       {/* SVG markers for message arrowheads. orient="auto-start-reverse"
           rotates the marker to follow the line direction. refX positions
-          the tip exactly at the line endpoint. */}
+          the tip exactly at the line endpoint.
+          V12: only the INK arrowhead is used — no ACCENT arrowhead variant. */}
       <defs>
         <marker
           id="tls-arrow-ink"
@@ -286,18 +316,6 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
           markerUnits="userSpaceOnUse"
         >
           <path d="M 0 0 L 10 5 L 0 10 z" fill={INK} />
-        </marker>
-        <marker
-          id="tls-arrow-accent"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-          markerUnits="userSpaceOnUse"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill={ACCENT} stroke={INK} strokeWidth="0.5" />
         </marker>
       </defs>
 
@@ -391,7 +409,10 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
         strokeDasharray="2 2"
       />
 
-      {/* ATTACKER column — appears in phase 3+ */}
+      {/* ATTACKER column — appears in phase 3+.
+          V12: actor columns must NOT use ACCENT fill — actor is a category, not a focus.
+          ATTACKER header uses INK fill with PAPER text (high-contrast inversion)
+          to signal threat actor presence without yellow/color encoding. */}
       <AnimatePresence>
         {showAttacker && (
           <PopIn key="attacker-col" durationMs={400}>
@@ -400,7 +421,7 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
               y={ACTOR_Y}
               width={COL_W}
               height={ACTOR_LABEL_H}
-              fill={ACCENT}
+              fill={INK}
               stroke={INK}
               strokeWidth={1}
             />
@@ -411,7 +432,7 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
               fontFamily={FONT_FAMILY}
               fontSize={11}
               fontWeight={700}
-              fill={INK}
+              fill={PAPER}
             >
               ATTACKER
             </text>
@@ -454,7 +475,9 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
       {/* Mitigation badges — only in phase 4. Placed at the bottom of the
           lifeline area (y=296-308), below the last visible message and above
           the footer rect (y=312). Previously at y=44 they collided with the
-          CLIENT/SERVER/ATTACKER actor column labels at y=40-70. */}
+          CLIENT/SERVER/ATTACKER actor column labels at y=40-70.
+          V12: badge fill is PAPER (not ACCENT) — a badge is a category label, not a focus.
+          Stroke-dash border distinguishes these from regular actor columns. */}
       <AnimatePresence>
         {showMitigations &&
           MITIGATION_BADGES.filter((b) => step >= b.appearOn).map((b, i) => (
@@ -464,9 +487,10 @@ function renderFrame(frame: Frame<TLSState>): ReactNode {
                 y={296}
                 width={140}
                 height={14}
-                fill={ACCENT}
+                fill={PAPER}
                 stroke={INK}
                 strokeWidth={1}
+                strokeDasharray="3 2"
               />
               <text
                 x={20 + i * 150 + 70}
