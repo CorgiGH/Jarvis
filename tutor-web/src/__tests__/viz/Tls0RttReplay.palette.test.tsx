@@ -193,4 +193,44 @@ describe("Tls0RttReplay — V12 palette compliance", () => {
     // Also: total ACCENT count ≤1 on this frame (highlightedMessageId=8 focal).
     expect(accentElementCount(svg!)).toBeLessThanOrEqual(1);
   });
+
+  test("F9 (replay-attack frame): ⚠ glyph is rendered in the SVG", () => {
+    // Frame 9: msgs id=9 (replay=true) and id=10 (replay=true) are both visible.
+    // The MessageRow component conditionally renders a <motion.text> containing "⚠"
+    // for every replay message. Assert at least one text element carries that glyph.
+    // Guards against silent regression where glyph rendering is removed but
+    // ACCENT-absence tests still pass.
+    const { container } = render(<Tls0RttReplay />);
+    advanceTo(container, 9);
+    const svg = container.querySelector("svg");
+    expect(svg).not.toBeNull();
+    const textEls = Array.from(svg!.querySelectorAll("text"));
+    const glyphEl = textEls.find((el) => el.textContent?.includes("⚠"));
+    expect(glyphEl).toBeDefined();
+  });
+
+  test("F8 (first replay message visible): message line carries stroke-dasharray='6 3'", () => {
+    // Frame 8: msg id=9 (replay=true, attacker→server) first appears as highlighted.
+    // MessageRow sets strokeDasharray="6 3" for replay messages (distinct from
+    // encrypted "4 3" and plain/no-dash). Assert at least one line/path in the SVG
+    // outside <defs> carries the "6 3" dash pattern.
+    // Guards against silent regression where dash encoding is removed but
+    // ACCENT-absence tests still pass.
+    const { container } = render(<Tls0RttReplay />);
+    advanceTo(container, 8);
+    const svg = container.querySelector("svg");
+    expect(svg).not.toBeNull();
+    const candidates = Array.from(svg!.querySelectorAll("line, path"));
+    const replayDashEl = candidates.find((el) => {
+      if (el.getAttribute("stroke-dasharray") !== "6 3") return false;
+      // Exclude elements inside <defs>
+      let ancestor = el.parentElement;
+      while (ancestor && ancestor !== (svg as Element)) {
+        if (ancestor.tagName.toLowerCase() === "defs") return false;
+        ancestor = ancestor.parentElement;
+      }
+      return true;
+    });
+    expect(replayDashEl).toBeDefined();
+  });
 });

@@ -143,11 +143,8 @@ function MessageRow({
   const toX = actorX(msg.to);
   // V12: arrow color is always INK — replay danger is NOT encoded with yellow.
   // Replay messages instead use a thicker stroke-dash pattern and a ⚠ glyph.
-  const strokeC = INK;
   const strokeW = isHighlighted ? 2 : 1;
   const midX = (fromX + toX) / 2;
-  // V12: always use the ink arrowhead — no ACCENT arrowhead variant.
-  const markerEnd = "url(#tls-arrow-ink)";
   // replay=true: use a 6 3 dash to distinguish from encrypted (4 3) and plain
   // (no dash) — encodes danger/replay KIND through line pattern, not color.
   const replayDash = "6 3";
@@ -179,11 +176,11 @@ function MessageRow({
         y1={y}
         x2={toX}
         y2={y}
-        stroke={strokeC}
+        stroke={INK}
         strokeWidth={strokeW}
         strokeDasharray={strokeDash}
         durationMs={400}
-        markerEnd={markerEnd}
+        markerEnd="url(#tls-arrow-ink)"
       />
       {/* Label box ABOVE the line (out of the arrow path).
           ACCENT fill = focal/highlighted message only (V12 single focal rule). */}
