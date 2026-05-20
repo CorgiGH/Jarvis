@@ -26,4 +26,11 @@ class AiLiteracyRepoTest {
         repo.confirm("u2", "v0.0-old", "ro")
         assertFalse(repo.hasConfirmedCurrent("u2"))
     }
+
+    @Test fun `confirming the same version twice is a no-op`() {
+        val repo = AiLiteracyRepo(db)
+        repo.confirm("u3", AI_LITERACY_VERSION, "ro")
+        repo.confirm("u3", AI_LITERACY_VERSION, "en") // second call must not throw
+        assertTrue(repo.hasConfirmedCurrent("u3"))
+    }
 }
