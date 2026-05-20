@@ -287,8 +287,25 @@ fun Application.installTutorRoutes() {
             if (uid == null) {
                 return@get call.respond(HttpStatusCode.Unauthorized, """{"error":"login required"}""")
             }
-            // Already authenticated — return current state without rotating.
-            call.respond(HttpStatusCode.OK, """{"ok":true,"userId":"$uid","csrf":"$existingCsrf"}""")
+            // Already authenticated — ensure csrf is always a real token, never null.
+            val csrf = if (existingCsrf.isNullOrBlank()) {
+                val fresh = ByteArray(16).also { rng.nextBytes(it) }.joinToString("") { "%02x".format(it) }
+                call.response.cookies.append(
+                    Cookie(
+                        name = "csrf",
+                        value = fresh,
+                        httpOnly = false,
+                        secure = true,
+                        extensions = mapOf("SameSite" to "Strict"),
+                        path = "/",
+                        maxAge = 60 * 60 * 24 * 14,
+                    ),
+                )
+                fresh
+            } else {
+                existingCsrf
+            }
+            call.respond(HttpStatusCode.OK, """{"ok":true,"userId":"$uid","csrf":"$csrf"}""")
         }
 
         // Layer B Task 1 — vision-LLM screenshot sensor.
@@ -2197,8 +2214,9 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             TaskPrepTable,
         )
     }
-    // Single-user owner row (idempotent). The tutor surface is
-    // single-tenant; one User row backs the auto-session route.
+    // Bootstrap OWNER account (idempotent). This row is the fallback admin
+    // identity; the auto-session route does NOT auto-login into it — callers
+    // must authenticate via /auth/request-link + /auth/verify.
     if (jarvis.tutor.UserRepo(db).findById("owner") == null) {
         try {
             val now = java.time.Instant.now()
