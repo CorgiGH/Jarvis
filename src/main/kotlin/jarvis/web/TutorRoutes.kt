@@ -43,7 +43,9 @@ import jarvis.tutor.AI_LITERACY_VERSION
 import jarvis.tutor.AiLiteracyConfirmationTable
 import jarvis.tutor.AiLiteracyRepo
 import jarvis.tutor.ConsentLogTable
+import jarvis.tutor.ConsentRepo
 import jarvis.tutor.UserPreferencesTable
+import jarvis.tutor.UserPreferencesRepo
 import jarvis.tutor.MagicLinkRepo
 import jarvis.tutor.MagicLinkTokensTable
 import jarvis.tutor.UserRepo
@@ -1901,6 +1903,73 @@ fun Application.installTutorRoutes() {
                 }
             }
         }
+
+        // GDPR Art. 15 — right of access / data portability.
+        // Returns the authenticated user's own data as JSON (no CSRF needed for
+        // GETs). requireUser is the sole auth gate (401 on missing/expired session).
+        // /api/v1/me/ is whitelisted from the legacy static-auth gate in WebMain.kt.
+        get("/api/v1/me/export") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: return@get call.respond(HttpStatusCode.InternalServerError, "no ctx")
+            requireUser { uid ->
+                val user = UserRepo(ctx.db).findById(uid)
+                val consent = ConsentRepo(ctx.db).listForUser(uid)
+                val prefs = UserPreferencesRepo(ctx.db).get(uid)
+                val export = MeExport(
+                    user = user?.let { MeUserDto(it.id, it.name, it.scope.name, it.email, it.lang) },
+                    consentEvents = consent.map { MeConsentEventDto(it.consentType, it.granted, it.recordedAt.toString()) },
+                    preferences = MePreferencesDto(prefs.hintMode, prefs.loggingPausedUntil?.toString()),
+                    aiLiteracyConfirmed = AiLiteracyRepo(ctx.db).hasConfirmedCurrent(uid),
+                    exportedAt = java.time.Instant.now().toString(),
+                )
+                call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=jarvis-export.json")
+                call.respondText(
+                    sensorJson.encodeToString(MeExport.serializer(), export),
+                    ContentType.Application.Json,
+                )
+            }
+        }
+
+        // GDPR Art. 17 — right to erasure ("right to be forgotten").
+        // Deletes all user-scoped rows in dependency order (child tables first,
+        // then sessions, then the user row itself) inside a single transaction.
+        // requireUser OUTER (401 no session) → csrfProtect INNER (403 on mismatch).
+        post("/api/v1/me/delete") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: return@post call.respond(HttpStatusCode.InternalServerError, "no ctx")
+            requireUser { uid ->
+                call.csrfProtect {
+                    transaction(ctx.db) {
+                        ConsentLogTable.deleteWhere { ConsentLogTable.userId eq uid }
+                        UserPreferencesTable.deleteWhere { UserPreferencesTable.userId eq uid }
+                        AiLiteracyConfirmationTable.deleteWhere { AiLiteracyConfirmationTable.userId eq uid }
+                        FsrsCardsTable.deleteWhere { FsrsCardsTable.userId eq uid }
+                        KnowledgeGapsTable.deleteWhere { KnowledgeGapsTable.userId eq uid }
+                        SessionsTable.deleteWhere { SessionsTable.userId eq uid }
+                        UsersTable.deleteWhere { UsersTable.id eq uid }
+                    }
+                    call.respondText("""{"deleted":true}""", ContentType.Application.Json)
+                }
+            }
+        }
+
+        // GDPR Art. 18 — right to restriction of processing.
+        // Toggles the loggingPausedUntil preference: if currently unset, sets it
+        // to now + 30 days (pause logging); if already set, clears it (resume).
+        // requireUser OUTER (401) → csrfProtect INNER (403).
+        post("/api/v1/me/restrict") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: return@post call.respond(HttpStatusCode.InternalServerError, "no ctx")
+            requireUser { uid ->
+                call.csrfProtect {
+                    val prefs = UserPreferencesRepo(ctx.db).get(uid)
+                    val newUntil = if (prefs.loggingPausedUntil == null)
+                        java.time.Instant.now().plusSeconds(60L * 60 * 24 * 30) else null
+                    UserPreferencesRepo(ctx.db).set(uid, prefs.hintMode, newUntil)
+                    call.respondText("""{"loggingPaused":${newUntil != null}}""", ContentType.Application.Json)
+                }
+            }
+        }
     }
 }
 
@@ -2142,6 +2211,41 @@ private data class ApiCreateGrantRequest(
     /** Default 1 hour, hard-capped at 8 hours per spec §4 item 4. */
     val ttlSeconds: Long = 3600,
     val maxCalls: Int = 10,
+)
+
+// GDPR DSR (Data Subject Rights) response DTOs — Task 16.
+// Serialization lives at the route boundary; domain classes (User, ConsentEvent,
+// UserPreferences) are NOT annotated.
+
+@kotlinx.serialization.Serializable
+private data class MeUserDto(
+    val id: String,
+    val name: String,
+    val scope: String,
+    val email: String?,
+    val lang: String,
+)
+
+@kotlinx.serialization.Serializable
+private data class MeConsentEventDto(
+    val consentType: String,
+    val granted: Boolean,
+    val recordedAt: String,
+)
+
+@kotlinx.serialization.Serializable
+private data class MePreferencesDto(
+    val hintMode: String,
+    val loggingPausedUntil: String?,
+)
+
+@kotlinx.serialization.Serializable
+private data class MeExport(
+    val user: MeUserDto?,
+    val consentEvents: List<MeConsentEventDto>,
+    val preferences: MePreferencesDto,
+    val aiLiteracyConfirmed: Boolean,
+    val exportedAt: String,
 )
 
 @Serializable
