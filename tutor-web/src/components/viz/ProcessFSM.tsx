@@ -361,7 +361,7 @@ function renderFrame(frame: Frame<FSMState>): ReactNode {
           markerHeight="6"
           orient="auto-start-reverse"
         >
-          <path d="M0,0 L10,5 L0,10 Z" fill={INK} />
+          <path d="M0,0 L10,5 L0,10 Z" fill={ACCENT} stroke={INK} strokeWidth="0.5" />
         </marker>
         <pattern
           id="fsm-zombie-hatch"

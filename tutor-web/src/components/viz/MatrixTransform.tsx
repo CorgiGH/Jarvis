@@ -23,8 +23,6 @@ interface MatrixTransformProps {
   w: Vec2;
   testRayCount?: number;
   predictionGates?: Map<number, PredictionGate>;
-  /** @deprecated Shell owns ARIA live region; this prop is ignored. */
-  liveRegionId?: string;
 }
 
 type MatrixState = { t: number };

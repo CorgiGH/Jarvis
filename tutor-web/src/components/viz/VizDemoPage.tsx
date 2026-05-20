@@ -88,7 +88,6 @@ export function VizDemoPage() {
               { label: "black w (non-eig)", isCorrect: false },
             ],
           }]])}
-          liveRegionId="viz-live"
         />
       </section>
 

@@ -101,10 +101,6 @@ const NUM_X = 20;
 // Message (bottom)
 const MSG_Y = 340;
 
-function pctStr(x: number): string {
-  return (x * 100).toFixed(2) + "%";
-}
-
 function fmtPct(n: number): string {
   return (n * 100).toFixed(2) + "%";
 }
@@ -781,9 +777,6 @@ function FooterMessage({ message }: { message: string }) {
     </AnimatePresence>
   );
 }
-
-// Retained for potential debug/breakpoint use — not referenced in render now.
-void pctStr;
 
 export function BayesTree(): ReactNode {
   return (

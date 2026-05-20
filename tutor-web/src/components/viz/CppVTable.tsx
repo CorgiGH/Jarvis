@@ -349,17 +349,11 @@ function buildFrames(): Frame<CPPState>[] {
   return frames;
 }
 
-export const FRAME_COUNT = 15;
 export const FRAMES = buildFrames();
+export const FRAME_COUNT = FRAMES.length;
 
 const SVG_W = 480;
 const SVG_H = 360;
-
-// Layout constants (used implicitly via the viewBox)
-const _SVG_W: typeof SVG_W = SVG_W;
-const _SVG_H: typeof SVG_H = SVG_H;
-void _SVG_W;
-void _SVG_H;
 
 const CODE_X = 10;
 const CODE_Y = 30;
