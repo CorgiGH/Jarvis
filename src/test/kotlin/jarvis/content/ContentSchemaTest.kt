@@ -58,4 +58,24 @@ class ContentSchemaTest {
         assertEquals("pa-kc-002", e.edges.single().kc)
         assertEquals("pa-kc-001", e.edges.single().prereq)
     }
+
+    @Test
+    fun `parses a misconception`() {
+        val yaml = """
+            id: pa-misc-001
+            kc_id: pa-kc-001
+            label_ro: "Algoritmii trebuie să fie infiniti"
+            label_en: "Algorithms must be infinite"
+            trigger: "Student confuses loop count with infinite execution"
+            refutation: "By definition an algorithm must terminate in finite steps"
+            source:
+              - doc: pa-lecture-01
+                quote: "An algorithm is a finite sequence of steps"
+            version: 1
+        """.trimIndent()
+        val m = Yaml.default.decodeFromString(Misconception.serializer(), yaml)
+        assertEquals("pa-misc-001", m.id)
+        assertEquals("pa-kc-001", m.kc_id)
+        assertEquals("pa-lecture-01", m.source.single().doc)
+    }
 }
