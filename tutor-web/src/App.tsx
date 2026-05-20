@@ -68,18 +68,19 @@ export function App() {
   useEffect(() => {
     if (sessionBootstrapped.current) return;
     sessionBootstrapped.current = true;
+    const pathname = here.pathname;
     ensureTutorSession().then(status => {
       if (
         status === 401 &&
-        here.pathname !== "/login" &&
-        here.pathname !== "/welcome/ai-literacy"
+        pathname !== "/login" &&
+        pathname !== "/welcome/ai-literacy"
       ) {
         navigate("/login", { replace: true });
         return;
       }
       setSessionReady(true);
     }).catch(() => setSessionReady(true));
-  }, [here.pathname, navigate]);
+  }, [navigate]);
 
   // Phase 4.4 cross-device sync: read jarvis_last_task server cookie on
   // cold mount. Server cookie wins over localStorage when both present.

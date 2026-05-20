@@ -13,10 +13,13 @@ import { useState } from "react";
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [inFlight, setInFlight] = useState(false);
   const lang = "ro";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (inFlight) return;
+    setInFlight(true);
     try {
       await fetch("/auth/request-link", {
         method: "POST",
@@ -70,6 +73,7 @@ export function LoginPage() {
         </div>
         <button
           type="submit"
+          disabled={inFlight}
           className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-4 py-2 hover:bg-page-fg disabled:opacity-50 self-start"
         >
           SEND LINK / TRIMITE LINK

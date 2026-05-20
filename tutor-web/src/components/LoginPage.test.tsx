@@ -14,4 +14,12 @@ describe("LoginPage", () => {
     ));
     expect(screen.getByText(/check your email|verifică/i)).toBeInTheDocument();
   });
+
+  it("shows check-email state even when fetch rejects (network error)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("net::ERR_CONNECTION_REFUSED")));
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@b.io" } });
+    fireEvent.click(screen.getByRole("button", { name: /send|trimite/i }));
+    await waitFor(() => expect(screen.getByText(/check your email|verifică/i)).toBeInTheDocument());
+  });
 });
