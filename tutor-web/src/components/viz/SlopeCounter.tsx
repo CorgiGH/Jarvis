@@ -1,3 +1,5 @@
+// Intentionally non-SVG: SlopeCounter is a numeric readout chip (left/right sample counts
+// + slope diff), not a diagram. Spec V7 "SVG over canvas" governs diagrams only.
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
 
 export interface SlopeCounterProps { data: number[]; mu: number; }
@@ -47,7 +49,11 @@ export function SlopeCounter({ data, mu }: SlopeCounterProps) {
           RIGHT: {right}
         </span>
       </div>
-      <div style={{ fontSize: "0.75rem", opacity: 0.7, marginTop: "0.1rem" }}>
+      <div
+        role="status"
+        aria-label={`slope: ${diff >= 0 ? `+${diff}` : `${diff}`}`}
+        style={{ fontSize: "0.75rem", opacity: 0.7, marginTop: "0.1rem" }}
+      >
         slope ={" "}
         <span
           data-testid="slope-diff"
