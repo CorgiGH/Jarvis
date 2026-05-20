@@ -111,27 +111,31 @@ function buildFrames(): Frame<State>[] {
   };
   push(s);
 
-  // F6: T2 op3 (store) — counter = x → counter = 1; T2 done. LOST UPDATE!
+  // F6: T2 op3 (store) — counter = x → counter = 1; T2 done.
+  // Focal action: T2's store line. lostUpdateFlash moves to F7 so that no
+  // single frame has two simultaneous ACCENT triggers (V12 invariant).
   s = {
     ...s,
     step: 6,
     counter: 1, // still 1 — that's the bug
     t2: { ...s.t2, pc: 3 },
     highlightOp: { thread: "T2", opIdx: 2 },
-    lostUpdateFlash: true,
-    message: "T2 stores: counter ← 1. LOST UPDATE! Both stored 1 over 0.",
+    lostUpdateFlash: false,
+    message: "T2 stores: counter ← 1. T2 done — but counter should be 2!",
   };
   push(s);
 
-  // F7: result — counter = 1 (expected 2). RACE!
+  // F7: result — counter = 1 (expected 2). RACE! Flash the counter here
+  // (aftermath frame, no code-line highlight) so lost-update is shown without
+  // two ACCENT elements at once.
   s = {
     ...s,
     step: 7,
     highlightOp: undefined,
-    lostUpdateFlash: false,
+    lostUpdateFlash: true,
     raceCounterFinal: 1,
     message:
-      "RACE result: counter = 1, expected 2. Both increments observed counter=0 and clobbered the same write.",
+      "RACE result: counter = 1, expected 2. LOST UPDATE — both threads clobbered the same write.",
   };
   push(s);
 

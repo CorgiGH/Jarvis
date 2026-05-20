@@ -247,4 +247,28 @@ describe("RaceMutex — V12 palette compliance", () => {
       }
     });
   });
+
+  // ── Data-level invariant: no frame has both ACCENT triggers at once ────
+  // framer-motion's animated `fill` (0.8s easeInOut on the counter rect) does
+  // not apply synchronously in JSDOM, so the DOM-level sweep above cannot catch
+  // frames where lostUpdateFlash AND highlightOp are both set simultaneously.
+  // This test asserts the invariant at the DATA layer — reliable and fast.
+  describe("FRAMES data invariant: lostUpdateFlash and highlightOp never both truthy", () => {
+    test("no frame has both lostUpdateFlash truthy AND highlightOp defined", () => {
+      const violations = FRAMES.filter(
+        (f) => f.state.lostUpdateFlash && f.state.highlightOp !== undefined
+      );
+      if (violations.length > 0) {
+        const info = violations
+          .map((f) => `step=${f.state.step}`)
+          .join(", ");
+        throw new Error(
+          `V12 invariant broken: ${violations.length} frame(s) have both ` +
+            `lostUpdateFlash=true and highlightOp defined: [${info}]. ` +
+            `Separate them so each frame has at most one ACCENT trigger.`
+        );
+      }
+      expect(violations.length).toBe(0);
+    });
+  });
 });
