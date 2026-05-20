@@ -1,6 +1,7 @@
 import { render, fireEvent } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { NumLineDirect } from "../../components/viz/NumLineDirect";
+import { act } from "react";
 
 beforeEach(() => {
   vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 0; });
@@ -67,5 +68,53 @@ describe("NumLineDirect", () => {
     fireEvent.pointerUp(marker, { pointerId: 1 });
 
     expect(onMu).not.toHaveBeenCalled();
+  });
+
+  // ── V19: ARIA — role/title/desc ────────────────────────────────────────────
+  test("svg has role='img' (V19)", () => {
+    const { container } = render(<NumLineDirect data={data} mu={8} onMu={() => {}} />);
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("role")).toBe("img");
+  });
+
+  test("svg has <title> and <desc> elements (V19)", () => {
+    const { container } = render(<NumLineDirect data={data} mu={8} onMu={() => {}} />);
+    const svg = container.querySelector("svg");
+    expect(svg?.querySelector("title")).not.toBeNull();
+    expect(svg?.querySelector("desc")).not.toBeNull();
+  });
+
+  test("svg aria-labelledby references title and desc ids (V19)", () => {
+    const { container } = render(<NumLineDirect data={data} mu={8} onMu={() => {}} />);
+    const svg = container.querySelector("svg");
+    const labelledBy = svg?.getAttribute("aria-labelledby") ?? "";
+    const titleId = svg?.querySelector("title")?.id ?? "";
+    const descId = svg?.querySelector("desc")?.id ?? "";
+    expect(titleId.length).toBeGreaterThan(0);
+    expect(descId.length).toBeGreaterThan(0);
+    expect(labelledBy).toContain(titleId);
+    expect(labelledBy).toContain(descId);
+  });
+
+  // ── V5: ARIA — aria-live narrates μ changes ────────────────────────────────
+  test("aria-live='polite' region exists (V5)", () => {
+    const { container } = render(<NumLineDirect data={data} mu={8} onMu={() => {}} />);
+    const live = container.querySelector("[aria-live='polite'][role='status']");
+    expect(live).not.toBeNull();
+  });
+
+  test("aria-live region contains current μ value on initial render (V5)", () => {
+    const { container } = render(<NumLineDirect data={data} mu={8} onMu={() => {}} />);
+    const live = container.querySelector("[aria-live='polite'][role='status']");
+    expect(live?.textContent).toMatch(/8/);
+  });
+
+  test("aria-live region updates when μ prop changes (V5)", () => {
+    const { container, rerender } = render(<NumLineDirect data={data} mu={8} onMu={() => {}} />);
+    act(() => {
+      rerender(<NumLineDirect data={data} mu={11.5} onMu={() => {}} />);
+    });
+    const live = container.querySelector("[aria-live='polite'][role='status']");
+    expect(live?.textContent).toMatch(/11\.5/);
   });
 });

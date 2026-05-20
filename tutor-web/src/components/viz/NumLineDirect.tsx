@@ -1,5 +1,8 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, Fragment } from "react";
 import { ACCENT, INK } from "./theme";
+
+const TITLE_ID = "num-line-direct-title";
+const DESC_ID = "num-line-direct-desc";
 
 export interface NumLineDirectProps {
   data: number[];
@@ -82,35 +85,51 @@ export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) 
   }, [flushRAF]);
 
   return (
-    <svg
-      ref={svgRef}
-      width={SVG_W}
-      height={SVG_H}
-      viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-      data-testid="num-line-direct"
-      style={{ userSelect: "none", touchAction: "none" }}
-    >
-      <line x1={PAD} y1={AXIS_Y} x2={SVG_W - PAD} y2={AXIS_Y} stroke={INK} strokeWidth={1.5} opacity={0.35} />
-      {data.map((v, i) => (
-        <line
-          key={i}
-          data-testid="sample-tick"
-          x1={toSvgX(v, lo, hi)} y1={AXIS_Y - TICK_H / 2}
-          x2={toSvgX(v, lo, hi)} y2={AXIS_Y + TICK_H / 2}
-          stroke={INK} strokeWidth={2} opacity={0.6}
+    <Fragment>
+      <svg
+        ref={svgRef}
+        width={SVG_W}
+        height={SVG_H}
+        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+        data-testid="num-line-direct"
+        role="img"
+        aria-labelledby={`${TITLE_ID} ${DESC_ID}`}
+        style={{ userSelect: "none", touchAction: "none" }}
+      >
+        <title id={TITLE_ID}>Number line — mean (μ) adjuster</title>
+        <desc id={DESC_ID}>
+          {`A number line from ${lo.toFixed(1)} to ${hi.toFixed(1)} with ${data.length} sample point${data.length !== 1 ? "s" : ""}. The mean marker (μ) is currently at ${mu}.`}
+        </desc>
+        <line x1={PAD} y1={AXIS_Y} x2={SVG_W - PAD} y2={AXIS_Y} stroke={INK} strokeWidth={1.5} opacity={0.35} />
+        {data.map((v, i) => (
+          <line
+            key={i}
+            data-testid="sample-tick"
+            x1={toSvgX(v, lo, hi)} y1={AXIS_Y - TICK_H / 2}
+            x2={toSvgX(v, lo, hi)} y2={AXIS_Y + TICK_H / 2}
+            stroke={INK} strokeWidth={2} opacity={0.6}
+          />
+        ))}
+        <circle
+          ref={markerRef}
+          data-testid="mu-marker"
+          cx={toSvgX(mu, lo, hi)} cy={AXIS_Y} r={MARKER_R}
+          fill={ACCENT} stroke={INK} strokeWidth={2}
+          style={{ cursor: "ew-resize" }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
         />
-      ))}
-      <circle
-        ref={markerRef}
-        data-testid="mu-marker"
-        cx={toSvgX(mu, lo, hi)} cy={AXIS_Y} r={MARKER_R}
-        fill={ACCENT} stroke={INK} strokeWidth={2}
-        style={{ cursor: "ew-resize" }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-      />
-      <text x={toSvgX(mu, lo, hi)} y={AXIS_Y - MARKER_R - 4} textAnchor="middle" fontSize={11} fill={INK} fontWeight="bold">μ</text>
-    </svg>
+        <text x={toSvgX(mu, lo, hi)} y={AXIS_Y - MARKER_R - 4} textAnchor="middle" fontSize={11} fill={INK} fontWeight="bold">μ</text>
+      </svg>
+      <div
+        aria-live="polite"
+        role="status"
+        data-testid="num-line-direct-live"
+        style={{ position: "absolute", left: -9999 }}
+      >
+        {`μ = ${mu}`}
+      </div>
+    </Fragment>
   );
 }
