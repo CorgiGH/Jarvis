@@ -42,6 +42,7 @@ import jarvis.tutor.SessionsTable
 import jarvis.tutor.AI_LITERACY_VERSION
 import jarvis.tutor.AiLiteracyConfirmationTable
 import jarvis.tutor.AiLiteracyRepo
+import jarvis.tutor.ConsentLogTable
 import jarvis.tutor.MagicLinkRepo
 import jarvis.tutor.MagicLinkTokensTable
 import jarvis.tutor.UserRepo
@@ -2234,6 +2235,7 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             SessionsTable,
             MagicLinkTokensTable,        // Gate 2 — magic-link auth
             AiLiteracyConfirmationTable, // Gate 2 — AI-literacy confirmation (AI Act Art. 4)
+            ConsentLogTable,             // Gate 2 — GDPR consent audit log
             TasksTable,
             SensorEventsTable,
             TrustGrantsTable,
