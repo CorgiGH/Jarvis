@@ -1,0 +1,17 @@
+version: 1
+subjects:
+  - id: PA
+    name_ro: "Proiectarea Algoritmilor"
+    name_en: "Algorithm Design"
+  - id: PS
+    name_ro: "Probabilități și Statistică"
+    name_en: "Probability and Statistics"
+  - id: POO
+    name_ro: "Programare Orientată pe Obiecte"
+    name_en: "Object-Oriented Programming"
+  - id: ALO
+    name_ro: "Algebră și Logică"
+    name_en: "Algebra and Logic"
+  - id: SO-RC
+    name_ro: "Sisteme de Operare și Rețele de Calculatoare"
+    name_en: "Operating Systems and Computer Networks"
