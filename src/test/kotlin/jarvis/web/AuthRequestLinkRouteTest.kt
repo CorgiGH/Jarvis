@@ -16,6 +16,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AuthRequestLinkRouteTest {
@@ -36,7 +37,9 @@ class AuthRequestLinkRouteTest {
         assertTrue(r.bodyAsText().contains("ok"))
         assertEquals(1, fake.sent.size)
         assertEquals("student@example.com", fake.sent.single().first)
-        assertTrue(fake.sent.single().second.contains("/auth/verify?token="))
+        val link = fake.sent.single().second
+        assertTrue(link.contains("/auth/verify?token="), "link must point at /auth/verify: $link")
+        assertFalse(link.contains("/tutor/"), "link must NOT have a /tutor prefix: $link")
     }
 
     @Test fun `a malformed email is rejected with 400`() = testApplication {

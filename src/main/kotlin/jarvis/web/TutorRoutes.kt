@@ -224,7 +224,7 @@ fun Application.installTutorRoutes() {
             val lang = if (body.lang == "en") "en" else "ro"
             val baseUrl = System.getenv("JARVIS_PUBLIC_BASE_URL") ?: "https://corgflix.duckdns.org"
             val rawToken = jarvis.tutor.MagicLinkRepo(ctx.db).issue(email, lang, ttlSeconds = 15 * 60)
-            val link = "$baseUrl/tutor/auth/verify?token=$rawToken"
+            val link = "$baseUrl/auth/verify?token=$rawToken"
             val mailResult = ctx.mailer.send(email, link, lang)
             if (mailResult == MailResult.FAILED) {
                 System.err.println("[request-link] mail delivery failed for $email")

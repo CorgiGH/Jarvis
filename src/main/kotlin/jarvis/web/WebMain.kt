@@ -94,7 +94,14 @@ internal suspend fun runWeb() {
                 path.startsWith("/api/v1/tasks") ||
                 path.startsWith("/api/v1/me/") ||
                 path == "/api/v1/tutor/auto-session" ||
-                path == "/api/v1/gateway/inbound") return@intercept
+                path == "/api/v1/gateway/inbound" ||
+                // Gate 2: tutor SPA routes — self-authenticate via jarvis_session
+                path.startsWith("/api/v1/last-task") ||
+                path.startsWith("/api/v1/fsrs/") ||
+                path.startsWith("/api/v1/drill/") ||
+                path.startsWith("/api/v1/sidekick/") ||
+                path.startsWith("/api/v1/gap") ||
+                path.startsWith("/api/v1/daemon/health")) return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]
