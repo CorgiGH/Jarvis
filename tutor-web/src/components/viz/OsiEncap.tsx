@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { scaleLinear } from "@visx/scale";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
-import { ACCENT, FONT_FAMILY, INK, PAPER, STROKE_FOCUS } from "./theme";
+import { ACCENT, FONT_FAMILY, INK, PAPER, STROKE_DEFAULT, STROKE_FOCUS } from "./theme";
 import {
   AnimatePresence,
   PopIn,
@@ -653,7 +653,7 @@ function PacketGlyph({
   const fill = isFocal ? ACCENT : INK;
   // Focal packet label needs light ink to contrast against yellow; non-focal against dark.
   const labelFill = isFocal ? INK : PAPER;
-  const strokeWidth = isFocal ? STROKE_FOCUS : 1;
+  const strokeWidth = isFocal ? STROKE_FOCUS : STROKE_DEFAULT;
 
   return (
     <motion.g
@@ -802,7 +802,7 @@ function renderFrame(frame: Frame<State>, frameIdx: number): ReactNode {
   // Determine the single focal packet for this frame (V12: exactly one may be ACCENT).
   // The focal packet is the FIRST packet whose layer+side matches highlightLayer.
   const focalPacketId: string | null = (() => {
-    if (!highlightLayer) return packets.length > 0 ? packets[0].id : null;
+    if (!highlightLayer) return null;
     const match = packets.find(
       (p) => p.layer === highlightLayer.layer && p.side === highlightLayer.side
     );

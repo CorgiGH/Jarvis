@@ -162,4 +162,13 @@ describe("OsiEncap — V12 palette compliance", () => {
     expect(svg!.querySelector("pattern#hatch-dense")).not.toBeNull();
     expect(svg!.querySelector("pattern#hatch-cross")).not.toBeNull();
   });
+
+  test("frame 15 (summary, no highlightLayer): zero ACCENT fills — no focal element", () => {
+    const { container } = render(<OsiEncap />);
+    advanceTo(container, 15);
+    const svg = container.querySelector("svg")!;
+    const currentRects = activePacketRects(svg, 15);
+    const accentRects = currentRects.filter((el) => el.getAttribute("fill") === ACCENT_HEX);
+    expect(accentRects.length).toBe(0);
+  });
 });
