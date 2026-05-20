@@ -23,29 +23,34 @@ object SessionsTable : Table("sessions") {
 class SessionRepo(private val db: Database) {
     private val rng = SecureRandom()
 
+    /** Mint a fresh session; store sha256(sid); return the raw sid for the cookie. */
     fun create(userId: String, ttlSeconds: Long): String {
-        val sid = ByteArray(32).also { rng.nextBytes(it) }
+        val rawSid = ByteArray(32).also { rng.nextBytes(it) }
             .joinToString("") { "%02x".format(it) }
         val now = Instant.now()
         transaction(db) {
             SessionsTable.insert {
-                it[SessionsTable.sid] = sid
+                it[SessionsTable.sid] = sha256Hex(rawSid)
                 it[SessionsTable.userId] = userId
                 it[SessionsTable.createdAt] = now
                 it[SessionsTable.expiresAt] = now.plusSeconds(ttlSeconds)
             }
         }
-        return sid
+        return rawSid
     }
 
-    fun findUserId(sid: String): String? = transaction(db) {
+    fun findUserId(rawSid: String): String? = transaction(db) {
         val now = Instant.now()
         SessionsTable.selectAll().where {
-            (SessionsTable.sid eq sid) and (SessionsTable.expiresAt.greater(now))
+            (SessionsTable.sid eq sha256Hex(rawSid)) and (SessionsTable.expiresAt.greater(now))
         }.singleOrNull()?.get(SessionsTable.userId)
     }
 
-    fun revoke(sid: String) = transaction(db) {
-        SessionsTable.deleteWhere { SessionsTable.sid eq sid }
+    fun revoke(rawSid: String) = transaction(db) {
+        SessionsTable.deleteWhere { SessionsTable.sid eq sha256Hex(rawSid) }
     }
+
+    private fun sha256Hex(s: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 }
