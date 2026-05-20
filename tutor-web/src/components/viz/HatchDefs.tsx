@@ -3,6 +3,12 @@ import { INK } from "./theme";
 
 // Shared SVG <defs> for the two brutalist hatch patterns.
 // Render once inside any <svg> that uses HATCH_LIGHT / HATCH_DENSE fills.
+//
+// COORDINATE-SPACE NOTE: patternUnits="userSpaceOnUse" means the 6px / 3px hatch
+// pitch is measured in the HOST <svg>'s user-space, tuned for the AlgoStepperShell
+// viewBox (0 0 480 360). A host <svg> with a very different viewBox scale will see
+// a proportionally different visual hatch density — keep a comparable viewBox or
+// scale the host accordingly.
 export function HatchDefs() {
   return (
     <defs>

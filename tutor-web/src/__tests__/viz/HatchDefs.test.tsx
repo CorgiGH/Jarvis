@@ -15,4 +15,6 @@ test("HatchDefs renders both pattern elements", () => {
   );
   expect(container.querySelector("pattern#hatch-light")).not.toBeNull();
   expect(container.querySelector("pattern#hatch-dense")).not.toBeNull();
+  expect(container.querySelector("pattern#hatch-light line")).not.toBeNull();
+  expect(container.querySelector("pattern#hatch-dense line")).not.toBeNull();
 });
