@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, Fragment } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { ACCENT, INK } from "./theme";
 
 const TITLE_ID = "num-line-direct-title";
@@ -85,7 +85,7 @@ export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) 
   }, [flushRAF]);
 
   return (
-    <Fragment>
+    <div style={{ position: "relative" }}>
       <svg
         ref={svgRef}
         width={SVG_W}
@@ -98,7 +98,7 @@ export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) 
       >
         <title id={TITLE_ID}>Number line — mean (μ) adjuster</title>
         <desc id={DESC_ID}>
-          {`A number line from ${lo.toFixed(1)} to ${hi.toFixed(1)} with ${data.length} sample point${data.length !== 1 ? "s" : ""}. The mean marker (μ) is currently at ${mu}.`}
+          {`A number line from ${lo.toFixed(1)} to ${hi.toFixed(1)} with ${data.length} sample point${data.length !== 1 ? "s" : ""}. Drag the μ marker to set the mean.`}
         </desc>
         <line x1={PAD} y1={AXIS_Y} x2={SVG_W - PAD} y2={AXIS_Y} stroke={INK} strokeWidth={1.5} opacity={0.35} />
         {data.map((v, i) => (
@@ -130,6 +130,6 @@ export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) 
       >
         {`μ = ${mu}`}
       </div>
-    </Fragment>
+    </div>
   );
 }

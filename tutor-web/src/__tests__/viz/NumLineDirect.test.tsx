@@ -1,7 +1,6 @@
 import { render, fireEvent } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { NumLineDirect } from "../../components/viz/NumLineDirect";
-import { act } from "react";
 
 beforeEach(() => {
   vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 0; });
@@ -111,9 +110,7 @@ describe("NumLineDirect", () => {
 
   test("aria-live region updates when μ prop changes (V5)", () => {
     const { container, rerender } = render(<NumLineDirect data={data} mu={8} onMu={() => {}} />);
-    act(() => {
-      rerender(<NumLineDirect data={data} mu={11.5} onMu={() => {}} />);
-    });
+    rerender(<NumLineDirect data={data} mu={11.5} onMu={() => {}} />);
     const live = container.querySelector("[aria-live='polite'][role='status']");
     expect(live?.textContent).toMatch(/11\.5/);
   });
