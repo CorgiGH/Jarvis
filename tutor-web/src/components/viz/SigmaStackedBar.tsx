@@ -1,4 +1,4 @@
-import { ACCENT, FONT_FAMILY, INK, PAPER, STROKE_DEFAULT, STROKE_FOCUS } from "./theme";
+import { ACCENT, FONT_FAMILY, INK, PAPER, STROKE_DEFAULT } from "./theme";
 
 export interface SigmaStackedBarProps {
   data: number[];
@@ -131,11 +131,7 @@ export function SigmaStackedBar({ data, mu, focusedIndex }: SigmaStackedBarProps
           fill={INK}
         >
           {`Σ = `}
-          <tspan
-            data-testid="sigma-sum"
-            fill={INK}
-            style={{ background: ACCENT }}
-          >
+          <tspan data-testid="sigma-sum" fill={INK}>
             {total.toFixed(1)}
           </tspan>
         </text>
