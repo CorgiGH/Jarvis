@@ -35,6 +35,9 @@ export interface AlgoStepperShellProps<S> {
   onShare?: (hashState: string) => void;
   testIdPrefix?: string;
   initialStep?: number;
+  /** Called on every frame change, including the initial mount — so the parent
+   *  learns the actual (gate-clamped) starting frame. Wrap in useCallback to
+   *  avoid spurious re-fires when the parent re-renders. */
   onStep?: (idx: number) => void;
 }
 

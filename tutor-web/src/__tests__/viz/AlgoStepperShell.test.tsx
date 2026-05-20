@@ -424,6 +424,7 @@ describe("AlgoStepperShell — initialStep/onStep contract (T5)", () => {
         initialStep={3} onStep={(i) => seen.push(i)} testIdPrefix="cn" />
     );
     expect(screen.getByTestId("cn-frame-counter").textContent).toContain("4 / 6");
+    expect(seen).toContain(3); // onStep fires on mount with the clamped initial frame
     fireEvent.click(screen.getByTestId("cn-step-fwd"));
     expect(seen).toContain(4);
   });
