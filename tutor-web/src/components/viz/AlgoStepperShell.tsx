@@ -79,8 +79,15 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const initialIdx = useMemo(() => {
     const fromHash = parseHashIdx(testIdPrefix);
     if (fromHash === null) return 0;
-    return Math.max(0, Math.min(lastIdx, fromHash));
-  }, [testIdPrefix, lastIdx]);
+    // On first mount no gates are answered yet — clamp the hash-restored frame to
+    // the lowest prediction-gate frame so a shared/stale hash cannot deep-link
+    // past an unanswered prediction gate.
+    const gateFrames = props.predictionGates
+      ? [...props.predictionGates.keys()].sort((a, b) => a - b)
+      : [];
+    const ceiling = Math.min(gateFrames[0] ?? lastIdx, lastIdx);
+    return Math.max(0, Math.min(ceiling, fromHash));
+  }, [testIdPrefix, lastIdx, props.predictionGates]);
 
   const [idx, setIdx] = useState(initialIdx);
   const [playing, setPlaying] = useState(false);

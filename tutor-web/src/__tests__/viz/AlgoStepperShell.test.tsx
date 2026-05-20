@@ -355,6 +355,33 @@ describe("AlgoStepperShell — predictionGates (per-frame map)", () => {
   });
 });
 
+describe("AlgoStepperShell — hash deep-link clamped to gate ceiling", () => {
+  beforeEach(() => {
+    window.location.hash = "#hg-idx-6";
+  });
+
+  afterEach(() => {
+    window.location.hash = "";
+  });
+
+  test("hash past gate ceiling is clamped to first unanswered gate frame", () => {
+    const frames = Array.from({ length: 8 }, (_, i) => ({ state: i, aria: `f${i}` }));
+    render(
+      <AlgoStepperShell
+        title="t"
+        desc="d"
+        frames={frames}
+        renderFrame={(f) => <text>{String(f.state)}</text>}
+        testIdPrefix="hg"
+        predictionGates={new Map([[2, { question: "q", answers: [{ label: "A", isCorrect: true }] }]])}
+      />
+    );
+    // Hash was idx-6 (7th frame), but gate at frame 2 is unanswered.
+    // initialIdx must be clamped to 2 → displayed as "3 / 8".
+    expect(screen.getByTestId("hg-frame-counter").textContent).toContain("3 / 8");
+  });
+});
+
 describe("AlgoStepperShell — ARIA live", () => {
   test("live region updates with frame.aria", () => {
     render(
