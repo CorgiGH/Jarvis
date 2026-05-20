@@ -107,4 +107,47 @@ class ContentValidatorTest {
             edges = emptyList(), misconceptions = listOf(m))
         assertEquals(1, ContentValidator.checkBilingual(sub).size)
     }
+
+    private val srcLookup: (String) -> String? = { doc ->
+        if (doc == "pa-lecture-01") "An algorithm is a finite\n  sequence of unambiguous steps." else null
+    }
+
+    @Test
+    fun `quote that is a verbatim substring of the source passes`() {
+        val withSrc = kc("a", weight = 1.0, tier = 1)
+            .copy(source = listOf(SourceRef("pa-lecture-01", "a finite sequence of unambiguous steps")))
+        val sub = LoadedSubject("PA", kcs = listOf(withSrc), edges = emptyList(), misconceptions = emptyList())
+        assertTrue(ContentValidator.checkVerbatimSources(sub, srcLookup).isEmpty())
+    }
+
+    @Test
+    fun `quote not present in the source is an error`() {
+        val withSrc = kc("a", weight = 1.0, tier = 1)
+            .copy(source = listOf(SourceRef("pa-lecture-01", "an algorithm always halts")))
+        val sub = LoadedSubject("PA", kcs = listOf(withSrc), edges = emptyList(), misconceptions = emptyList())
+        val issues = ContentValidator.checkVerbatimSources(sub, srcLookup)
+        assertEquals(1, issues.size)
+        assertEquals("verbatim_source", issues.single().rule)
+        assertEquals("error", issues.single().severity)
+    }
+
+    @Test
+    fun `empty source list is an error — every KC must be attributed`() {
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kc("a", weight = 1.0, tier = 1)),
+            edges = emptyList(), misconceptions = emptyList())
+        val issues = ContentValidator.checkVerbatimSources(sub, srcLookup)
+        assertEquals(1, issues.size)
+        assertTrue(issues.single().detail.contains("no source"))
+    }
+
+    @Test
+    fun `missing source file degrades to a warning, not an error`() {
+        val withSrc = kc("a", weight = 1.0, tier = 1)
+            .copy(source = listOf(SourceRef("not-on-disk", "anything")))
+        val sub = LoadedSubject("PA", kcs = listOf(withSrc), edges = emptyList(), misconceptions = emptyList())
+        val issues = ContentValidator.checkVerbatimSources(sub, srcLookup)
+        assertEquals(1, issues.size)
+        assertEquals("warning", issues.single().severity)
+    }
 }

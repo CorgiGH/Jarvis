@@ -121,4 +121,46 @@ object ContentValidator {
         }
         return issues
     }
+
+    private fun normalizeWs(s: String): String = s.replace(Regex("\\s+"), " ").trim()
+
+    /**
+     * Council 1779311876 amendment 1. For every KC and misconception:
+     *  - at least one SourceRef is required (empty source = error);
+     *  - each SourceRef.quote, after whitespace normalization, must be a
+     *    verbatim substring of [sourceText] of its doc;
+     *  - if the doc's extracted text is absent, the check degrades to a
+     *    warning (cannot verify) rather than an error.
+     * [sourceText] maps a doc id to its extracted text, or null if absent.
+     */
+    fun checkVerbatimSources(
+        sub: LoadedSubject,
+        sourceText: (doc: String) -> String?,
+    ): List<ValidationIssue> {
+        val issues = mutableListOf<ValidationIssue>()
+
+        fun checkOne(ownerKind: String, ownerId: String, refs: List<SourceRef>) {
+            if (refs.isEmpty()) {
+                issues += ValidationIssue("error", "verbatim_source", sub.subject,
+                    "$ownerKind '$ownerId' has no source attribution")
+                return
+            }
+            for (ref in refs) {
+                val text = sourceText(ref.doc)
+                if (text == null) {
+                    issues += ValidationIssue("warning", "verbatim_source", sub.subject,
+                        "$ownerKind '$ownerId': source '${ref.doc}' has no extracted text on disk — quote unverifiable")
+                    continue
+                }
+                if (!normalizeWs(text).contains(normalizeWs(ref.quote))) {
+                    issues += ValidationIssue("error", "verbatim_source", sub.subject,
+                        "$ownerKind '$ownerId': quote not found verbatim in source '${ref.doc}'")
+                }
+            }
+        }
+
+        for (kc in sub.kcs) checkOne("KC", kc.id, kc.source)
+        for (m in sub.misconceptions) checkOne("misconception", m.id, m.source)
+        return issues
+    }
 }
