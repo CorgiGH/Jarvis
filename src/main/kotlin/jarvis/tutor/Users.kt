@@ -55,20 +55,31 @@ class UserRepo(private val db: Database) {
     }
 
     /** Find the user with this email, or create a new FRIEND-scope user. */
-    fun upsertByEmail(email: String, lang: String): User {
-        findByEmail(email)?.let { return it }
-        val now = Instant.now()
-        val u = User(
-            id = TutorTypes.ulid(),
-            name = email.substringBefore('@'),
-            scope = UserScope.FRIEND,
-            createdAt = now,
-            lastSeenAt = now,
-            email = email,
-            lang = lang,
-        )
-        insert(u)
-        return u
+    fun upsertByEmail(email: String, lang: String): User = transaction(db) {
+        UsersTable.selectAll().where { UsersTable.email eq email }
+            .singleOrNull()?.toUser()
+            ?: run {
+                val now = Instant.now()
+                val u = User(
+                    id = TutorTypes.ulid(),
+                    name = email.substringBefore('@'),
+                    scope = UserScope.FRIEND,
+                    createdAt = now,
+                    lastSeenAt = now,
+                    email = email,
+                    lang = lang,
+                )
+                UsersTable.insert { row ->
+                    row[id] = u.id
+                    row[name] = u.name
+                    row[scope] = u.scope.name
+                    row[createdAt] = u.createdAt
+                    row[lastSeenAt] = u.lastSeenAt
+                    row[UsersTable.email] = u.email
+                    row[UsersTable.lang] = u.lang
+                }
+                u
+            }
     }
 
     fun touchLastSeen(id: String, ts: Instant) = transaction(db) {
