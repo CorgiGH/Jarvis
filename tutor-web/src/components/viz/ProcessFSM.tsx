@@ -370,7 +370,7 @@ function renderFrame(frame: Frame<FSMState>): ReactNode {
           patternUnits="userSpaceOnUse"
           patternTransform="rotate(45)"
         >
-          <rect width="6" height="6" fill={ACCENT} />
+          <rect width="6" height="6" fill={PAPER} />
           <line x1="0" y1="0" x2="0" y2="6" stroke={INK} strokeWidth={1} />
         </pattern>
       </defs>
@@ -491,7 +491,7 @@ function renderFrame(frame: Frame<FSMState>): ReactNode {
                     fontFamily={FONT_FAMILY}
                     fontSize={8}
                     fontWeight={700}
-                    fill={ACCENT}
+                    fill={PAPER}
                   >
                     P{p.pid - 99}
                   </text>
@@ -592,7 +592,7 @@ function renderFrame(frame: Frame<FSMState>): ReactNode {
             fontFamily={FONT_FAMILY}
             fontSize={9}
             fontWeight={700}
-            fill={ACCENT}
+            fill={PAPER}
           >
             {c.label}
           </text>
@@ -758,7 +758,7 @@ export function ProcessFSM(): ReactNode {
   return (
     <AlgoStepperShell<FSMState>
       title="SO-1 · Process lifecycle FSM (with zombie)"
-      desc="Fork / wait scenario walking a parent and child through NEW → READY → RUNNING → WAITING → ZOMBIE → TERMINATED. Hatched yellow node = ZOMBIE: process has exited but its PCB lingers until the parent reaps the exit status."
+      desc="Fork / wait scenario walking a parent and child through NEW → READY → RUNNING → WAITING → ZOMBIE → TERMINATED. Hatched node = ZOMBIE: process has exited but its PCB lingers until the parent reaps the exit status."
       frames={FRAMES}
       renderFrame={renderFrame}
       testIdPrefix="process-fsm"
