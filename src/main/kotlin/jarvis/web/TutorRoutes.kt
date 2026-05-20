@@ -1746,8 +1746,9 @@ fun Application.installTutorRoutes() {
             call.csrfProtect {
                 val t0 = System.currentTimeMillis()
                 val sid = call.request.cookies["jarvis_session"]
-                sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
                     ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                if (!call.aiLiteracyGate(userId)) return@csrfProtect
                 val req = try {
                     sensorJson.decodeFromString(ApiDrillGradeRequest.serializer(), call.receiveText())
                 } catch (e: Exception) {
@@ -1899,6 +1900,7 @@ fun Application.installTutorRoutes() {
                     }.getOrNull()
                     val lang = if (body?.lang == "en") "en" else "ro"
                     AiLiteracyRepo(ctx.db).confirm(uid, AI_LITERACY_VERSION, lang)
+                    ConsentRepo(ctx.db).record(uid, "ai-literacy", granted = true)
                     call.respondText("""{"ok":true}""", ContentType.Application.Json)
                 }
             }

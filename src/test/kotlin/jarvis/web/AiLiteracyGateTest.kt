@@ -59,6 +59,23 @@ class AiLiteracyGateTest {
         assertNotEquals(HttpStatusCode.Forbidden, r.status)  // not blocked by the literacy gate
     }
 
+    @Test fun `drill grade is blocked 403 when literacy not confirmed`() = testApplication {
+        val (_, sid, dbDir) = seed()
+        val db = TutorDb.connect(dbDir.resolve("t.db").toString())
+        application {
+            attributes.put(TutorContextKey, testTutorContext(db, dbDir, mailer = FakeMailer()))
+            installTutorRoutes()
+        }
+        val r = client.post("/api/v1/drill/grade") {
+            header("Cookie", "jarvis_session=$sid; csrf=c")
+            header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+        assertEquals(HttpStatusCode.Forbidden, r.status)
+        assert(r.bodyAsText().contains("ai-literacy"))
+    }
+
     @Test fun `screenshot endpoint is blocked 403 when the user has not confirmed literacy`() = testApplication {
         val (_, sid, dbDir) = seed()
         val db = TutorDb.connect(dbDir.resolve("t.db").toString())

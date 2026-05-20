@@ -16,7 +16,7 @@ class AiLiteracyConfirmRouteTest {
     @Test fun `confirm records the confirmation for the session user`() = testApplication {
         val dbDir = Files.createTempDirectory("ailitroute")
         val db = TutorDb.connect(dbDir.resolve("t.db").toString())
-        transaction(db) { SchemaUtils.create(UsersTable, SessionsTable, AiLiteracyConfirmationTable) }
+        transaction(db) { SchemaUtils.create(UsersTable, SessionsTable, AiLiteracyConfirmationTable, ConsentLogTable) }
         val uid = TutorTypes.ulid()
         UserRepo(db).insert(User(uid, "u", UserScope.FRIEND, Instant.now(), Instant.now()))
         val sid = SessionRepo(db).create(uid, 3600)
