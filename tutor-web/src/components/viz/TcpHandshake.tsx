@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
-import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import { ACCENT, FONT_FAMILY, HATCH_DENSE, INK, PAPER } from "./theme";
 import {
   AnimatePresence,
   DrawLine,
@@ -627,6 +627,23 @@ function formatStateLabel(s: TCPState): string {
   return s;
 }
 
+/**
+ * Encode message KIND via non-color channels (V12 compliance):
+ *   SYN     → solid line  (no dash)
+ *   SYN-ACK → long-dash   ("5 3")  — distinguishable as a reply
+ *   ACK     → short-dash  ("2 3")  — the final completing stroke
+ *   DROP    → dotted      ("3 2")  — message that never reaches destination
+ *
+ * Spoofed messages additionally use a thinner stroke weight.
+ * All arrows are INK (not ACCENT). ACCENT is not used here.
+ */
+function kindDash(kind: MsgKind, isDropped: boolean): string | undefined {
+  if (isDropped) return "3 2";
+  if (kind === "SYN-ACK") return "5 3";
+  if (kind === "ACK") return "2 3";
+  return undefined; // SYN = solid
+}
+
 function MessageArrow({
   msg,
   isDropped,
@@ -639,13 +656,13 @@ function MessageArrow({
   const midX = (fromX + toX) / 2;
   const y = msg.y;
 
-  const isAccent = msg.kind === "SYN-ACK" || msg.spoofedSrc !== undefined;
-  const strokeC = isDropped ? ACCENT : isAccent ? ACCENT : INK;
-  const markerEnd = isAccent
-    ? "url(#tcp-arrow-accent)"
-    : "url(#tcp-arrow-ink)";
+  // V12: all arrows are INK — kind is encoded by dash pattern, not color.
+  const strokeC = INK;
+  const dash = kindDash(msg.kind, isDropped);
+  // Spoofed messages use a slightly thinner stroke to signal "not a real source".
+  const strokeW = isDropped ? 2 : msg.spoofedSrc ? 1 : 1.5;
 
-  // Label text
+  // Label text — kind + seq/ack numbers + spoofed-src annotation.
   const seqPart =
     msg.seq !== undefined ? ` seq=${msg.seq}` : "";
   const ackPart = msg.ack !== undefined ? ` ack=${msg.ack}` : "";
@@ -678,10 +695,10 @@ function MessageArrow({
         x2={effectiveToX}
         y2={y}
         stroke={strokeC}
-        strokeWidth={isDropped ? 2 : 1.5}
-        strokeDasharray={isDropped ? "3 2" : undefined}
+        strokeWidth={strokeW}
+        strokeDasharray={dash}
         durationMs={500}
-        markerEnd={isDropped ? undefined : markerEnd}
+        markerEnd={isDropped ? undefined : "url(#tcp-arrow-ink)"}
       />
       <motion.rect
         x={midX - labelW / 2}
@@ -711,6 +728,8 @@ function MessageArrow({
       </motion.text>
       {isDropped && (
         <PopIn durationMs={300} delayMs={250}>
+          {/* V12: drop × is INK, not ACCENT — "dropped" is a state, not a
+              focal element. A thick INK × with PAPER outline is legible. */}
           <text
             x={effectiveToX + 6}
             y={y + 4}
@@ -718,9 +737,9 @@ function MessageArrow({
             fontFamily={FONT_FAMILY}
             fontSize={14}
             fontWeight={700}
-            fill={ACCENT}
-            stroke={INK}
-            strokeWidth={0.5}
+            fill={INK}
+            stroke={PAPER}
+            strokeWidth={1.5}
           >
             ×
           </text>
@@ -803,9 +822,9 @@ function renderFrame(frame: Frame<State>): ReactNode {
 
   return (
     <>
-      {/* SVG markers for message arrowheads — copy the Tls0RttReplay
-          orient="auto-start-reverse" pattern so the arrowhead follows the
-          DrawLine endpoint as it grows. */}
+      {/* SVG markers for message arrowheads — V12: only INK arrowhead.
+          The old tcp-arrow-accent marker is removed (yellow arrowheads
+          encoded kind, which violates V12). */}
       <defs>
         <marker
           id="tcp-arrow-ink"
@@ -818,23 +837,6 @@ function renderFrame(frame: Frame<State>): ReactNode {
           markerUnits="userSpaceOnUse"
         >
           <path d="M 0 0 L 10 5 L 0 10 z" fill={INK} />
-        </marker>
-        <marker
-          id="tcp-arrow-accent"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="7"
-          markerHeight="7"
-          orient="auto-start-reverse"
-          markerUnits="userSpaceOnUse"
-        >
-          <path
-            d="M 0 0 L 10 5 L 0 10 z"
-            fill={ACCENT}
-            stroke={INK}
-            strokeWidth="0.5"
-          />
         </marker>
       </defs>
 
@@ -867,17 +869,17 @@ function renderFrame(frame: Frame<State>): ReactNode {
         </motion.text>
       </AnimatePresence>
 
-      {/* CLIENT actor column. On the SUMMARY frame both endpoints are
-          ESTABLISHED (the "winning" state), so the column flips to accent fill
-          to make the victory visible at a glance. */}
+      {/* CLIENT actor column. V12: SUMMARY "victory" state is encoded by a
+          double-weight INK border + label text, not by ACCENT fill (which would
+          be a category color and may collide with the focal-element rule). */}
       <rect
         x={CLIENT_X - 32}
         y={ACTOR_LABEL_BAR_Y}
         width={64}
         height={ACTOR_LABEL_BAR_H}
-        fill={phase === "SUMMARY" ? ACCENT : PAPER}
+        fill={PAPER}
         stroke={INK}
-        strokeWidth={1}
+        strokeWidth={phase === "SUMMARY" ? 2.5 : 1}
       />
       <text
         x={CLIENT_X}
@@ -913,15 +915,16 @@ function renderFrame(frame: Frame<State>): ReactNode {
         {formatStateLabel(clientState)}
       </FadeText>
 
-      {/* SERVER actor column. Same SUMMARY-frame accent treatment as CLIENT. */}
+      {/* SERVER actor column. V12: same double-weight INK border as CLIENT
+          on the SUMMARY frame — no ACCENT fill. */}
       <rect
         x={SERVER_X - 32}
         y={ACTOR_LABEL_BAR_Y}
         width={64}
         height={ACTOR_LABEL_BAR_H}
-        fill={phase === "SUMMARY" ? ACCENT : PAPER}
+        fill={PAPER}
         stroke={INK}
-        strokeWidth={1}
+        strokeWidth={phase === "SUMMARY" ? 2.5 : 1}
       />
       <text
         x={SERVER_X}
@@ -957,10 +960,11 @@ function renderFrame(frame: Frame<State>): ReactNode {
         {formatStateLabel(serverState)}
       </FadeText>
 
-      {/* ATTACKER actor column — only visible when active. On the SUMMARY
-          frame the attack is defeated by both defenses, so the column drops
-          its accent fill and gets a strikethrough across the label (mutual
-          ESTABLISHED is the winning state, ATTACKER is the losing state). */}
+      {/* ATTACKER actor column — only visible when active. V12: the ATTACKER
+          header must NOT use ACCENT fill (yellow = focal element, not actor
+          category). Instead, a dashed INK border distinguishes the ATTACKER
+          column as a threat actor without using yellow. On the SUMMARY frame
+          the column gets a lighter opacity + strikethrough to signal defeat. */}
       <AnimatePresence>
         {attackerActive && (
           <PopIn key="attacker-col" durationMs={350}>
@@ -969,9 +973,10 @@ function renderFrame(frame: Frame<State>): ReactNode {
               y={ACTOR_LABEL_BAR_Y}
               width={72}
               height={ACTOR_LABEL_BAR_H}
-              fill={phase === "SUMMARY" ? PAPER : ACCENT}
+              fill={PAPER}
               stroke={INK}
-              strokeWidth={1}
+              strokeWidth={phase === "SUMMARY" ? 1 : 1.5}
+              strokeDasharray={phase === "SUMMARY" ? undefined : "3 2"}
             />
             <text
               x={ATTACKER_X}
@@ -1053,12 +1058,15 @@ function renderFrame(frame: Frame<State>): ReactNode {
             <AnimatePresence>
               {slot && (
                 <PopIn key={`slot-${i}-${slot.src}`} durationMs={300}>
+                  {/* V12: spoofed slots use HATCH_DENSE fill (category =
+                      "half-open / spoofed"), not ACCENT (which is focal only).
+                      Legitimate slots use solid INK fill. */}
                   <rect
                     x={BACKLOG_X}
                     y={slotY}
                     width={BACKLOG_SLOT_W}
                     height={BACKLOG_SLOT_H}
-                    fill={slot.spoofed ? ACCENT : INK}
+                    fill={slot.spoofed ? HATCH_DENSE : INK}
                     stroke={INK}
                     strokeWidth={1}
                   />
@@ -1069,7 +1077,7 @@ function renderFrame(frame: Frame<State>): ReactNode {
                     fontFamily={FONT_FAMILY}
                     fontSize={6.5}
                     fontWeight={700}
-                    fill={slot.spoofed ? INK : ACCENT}
+                    fill={INK}
                   >
                     {slot.src}
                   </text>
@@ -1081,6 +1089,8 @@ function renderFrame(frame: Frame<State>): ReactNode {
       })}
       {backlogFull && (
         <PopIn durationMs={300}>
+          {/* V12: BACKLOG FULL alert uses a thick INK border (not ACCENT stroke).
+              "Full" is a state category — not the focal element of the frame. */}
           <rect
             x={BACKLOG_X - 4}
             y={BACKLOG_Y - 4}
@@ -1089,8 +1099,8 @@ function renderFrame(frame: Frame<State>): ReactNode {
               4 * BACKLOG_SLOT_H + 3 * BACKLOG_SLOT_GAP + 8
             }
             fill="none"
-            stroke={ACCENT}
-            strokeWidth={2}
+            stroke={INK}
+            strokeWidth={2.5}
           />
           <text
             x={BACKLOG_X + BACKLOG_SLOT_W / 2}
@@ -1111,7 +1121,10 @@ function renderFrame(frame: Frame<State>): ReactNode {
         </PopIn>
       )}
 
-      {/* Cookies-on indicator near the server lifeline */}
+      {/* Cookies-on indicator near the server lifeline. V12: mode badges are
+          NOT ACCENT fill — "cookies enabled" is a mode, not a focal element.
+          Use PAPER fill + double-weight INK border to distinguish from the
+          normal server lifeline area. */}
       <AnimatePresence>
         {cookiesEnabled && (
           <PopIn key="cookies-on" durationMs={350}>
@@ -1120,9 +1133,9 @@ function renderFrame(frame: Frame<State>): ReactNode {
               y={210}
               width={160}
               height={32}
-              fill={ACCENT}
+              fill={PAPER}
               stroke={INK}
-              strokeWidth={1}
+              strokeWidth={2}
             />
             <text
               x={SERVER_X}
