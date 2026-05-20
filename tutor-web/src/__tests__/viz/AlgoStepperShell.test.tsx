@@ -225,7 +225,7 @@ describe("AlgoStepperShell — play/pause/reset", () => {
 });
 
 describe("AlgoStepperShell — predict-gate", () => {
-  test("locks scrubber + play until answered, then unlocks", () => {
+  test("locks scrubber until answered, then unlocks", () => {
     const onAnswered = vi.fn();
     render(
       <AlgoStepperShell
@@ -233,19 +233,18 @@ describe("AlgoStepperShell — predict-gate", () => {
         desc="Demo"
         frames={counterFrames}
         renderFrame={renderCounter}
-        predictionGate={{
+        predictionGates={new Map([[0, {
           question: "Pick the right one",
           answers: [
             { label: "wrong", isCorrect: false },
             { label: "right", isCorrect: true },
           ],
           onAnswered,
-        }}
+        }]])}
       />
     );
     const scrubber = screen.getByTestId("stepper-scrubber") as HTMLInputElement;
     expect(scrubber.disabled).toBe(true);
-    expect((screen.getByTestId("stepper-play") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId("predict-gate")).toBeInTheDocument();
     fireEvent.click(screen.getByText("right"));
     expect(onAnswered).toHaveBeenCalledWith(true);
@@ -261,14 +260,14 @@ describe("AlgoStepperShell — predict-gate", () => {
         desc="Demo"
         frames={counterFrames}
         renderFrame={renderCounter}
-        predictionGate={{
+        predictionGates={new Map([[0, {
           question: "Pick",
           answers: [
             { label: "wrong", isCorrect: false },
             { label: "right", isCorrect: true },
           ],
           onAnswered,
-        }}
+        }]])}
       />
     );
     fireEvent.click(screen.getByText("wrong"));
@@ -324,6 +323,35 @@ describe("AlgoStepperShell — share-link", () => {
     fireEvent.keyDown(svg, { key: "ArrowRight" });
     fireEvent.click(screen.getByTestId("stepper-share"));
     expect(onShare).toHaveBeenCalledWith("stepper-idx-1");
+  });
+});
+
+describe("AlgoStepperShell — predictionGates (per-frame map)", () => {
+  function gateFixture(): Map<number, import("../../components/viz/AlgoStepperShell").PredictionGate> {
+    return new Map([
+      [2, { question: "next?", answers: [{ label: "A", isCorrect: true }, { label: "B", isCorrect: false }] }],
+    ]);
+  }
+
+  test("predictionGates: gate at frame 2 blocks advance past frame 2 until answered", () => {
+    const frames = Array.from({ length: 6 }, (_, i) => ({ state: i, aria: `f${i}` }));
+    render(
+      <AlgoStepperShell
+        title="t" desc="d" frames={frames}
+        renderFrame={(f) => <text>{String(f.state)}</text>}
+        predictionGates={gateFixture()}
+        testIdPrefix="gt"
+      />
+    );
+    fireEvent.click(screen.getByTestId("gt-step-fwd"));
+    fireEvent.click(screen.getByTestId("gt-step-fwd"));
+    expect(screen.getByTestId("gt-frame-counter").textContent).toContain("3 / 6");
+    expect(screen.getByTestId("predict-gate")).toBeInTheDocument();
+    expect(screen.getByTestId("gt-step-fwd")).toBeDisabled();
+    fireEvent.click(screen.getByText("A"));
+    expect(screen.queryByTestId("predict-gate")).toBeNull();
+    fireEvent.click(screen.getByTestId("gt-step-fwd"));
+    expect(screen.getByTestId("gt-frame-counter").textContent).toContain("4 / 6");
   });
 });
 

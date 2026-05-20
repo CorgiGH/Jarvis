@@ -30,7 +30,7 @@ export interface AlgoStepperShellProps<S> {
   desc: string;
   frames: Frame<S>[] | (() => Generator<Frame<S>>);
   renderFrame: (frame: Frame<S>, idx: number) => ReactNode;
-  predictionGate?: PredictionGate;
+  predictionGates?: Map<number, PredictionGate>;
   voiceMap?: Record<number, string>;
   autoplayMsPerFrame?: number;
   onShare?: (hashState: string) => void;
@@ -84,20 +84,31 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
 
   const [idx, setIdx] = useState(initialIdx);
   const [playing, setPlaying] = useState(false);
-  const [predictionLocked, setPredictionLocked] = useState(!!props.predictionGate);
+  const [answeredGates, setAnsweredGates] = useState<Set<number>>(new Set());
   const [voiceOn, setVoiceOn] = useState(false);
+
+  const maxReachable = useMemo(() => {
+    if (!props.predictionGates) return lastIdx;
+    const gateFrames = [...props.predictionGates.keys()].sort((a, b) => a - b);
+    for (const g of gateFrames) {
+      if (!answeredGates.has(g)) return Math.min(g, lastIdx);
+    }
+    return lastIdx;
+  }, [props.predictionGates, answeredGates, lastIdx]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingNextSrcRef = useRef<string | null>(null);
   const voiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reducedMotion = readReducedMotion();
 
+  const gateLocked = !!props.predictionGates?.has(idx) && !answeredGates.has(idx);
+  const activeGate = props.predictionGates?.get(idx);
+
   const stepBy = useCallback(
     (delta: number) => {
-      if (predictionLocked) return;
-      setIdx((prev) => Math.max(0, Math.min(lastIdx, prev + delta)));
+      setIdx((prev) => Math.max(0, Math.min(maxReachable, prev + delta)));
     },
-    [lastIdx, predictionLocked]
+    [maxReachable]
   );
 
   const reset = useCallback(() => {
@@ -106,13 +117,12 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   }, []);
 
   const togglePlay = useCallback(() => {
-    if (predictionLocked) return;
     if (reducedMotion) {
       stepBy(1);
       return;
     }
     setPlaying((p) => !p);
-  }, [reducedMotion, stepBy, predictionLocked]);
+  }, [reducedMotion, stepBy]);
 
   useEffect(() => {
     if (!playing || reducedMotion) {
@@ -125,9 +135,9 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     intervalRef.current = setInterval(() => {
       setIdx((prev) => {
         const next = prev + 1;
-        if (next > lastIdx) {
+        if (next > maxReachable) {
           setPlaying(false);
-          return lastIdx;
+          return maxReachable;
         }
         return next;
       });
@@ -135,7 +145,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [playing, reducedMotion, autoplayMsPerFrame, lastIdx]);
+  }, [playing, reducedMotion, autoplayMsPerFrame, maxReachable]);
 
   useEffect(() => {
     writeHashIdx(testIdPrefix, idx);
@@ -194,10 +204,10 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
 
   const onPredict = useCallback(
     (isCorrect: boolean) => {
-      setPredictionLocked(false);
-      props.predictionGate?.onAnswered?.(isCorrect);
+      setAnsweredGates((prev) => new Set(prev).add(idx));
+      activeGate?.onAnswered?.(isCorrect);
     },
-    [props.predictionGate]
+    [idx, activeGate]
   );
 
   const onShareClick = useCallback(() => {
@@ -205,7 +215,6 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   }, [props.onShare, testIdPrefix, idx]);
 
   const onKey = (e: ReactKeyboardEvent<SVGSVGElement>) => {
-    if (predictionLocked) return;
     const k = e.key.toLowerCase();
     if (e.key === "ArrowRight" || k === "k") {
       e.preventDefault();
@@ -310,19 +319,22 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           >
             Frame
           </div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>
+          <div
+            data-testid={`${testIdPrefix}-frame-counter`}
+            style={{ fontSize: 18, fontWeight: 700 }}
+          >
             {idx + 1} / {materializedFrames.length}
           </div>
           <input
             type="range"
             min={0}
-            max={lastIdx}
+            max={maxReachable}
             step={1}
             value={idx}
-            disabled={predictionLocked}
+            disabled={gateLocked}
             onChange={(e) =>
               setIdx(
-                Math.max(0, Math.min(lastIdx, Number(e.target.value)))
+                Math.max(0, Math.min(maxReachable, Number(e.target.value)))
               )
             }
             aria-label="Frame scrubber"
@@ -333,27 +345,26 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           <button
             onClick={togglePlay}
-            disabled={predictionLocked}
             data-testid={`${testIdPrefix}-play`}
-            style={brutalistBtn(playing, predictionLocked)}
+            style={brutalistBtn(playing, false)}
           >
             {playing ? "⏸ pause" : "▶ play"}
           </button>
           <button
             onClick={() => stepBy(-1)}
-            disabled={predictionLocked || idx === 0}
+            disabled={idx === 0}
             data-testid={`${testIdPrefix}-step-back`}
             aria-label="Step back one frame"
-            style={brutalistBtn(false, predictionLocked || idx === 0)}
+            style={brutalistBtn(false, idx === 0)}
           >
             ◀
           </button>
           <button
             onClick={() => stepBy(1)}
-            disabled={predictionLocked || idx === lastIdx}
+            disabled={idx >= maxReachable}
             data-testid={`${testIdPrefix}-step-fwd`}
             aria-label="Step forward one frame"
-            style={brutalistBtn(false, predictionLocked || idx === lastIdx)}
+            style={brutalistBtn(false, idx >= maxReachable)}
           >
             ▶
           </button>
@@ -389,7 +400,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             Reduced-motion on · play steps once per click.
           </div>
         )}
-        {props.predictionGate && predictionLocked && (
+        {gateLocked && activeGate && (
           <div
             data-testid="predict-gate"
             style={{ border: `2px solid ${INK}`, padding: 10, background: PAPER }}
@@ -406,7 +417,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
               ⚡ Predict
             </div>
             <div style={{ fontSize: 11, lineHeight: 1.5 }}>
-              {props.predictionGate.question}
+              {activeGate.question}
             </div>
             <div
               style={{
@@ -416,7 +427,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
                 marginTop: 8,
               }}
             >
-              {props.predictionGate.answers.map((a, i) => (
+              {activeGate.answers.map((a, i) => (
                 <button
                   key={i}
                   onClick={() => onPredict(a.isCorrect)}
