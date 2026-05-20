@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
-import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
+import { ACCENT, FONT_FAMILY, HATCH_DENSE, INK, PAPER } from "./theme";
 import {
   AnimatePresence,
   DrawLine,
@@ -218,8 +218,8 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         />
       </AnimatePresence>
 
-      {/* D node */}
-      <circle cx={branchX1} cy={branch1Y} r={5} fill={ACCENT} stroke={INK} strokeWidth={1} />
+      {/* D node — category encoded via hatch (V12: ACCENT = focal only) */}
+      <circle cx={branchX1} cy={branch1Y} r={5} fill={HATCH_DENSE} stroke={INK} strokeWidth={1} />
       <TweenText
         x={branchX1 + 8}
         y={branch1Y + 4}
@@ -339,7 +339,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
       {/* 100×100 unit square; map disease/healthy split + positive/negative */}
       <rect x={AREA_X} y={AREA_Y} width={AREA_W} height={AREA_H} fill={PAPER} stroke={INK} strokeWidth={1} />
 
-      {/* Disease ∩ positive (top-left of area) — width tweens with prior */}
+      {/* Disease ∩ positive (top-left of area) — hatch encodes Disease category (V12) */}
       <motion.rect
         x={AREA_X}
         y={AREA_Y}
@@ -351,10 +351,10 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
           strokeWidth: dpStroke,
         }}
         transition={{ duration: 0.55, ease: "easeInOut" }}
-        fill={ACCENT}
+        fill={HATCH_DENSE}
         stroke={INK}
       />
-      {/* Disease ∩ negative (bottom-left) */}
+      {/* Disease ∩ negative (bottom-left) — hatch encodes Disease category (V12) */}
       <motion.rect
         x={AREA_X}
         y={AREA_Y + AREA_H * sensitivity}
@@ -365,7 +365,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
           strokeWidth: dnStroke,
         }}
         transition={{ duration: 0.55, ease: "easeInOut" }}
-        fill={ACCENT}
+        fill={HATCH_DENSE}
         stroke={INK}
         opacity={0.2}
       />
