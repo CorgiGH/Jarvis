@@ -5,7 +5,6 @@ import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.javatime.timestamp
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
@@ -19,6 +18,8 @@ data class User(
     val scope: UserScope,
     val createdAt: Instant,
     val lastSeenAt: Instant,
+    val email: String? = null,
+    val lang: String = "ro",
 )
 
 object UsersTable : Table("users") {
@@ -27,6 +28,8 @@ object UsersTable : Table("users") {
     val scope = varchar("scope", 16)
     val createdAt = timestamp("created_at")
     val lastSeenAt = timestamp("last_seen_at")
+    val email = varchar("email", 320).nullable().uniqueIndex()
+    val lang = varchar("lang", 8).default("ro")
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -38,11 +41,34 @@ class UserRepo(private val db: Database) {
             it[scope] = u.scope.name
             it[createdAt] = u.createdAt
             it[lastSeenAt] = u.lastSeenAt
+            it[email] = u.email
+            it[lang] = u.lang
         }
     }
 
     fun findById(id: String): User? = transaction(db) {
         UsersTable.selectAll().where { UsersTable.id eq id }.singleOrNull()?.toUser()
+    }
+
+    fun findByEmail(email: String): User? = transaction(db) {
+        UsersTable.selectAll().where { UsersTable.email eq email }.singleOrNull()?.toUser()
+    }
+
+    /** Find the user with this email, or create a new FRIEND-scope user. */
+    fun upsertByEmail(email: String, lang: String): User {
+        findByEmail(email)?.let { return it }
+        val now = Instant.now()
+        val u = User(
+            id = TutorTypes.ulid(),
+            name = email.substringBefore('@'),
+            scope = UserScope.FRIEND,
+            createdAt = now,
+            lastSeenAt = now,
+            email = email,
+            lang = lang,
+        )
+        insert(u)
+        return u
     }
 
     fun touchLastSeen(id: String, ts: Instant) = transaction(db) {
@@ -55,5 +81,7 @@ class UserRepo(private val db: Database) {
         scope = UserScope.valueOf(this[UsersTable.scope]),
         createdAt = this[UsersTable.createdAt],
         lastSeenAt = this[UsersTable.lastSeenAt],
+        email = this[UsersTable.email],
+        lang = this[UsersTable.lang],
     )
 }
