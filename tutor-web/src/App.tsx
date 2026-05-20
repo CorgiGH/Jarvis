@@ -8,6 +8,7 @@ import { TasksScreen } from "./components/TasksScreen";
 import { TrustSettings } from "./components/TrustSettings";
 import { DaemonHealthPill } from "./components/DaemonHealthPill";
 import { KnowledgeLedger } from "./components/KnowledgeLedger";
+import { LoginPage } from "./components/LoginPage";
 import { jarvisFetch } from "./lib/api";
 import { recordTelemetry } from "./lib/telemetry";
 
@@ -27,11 +28,16 @@ const REVIEW_DAILY_CAP = 20;
  *  cookie was still cached client-side, the early-exit skipped /auto-session
  *  and the first /api/v1/last-task GET hit with a dead session → 401.
  *  Always call /auto-session; the server is idempotent (returns OK without
- *  rotating when session+csrf are both valid). */
-async function ensureTutorSession(): Promise<void> {
+ *  rotating when session+csrf are both valid).
+ *
+ *  Gate 2: returns the HTTP status so the caller can redirect on 401. */
+async function ensureTutorSession(): Promise<number> {
   try {
-    await fetch("/api/v1/tutor/auto-session", { credentials: "include" });
-  } catch (_) {}
+    const r = await fetch("/api/v1/tutor/auto-session", { credentials: "include" });
+    return r.status;
+  } catch (_) {
+    return 0; // network error — treat as unknown, don't redirect
+  }
 }
 
 export function App() {
@@ -62,8 +68,18 @@ export function App() {
   useEffect(() => {
     if (sessionBootstrapped.current) return;
     sessionBootstrapped.current = true;
-    ensureTutorSession().finally(() => setSessionReady(true));
-  }, []);
+    ensureTutorSession().then(status => {
+      if (
+        status === 401 &&
+        here.pathname !== "/login" &&
+        here.pathname !== "/welcome/ai-literacy"
+      ) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setSessionReady(true);
+    }).catch(() => setSessionReady(true));
+  }, [here.pathname, navigate]);
 
   // Phase 4.4 cross-device sync: read jarvis_last_task server cookie on
   // cold mount. Server cookie wins over localStorage when both present.
@@ -276,17 +292,19 @@ export function App() {
         </div>
       )}
       <main className="flex-1 min-h-0 overflow-hidden overflow-y-auto bg-page-bg">
-        {here.pathname === "/review"
-          ? <FsrsReview streak={0} />
-          : here.pathname === "/tasks"
-            ? <TasksScreen />
-            : here.pathname === "/settings/trust"
-              ? <TrustSettings />
-              : !sessionReady
-                ? <div className="p-6 font-mono text-sm text-page-fg/80">setting up tutor session…</div>
-                : showQuickStart
-                  ? <ActiveTaskDashboard />
-                  : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
+        {here.pathname === "/login"
+          ? <LoginPage />
+          : here.pathname === "/review"
+            ? <FsrsReview streak={0} />
+            : here.pathname === "/tasks"
+              ? <TasksScreen />
+              : here.pathname === "/settings/trust"
+                ? <TrustSettings />
+                : !sessionReady
+                  ? <div className="p-6 font-mono text-sm text-page-fg/80">setting up tutor session…</div>
+                  : showQuickStart
+                    ? <ActiveTaskDashboard />
+                    : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
       </main>
       {ledgerOpen && <KnowledgeLedger onClose={() => setLedgerOpen(false)} />}
     </div>
