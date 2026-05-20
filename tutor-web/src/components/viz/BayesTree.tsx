@@ -367,7 +367,7 @@ function renderFrame(frame: Frame<BayesState>): ReactNode {
         transition={{ duration: 0.55, ease: "easeInOut" }}
         fill={HATCH_DENSE}
         stroke={INK}
-        opacity={0.2}
+        opacity={0.5}
       />
       {/* Healthy ∩ positive (top-right) */}
       <motion.rect

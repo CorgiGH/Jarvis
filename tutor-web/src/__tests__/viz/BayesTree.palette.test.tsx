@@ -268,6 +268,19 @@ describe("BayesTree — V12 palette compliance", () => {
         expect(el.getAttribute("fill")).not.toBe(ACCENT_HEX);
       });
     });
+
+    test("F3: both Disease rects (D∩positive + D∩negative) are present and hatch-filled", () => {
+      const { container } = render(<BayesTree />);
+      advanceTo(container, 3);
+      const svg = container.querySelector("svg")!;
+
+      const dRects = diseaseRects(svg);
+      expect(dRects.length).toBe(2); // D∩positive + D∩negative both present
+      dRects.forEach((el) => {
+        const fill = el.getAttribute("fill") ?? "";
+        expect(fill).toMatch(/^url\(#hatch-/); // both hatch-filled, not accent/paper
+      });
+    });
   });
 
   // ── Zero ACCENT on early frames (before posterior payoff) ────────────────
