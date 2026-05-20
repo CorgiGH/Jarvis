@@ -36,12 +36,6 @@ export interface AlgoStepperShellProps<S> {
   testIdPrefix?: string;
 }
 
-function readReducedMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  if (typeof window.matchMedia !== "function") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 function parseHashIdx(prefix: string): number | null {
   if (typeof window === "undefined") return null;
   const m = window.location.hash.match(
@@ -100,7 +94,6 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pendingNextSrcRef = useRef<string | null>(null);
   const voiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reducedMotion = readReducedMotion();
 
   const gateLocked = !!props.predictionGates?.has(idx) && !answeredGates.has(idx);
   const activeGate = props.predictionGates?.get(idx);
