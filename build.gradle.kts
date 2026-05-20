@@ -175,3 +175,7 @@ tasks.register<JavaExec>("validateContent") {
     args = listOf("content")
     jvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
 }
+
+// Gate 3: content corpus validation runs as part of the standard verification
+// lifecycle. `gradle check` (and `gradle build`) now fail on a malformed corpus.
+tasks.named("check") { dependsOn("validateContent") }
