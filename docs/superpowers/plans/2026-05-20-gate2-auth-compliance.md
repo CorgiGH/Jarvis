@@ -2242,3 +2242,15 @@ Plan complete and saved to `docs/superpowers/plans/2026-05-20-gate2-auth-complia
 **1. Subagent-Driven (recommended)** — dispatch a fresh subagent per task, review between tasks, fast iteration. This is the Gate 1 workflow (implementer + 2-stage review per task) that worked well.
 
 **2. Inline Execution** — execute tasks in this session using executing-plans, batch execution with checkpoints for review.
+
+---
+
+## Post-Gate-2 follow-ups (recorded per council `1779305355`)
+
+Tracked items shipped with Gate 2. Not blockers for the local merge to `main` — to be closed in a later gate or a focused pass.
+
+1. **FK declarations on 3 Gate-2 tables.** `ai_literacy_confirmation`, `consent_log`, `user_preferences` declare `userId` as a plain `varchar` without `.references(UsersTable.id)`; ~10 sibling user-scoped tables declare the FK. Low severity — every `userId` is a server-resolved authenticated id (no orphan-row path), and SQLite enforces FKs only with `PRAGMA foreign_keys=ON` — but it is a consistency gap. Closing it = add `.references(UsersTable.id)` to the 3 tables AND update their repo tests (`AiLiteracyRepoTest`, `ConsentRepoTest`, `UserPreferencesRepoTest`) to `SchemaUtils.create(UsersTable, ...)` + seed each test user as a real `UsersTable` row (an FK-on insert would otherwise fail). Note: `magic_link_tokens` correctly has NO user FK — it is keyed by email before a user row may exist.
+
+**Resolved before merge (no longer deferred):** the `/me/delete` GDPR Art-17 erasure now covers every user-scoped table (`AuditLinesTable` excluded by design — append-only hash-chain, Art 17(3)(b)).
+
+**Deploy gate:** Gate 2 merges to `main` locally; deploying it to the VPS is a separate deliberate step.
