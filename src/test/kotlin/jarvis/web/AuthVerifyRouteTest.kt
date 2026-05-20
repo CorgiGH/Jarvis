@@ -44,6 +44,8 @@ class AuthVerifyRouteTest {
         }
         val c = createClient { install(HttpCookies); followRedirects = false }
         val r = c.get("/auth/verify?token=$raw")
+        assertEquals(HttpStatusCode.Found, r.status)
+        assertTrue(r.headers[HttpHeaders.Location]?.startsWith("/tutor/login") == true)
         val cookies = r.headers.getAll(HttpHeaders.SetCookie) ?: emptyList()
         assertTrue(cookies.none { it.startsWith("jarvis_session=") })
     }

@@ -239,8 +239,9 @@ fun Application.installTutorRoutes() {
             }
             val claim = MagicLinkRepo(ctx.db).consume(raw)
                 ?: return@get call.respondRedirect("/tutor/login?error=expired")
-            val user = UserRepo(ctx.db).upsertByEmail(claim.email, claim.lang)
-            UserRepo(ctx.db).touchLastSeen(user.id, java.time.Instant.now())
+            val userRepo = UserRepo(ctx.db)
+            val user = userRepo.upsertByEmail(claim.email, claim.lang)
+            userRepo.touchLastSeen(user.id, java.time.Instant.now())
             // Fresh sid every time — never adopt a client-supplied value (kills session fixation).
             val sid = SessionRepo(ctx.db).create(user.id, ttlSeconds = 60L * 60 * 24 * 14)
             val csrf = ByteArray(16).also { rng.nextBytes(it) }.joinToString("") { "%02x".format(it) }
