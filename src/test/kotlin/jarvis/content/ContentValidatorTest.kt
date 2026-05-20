@@ -1,5 +1,7 @@
 package jarvis.content
 
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -169,5 +171,23 @@ class ContentValidatorTest {
         val report = ContentValidator.validate(listOf(sub), srcLookup)
         assertFalse(report.ok)
         assertTrue(report.issues.any { it.rule == "exam_weight" })
+    }
+
+    @Test
+    fun `runValidation loads a content dir and reports ok`(@org.junit.jupiter.api.io.TempDir tmp: java.nio.file.Path) {
+        tmp.resolve("subjects.yaml").writeText(
+            "version: 1\nsubjects:\n  - id: PA\n    name_ro: \"P\"\n    name_en: \"Algorithm Design\"\n")
+        val pa = tmp.resolve("PA")
+        pa.resolve("kcs").createDirectories()
+        pa.resolve("_sources").createDirectories()
+        pa.resolve("_sources/pa-lecture-01.md").writeText("An algorithm is a finite sequence of steps.")
+        pa.resolve("kcs/pa-kc-001.yaml").writeText(
+            "id: pa-kc-001\nsubject: PA\nname_ro: \"A\"\nname_en: \"Algorithm\"\n" +
+            "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
+            "exam_weight: 1.0\ntier: 1\nversion: 1\n" +
+            "source:\n  - doc: pa-lecture-01\n    quote: \"a finite sequence of steps\"\n")
+        pa.resolve("edges.yaml").writeText("subject: PA\nedges: []\n")
+        val report = ContentCli.runValidation(tmp)
+        assertTrue(report.ok, report.issues.toString())
     }
 }
