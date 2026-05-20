@@ -1939,12 +1939,17 @@ fun Application.installTutorRoutes() {
                 ?: return@post call.respond(HttpStatusCode.InternalServerError, "no ctx")
             requireUser { uid ->
                 call.csrfProtect {
+                    // GDPR Art 17 erasure. Covers tutor + auth tables. Legacy Layer-A/B
+                    // tables (TrustGrants, SensorEvents, EffectorAttempts, CardActionLog,
+                    // Tasks, DetectedTaskMapping) deferred to a follow-up; AuditLines is
+                    // retained by design (hash-chain integrity, Art 17(3)(b)).
                     transaction(ctx.db) {
                         ConsentLogTable.deleteWhere { ConsentLogTable.userId eq uid }
                         UserPreferencesTable.deleteWhere { UserPreferencesTable.userId eq uid }
                         AiLiteracyConfirmationTable.deleteWhere { AiLiteracyConfirmationTable.userId eq uid }
                         FsrsCardsTable.deleteWhere { FsrsCardsTable.userId eq uid }
                         KnowledgeGapsTable.deleteWhere { KnowledgeGapsTable.userId eq uid }
+                        TokensTable.deleteWhere { TokensTable.userId eq uid }
                         SessionsTable.deleteWhere { SessionsTable.userId eq uid }
                         UsersTable.deleteWhere { UsersTable.id eq uid }
                     }

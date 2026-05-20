@@ -16,6 +16,7 @@ import jarvis.tutor.TutorTypes
 import jarvis.tutor.User
 import jarvis.tutor.UserRepo
 import jarvis.tutor.UserPreferencesTable
+import jarvis.tutor.TokensTable
 import jarvis.tutor.UserScope
 import jarvis.tutor.UsersTable
 import org.jetbrains.exposed.sql.SchemaUtils
@@ -41,12 +42,13 @@ class MeRoutesTest {
         val r = client.get("/api/v1/me/export") { header("Cookie", "jarvis_session=$sid") }
         assertEquals(HttpStatusCode.OK, r.status)
         assertTrue(r.bodyAsText().contains("e@x.io"))
+        assertTrue(r.headers["Content-Disposition"]?.contains("attachment") == true)
     }
 
     @Test fun `delete removes the user and revokes the session`() = testApplication {
         val dbDir = Files.createTempDirectory("medelete")
         val db = TutorDb.connect(dbDir.resolve("t.db").toString())
-        transaction(db) { SchemaUtils.create(UsersTable, SessionsTable, ConsentLogTable, UserPreferencesTable, AiLiteracyConfirmationTable, FsrsCardsTable, KnowledgeGapsTable) }
+        transaction(db) { SchemaUtils.create(UsersTable, SessionsTable, ConsentLogTable, UserPreferencesTable, AiLiteracyConfirmationTable, FsrsCardsTable, KnowledgeGapsTable, TokensTable) }
         val uid = TutorTypes.ulid()
         UserRepo(db).insert(User(uid, "u", UserScope.FRIEND, Instant.now(), Instant.now()))
         val sid = SessionRepo(db).create(uid, 3600)
@@ -60,5 +62,27 @@ class MeRoutesTest {
         assertEquals(HttpStatusCode.OK, r.status)
         assertEquals(null, UserRepo(db).findById(uid))
         assertEquals(null, SessionRepo(db).findUserId(sid))
+    }
+
+    @Test fun `restrict toggles logging-paused on then off`() = testApplication {
+        val dbDir = Files.createTempDirectory("merestrict")
+        val db = TutorDb.connect(dbDir.resolve("t.db").toString())
+        transaction(db) { SchemaUtils.create(UsersTable, SessionsTable, UserPreferencesTable) }
+        val uid = TutorTypes.ulid()
+        UserRepo(db).insert(User(uid, "u", UserScope.FRIEND, Instant.now(), Instant.now()))
+        val sid = SessionRepo(db).create(uid, 3600)
+        application {
+            attributes.put(TutorContextKey, testTutorContext(db, dbDir, mailer = FakeMailer()))
+            installTutorRoutes()
+        }
+        val first = client.post("/api/v1/me/restrict") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+        }
+        assertEquals(HttpStatusCode.OK, first.status)
+        assertTrue(first.bodyAsText().contains(""""loggingPaused":true"""))
+        val second = client.post("/api/v1/me/restrict") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+        }
+        assertTrue(second.bodyAsText().contains(""""loggingPaused":false"""))
     }
 }
