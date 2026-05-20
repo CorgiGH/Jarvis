@@ -18,10 +18,6 @@ const TITLE_ID = "sigma-stacked-bar-title";
 const DESC_ID = "sigma-stacked-bar-desc";
 
 export function SigmaStackedBar({ data, mu, focusedIndex }: SigmaStackedBarProps) {
-  const prefersReduced =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
   const deviations = data.map((x) => Math.abs(x - mu));
   const total = deviations.reduce((a, b) => a + b, 0);
 
@@ -39,10 +35,6 @@ export function SigmaStackedBar({ data, mu, focusedIndex }: SigmaStackedBarProps
     xOffsets.push(cursor);
     cursor += w;
   }
-
-  const transitionStyle = prefersReduced
-    ? undefined
-    : "width 120ms ease-out";
 
   return (
     <div
@@ -93,11 +85,6 @@ export function SigmaStackedBar({ data, mu, focusedIndex }: SigmaStackedBarProps
               fill={fill}
               stroke={PAPER}
               strokeWidth={segW > 0 ? STROKE_DEFAULT : 0}
-              style={
-                transitionStyle
-                  ? { transition: transitionStyle }
-                  : undefined
-              }
             >
               <title>{`|x${i + 1} − μ| = ${dev.toFixed(2)}`}</title>
             </rect>

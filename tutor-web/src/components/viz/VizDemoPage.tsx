@@ -134,7 +134,7 @@ export function VizDemoPage() {
       <section data-testid="viz-demo-sigma" style={tileStyle}>
         <h2 style={headingStyle}>SigmaStackedBar (PS basis)</h2>
         <p style={subheadingStyle}>
-          Stacked deviations · ink + accent + opacity alternation · hard edges
+          Stacked deviations · SVG · ink segments + hairline seams · ACCENT on focus
         </p>
         <SigmaStackedBar data={[1, 3, 4, 5, 6, 8, 11]} mu={numLineMu} />
       </section>

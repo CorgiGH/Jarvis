@@ -112,23 +112,12 @@ describe("SigmaStackedBar", () => {
     });
   });
 
-  test("transition: none under prefers-reduced-motion (style attr)", () => {
-    const original = window.matchMedia;
-    window.matchMedia = vi.fn().mockReturnValue({
-      matches: true,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }) as any;
-    const { container } = render(<SigmaStackedBar data={data} mu={8} />);
-    // In SVG the transition is on the rect via style attr or CSS; check no transition is applied
+  test("focused segment uses ACCENT fill; others remain INK (V12)", () => {
+    const { container } = render(<SigmaStackedBar data={data} mu={8} focusedIndex={1} />);
     const rects = container.querySelectorAll("svg rect[data-testid^='sigma-seg-']");
-    rects.forEach((rect) => {
-      const style = rect.getAttribute("style") ?? "";
-      // Either no transition property at all, or explicitly "none"
-      if (style.includes("transition")) {
-        expect(style).toMatch(/transition\s*:\s*none/);
-      }
+    rects.forEach((rect, i) => {
+      if (i === 1) expect(rect.getAttribute("fill")).toBe(ACCENT);
+      else expect(rect.getAttribute("fill")).toBe(INK);
     });
-    window.matchMedia = original;
   });
 });
