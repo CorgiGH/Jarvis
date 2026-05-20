@@ -39,7 +39,9 @@ import jarvis.tutor.SensorPayload
 import jarvis.tutor.SensorRepo
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.SessionsTable
+import jarvis.tutor.MagicLinkRepo
 import jarvis.tutor.MagicLinkTokensTable
+import jarvis.tutor.UserRepo
 import jarvis.tutor.TaskPrepTable
 import jarvis.tutor.TasksTable
 import jarvis.tutor.TokenRepo
@@ -221,6 +223,50 @@ fun Application.installTutorRoutes() {
                 System.err.println("[request-link] mail delivery failed for $email")
             }
             call.respond(HttpStatusCode.OK, """{"ok":true}""")
+        }
+
+        // Gate 2: magic-link verification.
+        // Consumes the one-time token, upserts the user by email, mints a
+        // session, sets jarvis_session + csrf cookies, then 302→/tutor/.
+        // Invalid/expired/already-consumed tokens redirect to login with an
+        // error query param — no session cookie is set.
+        get("/auth/verify") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: return@get call.respond(HttpStatusCode.InternalServerError, "no ctx")
+            val raw = call.request.queryParameters["token"]
+            if (raw.isNullOrBlank()) {
+                return@get call.respondRedirect("/tutor/login?error=missing")
+            }
+            val claim = MagicLinkRepo(ctx.db).consume(raw)
+                ?: return@get call.respondRedirect("/tutor/login?error=expired")
+            val user = UserRepo(ctx.db).upsertByEmail(claim.email, claim.lang)
+            UserRepo(ctx.db).touchLastSeen(user.id, java.time.Instant.now())
+            // Fresh sid every time — never adopt a client-supplied value (kills session fixation).
+            val sid = SessionRepo(ctx.db).create(user.id, ttlSeconds = 60L * 60 * 24 * 14)
+            val csrf = ByteArray(16).also { rng.nextBytes(it) }.joinToString("") { "%02x".format(it) }
+            call.response.cookies.append(
+                Cookie(
+                    name = "jarvis_session",
+                    value = sid,
+                    httpOnly = true,
+                    secure = true,
+                    extensions = mapOf("SameSite" to "Strict"),
+                    path = "/",
+                    maxAge = 60 * 60 * 24 * 14,
+                ),
+            )
+            call.response.cookies.append(
+                Cookie(
+                    name = "csrf",
+                    value = csrf,
+                    httpOnly = false,
+                    secure = true,
+                    extensions = mapOf("SameSite" to "Strict"),
+                    path = "/",
+                    maxAge = 60 * 60 * 24 * 14,
+                ),
+            )
+            call.respondRedirect("/tutor/")
         }
 
         // Single-user auto-session: SPA hits this on mount. If session
