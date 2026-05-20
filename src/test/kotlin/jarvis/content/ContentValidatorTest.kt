@@ -37,4 +37,29 @@ class ContentValidatorTest {
         assertEquals("cycle", issues.single().rule)
         assertFalse(issues.single().severity == "warning")
     }
+
+    @Test
+    fun `kc within 8 prereq-hops of a tier-1 root is not an orphan`() {
+        val sub = LoadedSubject(
+            "PA",
+            kcs = listOf(kc("root", tier = 1), kc("child")),
+            edges = listOf(PrereqEdge("child", "root", "r")),
+            misconceptions = emptyList(),
+        )
+        assertTrue(ContentValidator.detectOrphans(sub).isEmpty())
+    }
+
+    @Test
+    fun `kc with no path to a tier-1 root is an orphan`() {
+        val sub = LoadedSubject(
+            "PA",
+            kcs = listOf(kc("root", tier = 1), kc("floating", tier = 2)),
+            edges = emptyList(),
+            misconceptions = emptyList(),
+        )
+        val issues = ContentValidator.detectOrphans(sub)
+        assertEquals(1, issues.size)
+        assertEquals("orphan", issues.single().rule)
+        assertTrue(issues.single().detail.contains("floating"))
+    }
 }

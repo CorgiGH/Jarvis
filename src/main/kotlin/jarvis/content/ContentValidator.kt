@@ -54,4 +54,40 @@ object ContentValidator {
         }
         return issues
     }
+
+    /**
+     * Orphan = a KC that is NOT a tier-1 root and has no prerequisite chain of
+     * <= [MAX_HOPS] edges reaching a tier-1 KC. Walks edges kc -> prereq.
+     */
+    const val MAX_HOPS = 8
+
+    fun detectOrphans(sub: LoadedSubject): List<ValidationIssue> {
+        val tier1: Set<String> = sub.kcs.filter { it.tier == 1 }.map { it.id }.toSet()
+        // prereqsOf[x] = the KCs that x directly depends on.
+        val prereqsOf: Map<String, List<String>> = sub.edges.groupBy({ it.kc }, { it.prereq })
+        val issues = mutableListOf<ValidationIssue>()
+
+        for (kc in sub.kcs) {
+            if (kc.id in tier1) continue
+            // BFS up the prerequisite chain, bounded by MAX_HOPS.
+            val seen = hashSetOf(kc.id)
+            var frontier = listOf(kc.id)
+            var reached = false
+            var hop = 0
+            while (frontier.isNotEmpty() && hop < MAX_HOPS && !reached) {
+                val next = mutableListOf<String>()
+                for (n in frontier) for (p in prereqsOf[n].orEmpty()) {
+                    if (p in tier1) { reached = true }
+                    if (seen.add(p)) next += p
+                }
+                frontier = next
+                hop++
+            }
+            if (!reached) {
+                issues += ValidationIssue("error", "orphan", sub.subject,
+                    "KC '${kc.id}' has no prerequisite path (<= $MAX_HOPS hops) to a tier-1 root")
+            }
+        }
+        return issues
+    }
 }
