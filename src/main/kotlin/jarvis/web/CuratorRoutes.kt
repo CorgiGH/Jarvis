@@ -65,6 +65,11 @@ fun Route.installCuratorRoutes() {
         requireOwner {
             val subject = call.parameters["subject"]
                 ?: run { call.respond(HttpStatusCode.BadRequest, "subject required"); return@requireOwner }
+            val knownSubjects = ContentRepo(contentDir()).loadManifest().subjects.map { it.id }
+            if (subject !in knownSubjects) {
+                call.respond(HttpStatusCode.NotFound, """{"error":"unknown subject"}""")
+                return@requireOwner
+            }
             val kcs = ContentRepo(contentDir()).loadSubject(subject).kcs
             call.respondText(
                 curatorJson.encodeToString(
@@ -82,6 +87,11 @@ fun Route.installCuratorRoutes() {
                 ?: run { call.respond(HttpStatusCode.BadRequest, "subject required"); return@requireOwner }
             val id = call.parameters["id"]
                 ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@requireOwner }
+            val knownSubjects = ContentRepo(contentDir()).loadManifest().subjects.map { it.id }
+            if (subject !in knownSubjects) {
+                call.respond(HttpStatusCode.NotFound, """{"error":"unknown subject"}""")
+                return@requireOwner
+            }
             val kc = ContentRepo(contentDir()).loadSubject(subject).kcs.firstOrNull { it.id == id }
                 ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"KC not found"}"""); return@requireOwner }
             call.respondText(

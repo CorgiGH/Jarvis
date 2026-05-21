@@ -103,6 +103,20 @@ class CuratorRoutesTest {
     }
 
     @Test
+    fun `GET curator kcs returns 404 for an unknown subject`(@TempDir tmp: Path) = testApplication {
+        val content = tmp.resolve("content"); seedContent(content)
+        var ctx: TutorContext? = null
+        application { installFresh(tmp, content); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val sid = seedOwner(ctx!!)
+        val client = createClient {
+            install(HttpCookies); install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val r = client.get("/api/v1/curator/subjects/BOGUS/kcs") { cookie("jarvis_session", sid) }
+        assertEquals(HttpStatusCode.NotFound, r.status)
+    }
+
+    @Test
     fun `GET curator kcs lists and fetches a single KC`(@TempDir tmp: Path) = testApplication {
         val content = tmp.resolve("content"); seedContent(content)
         var ctx: TutorContext? = null

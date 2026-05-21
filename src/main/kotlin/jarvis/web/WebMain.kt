@@ -101,7 +101,9 @@ internal suspend fun runWeb() {
                 path.startsWith("/api/v1/drill/") ||
                 path.startsWith("/api/v1/sidekick/") ||
                 path.startsWith("/api/v1/gap") ||
-                path.startsWith("/api/v1/daemon/health")) return@intercept
+                path.startsWith("/api/v1/daemon/health") ||
+                // Gate 3: curator routes — self-authenticate via jarvis_session + requireOwner
+                path.startsWith("/api/v1/curator/")) return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]
