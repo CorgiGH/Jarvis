@@ -122,6 +122,9 @@ fun Application.installTutorRoutes() {
             call.respondText("""{"ok":true}""", ContentType.Application.Json)
         }
 
+        // Gate 3: content-authoring curator routes (read + validate only).
+        installCuratorRoutes()
+
         // Daemon health probe: checks if the local background daemon at
         // port 7331 is reachable. No auth required (public liveness data).
         get("/api/v1/daemon/health") {
