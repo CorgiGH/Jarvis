@@ -18,6 +18,16 @@ import java.nio.file.Path
 
 private val curatorJson = Json { encodeDefaults = true; prettyPrint = false }
 
+@kotlinx.serialization.Serializable
+private data class GraphNode(val id: String, val name_en: String, val tier: Int)
+
+@kotlinx.serialization.Serializable
+private data class GraphResponse(
+    val subject: String,
+    val nodes: List<GraphNode>,
+    val edges: List<jarvis.content.PrereqEdge>,
+)
+
 /** Resolves the content/ directory: JARVIS_CONTENT_DIR env/property, else "content" (CWD-relative). */
 private fun contentDir(): Path =
     Path.of(System.getProperty("JARVIS_CONTENT_DIR")
@@ -96,6 +106,23 @@ fun Route.installCuratorRoutes() {
                 ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"KC not found"}"""); return@requireOwner }
             call.respondText(
                 curatorJson.encodeToString(jarvis.content.KnowledgeConcept.serializer(), kc),
+                ContentType.Application.Json,
+            )
+        }
+    }
+
+    get("/api/v1/curator/subjects/{subject}/graph") {
+        requireOwner {
+            val subject = call.parameters["subject"]
+                ?: run { call.respond(HttpStatusCode.BadRequest, "subject required"); return@requireOwner }
+            val loaded = ContentRepo(contentDir()).loadSubject(subject)
+            val resp = GraphResponse(
+                subject = subject,
+                nodes = loaded.kcs.map { GraphNode(it.id, it.name_en, it.tier) },
+                edges = loaded.edges,
+            )
+            call.respondText(
+                curatorJson.encodeToString(GraphResponse.serializer(), resp),
                 ContentType.Application.Json,
             )
         }

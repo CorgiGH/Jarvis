@@ -135,4 +135,31 @@ class CuratorRoutesTest {
         val missing = client.get("/api/v1/curator/subjects/PA/kcs/pa-kc-999") { cookie("jarvis_session", sid) }
         assertEquals(HttpStatusCode.NotFound, missing.status)
     }
+
+    @Test
+    fun `GET curator graph returns nodes and edges`(@TempDir tmp: Path) = testApplication {
+        val content = tmp.resolve("content")
+        seedContent(content)
+        // add a second KC + an edge
+        val pa = content.resolve("PA")
+        pa.resolve("kcs/pa-kc-002.yaml").writeText(
+            "id: pa-kc-002\nsubject: PA\nname_ro: \"B\"\nname_en: \"Complexity\"\n" +
+            "cluster: f\nbloom_level: understand\ndifficulty: 2\ntime_minutes: 15\n" +
+            "exam_weight: 0.0\ntier: 2\nversion: 1\n")
+        pa.resolve("edges.yaml").writeText(
+            "subject: PA\nedges:\n  - kc: pa-kc-002\n    prereq: pa-kc-001\n    rationale: r\n")
+        var ctx: TutorContext? = null
+        application { installFresh(tmp, content); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val sid = seedOwner(ctx!!)
+        val client = createClient {
+            install(HttpCookies); install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val r = client.get("/api/v1/curator/subjects/PA/graph") { cookie("jarvis_session", sid) }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        assertTrue(body.contains("pa-kc-001"))
+        assertTrue(body.contains("pa-kc-002"))
+        assertTrue(body.contains("\"prereq\":\"pa-kc-001\""))
+    }
 }
