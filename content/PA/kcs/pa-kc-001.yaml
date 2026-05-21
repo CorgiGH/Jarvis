@@ -1,0 +1,18 @@
+id: pa-kc-001
+subject: PA
+name_ro: "Noțiunea de algoritm"
+name_en: "The notion of an algorithm"
+cluster: "Fundamentele algoritmilor"
+bloom_level: understand
+difficulty: 1
+time_minutes: 25
+exam_weight: 0.22
+tier: 1
+source:
+  - doc: pa-lecture-01
+    quote: "It does not exists a standard definition for the notion of algorithm."
+  - doc: pa-lecture-01
+    quote: "An algorithm is a well-ordered collection of unambiguous and effectively computable\noperations that when executed produces a result and halts in a finite amount of time."
+  - doc: pa-lecture-01
+    quote: "An algorithm is an ordered sequence of instructions that is guaranteed to solve a\nspecific problem."
+version: 1

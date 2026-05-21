@@ -1,0 +1,17 @@
+subject: PA
+edges:
+  - kc: pa-kc-002
+    prereq: pa-kc-001
+    rationale: "Defining a problem as an (input, output) pair and a computation model presupposes the notion of an algorithm itself."
+  - kc: pa-kc-003
+    prereq: pa-kc-001
+    rationale: "Choosing how to describe an algorithm (informal, formal, semiformal) requires already knowing what an algorithm is."
+  - kc: pa-kc-004
+    prereq: pa-kc-002
+    rationale: "Formal computation models exist to decide whether a problem is computable, so they build on the problem / computation-model concept."
+  - kc: pa-kc-005
+    prereq: pa-kc-001
+    rationale: "Measuring the size of values is the first step of analysing an algorithm's efficiency, which only makes sense once an algorithm is defined."
+  - kc: pa-kc-006
+    prereq: pa-kc-005
+    rationale: "The time cost of operations and computations is expressed in terms of the uniform, logarithmic or linear size of values."

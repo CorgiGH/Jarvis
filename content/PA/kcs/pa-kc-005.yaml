@@ -1,0 +1,16 @@
+id: pa-kc-005
+subject: PA
+name_ro: "Dimensiunea valorilor: uniformă, logaritmică, liniară"
+name_en: "Value size: uniform, logarithmic, linear"
+cluster: "Eficiența algoritmilor"
+bloom_level: apply
+difficulty: 3
+time_minutes: 30
+exam_weight: 0.13
+tier: 3
+source:
+  - doc: pa-lecture-01
+    quote: "For the values of each data type, the size of representation must be\n  mentioned."
+  - doc: pa-lecture-01
+    quote: "There are (at least) three ways to define the size of values:"
+version: 1

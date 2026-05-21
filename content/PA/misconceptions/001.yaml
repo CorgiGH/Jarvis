@@ -1,0 +1,10 @@
+id: pa-misc-001
+kc_id: pa-kc-001
+label_ro: "Algoritmul are o singură definiție standard"
+label_en: "An algorithm has a single standard definition"
+trigger: "The student believes there is one official, universally agreed definition of an algorithm and treats any single textbook phrasing as THE definition."
+refutation: "The lecture opens by stating that no standard definition exists for the notion of algorithm; it then lists several distinct attempts (Cambridge Dictionary, Schneider & Gersting, Wikipedia) that only share common ingredients. The notion is intuitive; what matters is the shared core, not one canonical sentence."
+source:
+  - doc: pa-lecture-01
+    quote: "It does not exists a standard definition for the notion of algorithm. Let us\nconsider several attempts."
+version: 1

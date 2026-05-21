@@ -1,0 +1,18 @@
+id: pa-kc-006
+subject: PA
+name_ro: "Costul de timp al unui calcul"
+name_en: "Time cost of a computation"
+cluster: "Eficiența algoritmilor"
+bloom_level: apply
+difficulty: 4
+time_minutes: 35
+exam_weight: 0.17
+tier: 4
+source:
+  - doc: pa-lecture-01
+    quote: "Each operation op has a time cost time(op)."
+  - doc: pa-lecture-01
+    quote: "The time cost of an expression evaluation is the sum of time costs of the\noperations included in the expression."
+  - doc: pa-lecture-01
+    quote: "The time cost of a computation is the sum of the time costs of its\nexecution steps."
+version: 1

@@ -1,0 +1,18 @@
+id: pa-kc-004
+subject: PA
+name_ro: "Necesitatea formalizării și modele de calcul"
+name_en: "The need for formalisation and computation models"
+cluster: "Fundamentele algoritmilor"
+bloom_level: understand
+difficulty: 3
+time_minutes: 30
+exam_weight: 0.17
+tier: 3
+source:
+  - doc: pa-lecture-01
+    quote: "To prove that there is no algorithm that solve this problem, we need a\n  formal definition for algorithm!"
+  - doc: pa-lecture-01
+    quote: "The formal definition for an algorithm was introduced using various\ncomputational models:"
+  - doc: pa-lecture-01
+    quote: "All these models are computationally equivalent."
+version: 1

@@ -1,0 +1,16 @@
+id: pa-kc-003
+subject: PA
+name_ro: "Moduri de descriere a unui algoritm"
+name_en: "Ways to describe an algorithm"
+cluster: "Fundamentele algoritmilor"
+bloom_level: understand
+difficulty: 2
+time_minutes: 20
+exam_weight: 0.13
+tier: 2
+source:
+  - doc: pa-lecture-01
+    quote: "There are various ways to describe an algorithm:"
+  - doc: pa-lecture-01
+    quote: "pseudo-code, combines a formal notation with a informal one"
+version: 1
