@@ -7,13 +7,22 @@ import kotlin.system.exitProcess
 
 object ContentCli {
 
-    /** Loads every subject in the manifest, validates, and regenerates edges.mmd files. */
-    fun runValidation(contentDir: Path): ValidationReport {
+    /** Pure read-only validation — loads the manifest + all subjects and runs ContentValidator.
+     *  No file writes. Safe to call from an HTTP GET handler. */
+    fun validateOnly(contentDir: Path): ValidationReport {
         val repo = ContentRepo(contentDir)
         val manifest = repo.loadManifest()
         val subjects = manifest.subjects.map { repo.loadSubject(it.id) }
+        return ContentValidator.validate(subjects) { doc ->
+            // doc ids are unique across subjects in practice; search each subject's _sources.
+            manifest.subjects.firstNotNullOfOrNull { repo.sourceText(it.id, doc) }
+        }
+    }
 
-        // Regenerate each subject's edges.mmd mirror (only if edges.yaml exists).
+    /** Regenerates edges.mmd for every subject that has an edges.yaml. */
+    fun regenerateMermaid(contentDir: Path) {
+        val repo = ContentRepo(contentDir)
+        val manifest = repo.loadManifest()
         for (entry in manifest.subjects) {
             val edgesYaml = contentDir.resolve(entry.id).resolve("edges.yaml")
             if (edgesYaml.exists()) {
@@ -22,11 +31,13 @@ object ContentCli {
                 contentDir.resolve(entry.id).resolve("edges.mmd").writeText(mmd + "\n")
             }
         }
+    }
 
-        return ContentValidator.validate(subjects) { doc ->
-            // doc ids are unique across subjects in practice; search each subject's _sources.
-            manifest.subjects.firstNotNullOfOrNull { repo.sourceText(it.id, doc) }
-        }
+    /** CLI entry point: regenerates edges.mmd files then runs pure validation.
+     *  Behaviour is identical to the original runValidation. */
+    fun runValidation(contentDir: Path): ValidationReport {
+        regenerateMermaid(contentDir)
+        return validateOnly(contentDir)
     }
 }
 
