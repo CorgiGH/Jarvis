@@ -115,6 +115,11 @@ fun Route.installCuratorRoutes() {
         requireOwner {
             val subject = call.parameters["subject"]
                 ?: run { call.respond(HttpStatusCode.BadRequest, "subject required"); return@requireOwner }
+            val knownSubjects = ContentRepo(contentDir()).loadManifest().subjects.map { it.id }
+            if (subject !in knownSubjects) {
+                call.respond(HttpStatusCode.NotFound, """{"error":"unknown subject"}""")
+                return@requireOwner
+            }
             val loaded = ContentRepo(contentDir()).loadSubject(subject)
             val resp = GraphResponse(
                 subject = subject,
