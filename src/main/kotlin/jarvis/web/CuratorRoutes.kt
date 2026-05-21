@@ -132,4 +132,14 @@ fun Route.installCuratorRoutes() {
             )
         }
     }
+
+    get("/api/v1/curator/validate") {
+        requireOwner {
+            val report = jarvis.content.ContentCli.runValidation(contentDir())
+            call.respondText(
+                curatorJson.encodeToString(jarvis.content.ValidationReport.serializer(), report),
+                ContentType.Application.Json,
+            )
+        }
+    }
 }

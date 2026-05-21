@@ -39,7 +39,8 @@ class CuratorRoutesTest {
         pa.resolve("kcs/pa-kc-001.yaml").writeText(
             "id: pa-kc-001\nsubject: PA\nname_ro: \"A\"\nname_en: \"Algorithm\"\n" +
             "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
-            "exam_weight: 1.0\ntier: 1\nversion: 1\n")
+            "exam_weight: 1.0\ntier: 1\nversion: 1\n" +
+            "source:\n  - doc: lecture-01\n    quote: \"Algorithm\"\n")
         pa.resolve("edges.yaml").writeText("subject: PA\nedges: []\n")
     }
 
@@ -175,5 +176,23 @@ class CuratorRoutesTest {
         assertTrue(body.contains("pa-kc-001"))
         assertTrue(body.contains("pa-kc-002"))
         assertTrue(body.contains("\"prereq\":\"pa-kc-001\""))
+    }
+
+    @Test
+    fun `GET curator validate returns a structural report with the disclaimer`(@TempDir tmp: Path) = testApplication {
+        val content = tmp.resolve("content")
+        seedContent(content)
+        var ctx: TutorContext? = null
+        application { installFresh(tmp, content); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val sid = seedOwner(ctx!!)
+        val client = createClient {
+            install(HttpCookies); install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val r = client.get("/api/v1/curator/validate") { cookie("jarvis_session", sid) }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        assertTrue(body.contains("structural checks only"))
+        assertTrue(body.contains("\"ok\":true"))
     }
 }
