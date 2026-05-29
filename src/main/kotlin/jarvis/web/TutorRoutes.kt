@@ -1779,7 +1779,10 @@ fun Application.installTutorRoutes() {
                             kotlinx.serialization.builtins.ListSerializer(jarvis.tutor.Problem.serializer()),
                             prep.problemsJson,
                         )
-                    } catch (_: Exception) { emptyList() }
+                    } catch (e: Exception) {
+                        System.err.println("[drill-grade] could not read problemsJson for task=${req.taskId}: ${e.message?.take(120)}")
+                        emptyList()
+                    }
                     problems.firstOrNull { it.problemId == req.problemId }
                 }
 
@@ -2347,11 +2350,11 @@ private data class ApiDrillGradeRequest(
      * grader also auto-detects the sentinel server-side.
      */
     val giveUp: Boolean = false,
-    // E1 trustworthy-grader: optional deterministic-grading inputs. When
-    // [canonicalAnswer] is present the server cross-checks the attempt with
-    // GradeScoring.answerMatches (never trusts the LLM verdict alone).
-    // [conceptIds] names the KCs this problem exercises — confident grades
-    // record per-KC mastery via KcMasteryRepo.
+    // E1/E2 trustworthy-grader: optional deterministic-grading inputs.
+    // [canonicalAnswer] is a FALLBACK only — the server prefers the persisted
+    // Problem.canonicalAnswer (looked up by taskId+problemId).
+    // [conceptIds] is RETAINED for wire-compat but NO LONGER drives recorded
+    // mastery (E2: mastery records on the server-side Problem.kcIds, never client input).
     val canonicalAnswer: String? = null,
     val conceptIds: List<String>? = null,
 )
