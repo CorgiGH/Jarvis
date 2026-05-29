@@ -21,6 +21,8 @@ interface Problem {
   statement: string;
   equationRefs?: string[];
   dataGivens?: string[];
+  shape?: string;   // E3: computational|proof-derivation|design-implement|analysis-trace|fact-conceptual
+  vizId?: string;   // E3: resolved viz id for routing (mirrors the KC's viz_id)
 }
 
 const POLL_INTERVAL_MS = 2000;
