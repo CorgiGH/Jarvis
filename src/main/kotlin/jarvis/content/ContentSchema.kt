@@ -57,6 +57,10 @@ data class KnowledgeConcept(
     val version: Int = 1,
 )
 
+/** content/viz-ids.yaml — the canonical set of valid viz ids (Kotlin↔TS source of truth). */
+@Serializable
+data class VizIdsFile(val viz_ids: List<String> = emptyList())
+
 /** A single prerequisite edge: [kc] depends on [prereq]. */
 @Serializable
 data class PrereqEdge(

@@ -1,0 +1,6 @@
+# Canonical list of valid viz ids. The Kotlin validator (checkVizReferences) reads
+# this; tutor-web/src/components/viz/vizRegistry.ts MUST cover exactly this set
+# (enforced by vizRegistry.test.ts). Add an id here only when a component is
+# registered in vizRegistry.ts.
+viz_ids:
+  - recursion-tree

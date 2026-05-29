@@ -40,6 +40,13 @@ class ContentRepo(private val root: Path) {
         return LoadedSubject(subject, kcs, edges, misc)
     }
 
+    /** E3: load content/viz-ids.yaml into a set. Empty if the file is absent. */
+    fun loadVizIds(): Set<String> {
+        val f = root.resolve("viz-ids.yaml")
+        if (!f.exists()) return emptySet()
+        return Yaml.default.decodeFromString(VizIdsFile.serializer(), f.readText()).viz_ids.toSet()
+    }
+
     /** Extracted source text for a `_sources/{doc}.md` file, or null if absent. */
     fun sourceText(subject: String, doc: String): String? {
         val f = root.resolve(subject).resolve("_sources").resolve("$doc.md")
