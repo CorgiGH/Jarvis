@@ -2,11 +2,21 @@ package jarvis.content
 
 import kotlinx.serialization.Serializable
 
-/** A verbatim citation: [quote] must appear in the extracted text of source [doc]. */
+/** Char offsets into the committed source-of-record text (_sources/{doc}.md). */
+@Serializable
+data class Span(val start: Int, val end: Int)
+
+/** A verbatim citation. [quote] must appear in the source-of-record of [doc].
+ *  When [span] is present it is the authoritative anchor (raw offsets); [page]
+ *  is 1-indexed (0 = unspecified). [provenance] is "pdftotext" (machine) or
+ *  "vision-confirmed" (Claude re-read the rendered page and confirmed the span). */
 @Serializable
 data class SourceRef(
     val doc: String,
     val quote: String,
+    val page: Int = 0,
+    val span: Span? = null,
+    val provenance: String = "pdftotext",
 )
 
 /** content/subjects.yaml — the top-level manifest. */
@@ -36,6 +46,9 @@ data class KnowledgeConcept(
     val time_minutes: Int,
     val exam_weight: Double,
     val tier: Int,
+    /** "standard" | "strict". strict KCs (formula/algorithm) require every
+     *  source ref to carry a span AND provenance == "vision-confirmed". */
+    val grounding_tier: String = "standard",
     val source: List<SourceRef> = emptyList(),
     val version: Int = 1,
 )

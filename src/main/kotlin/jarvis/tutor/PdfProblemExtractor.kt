@@ -21,6 +21,12 @@ data class Problem(
     val statement: String,
     val equationRefs: List<String> = emptyList(),
     val dataGivens: List<String> = emptyList(),
+    // E2: server-side authoritative grading inputs (populated at ingest, never client-trusted).
+    val kcIds: List<String> = emptyList(),
+    val rubricItems: List<String> = emptyList(),
+    val referenceSolution: String? = null,
+    val canonicalAnswer: String? = null,
+    val shape: String? = null,   // descriptive: computational|proof-derivation|design-implement|analysis-trace|fact-conceptual
 )
 
 object PdfProblemExtractor {
