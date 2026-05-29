@@ -43,14 +43,25 @@ class TutorRoutesTest {
         @JvmStatic
         @BeforeAll
         fun pinEventLogDir() {
-            java.nio.file.Files.createDirectories(sharedEventLogDir)
-            System.setProperty("jarvis.tutor.event_log.dir", sharedEventLogDir.toString())
+            // TutorEventLog.GLOBAL freezes its dir to whatever this property
+            // points at on FIRST access across the JVM lifetime. Another test
+            // class in the same suite may touch GLOBAL (and thus freeze the
+            // dir) before this @BeforeAll runs, so only set the property if it
+            // is not already pinned, and read from the dir that actually got
+            // frozen (System property), not unconditionally from our own
+            // @TempDir field. This keeps the suite order-independent.
+            if (System.getProperty("jarvis.tutor.event_log.dir") == null) {
+                java.nio.file.Files.createDirectories(sharedEventLogDir)
+                System.setProperty("jarvis.tutor.event_log.dir", sharedEventLogDir.toString())
+            }
         }
     }
 
     private fun readSharedEventLogLines(): List<String> {
         val today = java.time.LocalDate.now().toString()
-        val logFile = sharedEventLogDir.resolve("tutor_events.$today.jsonl").toFile()
+        val dir = System.getProperty("jarvis.tutor.event_log.dir")
+            ?.let { Path.of(it) } ?: sharedEventLogDir
+        val logFile = dir.resolve("tutor_events.$today.jsonl").toFile()
         val deadline = System.currentTimeMillis() + 2000
         while (System.currentTimeMillis() < deadline && (!logFile.exists() || logFile.readLines().isEmpty())) {
             Thread.sleep(50)

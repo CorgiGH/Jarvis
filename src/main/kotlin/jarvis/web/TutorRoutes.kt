@@ -19,6 +19,8 @@ import jarvis.tutor.EffectorAttemptsTable
 import jarvis.tutor.EffectorDispatcher
 import jarvis.tutor.EffectorType
 import jarvis.tutor.FsrsCardsTable
+import jarvis.tutor.GradeResult
+import jarvis.tutor.GradeScoring
 import jarvis.tutor.GrantSource
 import jarvis.tutor.NonceCache
 import jarvis.tutor.Outcome
@@ -95,6 +97,14 @@ private val rng = SecureRandom()
  * routing blocks into the same engine, so this composes cleanly with the
  * existing routes in WebMain.kt.
  */
+/**
+ * Test seam for the drill-grade LLM. Production uses [jarvis.OpenRouterChatLlm];
+ * tests override this to inject a fake [jarvis.Llm] so the deterministic scoring
+ * + mastery-write path can be exercised without a live model. Internal so only
+ * in-module (test) code reassigns it.
+ */
+internal var drillGraderLlmFactory: () -> jarvis.Llm = { jarvis.OpenRouterChatLlm() }
+
 fun Application.installTutorRoutes() {
     routing {
         // Static SPA bundle. Vite build output is committed at
@@ -1775,7 +1785,7 @@ fun Application.installTutorRoutes() {
                 // grader now returns GradeAttempt carrying raw LLM output so
                 // A.3 can populate envelope llm_output_raw_truncated below.
                 val attempt: jarvis.tutor.GradeAttempt? = try {
-                    jarvis.OpenRouterChatLlm().use { llm ->
+                    drillGraderLlmFactory().use { llm ->
                         kotlinx.coroutines.runBlocking {
                             jarvis.tutor.DrillGrader.grade(
                                 problemStatement = req.problemStatement,
@@ -1807,6 +1817,7 @@ fun Application.installTutorRoutes() {
                             correct = false, score = 0.0, rubric = emptyMap(),
                             misconception = "UNGRADED",
                             elaboratedFeedback = "LLM unavailable. Please re-attempt or ask sidekick.",
+                            confidence = "LOW", recorded = false, answerMatch = null,
                         ) to "error"
                     }
                     attempt.parsed == null -> {
@@ -1816,16 +1827,40 @@ fun Application.installTutorRoutes() {
                             correct = false, score = 0.0, rubric = emptyMap(),
                             misconception = "OTHER",
                             elaboratedFeedback = "LLM grader returned malformed output; please re-attempt or ask sidekick.",
+                            confidence = "LOW", recorded = false, answerMatch = null,
                         ) to "parse_error"
                     }
                     else -> {
-                        val r = attempt.parsed!!
+                        // E1 trustworthy-grader: the LLM emits rubric booleans +
+                        // prose, but the DETERMINISTIC layer (GradeScoring) decides
+                        // correctness, score, and confidence. The LLM's self-reported
+                        // `score`/`correct` are never trusted. Only confident grades
+                        // (rubric-coherent AND, if a canonical answer was supplied,
+                        // agreeing with the deterministic match) record KC mastery.
+                        val g: GradeResult = attempt.parsed!!
+                        val answerMatch: Boolean? =
+                            req.canonicalAnswer?.let { GradeScoring.answerMatches(it, req.userAttempt) }
+                        val rubricCorrect = GradeScoring.correctFromRubric(g.rubric)
+                        val deterministicCorrect = answerMatch ?: rubricCorrect
+                        val deterministicScore = GradeScoring.scoreFromRubric(g.rubric)
+                        val coherent = GradeScoring.isConfident(g)
+                        val answerAgrees = answerMatch == null || answerMatch == rubricCorrect
+                        val confident = coherent && answerAgrees
+                        var recorded = false
+                        if (confident && !req.conceptIds.isNullOrEmpty()) {
+                            val repo = jarvis.tutor.KcMasteryRepo(ctx.db)
+                            req.conceptIds.forEach { kcId -> repo.record(userId, kcId, deterministicScore) }
+                            recorded = true
+                        }
                         ApiDrillGradeReply(
-                            correct = r.correct,
-                            score = r.score,
-                            rubric = r.rubric,
-                            misconception = r.misconception,
-                            elaboratedFeedback = r.elaboratedFeedback,
+                            correct = deterministicCorrect,
+                            score = deterministicScore,
+                            rubric = g.rubric,
+                            misconception = g.misconception,
+                            elaboratedFeedback = g.elaboratedFeedback,
+                            confidence = if (confident) "HIGH" else "LOW",
+                            recorded = recorded,
+                            answerMatch = answerMatch,
                         ) to "ok"
                     }
                 }
@@ -2297,6 +2332,13 @@ private data class ApiDrillGradeRequest(
      * grader also auto-detects the sentinel server-side.
      */
     val giveUp: Boolean = false,
+    // E1 trustworthy-grader: optional deterministic-grading inputs. When
+    // [canonicalAnswer] is present the server cross-checks the attempt with
+    // GradeScoring.answerMatches (never trusts the LLM verdict alone).
+    // [conceptIds] names the KCs this problem exercises — confident grades
+    // record per-KC mastery via KcMasteryRepo.
+    val canonicalAnswer: String? = null,
+    val conceptIds: List<String>? = null,
 )
 
 @Serializable
@@ -2306,6 +2348,10 @@ private data class ApiDrillGradeReply(
     val rubric: Map<String, Boolean>,
     val misconception: String?,
     val elaboratedFeedback: String,
+    // E1 trustworthy-grader.
+    val confidence: String,            // "HIGH" | "LOW"
+    val recorded: Boolean,             // true iff this grade updated mastery
+    val answerMatch: Boolean? = null,  // present iff canonicalAnswer was supplied
 )
 
 @Serializable
@@ -2374,6 +2420,7 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
             jarvis.tutor.CardActionLogTable,
             jarvis.tutor.taskdetect.DetectedTaskMappingTable,
             TaskPrepTable,
+            jarvis.tutor.KcMasteryTable, // E1 trustworthy-grader — per-KC mastery
         )
     }
     // Bootstrap OWNER account (idempotent). This row is the fallback admin
