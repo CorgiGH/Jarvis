@@ -105,6 +105,21 @@ private val rng = SecureRandom()
  */
 internal var drillGraderLlmFactory: () -> jarvis.Llm = { jarvis.OpenRouterChatLlm() }
 
+/** E3 test seams. Production: generator = free OpenRouter Llama; critic = Claude via relay (DEC-1 relay-only). */
+internal var drillGeneratorLlmFactory: () -> jarvis.Llm = { jarvis.OpenRouterChatLlm() }
+internal var drillCriticLlmFactory: () -> jarvis.Llm = { jarvis.RelayLlm() }
+/** E3: resolve a KC for generation grounding. Default loads from the content corpus. Overridden in tests. */
+internal var drillKcLookup: (subject: String, kcId: String) -> jarvis.content.KnowledgeConcept? = { subject, kcId ->
+    try {
+        val contentDir = java.nio.file.Path.of(
+            System.getProperty("JARVIS_CONTENT_DIR")
+                ?: System.getenv("JARVIS_CONTENT_DIR")
+                ?: "content"
+        )
+        jarvis.content.ContentRepo(contentDir).loadSubject(subject).kcs.firstOrNull { it.id == kcId }
+    } catch (_: Exception) { null }
+}
+
 fun Application.installTutorRoutes() {
     routing {
         // Static SPA bundle. Vite build output is committed at
