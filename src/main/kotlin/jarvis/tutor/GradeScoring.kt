@@ -24,4 +24,18 @@ object GradeScoring {
      */
     fun isConfident(llm: GradeResult): Boolean =
         llm.rubric.isNotEmpty() && llm.correct == correctFromRubric(llm.rubric)
+
+    /** Normalize a free-text answer for exact comparison. */
+    fun normalizeAnswer(s: String): String =
+        s.trim().lowercase().replace(Regex("\\s+"), " ").trimEnd('.', ',', ';', ':', ' ')
+
+    /** Deterministic match of a student answer against a canonical answer (string or numeric). */
+    fun answerMatches(canonical: String, attempt: String): Boolean {
+        val c = normalizeAnswer(canonical)
+        val a = normalizeAnswer(attempt)
+        if (c == a) return true
+        val cn = c.toDoubleOrNull()
+        val an = a.toDoubleOrNull()
+        return cn != null && an != null && kotlin.math.abs(cn - an) < 1e-9
+    }
 }

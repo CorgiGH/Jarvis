@@ -40,4 +40,15 @@ class GradeScoringTest {
         assertFalse(GradeScoring.isConfident(GradeResult(true, emptyMap(), 0.0, null, "")))
         assertFalse(GradeScoring.isConfident(GradeResult(false, emptyMap(), 0.0, null, "")))
     }
+
+    @Test fun `answer match is case whitespace and trailing-punctuation insensitive`() {
+        assertTrue(GradeScoring.answerMatches("O(n log n)", "  o(n  log n).  "))
+        assertFalse(GradeScoring.answerMatches("O(n log n)", "O(n^2)"))
+    }
+
+    @Test fun `numeric answers compare as numbers`() {
+        assertTrue(GradeScoring.answerMatches("42", "42.0"))
+        assertTrue(GradeScoring.answerMatches("0.5", " .5 ")) // normalized then numeric
+        assertFalse(GradeScoring.answerMatches("42", "43"))
+    }
 }
