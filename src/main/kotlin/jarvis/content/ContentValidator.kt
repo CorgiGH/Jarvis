@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ValidationIssue(
     val severity: String,   // "error" | "warning"
-    val rule: String,       // "cycle" | "orphan" | "exam_weight" | "bilingual" | "verbatim_source"
+    val rule: String,       // "cycle" | "orphan" | "exam_weight" | "bilingual" | "verbatim_source" | "viz_reference"
     val subject: String,
     val detail: String,
 )
@@ -125,6 +125,22 @@ object ContentValidator {
         return issues
     }
 
+    /** E3: a requires_visual KC must name a viz_id present in content/viz-ids.yaml. */
+    fun checkVizReferences(sub: LoadedSubject, validVizIds: Set<String>): List<ValidationIssue> {
+        val issues = mutableListOf<ValidationIssue>()
+        for (kc in sub.kcs) {
+            if (!kc.requires_visual) continue
+            val vid = kc.viz_id
+            when {
+                vid == null -> issues += ValidationIssue("error", "viz_reference", sub.subject,
+                    "KC '${kc.id}' is requires_visual but has no viz_id")
+                vid !in validVizIds -> issues += ValidationIssue("error", "viz_reference", sub.subject,
+                    "KC '${kc.id}' viz_id '$vid' is not in content/viz-ids.yaml")
+            }
+        }
+        return issues
+    }
+
     /**
      * Runs every structural check across all [subjects]. [sourceText] resolves a
      * doc id to its extracted source text (see checkVerbatimSources).
@@ -132,6 +148,7 @@ object ContentValidator {
      */
     fun validate(
         subjects: List<LoadedSubject>,
+        validVizIds: Set<String> = emptySet(),
         sourceText: (doc: String) -> String?,
     ): ValidationReport {
         val issues = mutableListOf<ValidationIssue>()
@@ -141,6 +158,7 @@ object ContentValidator {
             issues += checkExamWeights(sub)
             issues += checkBilingual(sub)
             issues += checkVerbatimSources(sub, sourceText)
+            issues += checkVizReferences(sub, validVizIds)
         }
         val ok = issues.none { it.severity == "error" }
         return ValidationReport(ok = ok, disclaimer = DISCLAIMER, issues = issues)

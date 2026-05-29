@@ -13,7 +13,8 @@ object ContentCli {
         val repo = ContentRepo(contentDir)
         val manifest = repo.loadManifest()
         val subjects = manifest.subjects.map { repo.loadSubject(it.id) }
-        return ContentValidator.validate(subjects) { doc ->
+        val vizIds = repo.loadVizIds()
+        return ContentValidator.validate(subjects, vizIds) { doc ->
             // doc ids are unique across subjects in practice; search each subject's _sources.
             manifest.subjects.firstNotNullOfOrNull { repo.sourceText(it.id, doc) }
         }

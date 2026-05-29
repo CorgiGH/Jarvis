@@ -161,7 +161,7 @@ class ContentValidatorTest {
         val good = kc("a", weight = 1.0, tier = 1)
             .copy(source = listOf(SourceRef("pa-lecture-01", "a finite sequence of unambiguous steps")))
         val sub = LoadedSubject("PA", kcs = listOf(good), edges = emptyList(), misconceptions = emptyList())
-        val report = ContentValidator.validate(listOf(sub), srcLookup)
+        val report = ContentValidator.validate(listOf(sub), sourceText = srcLookup)
         assertTrue(report.ok, report.issues.toString())
         assertEquals(ContentValidator.DISCLAIMER, report.disclaimer)
     }
@@ -171,7 +171,7 @@ class ContentValidatorTest {
         val sub = LoadedSubject("PA",
             kcs = listOf(kc("a", weight = 0.3, tier = 1)), // weight sum 0.3 -> error
             edges = emptyList(), misconceptions = emptyList())
-        val report = ContentValidator.validate(listOf(sub), srcLookup)
+        val report = ContentValidator.validate(listOf(sub), sourceText = srcLookup)
         assertFalse(report.ok)
         assertTrue(report.issues.any { it.rule == "exam_weight" })
     }
