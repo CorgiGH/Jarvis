@@ -6,6 +6,7 @@ import io.ktor.client.request.cookie
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -30,6 +31,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * E1 trustworthy-grader integration: POST /api/v1/drill/grade must apply the
@@ -178,5 +180,113 @@ class DrillGradeMasteryRouteTest {
 
         val mastery = KcMasteryRepo(ctx!!.db).get(userId, "pa-kc-001")
         assertNull(mastery, "incoherent (deferred) grade must NOT record KC mastery")
+    }
+
+    /** Build a grade-request body with explicit userAttempt and optional canonicalAnswer. */
+    private fun gradeBodyWith(
+        userAttempt: String,
+        conceptIds: List<String>,
+        canonicalAnswer: String? = null,
+    ): String {
+        val ids = conceptIds.joinToString(",") { "\"$it\"" }
+        val canonicalField = if (canonicalAnswer != null) ""","canonicalAnswer":"$canonicalAnswer"""" else ""
+        return """{
+            "taskId":"task-1",
+            "problemId":"d1",
+            "userAttempt":"$userAttempt",
+            "problemStatement":"sort n elements",
+            "expectedAnswerHint":"O(n log n)"
+            $canonicalField,
+            "conceptIds":[$ids]
+        }""".trimIndent()
+    }
+
+    @Test
+    fun `canonical answer match records and reports answerMatch true`(@TempDir tmp: Path) = testApplication {
+        // COHERENT grade: correct=true, all rubric items true → rubricCorrect=true,
+        // coherent=true. canonicalAnswer normalises equal to userAttempt →
+        // answerMatch=true, answerAgrees=true → confident=true → recorded=true.
+        drillGraderLlmFactory = {
+            FakeGraderLlm(
+                """{"correct":true,"rubric":{"numeric":true,"mechanism":true},""" +
+                    """"score":1.0,"misconception":null,"elaborated_feedback":"correct"}""",
+            )
+        }
+
+        var ctx: TutorContext? = null
+        application {
+            installFreshTutor(tmp)
+            ctx = attributes[TutorContextKey]
+        }
+        startApplication()
+        val (userId, sid) = seedSession(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+
+        val resp = client.post("/api/v1/drill/grade") {
+            cookie("jarvis_session", sid)
+            cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            // userAttempt "O(n log n)" normalises to "o(n log n)"
+            // canonicalAnswer "o(n log n)." normalises to "o(n log n)" (trailing dot stripped)
+            // → answerMatches returns true
+            setBody(gradeBodyWith("O(n log n)", listOf("pa-kc-001"), canonicalAnswer = "o(n log n)."))
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        assertTrue(body.contains("\"answerMatch\":true"), "body=$body")
+        assertTrue(body.contains("\"recorded\":true"), "body=$body")
+        assertTrue(body.contains("\"confidence\":\"HIGH\""), "body=$body")
+
+        val mastery = KcMasteryRepo(ctx!!.db).get(userId, "pa-kc-001")
+        assertNotNull(mastery, "canonical-match confident grade must record KC mastery")
+        assertEquals(1, mastery.observations, "exactly one observation recorded")
+    }
+
+    @Test
+    fun `canonical answer disagreeing with rubric defers and records nothing`(@TempDir tmp: Path) = testApplication {
+        // COHERENT grade: correct=true, all rubric items true → rubricCorrect=true,
+        // coherent=true. But canonicalAnswer "O(n^2)" does NOT match userAttempt
+        // "O(n log n)" → answerMatch=false, answerAgrees=false (false ≠ true) →
+        // confident=false → recorded=false, correct=false (deterministicCorrect=answerMatch=false).
+        drillGraderLlmFactory = {
+            FakeGraderLlm(
+                """{"correct":true,"rubric":{"numeric":true,"mechanism":true},""" +
+                    """"score":1.0,"misconception":null,"elaborated_feedback":"correct"}""",
+            )
+        }
+
+        var ctx: TutorContext? = null
+        application {
+            installFreshTutor(tmp)
+            ctx = attributes[TutorContextKey]
+        }
+        startApplication()
+        val (userId, sid) = seedSession(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+
+        val resp = client.post("/api/v1/drill/grade") {
+            cookie("jarvis_session", sid)
+            cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            // userAttempt "O(n log n)" vs canonicalAnswer "O(n^2)" → no match
+            setBody(gradeBodyWith("O(n log n)", listOf("pa-kc-001"), canonicalAnswer = "O(n^2)"))
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        assertTrue(body.contains("\"answerMatch\":false"), "body=$body")
+        assertTrue(body.contains("\"recorded\":false"), "body=$body")
+        assertTrue(body.contains("\"confidence\":\"LOW\""), "body=$body")
+        assertTrue(body.contains("\"correct\":false"), "body=$body")
+
+        val mastery = KcMasteryRepo(ctx!!.db).get(userId, "pa-kc-001")
+        assertNull(mastery, "disagreeing canonical answer must NOT record KC mastery")
     }
 }

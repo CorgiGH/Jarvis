@@ -2343,6 +2343,7 @@ private data class ApiDrillGradeRequest(
 
 @Serializable
 private data class ApiDrillGradeReply(
+    // `correct` is the displayed verdict; `recorded` is the mastery-authoritative flag (a LOW-confidence grade can show a verdict yet record nothing).
     val correct: Boolean,
     val score: Double,
     val rubric: Map<String, Boolean>,
