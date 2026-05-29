@@ -5,6 +5,7 @@ import { gradeDrill } from "../lib/drillGrader";
 import type { GradeResult } from "../lib/drillGrader";
 import { MathText } from "./MathText";
 import { formatEnum } from "../lib/formatEnum";
+import { RoutedViz } from "./RoutedViz";
 
 export interface DrillContent {
   drill: string;
@@ -21,6 +22,8 @@ export interface DrillContent {
   language?: "r" | "python" | "cpp" | "text";
   referenceSolution?: string;
   rubricItems?: string[];
+  /** E3 routing: when set, DrillStack mounts the registry component for this id. */
+  vizId?: string;
 }
 
 interface DrillStackProps {
@@ -141,6 +144,7 @@ export function DrillStack({
 
   return (
     <div data-testid="drill-stack" className="flex flex-col gap-4 p-4">
+      <RoutedViz vizId={content.vizId} />
       {/* Card order: DRILL → WORKED → DEFINITION → CHECK (§D productive-failure inversion) */}
 
       {/* 1. DRILL card — always open */}
