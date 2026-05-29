@@ -50,6 +50,10 @@ data class KnowledgeConcept(
      *  source ref to carry a span AND provenance == "vision-confirmed". */
     val grounding_tier: String = "standard",
     val source: List<SourceRef> = emptyList(),
+    /** E3 routing: id of the visualization component (must appear in content/viz-ids.yaml). */
+    val viz_id: String? = null,
+    /** E3 routing: when true, the validator ERRORs if viz_id is null or unresolvable. */
+    val requires_visual: Boolean = false,
     val version: Int = 1,
 )
 
