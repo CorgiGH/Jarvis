@@ -145,14 +145,21 @@ object ContentValidator {
 
     private fun normalizeWs(s: String): String = s.replace(Regex("\\s+"), " ").trim()
 
+    /** Strip Unicode combining marks (Romanian ș/ț/ă/â/î → s/t/a/a/i). */
+    private fun stripDiacritics(s: String): String =
+        java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+
+    private fun fold(s: String): String = normalizeWs(stripDiacritics(s)).lowercase()
+
     /**
-     * Council 1779311876 amendment 1. For every KC and misconception:
-     *  - at least one SourceRef is required (empty source = error);
-     *  - each SourceRef.quote, after whitespace normalization, must be a
-     *    verbatim substring of [sourceText] of its doc;
-     *  - if the doc's extracted text is absent, the check degrades to a
-     *    warning (cannot verify) rather than an error.
-     * [sourceText] maps a doc id to its extracted text, or null if absent.
+     * E2 grounding gate. Per source ref:
+     *  - absent source text → warning (cannot verify);
+     *  - span present → diacritic-EXACT confirm of the raw slice vs the quote; mismatch/oob → error;
+     *  - span absent → diacritic-insensitive candidate-find: not found → error;
+     *    found → error if the KC is grounding_tier=strict (span required), else warning;
+     *  - empty source list → error;
+     *  - grounding_tier=strict: every ref must be provenance=="vision-confirmed", else error.
      */
     fun checkVerbatimSources(
         sub: LoadedSubject,
@@ -160,28 +167,33 @@ object ContentValidator {
     ): List<ValidationIssue> {
         val issues = mutableListOf<ValidationIssue>()
 
-        fun checkOne(ownerKind: String, ownerId: String, refs: List<SourceRef>) {
-            if (refs.isEmpty()) {
-                issues += ValidationIssue("error", "verbatim_source", sub.subject,
-                    "$ownerKind '$ownerId' has no source attribution")
-                return
-            }
+        fun err(owner: String, id: String, msg: String) =
+            issues.add(ValidationIssue("error", "verbatim_source", sub.subject, "$owner '$id': $msg"))
+        fun warn(owner: String, id: String, msg: String) =
+            issues.add(ValidationIssue("warning", "verbatim_source", sub.subject, "$owner '$id': $msg"))
+
+        fun checkOne(owner: String, id: String, refs: List<SourceRef>, strict: Boolean) {
+            if (refs.isEmpty()) { err(owner, id, "has no source attribution"); return }
             for (ref in refs) {
                 val text = sourceText(ref.doc)
-                if (text == null) {
-                    issues += ValidationIssue("warning", "verbatim_source", sub.subject,
-                        "$ownerKind '$ownerId': source '${ref.doc}' has no extracted text on disk — quote unverifiable")
-                    continue
+                if (text == null) { warn(owner, id, "source '${ref.doc}' has no extracted text on disk — quote unverifiable"); continue }
+                val span = ref.span
+                if (span != null) {
+                    val slice = SourceOfRecord.slice(text, span)
+                    if (slice == null) err(owner, id, "span ${span.start}..${span.end} out of bounds in '${ref.doc}'")
+                    else if (slice != ref.quote) err(owner, id, "quote does not match raw span in '${ref.doc}' (diacritic-exact)")
+                } else {
+                    if (!fold(text).contains(fold(ref.quote))) err(owner, id, "quote not found in source '${ref.doc}'")
+                    else if (strict) err(owner, id, "strict KC requires an anchored (page, span) — none on ref to '${ref.doc}'")
+                    else warn(owner, id, "ungrounded span — quote found by fuzzy match only in '${ref.doc}'")
                 }
-                if (!normalizeWs(text).contains(normalizeWs(ref.quote))) {
-                    issues += ValidationIssue("error", "verbatim_source", sub.subject,
-                        "$ownerKind '$ownerId': quote not found verbatim in source '${ref.doc}'")
-                }
+                if (strict && ref.provenance != "vision-confirmed")
+                    err(owner, id, "strict KC requires provenance=vision-confirmed on '${ref.doc}' (got '${ref.provenance}')")
             }
         }
 
-        for (kc in sub.kcs) checkOne("KC", kc.id, kc.source)
-        for (m in sub.misconceptions) checkOne("misconception", m.id, m.source)
+        for (kc in sub.kcs) checkOne("KC", kc.id, kc.source, kc.grounding_tier == "strict")
+        for (m in sub.misconceptions) checkOne("misconception", m.id, m.source, false)
         return issues
     }
 }

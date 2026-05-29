@@ -119,7 +119,7 @@ class ContentValidatorTest {
         val withSrc = kc("a", weight = 1.0, tier = 1)
             .copy(source = listOf(SourceRef("pa-lecture-01", "a finite sequence of unambiguous steps")))
         val sub = LoadedSubject("PA", kcs = listOf(withSrc), edges = emptyList(), misconceptions = emptyList())
-        assertTrue(ContentValidator.checkVerbatimSources(sub, srcLookup).isEmpty())
+        assertTrue(ContentValidator.checkVerbatimSources(sub, srcLookup).none { it.severity == "error" })
     }
 
     @Test
@@ -171,6 +171,63 @@ class ContentValidatorTest {
         val report = ContentValidator.validate(listOf(sub), srcLookup)
         assertFalse(report.ok)
         assertTrue(report.issues.any { it.rule == "exam_weight" })
+    }
+
+    // --- E2: span-anchored, diacritic-exact, tier severity ---
+
+    // Raw source-of-record with a Romanian diacritic: "structuri și liste".
+    // "structuri" = offsets 0..9 (end-exclusive 9), "și" = offsets 10..12.
+    private val roLookup: (String) -> String? = { doc ->
+        if (doc == "ro-doc") "structuri și liste" else null
+    }
+
+    private fun kcSpan(id: String, refs: List<SourceRef>, tier: String = "standard") =
+        kc(id, tier = 1, weight = 1.0).copy(grounding_tier = tier, source = refs)
+
+    @Test
+    fun `span-anchored exact quote passes`() {
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kcSpan("a", listOf(SourceRef("ro-doc", "structuri", page = 1, span = Span(0, 9))))),
+            edges = emptyList(), misconceptions = emptyList())
+        assertTrue(ContentValidator.checkVerbatimSources(sub, roLookup).isEmpty())
+    }
+
+    @Test
+    fun `diacritic-collapsed quote at a span containing diacritics is an ERROR`() {
+        // quote "si" (no diacritic) cited at the span that actually holds "și".
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kcSpan("a", listOf(SourceRef("ro-doc", "si", page = 1, span = Span(10, 12))))),
+            edges = emptyList(), misconceptions = emptyList())
+        val issues = ContentValidator.checkVerbatimSources(sub, roLookup)
+        assertEquals(1, issues.size)
+        assertEquals("verbatim_source", issues.single().rule)
+        assertEquals("error", issues.single().severity)
+    }
+
+    @Test
+    fun `strict KC with an absent span is an ERROR`() {
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kcSpan("a", listOf(SourceRef("pa-lecture-01", "a finite sequence of unambiguous steps")), tier = "strict")),
+            edges = emptyList(), misconceptions = emptyList())
+        assertTrue(ContentValidator.checkVerbatimSources(sub, srcLookup).any { it.severity == "error" })
+    }
+
+    @Test
+    fun `strict KC with span but non-vision-confirmed provenance is an ERROR`() {
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kcSpan("a", listOf(SourceRef("ro-doc", "structuri", page = 1, span = Span(0, 9))), tier = "strict")),
+            edges = emptyList(), misconceptions = emptyList())
+        assertTrue(ContentValidator.checkVerbatimSources(sub, roLookup).any { it.severity == "error" && it.detail.contains("vision-confirmed") })
+    }
+
+    @Test
+    fun `standard KC with absent span but present quote is a WARNING not error`() {
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kcSpan("a", listOf(SourceRef("pa-lecture-01", "a finite sequence of unambiguous steps")))),
+            edges = emptyList(), misconceptions = emptyList())
+        val issues = ContentValidator.checkVerbatimSources(sub, srcLookup)
+        assertEquals(1, issues.size)
+        assertEquals("warning", issues.single().severity)
     }
 
     @Test
