@@ -1417,6 +1417,93 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        // E3: generate fresh, safeguard-gated practice drills for a knowledge concept.
+        // Reads existing problemsJson + drillsJson, adds/replaces by problemId, re-encodes
+        // BOTH, upserts — never clobbers existing drills.
+        post("/api/v1/task/{id}/generate-drills") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val taskId = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val task = TaskRepo(ctx.db).findById(taskId)
+                if (task == null || task.userId != userId) { call.respond(HttpStatusCode.NotFound, "task not found"); return@csrfProtect }
+                val body = try { sensorJson.decodeFromString(ApiGenerateDrillsRequest.serializer(), call.receiveText()) }
+                    catch (e: Exception) { call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}"); return@csrfProtect }
+
+                val kc = drillKcLookup(task.subject, body.kcId)
+                    ?: run { call.respond(HttpStatusCode.NotFound, "kc not found: ${body.kcId}"); return@csrfProtect }
+                val shape = body.shape ?: "fact-conceptual"
+                val sources = kc.source.map { it.quote }
+
+                val result = try {
+                    drillGeneratorLlmFactory().use { gen ->
+                        drillCriticLlmFactory().use { critic ->
+                            kotlinx.coroutines.runBlocking {
+                                jarvis.tutor.DrillGenerator.generate(kc, sources, shape, body.count, gen, critic)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadGateway, "generation failed (relay/LLM): ${e.message?.take(160)}"); return@csrfProtect
+                }
+
+                // read-merge-write BOTH stores by problemId.
+                val prepRepo = jarvis.tutor.TaskPrepRepo(ctx.db)
+                val existing = prepRepo.findByTaskId(taskId)
+                val existingProblems: List<jarvis.tutor.Problem> = if (existing?.problemsJson != null) {
+                    try {
+                        sensorJson.decodeFromString(
+                            kotlinx.serialization.builtins.ListSerializer(jarvis.tutor.Problem.serializer()),
+                            existing.problemsJson
+                        )
+                    } catch (_: Exception) { emptyList<jarvis.tutor.Problem>() }
+                } else emptyList<jarvis.tutor.Problem>()
+                val existingDrillsRaw: Map<String, jarvis.tutor.DrillContentDto> = if (existing?.drillsJson != null) {
+                    try {
+                        sensorJson.decodeFromString(
+                            kotlinx.serialization.builtins.MapSerializer(
+                                kotlinx.serialization.serializer<String>(),
+                                jarvis.tutor.DrillContentDto.serializer()
+                            ),
+                            existing.drillsJson
+                        )
+                    } catch (_: Exception) { emptyMap<String, jarvis.tutor.DrillContentDto>() }
+                } else emptyMap<String, jarvis.tutor.DrillContentDto>()
+                val problems = existingProblems.associateBy { it.problemId }.toMutableMap()
+                val drills = existingDrillsRaw.toMutableMap()
+                for (b in result.bundles) { problems[b.problem.problemId] = b.problem; drills[b.problem.problemId] = b.content }
+
+                val now = java.time.Instant.now()
+                prepRepo.upsert(jarvis.tutor.TaskPrep(
+                    taskId = taskId, generatedAt = now, version = existing?.version ?: 1,
+                    problemsJson = sensorJson.encodeToString(
+                        kotlinx.serialization.builtins.ListSerializer(jarvis.tutor.Problem.serializer()),
+                        problems.values.toList(),
+                    ),
+                    drillsJson = sensorJson.encodeToString(
+                        kotlinx.serialization.builtins.MapSerializer(
+                            kotlinx.serialization.serializer<String>(),
+                            jarvis.tutor.DrillContentDto.serializer()
+                        ),
+                        drills as Map<String, jarvis.tutor.DrillContentDto>,
+                    ),
+                    railJson = existing?.railJson ?: "[]",
+                ))
+                call.respond(HttpStatusCode.OK, ApiGenerateDrillsReply(
+                    taskId = taskId,
+                    accepted = result.bundles.map { AcceptedDrill(it.problem.problemId, it.problem.shape ?: shape) },
+                    rejectedCount = result.rejectReasons.size,
+                    rejectReasons = result.rejectReasons,
+                    criticUsed = "relay/claude",
+                    generatedAt = now.toString(),
+                ))
+            }
+        }
+
         // Phase 7.5 deferral closer: promote a knowledge gap to an FSRS card.
         // Idempotent — the gap row's fsrs_card_id is the source of truth.
         post("/api/v1/gap/{id}/promote") {
@@ -2390,6 +2477,21 @@ private data class ApiPrepAuthoredRequest(
     val problems: List<jarvis.tutor.Problem>,
     val version: Int = 1,
 )
+
+@Serializable
+private data class ApiGenerateDrillsRequest(val kcId: String, val shape: String? = null, val count: Int = 1)
+
+@Serializable
+private data class ApiGenerateDrillsReply(
+    val taskId: String,
+    val accepted: List<AcceptedDrill>,
+    val rejectedCount: Int,
+    val rejectReasons: List<String>,
+    val criticUsed: String,
+    val generatedAt: String,
+)
+@Serializable
+private data class AcceptedDrill(val problemId: String, val shape: String)
 
 @Serializable
 private data class ApiDrillGradeRequest(
