@@ -119,7 +119,10 @@ class ContentValidatorTest {
         val withSrc = kc("a", weight = 1.0, tier = 1)
             .copy(source = listOf(SourceRef("pa-lecture-01", "a finite sequence of unambiguous steps")))
         val sub = LoadedSubject("PA", kcs = listOf(withSrc), edges = emptyList(), misconceptions = emptyList())
-        assertTrue(ContentValidator.checkVerbatimSources(sub, srcLookup).none { it.severity == "error" })
+        val issues = ContentValidator.checkVerbatimSources(sub, srcLookup)
+        assertEquals(1, issues.size)
+        assertEquals("warning", issues.single().severity)
+        assertTrue(issues.single().detail.contains("ungrounded span"))
     }
 
     @Test
@@ -228,6 +231,17 @@ class ContentValidatorTest {
         val issues = ContentValidator.checkVerbatimSources(sub, srcLookup)
         assertEquals(1, issues.size)
         assertEquals("warning", issues.single().severity)
+    }
+
+    @Test
+    fun `span out of bounds is an ERROR`() {
+        val sub = LoadedSubject("PA",
+            kcs = listOf(kcSpan("a", listOf(SourceRef("ro-doc", "x", page = 1, span = Span(50, 60))))),
+            edges = emptyList(), misconceptions = emptyList())
+        val issues = ContentValidator.checkVerbatimSources(sub, roLookup)
+        assertEquals(1, issues.size)
+        assertEquals("error", issues.single().severity)
+        assertTrue(issues.single().detail.contains("out of bounds"))
     }
 
     @Test

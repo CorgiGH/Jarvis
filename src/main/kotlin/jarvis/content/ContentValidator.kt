@@ -27,6 +27,9 @@ object ContentValidator {
 
     const val DISCLAIMER = "structural checks only — content not groundedness-verified"
 
+    private val WS_RE = Regex("\\s+")
+    private val COMBINING_RE = Regex("\\p{M}+")
+
     /** Three-color DFS cycle detection over the prerequisite graph (edge prereq -> kc). */
     fun detectCycles(sub: LoadedSubject): List<ValidationIssue> {
         val adj: Map<String, List<String>> = sub.edges.groupBy({ it.prereq }, { it.kc })
@@ -143,12 +146,12 @@ object ContentValidator {
         return ValidationReport(ok = ok, disclaimer = DISCLAIMER, issues = issues)
     }
 
-    private fun normalizeWs(s: String): String = s.replace(Regex("\\s+"), " ").trim()
+    private fun normalizeWs(s: String): String = s.replace(WS_RE, " ").trim()
 
     /** Strip Unicode combining marks (Romanian ș/ț/ă/â/î → s/t/a/a/i). */
     private fun stripDiacritics(s: String): String =
         java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
-            .replace(Regex("\\p{M}+"), "")
+            .replace(COMBINING_RE, "")
 
     private fun fold(s: String): String = normalizeWs(stripDiacritics(s)).lowercase()
 
@@ -180,15 +183,16 @@ object ContentValidator {
                 val span = ref.span
                 if (span != null) {
                     val slice = SourceOfRecord.slice(text, span)
-                    if (slice == null) err(owner, id, "span ${span.start}..${span.end} out of bounds in '${ref.doc}'")
-                    else if (slice != ref.quote) err(owner, id, "quote does not match raw span in '${ref.doc}' (diacritic-exact)")
+                    if (slice == null) { err(owner, id, "span ${span.start}..${span.end} out of bounds in '${ref.doc}'"); continue }
+                    if (slice != ref.quote) { err(owner, id, "quote does not match raw span in '${ref.doc}' (diacritic-exact)"); continue }
+                    // span confirmed — now enforce strict provenance (only meaningful when the span matches)
+                    if (strict && ref.provenance != "vision-confirmed")
+                        err(owner, id, "strict KC requires provenance=vision-confirmed on '${ref.doc}' (got '${ref.provenance}')")
                 } else {
-                    if (!fold(text).contains(fold(ref.quote))) err(owner, id, "quote not found in source '${ref.doc}'")
-                    else if (strict) err(owner, id, "strict KC requires an anchored (page, span) — none on ref to '${ref.doc}'")
-                    else warn(owner, id, "ungrounded span — quote found by fuzzy match only in '${ref.doc}'")
+                    if (!fold(text).contains(fold(ref.quote))) { err(owner, id, "quote not found in source '${ref.doc}'"); continue }
+                    if (strict) { err(owner, id, "strict KC requires an anchored span — none on ref to '${ref.doc}'"); continue }
+                    warn(owner, id, "ungrounded span — quote found by fuzzy match only in '${ref.doc}'")
                 }
-                if (strict && ref.provenance != "vision-confirmed")
-                    err(owner, id, "strict KC requires provenance=vision-confirmed on '${ref.doc}' (got '${ref.provenance}')")
             }
         }
 
