@@ -39,7 +39,8 @@ data class KcMastery(
 
 class KcMasteryRepo(private val db: Database) {
 
-    fun get(userId: String, kcId: String): KcMastery? = transaction(db) {
+    /** Read the row; MUST be called from within a transaction. */
+    private fun readRow(userId: String, kcId: String): KcMastery? =
         KcMasteryTable.selectAll()
             .where { (KcMasteryTable.userId eq userId) and (KcMasteryTable.kcId eq kcId) }
             .map {
@@ -50,12 +51,15 @@ class KcMasteryRepo(private val db: Database) {
                 )
             }
             .singleOrNull()
-    }
 
+    fun get(userId: String, kcId: String): KcMastery? = transaction(db) { readRow(userId, kcId) }
+
+    // NOTE: read-then-write. Safe for the current single-user deployment (writes serialize on
+    // SQLite). If multi-user lands, replace with an atomic upsert to avoid a TOCTOU PK race.
     /** Apply one graded score via the EWMA rule; upsert and return the updated mastery. */
     fun record(userId: String, kcId: String, score: Double, now: Instant = Instant.now()): KcMastery =
         transaction(db) {
-            val existing = get(userId, kcId)
+            val existing = readRow(userId, kcId)
             val newEwma =
                 if (existing == null) score
                 else KcMastery.EWMA_ALPHA * score + (1 - KcMastery.EWMA_ALPHA) * existing.ewmaScore
