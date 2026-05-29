@@ -25,12 +25,13 @@ object SourceOfRecord {
         return text.substring(span.start, span.end)
     }
 
-    /** Resolve the pdftotext binary: env override, then PATH, then known install. */
-    fun resolveBin(): String =
-        System.getenv("JARVIS_PDFTOTEXT_BIN")
-            ?: sequenceOf("pdftotext", "C:\\tools\\poppler\\pdftotext.exe")
-                .firstOrNull { it == "pdftotext" || Path.of(it).exists() }
-            ?: "pdftotext"
+    /** Resolve the pdftotext binary: env override, then the known poppler install
+     *  if present, else the PATH name "pdftotext" (extract()'s try/catch handles absence). */
+    fun resolveBin(): String {
+        System.getenv("JARVIS_PDFTOTEXT_BIN")?.let { return it }
+        val poppler = "C:\\tools\\poppler\\pdftotext.exe"
+        return if (Path.of(poppler).exists()) poppler else "pdftotext"
+    }
 
     /** Shell out to pdftotext, returning raw text with form-feed page breaks,
      *  normalized to LF. Empty string on any failure (caller decides severity). */
@@ -39,6 +40,7 @@ object SourceOfRecord {
         return try {
             val proc = ProcessBuilder(bin, "-enc", "UTF-8", pdf.toString(), "-")
                 .redirectErrorStream(false)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start()
             val out = proc.inputStream.readBytes().toString(Charsets.UTF_8)
             proc.waitFor()
