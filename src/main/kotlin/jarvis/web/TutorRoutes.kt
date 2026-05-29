@@ -1364,6 +1364,43 @@ fun Application.installTutorRoutes() {
             }
         }
 
+        // E2 Task 4b: persist authored, kcId-bearing Problems for a task so the
+        // curate-tutor flow can populate the grade loop in production without an
+        // LLM reprep round-trip.
+        post("/api/v1/task/{id}/prep-authored") {
+            val ctx = application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@post }
+            call.csrfProtect {
+                val sid = call.request.cookies["jarvis_session"]
+                val userId = sid?.let { SessionRepo(ctx.db).findUserId(it) }
+                    ?: run { call.respond(HttpStatusCode.Unauthorized, "invalid session"); return@csrfProtect }
+                val taskId = call.parameters["id"]?.takeIf { it.isNotBlank() }
+                    ?: run { call.respond(HttpStatusCode.BadRequest, "id required"); return@csrfProtect }
+                val task = TaskRepo(ctx.db).findById(taskId)
+                if (task == null || task.userId != userId) {
+                    call.respond(HttpStatusCode.NotFound, "task not found"); return@csrfProtect
+                }
+                val body = try {
+                    sensorJson.decodeFromString(ApiPrepAuthoredRequest.serializer(), call.receiveText())
+                } catch (e: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "malformed: ${e.message?.take(160)}"); return@csrfProtect
+                }
+                val now = java.time.Instant.now()
+                val problemsJson = jarvis.tutor.TutorTypes.tutorJson.encodeToString(
+                    kotlinx.serialization.builtins.ListSerializer(jarvis.tutor.Problem.serializer()),
+                    body.problems,
+                )
+                val existing = jarvis.tutor.TaskPrepRepo(ctx.db).findByTaskId(taskId)
+                jarvis.tutor.TaskPrepRepo(ctx.db).upsert(jarvis.tutor.TaskPrep(
+                    taskId = taskId, generatedAt = now, version = body.version,
+                    problemsJson = problemsJson,
+                    drillsJson = existing?.drillsJson ?: "{}",
+                    railJson = existing?.railJson ?: "[]",
+                ))
+                call.respond(HttpStatusCode.OK, ApiTaskRepRepReply(taskId, body.problems.size, now.toString()))
+            }
+        }
+
         // Phase 7.5 deferral closer: promote a knowledge gap to an FSRS card.
         // Idempotent — the gap row's fsrs_card_id is the source of truth.
         post("/api/v1/gap/{id}/promote") {
@@ -2330,6 +2367,12 @@ private data class ApiTelemetryRequest(
     val name: String,
     val ts: String? = null,
     val payload: kotlinx.serialization.json.JsonElement? = null,
+)
+
+@Serializable
+private data class ApiPrepAuthoredRequest(
+    val problems: List<jarvis.tutor.Problem>,
+    val version: Int = 1,
 )
 
 @Serializable
