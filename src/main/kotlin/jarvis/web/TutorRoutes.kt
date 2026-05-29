@@ -1390,8 +1390,9 @@ fun Application.installTutorRoutes() {
                     kotlinx.serialization.builtins.ListSerializer(jarvis.tutor.Problem.serializer()),
                     body.problems,
                 )
-                val existing = jarvis.tutor.TaskPrepRepo(ctx.db).findByTaskId(taskId)
-                jarvis.tutor.TaskPrepRepo(ctx.db).upsert(jarvis.tutor.TaskPrep(
+                val prepRepo = jarvis.tutor.TaskPrepRepo(ctx.db)
+                val existing = prepRepo.findByTaskId(taskId)
+                prepRepo.upsert(jarvis.tutor.TaskPrep(
                     taskId = taskId, generatedAt = now, version = body.version,
                     problemsJson = problemsJson,
                     drillsJson = existing?.drillsJson ?: "{}",
