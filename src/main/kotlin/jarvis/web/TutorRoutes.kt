@@ -1771,6 +1771,18 @@ fun Application.installTutorRoutes() {
                     return@csrfProtect
                 }
 
+                // E2: resolve the persisted Problem server-side — client conceptIds/canonicalAnswer NOT trusted.
+                val serverProblem: jarvis.tutor.Problem? = run {
+                    val prep = jarvis.tutor.TaskPrepRepo(ctx.db).findByTaskId(req.taskId) ?: return@run null
+                    val problems = try {
+                        sensorJson.decodeFromString(
+                            kotlinx.serialization.builtins.ListSerializer(jarvis.tutor.Problem.serializer()),
+                            prep.problemsJson,
+                        )
+                    } catch (_: Exception) { emptyList() }
+                    problems.firstOrNull { it.problemId == req.problemId }
+                }
+
                 // Student-stand-in Task 0.5: capture every grade outcome to the
                 // tutor-event log for downstream Surface X (curriculum
                 // sufficiency) + Surface Y (synthetic learner) audits. We pick
@@ -1838,8 +1850,8 @@ fun Application.installTutorRoutes() {
                         // (rubric-coherent AND, if a canonical answer was supplied,
                         // agreeing with the deterministic match) record KC mastery.
                         val g: GradeResult = attempt.parsed!!
-                        val answerMatch: Boolean? =
-                            req.canonicalAnswer?.let { GradeScoring.answerMatches(it, req.userAttempt) }
+                        val canonical = serverProblem?.canonicalAnswer ?: req.canonicalAnswer
+                        val answerMatch: Boolean? = canonical?.let { GradeScoring.answerMatches(it, req.userAttempt) }
                         val rubricCorrect = GradeScoring.correctFromRubric(g.rubric)
                         val deterministicCorrect = answerMatch ?: rubricCorrect
                         val deterministicScore = GradeScoring.scoreFromRubric(g.rubric)
@@ -1847,10 +1859,13 @@ fun Application.installTutorRoutes() {
                         val answerAgrees = answerMatch == null || answerMatch == rubricCorrect
                         val confident = coherent && answerAgrees
                         var recorded = false
-                        if (confident && !req.conceptIds.isNullOrEmpty()) {
+                        val masteryKcs = serverProblem?.kcIds ?: emptyList()
+                        if (confident && masteryKcs.isNotEmpty()) {
                             val repo = jarvis.tutor.KcMasteryRepo(ctx.db)
-                            req.conceptIds.forEach { kcId -> repo.record(userId, kcId, deterministicScore) }
+                            masteryKcs.forEach { kcId -> repo.record(userId, kcId, deterministicScore) }
                             recorded = true
+                        } else if (confident && masteryKcs.isEmpty()) {
+                            System.err.println("[drill-grade] confident grade for task=${req.taskId} problem=${req.problemId} but no server-side kcIds — mastery NOT recorded")
                         }
                         ApiDrillGradeReply(
                             correct = deterministicCorrect,

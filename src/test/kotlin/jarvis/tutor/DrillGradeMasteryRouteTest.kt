@@ -20,6 +20,7 @@ import jarvis.Llm
 import jarvis.web.drillGraderLlmFactory
 import jarvis.web.installTutorContext
 import jarvis.web.installTutorRoutes
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeAll
@@ -126,6 +127,14 @@ class DrillGradeMasteryRouteTest {
         }
         startApplication()
         val (userId, sid) = seedSession(ctx!!)
+        TaskPrepRepo(ctx!!.db).upsert(TaskPrep(
+            taskId = "task-1", generatedAt = Instant.now(), version = 1,
+            problemsJson = Json.encodeToString(ListSerializer(Problem.serializer()),
+                listOf(Problem(problemId = "d1", page = 1, statement = "p",
+                    kcIds = listOf("pa-kc-001"),
+                    canonicalAnswer = null))),
+            drillsJson = "{}", railJson = "[]",
+        ))
         val csrf = "test-csrf-12345"
         val client = createClient {
             install(HttpCookies)
@@ -220,6 +229,14 @@ class DrillGradeMasteryRouteTest {
         }
         startApplication()
         val (userId, sid) = seedSession(ctx!!)
+        TaskPrepRepo(ctx!!.db).upsert(TaskPrep(
+            taskId = "task-1", generatedAt = Instant.now(), version = 1,
+            problemsJson = Json.encodeToString(ListSerializer(Problem.serializer()),
+                listOf(Problem(problemId = "d1", page = 1, statement = "p",
+                    kcIds = listOf("pa-kc-001"),
+                    canonicalAnswer = "o(n log n)."))),
+            drillsJson = "{}", railJson = "[]",
+        ))
         val csrf = "test-csrf-12345"
         val client = createClient {
             install(HttpCookies)
@@ -231,7 +248,7 @@ class DrillGradeMasteryRouteTest {
             cookie("csrf", csrf); header("X-CSRF-Token", csrf)
             contentType(ContentType.Application.Json)
             // userAttempt "O(n log n)" normalises to "o(n log n)"
-            // canonicalAnswer "o(n log n)." normalises to "o(n log n)" (trailing dot stripped)
+            // server canonicalAnswer "o(n log n)." normalises to "o(n log n)" (trailing dot stripped)
             // → answerMatches returns true
             setBody(gradeBodyWith("O(n log n)", listOf("pa-kc-001"), canonicalAnswer = "o(n log n)."))
         }
