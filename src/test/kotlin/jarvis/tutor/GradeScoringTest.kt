@@ -20,4 +20,18 @@ class GradeScoringTest {
         assertFalse(GradeScoring.correctFromRubric(mapOf("a" to true, "b" to false)))
         assertFalse(GradeScoring.correctFromRubric(emptyMap()))
     }
+
+    @Test fun `confident when llm correct flag agrees with its rubric`() {
+        val coherentPass = GradeResult(true, mapOf("a" to true, "b" to true), 1.0, null, "ok")
+        val coherentFail = GradeResult(false, mapOf("a" to true, "b" to false), 0.5, "m", "fb")
+        assertTrue(GradeScoring.isConfident(coherentPass))
+        assertTrue(GradeScoring.isConfident(coherentFail))
+    }
+
+    @Test fun `not confident when llm correct flag contradicts its rubric`() {
+        val saysCorrectButItemFalse = GradeResult(true, mapOf("a" to true, "b" to false), 0.9, null, "fb")
+        val saysWrongButAllPass = GradeResult(false, mapOf("a" to true, "b" to true), 0.2, "m", "fb")
+        assertFalse(GradeScoring.isConfident(saysCorrectButItemFalse))
+        assertFalse(GradeScoring.isConfident(saysWrongButAllPass))
+    }
 }

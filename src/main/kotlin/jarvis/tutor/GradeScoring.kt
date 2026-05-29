@@ -16,4 +16,11 @@ object GradeScoring {
     /** Correct iff the rubric is non-empty and every item passed. */
     fun correctFromRubric(rubric: Map<String, Boolean>): Boolean =
         rubric.isNotEmpty() && rubric.values.all { it }
+
+    /**
+     * LOW confidence when the LLM's own correctness verdict is internally inconsistent
+     * with the rubric booleans it emitted. Such grades MUST be deferred, never recorded.
+     */
+    fun isConfident(llm: GradeResult): Boolean =
+        llm.correct == correctFromRubric(llm.rubric)
 }
