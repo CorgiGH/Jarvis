@@ -60,4 +60,22 @@ class DrillGeneratorTest {
         assertEquals(0, res.bundles.size)
         assertTrue(res.rejectReasons.any { it.contains("leak") })
     }
+
+    @Test fun `rejects when critic says not grounded`() = runBlocking {
+        val gen = object : Llm { var n = 0
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
+        val notGrounded = """{"confidence":0.9,"grounded":false,"leak":false,"solvable":true}"""
+        val res = DrillGenerator.generate(kc, listOf("q"), "computational", 1, gen, Fake(notGrounded))
+        assertEquals(0, res.bundles.size)
+        assertTrue(res.rejectReasons.any { it.contains("critic") })
+    }
+
+    @Test fun `rejects when critic says not solvable`() = runBlocking {
+        val gen = object : Llm { var n = 0
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
+        val notSolvable = """{"confidence":0.9,"grounded":true,"leak":false,"solvable":false}"""
+        val res = DrillGenerator.generate(kc, listOf("q"), "computational", 1, gen, Fake(notSolvable))
+        assertEquals(0, res.bundles.size)
+        assertTrue(res.rejectReasons.any { it.contains("critic") })
+    }
 }

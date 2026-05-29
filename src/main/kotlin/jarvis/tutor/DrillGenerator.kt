@@ -30,12 +30,12 @@ object DrillGenerator {
     """.trimIndent()
 
     private fun parseCritic(raw: String): CriticVerdict? {
-        val start = raw.indexOf('{'); val end = raw.lastIndexOf('}')
-        if (start < 0 || end <= start) return null
-        val obj = try { json.parseToJsonElement(raw.substring(start, end + 1)) as? JsonObject } catch (_: Exception) { null } ?: return null
+        val block = DrillGenParser.firstBalancedBraceBlock(raw) ?: return null
+        val obj = try { json.parseToJsonElement(block) as? JsonObject } catch (_: Exception) { null } ?: return null
         val conf = (obj["confidence"] as? JsonPrimitive)?.doubleOrNull ?: return null
-        fun b(k: String) = (obj[k] as? JsonPrimitive)?.booleanOrNull ?: false
-        return CriticVerdict(conf, b("grounded"), b("leak"), b("solvable"))
+        // Fail-closed defaults: grounded/solvable missing → false (reject); leak missing → true (assume leak present).
+        fun b(k: String, failClosedDefault: Boolean) = (obj[k] as? JsonPrimitive)?.booleanOrNull ?: failClosedDefault
+        return CriticVerdict(conf, b("grounded", false), b("leak", true), b("solvable", false))
     }
 
     /** Generate up to [count] drills for [kc] of [shape]; each must pass leak + self-solve + cross-family critic. */

@@ -22,7 +22,7 @@ object DrillGenParser {
     private val json = Json { ignoreUnknownKeys = true }
 
     /** Extract the first balanced {...} block (CLI/relay providers wrap JSON in prose). */
-    private fun firstBalancedBraceBlock(s: String): String? {
+    internal fun firstBalancedBraceBlock(s: String): String? {
         val start = s.indexOf('{'); if (start < 0) return null
         var depth = 0; var inString = false; var escape = false
         for (i in start until s.length) {
