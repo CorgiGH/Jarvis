@@ -19,8 +19,9 @@ object GradeScoring {
 
     /**
      * LOW confidence when the LLM's own correctness verdict is internally inconsistent
-     * with the rubric booleans it emitted. Such grades MUST be deferred, never recorded.
+     * with the rubric booleans it emitted, OR when the rubric is empty (no evidence to
+     * cross-check). Such grades MUST be deferred, never recorded.
      */
     fun isConfident(llm: GradeResult): Boolean =
-        llm.correct == correctFromRubric(llm.rubric)
+        llm.rubric.isNotEmpty() && llm.correct == correctFromRubric(llm.rubric)
 }

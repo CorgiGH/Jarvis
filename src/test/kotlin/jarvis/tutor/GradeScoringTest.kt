@@ -34,4 +34,10 @@ class GradeScoringTest {
         assertFalse(GradeScoring.isConfident(saysCorrectButItemFalse))
         assertFalse(GradeScoring.isConfident(saysWrongButAllPass))
     }
+
+    @Test fun `empty rubric is never confident`() {
+        // No rubric evidence → cannot trust either verdict, must defer.
+        assertFalse(GradeScoring.isConfident(GradeResult(true, emptyMap(), 0.0, null, "")))
+        assertFalse(GradeScoring.isConfident(GradeResult(false, emptyMap(), 0.0, null, "")))
+    }
 }
