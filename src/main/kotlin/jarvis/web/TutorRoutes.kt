@@ -120,6 +120,13 @@ internal var drillKcLookup: (subject: String, kcId: String) -> jarvis.content.Kn
     } catch (_: Exception) { null }
 }
 
+/** E3 Task 12 seam: /reprep problem extractor. Production runs PdfProblemExtractor.identifyProblems;
+ *  tests override to return a deterministic list without touching the PDF or the network. */
+internal var reprepExtractorFn: suspend (pdfPath: java.nio.file.Path, llm: jarvis.Llm) -> List<jarvis.tutor.Problem> =
+    { pdfPath, llm -> jarvis.tutor.PdfProblemExtractor.identifyProblems(pdfPath, llm) }
+/** E3 Task 12 seam: the Llm instance used for reprep extraction (ignored when reprepExtractorFn is overridden). */
+internal var reprepExtractorLlmFactory: () -> jarvis.Llm = { jarvis.OpenRouterChatLlm() }
+
 fun Application.installTutorRoutes() {
     routing {
         // Static SPA bundle. Vite build output is committed at
@@ -1324,10 +1331,10 @@ fun Application.installTutorRoutes() {
                     .resolve(task.problemRef.path)
                     .normalize()
                     .toAbsolutePath()
-                val problems = try {
-                    jarvis.OpenRouterChatLlm().use { llm ->
+                val freshProblems = try {
+                    reprepExtractorLlmFactory().use { llm ->
                         kotlinx.coroutines.runBlocking {
-                            jarvis.tutor.PdfProblemExtractor.identifyProblems(pdfPath, llm)
+                            reprepExtractorFn(pdfPath, llm)
                         }
                     }
                 } catch (e: Exception) {
@@ -1336,7 +1343,7 @@ fun Application.installTutorRoutes() {
                 }
                 // C5: populate conceptRefs via HybridRetriever (lexical; semantic skipped — no API key in prod)
                 val conceptRefs = mutableListOf<jarvis.tutor.ContentRef>()
-                for (p in problems) {
+                for (p in freshProblems) {
                     val hits = kotlinx.coroutines.runBlocking {
                         jarvis.HybridRetriever.search(p.statement, k = 3, semanticEmbed = null)
                     }
@@ -1353,27 +1360,39 @@ fun Application.installTutorRoutes() {
                 jarvis.tutor.TaskRepo(ctx.db).updateConceptRefs(taskId, finalConceptRefs)
 
                 val now = java.time.Instant.now()
+                // E3 Task 12 guard: preserve any existing Problem with non-empty kcIds (merge by problemId).
+                // Fresh LLM-extracted problems (empty kcIds) are merged in; authored/generated problems
+                // (non-empty kcIds) survive. Existing drillsJson is preserved so authored/generated drills
+                // are not clobbered.
+                val prepRepo = jarvis.tutor.TaskPrepRepo(ctx.db)
+                val existingPrep = prepRepo.findByTaskId(taskId)
+                val preserved = (existingPrep?.problemsJson?.let {
+                    try { jarvis.tutor.TutorTypes.tutorJson.decodeFromString(
+                        kotlinx.serialization.builtins.ListSerializer(jarvis.tutor.Problem.serializer()), it)
+                    } catch (_: Exception) { emptyList() }
+                } ?: emptyList()).filter { it.kcIds.isNotEmpty() }
+                val merged = (preserved + freshProblems).associateBy { it.problemId }.values.toList()
                 val problemsJson = jarvis.tutor.TutorTypes.tutorJson.encodeToString(
                     kotlinx.serialization.builtins.ListSerializer(
                         jarvis.tutor.Problem.serializer()),
-                    problems,
+                    merged,
                 )
                 val railItems = jarvis.tutor.RailJsonBuilder.buildForTask(
                     ctx.db, taskId, userId,
                     jarvis.tutor.KnowledgeGapRepo(ctx.db, ctx.ledgerDir),
                 )
                 val railJsonStr = jarvis.tutor.RailJsonBuilder.toJsonArrayString(railItems)
-                jarvis.tutor.TaskPrepRepo(ctx.db).upsert(jarvis.tutor.TaskPrep(
+                prepRepo.upsert(jarvis.tutor.TaskPrep(
                     taskId = taskId,
                     generatedAt = now,
                     version = 1,
                     problemsJson = problemsJson,
-                    drillsJson = "{}",
+                    drillsJson = existingPrep?.drillsJson ?: "{}",
                     railJson = railJsonStr,
                 ))
                 call.respond(HttpStatusCode.OK, ApiTaskRepRepReply(
                     taskId = taskId,
-                    problems = problems.size,
+                    problems = freshProblems.size,
                     generatedAt = now.toString(),
                 ))
             }
