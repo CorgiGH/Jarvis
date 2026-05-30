@@ -88,6 +88,25 @@ scp -q "$APK_LOCAL" "$VPS:/opt/jarvis/android/build/outputs/apk/debug/android-de
 # actually read/execute them on restart.
 ssh "$VPS" "chown -R jarvis:jarvis $DIST_REMOTE /opt/jarvis/android"
 
+# === CONTENT CORPUS (Gate 3 / E2 / E3) ===
+# Historically deploy.sh shipped only the dist; the content/ knowledge-concept
+# corpus — which the tutor reads at runtime via JARVIS_CONTENT_DIR (curator
+# routes, the E3 generate-drills KC lookup, the content validator) — was never
+# deployed. Ship it to a stable sibling dir (like data/), replaced each deploy.
+echo "[deploy] scp content/ corpus → /opt/jarvis/content"
+ssh "$VPS" "rm -rf /opt/jarvis/content.tmp"
+scp -rq content "$VPS:/opt/jarvis/content.tmp"
+ssh "$VPS" "
+    rm -rf /opt/jarvis/content &&
+    mv /opt/jarvis/content.tmp /opt/jarvis/content &&
+    chown -R jarvis:jarvis /opt/jarvis/content
+"
+# The app resolves the corpus via JARVIS_CONTENT_DIR (default 'content',
+# CWD-relative). systemd's WorkingDirectory is NOT the repo, so this MUST be an
+# absolute path in /opt/jarvis/.env (preserved across deploys). Warn — don't
+# fail — so the operator sets it once: JARVIS_CONTENT_DIR=/opt/jarvis/content
+ssh "$VPS" "grep -q '^JARVIS_CONTENT_DIR=' /opt/jarvis/.env || echo '[deploy] WARNING: JARVIS_CONTENT_DIR not set in /opt/jarvis/.env — add JARVIS_CONTENT_DIR=/opt/jarvis/content or the tutor reads an empty/missing corpus'"
+
 ssh "$VPS" "
     systemctl start jarvis &&
     sleep 4 &&
