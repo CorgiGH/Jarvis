@@ -1499,11 +1499,11 @@ fun Application.installTutorRoutes() {
                 val now = java.time.Instant.now()
                 prepRepo.upsert(jarvis.tutor.TaskPrep(
                     taskId = taskId, generatedAt = now, version = existing?.version ?: 1,
-                    problemsJson = sensorJson.encodeToString(
+                    problemsJson = jarvis.tutor.TutorTypes.tutorJson.encodeToString(
                         kotlinx.serialization.builtins.ListSerializer(jarvis.tutor.Problem.serializer()),
                         problems.values.toList(),
                     ),
-                    drillsJson = sensorJson.encodeToString(
+                    drillsJson = jarvis.tutor.TutorTypes.tutorJson.encodeToString(
                         kotlinx.serialization.builtins.MapSerializer(
                             kotlinx.serialization.serializer<String>(),
                             jarvis.tutor.DrillContentDto.serializer()

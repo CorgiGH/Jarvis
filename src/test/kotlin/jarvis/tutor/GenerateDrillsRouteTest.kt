@@ -24,7 +24,9 @@ import jarvis.web.drillKcLookup
 import jarvis.web.installTutorContext
 import jarvis.web.installTutorRoutes
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeAll
 import java.nio.file.Files
@@ -131,7 +133,11 @@ class GenerateDrillsRouteTest {
         assertTrue(problems.any { it.problemId == "authored-1" }, "existing authored problem must survive")
         val gen1 = problems.first { it.problemId == "gen-pa-kc-001-0" }
         assertEquals(listOf("pa-kc-001"), gen1.kcIds)
-        assertTrue(prep.drillsJson.contains("gen-pa-kc-001-0") && prep.drillsJson.contains("recursion-tree"),
-            "drillsJson must contain generated problem id and viz id; got: ${prep.drillsJson}")
+        val drills = Json { ignoreUnknownKeys = true }.decodeFromString(
+            MapSerializer(serializer<String>(), DrillContentDto.serializer()),
+            prep.drillsJson,
+        )
+        assertEquals("recursion-tree", drills["gen-pa-kc-001-0"]!!.vizId,
+            "drillsJson must map gen-pa-kc-001-0 to vizId=recursion-tree; got: ${prep.drillsJson}")
     }
 }

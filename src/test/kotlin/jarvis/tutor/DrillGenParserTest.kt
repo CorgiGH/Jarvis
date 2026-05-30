@@ -18,6 +18,7 @@ class DrillGenParserTest {
         assertEquals(listOf("arithmetic correct"), d.rubricItems)
         assertEquals("6*7=42", d.worked)
         assertEquals("42", d.expectedAnswerHint)
+        assertNull(d.referenceSolution)
     }
 
     @Test fun `returns null on garbage`() {

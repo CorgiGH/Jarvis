@@ -52,6 +52,15 @@ class DrillGeneratorTest {
         assertTrue(res.rejectReasons.any { it.contains("critic") })
     }
 
+    @Test fun `rejects when critic reports a leak`() = runBlocking {
+        val gen = object : Llm { var n = 0
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
+        val leakCritic = """{"confidence":0.9,"grounded":true,"leak":true,"solvable":true}"""
+        val res = DrillGenerator.generate(kc, listOf("q"), "computational", 1, gen, Fake(leakCritic))
+        assertEquals(0, res.bundles.size)
+        assertTrue(res.rejectReasons.any { it.contains("critic") })
+    }
+
     @Test fun `rejects when the stem leaks its own answer`() = runBlocking {
         val leaky = """{"statement":"Compute 6*7. The answer is 42.","canonical_answer":"42","rubric_items":["ok"],"worked":"42","definition":"m","check":"c","expected_answer_hint":"42"}"""
         val gen = object : Llm { var n = 0
