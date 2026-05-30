@@ -10,6 +10,16 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File tools/inject-constraints.ps1"
+          }
+        ]
+      }
     ]
   }
 }
