@@ -15,3 +15,9 @@ edges:
   - kc: pa-kc-006
     prereq: pa-kc-005
     rationale: "The time cost of operations and computations is expressed in terms of the uniform, logarithmic or linear size of values."
+  - kc: pa-kc-fixture-recursion
+    prereq: pa-kc-001
+    rationale: "[FIXTURE] recursion demonstrator depends on the notion of an algorithm."
+  - kc: pa-kc-fixture-compute
+    prereq: pa-kc-001
+    rationale: "[FIXTURE] computation-cost demonstrator depends on the notion of an algorithm."
