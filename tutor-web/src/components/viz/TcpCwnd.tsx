@@ -23,12 +23,17 @@ type TCPState = {
   message: string;
 };
 
+// Number of RTTs to stay in FAST_RECOVERY before exiting to CONG_AVOIDANCE.
+const FAST_RECOVERY_WINDOW = 2;
+
 function buildFrames(): Frame<TCPState>[] {
   const frames: Frame<TCPState>[] = [];
   const history: CwndPoint[] = [];
   let cwnd = 1;
   let ssthresh = 16;
   let mode: Mode = "SLOW_START";
+  // Tracks how many RTTs we have been in FAST_RECOVERY.
+  let recoveryRtts = 0;
 
   const MAX_RTT = 29;
   const LOSS_RTTS = new Set([12, 24]);
@@ -38,10 +43,26 @@ function buildFrames(): Frame<TCPState>[] {
     if (rtt === 0) {
       event = "INIT — cwnd=1, ssthresh=16";
     } else if (LOSS_RTTS.has(rtt)) {
+      // TCP Reno: on packet loss enter FAST_RECOVERY.
+      // ssthresh = floor(cwnd / 2); cwnd = ssthresh + 3 (inflate for the 3 dup-ACKs).
       ssthresh = Math.floor(cwnd / 2);
       cwnd = ssthresh + 3;
-      mode = "CONG_AVOIDANCE";
-      event = `PACKET LOSS! ssthresh = cwnd/2 = ${ssthresh}, cwnd = ssthresh+3 = ${cwnd}`;
+      mode = "FAST_RECOVERY";
+      recoveryRtts = 0;
+      event = `PACKET LOSS! ssthresh = cwnd/2 = ${ssthresh}, cwnd = ssthresh+3 = ${cwnd} → FAST_RECOVERY`;
+    } else if (mode === "FAST_RECOVERY") {
+      recoveryRtts += 1;
+      if (recoveryRtts >= FAST_RECOVERY_WINDOW) {
+        // Exit FAST_RECOVERY: set cwnd = ssthresh (deflate) and switch to CONG_AVOIDANCE.
+        cwnd = ssthresh;
+        mode = "CONG_AVOIDANCE";
+        recoveryRtts = 0;
+        event = `FAST_RECOVERY complete — cwnd reset to ssthresh=${ssthresh}, switch to cong-avoidance`;
+      } else {
+        // Inflate cwnd by 1 per additional dup-ACK during recovery window.
+        cwnd += 1;
+        event = `FAST_RECOVERY: inflate cwnd to ${cwnd} (ssthresh=${ssthresh})`;
+      }
     } else if (mode === "SLOW_START") {
       cwnd = cwnd * 2;
       if (cwnd >= ssthresh) {
@@ -59,6 +80,8 @@ function buildFrames(): Frame<TCPState>[] {
       ? event
       : mode === "SLOW_START"
       ? `RTT ${rtt}: slow-start, cwnd doubled to ${cwnd}`
+      : mode === "FAST_RECOVERY"
+      ? `RTT ${rtt}: fast-recovery, cwnd=${cwnd}`
       : `RTT ${rtt}: cong-avoidance, cwnd += 1 to ${cwnd}`;
 
     frames.push({
