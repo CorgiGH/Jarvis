@@ -5,6 +5,7 @@ import {
   useTransform,
   type MotionValue,
 } from "motion/react";
+import { hierarchy, tree as d3tree } from "d3-hierarchy";
 import { AlgoStepperShell, type Frame, type ShellLayout } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "./theme";
 import {
@@ -42,7 +43,7 @@ type RecursionState = {
  * Build the fib(N) execution trace.
  * Returns one Frame per CALL or RETURN step.
  */
-function buildFibTrace(N: number): Frame<RecursionState>[] {
+export function buildFibTrace(N: number): Frame<RecursionState>[] {
   const frames: Frame<RecursionState>[] = [];
   const tree: TreeNode[] = [];
   const stack: number[] = [];
@@ -126,6 +127,41 @@ const TREE_Y_TOP = 40;
 const TREE_X_END = 470;
 const TREE_NODE_R = 14;
 const TREE_LEVEL_GAP = 50;
+
+/**
+ * Lay out a flat TreeNode[] using d3-hierarchy's Reingold-Tilford algorithm.
+ * Returns one position record per node, in absolute SVG coordinates.
+ * Pure function — safe to call outside React.
+ */
+export function layoutTreeNodes(
+  treeNodes: TreeNode[],
+): { id: number; x: number; y: number; depth: number }[] {
+  if (treeNodes.length === 0) return [];
+
+  const byId = new Map(treeNodes.map((n) => [n.id, n]));
+  const root = treeNodes.find((n) => n.parentId === null);
+  if (!root) return [];
+
+  // Build the d3 hierarchy from the flat node list.
+  const built = hierarchy<TreeNode>(root, (n) =>
+    n.childIds.map((cid) => byId.get(cid)).filter((c): c is TreeNode => c != null),
+  );
+
+  const maxDepth = Math.max(...treeNodes.map((n) => n.depth), 1);
+  const usableW = TREE_X_END - TREE_X;
+  const usableH = maxDepth * TREE_LEVEL_GAP;
+
+  // d3tree assigns x ∈ [0, usableW], y ∈ [0, usableH].
+  const laid = d3tree<TreeNode>().size([usableW, usableH])(built);
+
+  // Collect positions from the hierarchy, offset to SVG canvas coords.
+  return laid.descendants().map((d) => ({
+    id: d.data.id,
+    x: TREE_X + d.x,
+    y: TREE_Y_TOP + d.y,
+    depth: d.depth,
+  }));
+}
 
 // Per-node shared MotionValues for x/y. Both the circle's motion.g translate
 // AND the edges' x1/y1/x2/y2 read from the SAME MotionValue so they're
@@ -319,24 +355,10 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
   const { stack, tree } = frame.state;
   const currentId = frame.state.step.nodeId;
 
-  // Layout: group nodes by depth, distribute evenly at each depth level
-  const nodesByDepth = new Map<number, TreeNode[]>();
-  tree.forEach((n) => {
-    const list = nodesByDepth.get(n.depth) ?? [];
-    list.push(n);
-    nodesByDepth.set(n.depth, list);
-  });
-
+  // Layout: Reingold-Tilford via d3-hierarchy — no sibling overlap
+  const laid = layoutTreeNodes(tree);
   const positions = new Map<number, { x: number; y: number }>();
-  nodesByDepth.forEach((list, depth) => {
-    const usableW = TREE_X_END - TREE_X;
-    const step = usableW / Math.max(list.length, 1);
-    list.forEach((node, i) => {
-      const x = TREE_X + step * (i + 0.5);
-      const y = TREE_Y_TOP + depth * TREE_LEVEL_GAP;
-      positions.set(node.id, { x, y });
-    });
-  });
+  for (const { id, x, y } of laid) positions.set(id, { x, y });
 
   return (
     <>
