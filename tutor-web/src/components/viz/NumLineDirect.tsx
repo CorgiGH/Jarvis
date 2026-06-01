@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback } from "react";
 import { ACCENT, INK } from "./theme";
 
 const TITLE_ID = "num-line-direct-title";
@@ -31,7 +31,6 @@ function fromSvgX(x: number, lo: number, hi: number): number {
 export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) {
   const lo = min ?? Math.min(...data) - 2;
   const hi = max ?? Math.max(...data) + 2;
-  const markerRef = useRef<SVGCircleElement>(null);
   const muRef = useRef(mu);
   muRef.current = mu;
   const dragging = useRef(false);
@@ -42,10 +41,10 @@ export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) 
   const prefersReduced = typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  useEffect(() => {
-    if (!markerRef.current) return;
-    markerRef.current.setAttribute("cx", String(toSvgX(mu, lo, hi)));
-  }, [mu, lo, hi]);
+  // NOTE: No imperative setAttribute path. Both the circle cx and the μ label x
+  // derive purely from the `mu` prop via React render, so they always stay in sync.
+  // The old useEffect that called markerRef.current.setAttribute("cx", ...) has
+  // been removed — it caused the label to trail the circle during RAF-throttled drags.
 
   const flushRAF = useCallback(() => {
     if (pendingX.current === null) return;
@@ -111,7 +110,6 @@ export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) 
           />
         ))}
         <circle
-          ref={markerRef}
           data-testid="mu-marker"
           cx={toSvgX(mu, lo, hi)} cy={AXIS_Y} r={MARKER_R}
           fill={ACCENT} stroke={INK} strokeWidth={2}
@@ -120,7 +118,7 @@ export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) 
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
         />
-        <text x={toSvgX(mu, lo, hi)} y={AXIS_Y - MARKER_R - 4} textAnchor="middle" fontSize={11} fill={INK} fontWeight="bold">μ</text>
+        <text data-testid="mu-label" x={toSvgX(mu, lo, hi)} y={AXIS_Y - MARKER_R - 4} textAnchor="middle" fontSize={11} fill={INK} fontWeight="bold">μ</text>
       </svg>
       <div
         aria-live="polite"
