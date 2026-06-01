@@ -305,6 +305,9 @@ function buildFrames(): Frame<PageTableState>[] {
   pt[3].writable = true;
   phys[5].allocated = true;
   phys[5].cowShared = false;
+  // TLB shootdown: invalidate the stale entry for vpn=3 (was pfn=2, now pfn=5).
+  // Without this the viz teaches that a stale mapping silently vanishes — false.
+  tlb = tlb.filter((e) => e.vpn !== 3);
   push({
     phase: 4,
     va: { vpn: 3, offset: 0 },
@@ -333,7 +336,7 @@ function buildFrames(): Frame<PageTableState>[] {
   return frames;
 }
 
-const FRAMES = buildFrames();
+export const FRAMES = buildFrames();
 
 // Export frame count for tests
 export const FRAME_COUNT = FRAMES.length;
