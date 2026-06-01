@@ -126,3 +126,8 @@ if [[ "${RUN_LLM_EVAL:-0}" == "1" ]]; then
 fi
 
 echo "[deploy] done. rollback: bash tools/deploy.sh rollback"
+
+# SCHEMA-DEPLOY PRECONDITION (gap-ledger must-resolve #3):
+#   ssh root@46.247.109.91 'python3 - /opt/jarvis/backups' < tools/db-backup.py
+#   (or copy tools/db-backup.py to the VPS and run it there)
+# Run this and confirm the card count BEFORE any deploy that ALTERs a table.

@@ -39,3 +39,6 @@ tools/node_modules/
 .tmp-*.sql
 tutor-web/test-results/
 tutor-web/public/audio/
+
+# DB backup dumps (data, never committed)
+backups/
