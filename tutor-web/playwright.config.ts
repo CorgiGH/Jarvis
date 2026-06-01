@@ -6,6 +6,7 @@ export default defineConfig({
     baseURL: "http://localhost:5173",
     locale: "ro-RO",
     timezoneId: "Europe/Bucharest",
+    reducedMotion: "reduce",
   },
   webServer: {
     command: "npm run dev",

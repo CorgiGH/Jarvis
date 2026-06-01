@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   backend:
-    name: backend (gradle :test)
+    name: backend (gradle check)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -25,8 +25,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10"
-      - name: Gradle :test (root project only — android subproject skipped)
-        run: gradle --no-daemon :test --stacktrace --info
+      - name: Gradle check (root project only — android subproject skipped; includes validateContent)
+        run: gradle --no-daemon :check --stacktrace --info
       - name: Print failing test XML on failure
         if: failure()
         run: |
@@ -65,6 +65,10 @@ jobs:
         run: npm ci
       - name: vitest run
         run: npm test
+      - name: Install Playwright browsers (chromium only)
+        run: npx playwright install --with-deps chromium
+      - name: Playwright e2e
+        run: npm run e2e
 
   daemon:
     name: daemon (cargo test)

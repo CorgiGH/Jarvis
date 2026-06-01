@@ -44,6 +44,9 @@ if [[ "${1-}" == "rollback" ]]; then
 fi
 
 # === LOCAL BUILD + SMOKE ===
+echo "[deploy] tutor-web SPA build"
+( cd tutor-web && npm ci && npm run build )
+
 echo "[deploy] gradle :test :installDist :android:assembleDebug"
 gradle :test :installDist :android:assembleDebug
 
@@ -116,6 +119,7 @@ ssh "$VPS" "
 # === VERIFY ===
 echo "[deploy] verifying $HEALTH_URL"
 curl -s -m 10 "$HEALTH_URL" && echo
+curl -fsS "https://corgflix.duckdns.org/" | grep -q '<div id="root"' || { echo "SMOKE FAIL: SPA index did not serve"; exit 1; }
 ssh "$VPS" "tail -25 /var/log/jarvis.log | grep -Ev '^SLF4J|^Picked up|^Jarvis web|^Auth required' | head -20"
 
 # === SURFACE X ADVISORY (opt-in, never blocks) ===
