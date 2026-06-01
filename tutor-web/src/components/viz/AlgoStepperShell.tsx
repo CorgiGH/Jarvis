@@ -25,6 +25,21 @@ export interface PredictionGate {
   onAnswered?: (correct: boolean) => void;
 }
 
+/** Chrome/geometry is INJECTABLE so a viz is not trapped in a fixed box.
+ *  Transport (frames, scrubber, gates, a11y, voice) is unchanged; only the
+ *  shell's size/border/controls-placement vary. Defaults reproduce the
+ *  original boxed look exactly, so existing mounts are unaffected. */
+export interface ShellLayout {
+  /** drop max-width + border + padding; fill the parent (e.g. a full-screen door) */
+  fullBleed?: boolean;
+  /** max content width when not fullBleed (default 1100) */
+  maxWidth?: number;
+  /** where the scrubber/buttons sit relative to the canvas (default "side") */
+  controls?: "side" | "bottom" | "none";
+  /** canvas background (default white); set transparent to sit on a themed page */
+  canvasBg?: string;
+}
+
 export interface AlgoStepperShellProps<S> {
   title: string;
   desc: string;
@@ -35,6 +50,8 @@ export interface AlgoStepperShellProps<S> {
   onShare?: (hashState: string) => void;
   testIdPrefix?: string;
   initialStep?: number;
+  /** chrome/geometry overrides; omitted → original boxed look */
+  layout?: ShellLayout;
   /** Called on every frame change, including the initial mount — so the parent
    *  learns the actual (gate-clamped) starting frame. Wrap in useCallback to
    *  avoid spurious re-fires when the parent re-renders. */
@@ -209,23 +226,30 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const titleId = `${testIdPrefix}-title`;
   const descId = `${testIdPrefix}-desc`;
 
+  // --- injectable chrome/geometry (defaults = original boxed look) ---
+  const { fullBleed = false, maxWidth = 1100, controls = "side", canvasBg = "#fff" } =
+    props.layout ?? {};
+  const sideControls = controls === "side";
+  const wrapperStyle: CSSProperties = {
+    background: fullBleed ? "transparent" : PAPER,
+    border: fullBleed ? "none" : `2px solid ${INK}`,
+    padding: fullBleed ? 0 : 20,
+    display: "grid",
+    gridTemplateColumns: sideControls ? "1fr 260px" : "1fr",
+    gap: sideControls ? 24 : 12,
+    fontFamily: FONT_FAMILY,
+    color: INK,
+    maxWidth: fullBleed ? "none" : maxWidth,
+    width: "100%",
+    height: fullBleed ? "100%" : undefined,
+  };
+
   return (
     <Fragment>
       <style>{`
-        .algo-stepper-shell-wrapper {
-          background: ${PAPER};
-          border: 2px solid ${INK};
-          padding: 20px;
-          display: grid;
-          grid-template-columns: 1fr 260px;
-          gap: 24px;
-          font-family: ${FONT_FAMILY};
-          color: ${INK};
-          max-width: 1100px;
-        }
         @media (max-width: 720px) {
           .algo-stepper-shell-wrapper {
-            grid-template-columns: 1fr;
+            grid-template-columns: 1fr !important;
           }
         }
         @keyframes algoStepperFadeIn {
@@ -246,6 +270,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
         aria-labelledby={titleId}
         data-testid={`${testIdPrefix}-root`}
         className="algo-stepper-shell-wrapper"
+        style={wrapperStyle}
       >
         <MotionConfig reducedMotion="user">
           <svg
@@ -257,12 +282,13 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             onKeyDown={onKey}
             className="algo-stepper-shell-svg"
             style={{
-              background: "#fff",
+              background: canvasBg,
               outline: `2px solid transparent`,
               outlineOffset: 2,
               width: "100%",
-              height: "auto",
-              border: `1px solid ${INK}`,
+              height: fullBleed ? "100%" : "auto",
+              minHeight: 0,
+              border: fullBleed ? "none" : `1px solid ${INK}`,
             }}
             onFocus={(e) => {
               e.currentTarget.style.outline = `2px solid ${ACCENT}`;
@@ -277,6 +303,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             {currentFrame && renderFrame(currentFrame, idx)}
           </svg>
         </MotionConfig>
+      {controls !== "none" && (
       <div
         data-testid={`${testIdPrefix}-controls`}
         style={{ display: "flex", flexDirection: "column", gap: 14, position: "relative" }}
@@ -417,6 +444,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
           {currentFrame?.aria ?? ""}
         </div>
       </div>
+      )}
       </div>
     </Fragment>
   );

@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -69,6 +70,16 @@ PORT = int(os.environ.get("JARVIS_RELAY_PORT", "9999"))
 CLAUDE_BIN = os.environ.get("JARVIS_CLAUDE_BIN", "claude")
 CLAUDE_MODEL = os.environ.get("JARVIS_CLAUDE_MODEL")
 TIMEOUT_S = int(os.environ.get("JARVIS_RELAY_TIMEOUT_S", "120"))
+# Optional extra args appended to every `claude --print` call. Empty by
+# default (identical to prior behavior). Set e.g. to
+# '--strict-mcp-config --mcp-config {"mcpServers":{}} --setting-sources user'
+# to skip MCP-server + project-config cold-start cost (interactive-auth MCP
+# servers can hang a headless `claude --print` for 60s+).
+EXTRA_ARGS = shlex.split(os.environ.get("JARVIS_CLAUDE_ARGS", ""))
+# Optional working directory for the spawned `claude --print`. Default None
+# (inherit the server's cwd). Set to a neutral/empty dir to avoid loading a
+# heavy project `.claude/` (SessionStart hooks etc.) on every cold start.
+CLAUDE_CWD = os.environ.get("JARVIS_CLAUDE_CWD") or None
 
 if not TOKEN:
     print("FATAL: JARVIS_RELAY_TOKEN not set", file=sys.stderr)
@@ -103,6 +114,7 @@ def call_claude(prompt, timeout):
     cmd = [CLAUDE_BIN, "--print", "--output-format", "text"]
     if CLAUDE_MODEL:
         cmd += ["--model", CLAUDE_MODEL]
+    cmd += EXTRA_ARGS
     # CREATE_NO_WINDOW (0x08000000) suppresses the brief console flash
     # Windows would otherwise pop when pythonw spawns claude.exe (a
     # console-subsystem child). Constant is Windows-only; getattr falls
@@ -114,6 +126,7 @@ def call_claude(prompt, timeout):
         text=True,
         encoding="utf-8",
         timeout=timeout,
+        cwd=CLAUDE_CWD,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     if proc.returncode != 0:

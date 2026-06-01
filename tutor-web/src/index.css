@@ -40,6 +40,26 @@
   --type-body: clamp(14px, calc(13.5px + 0.1vw), 16px);
   --type-lg: 18px;
   --type-h2: 20px;
+
+  /* Motion — mirrors DESIGN.md motion.* (viz-excellence playbook §5).
+     Durations have no Tailwind v4 utility namespace, so they live here as
+     custom props: reference via var() in CSS, and as the source values for
+     Motion (framer) JS transitions. ADHD rule (DESIGN.md) overrides: accent
+     = single focus, no idle animation, reduced-motion respected. */
+  --duration-fast: 200ms;     /* hover/click */
+  --duration-base: 300ms;     /* state changes */
+  --duration-slow: 450ms;     /* panels / large moves */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);        /* entering (= Tailwind default) */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);         /* exiting — use a SHORTER duration */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* point-to-point */
+  --ease-landing: cubic-bezier(0.22, 1, 0.36, 1);/* the shipped slide-up "landing" */
+  --stagger: 70ms;            /* secondary elements; 60–80ms band */
+  --delay-children: 200ms;
+
+  /* Shape — radius LOCKED at 0 (DESIGN.md shape lock; ESLint-enforced once added). */
+  --radius-none: 0;
+  /* Elevation — brutalist HARD offset only (0 blur). Soft/blur shadows BANNED. */
+  --shadow-hard: 8px 8px 0 0 var(--color-border-strong);
 }
 
 @theme {
@@ -62,6 +82,14 @@
   --color-disabled-fg: var(--color-disabled-fg);
   --color-surface-muted: var(--color-surface-muted);
   --color-overlay-fg: var(--color-overlay-fg);
+
+  /* Motion/shape utilities (DESIGN.md). These map to real Tailwind v4 utilities:
+     ease-standard, ease-landing, shadow-hard, tracking-mega — so components cite a
+     named token instead of an arbitrary value (which becomes a lint error). */
+  --ease-standard: var(--ease-standard);   /* -> ease-standard */
+  --ease-landing: var(--ease-landing);     /* -> ease-landing */
+  --shadow-hard: var(--shadow-hard);       /* -> shadow-hard (kills shadow-[8px_8px_0_0_...]) */
+  --tracking-mega: 0.3em;                  /* -> tracking-mega (kills tracking-[0.3em]) */
 }
 
 /* ---------- Body baseline typography (Phase 2.2) ---------- */

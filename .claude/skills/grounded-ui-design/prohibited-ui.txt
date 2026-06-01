@@ -1,0 +1,12 @@
+# Prohibited UI features — reflects the CURRENT north-star (2026-05-17 redesign).
+# Stage ① scans proposals for these (regex, case-insensitive); any hit = FAIL.
+# NOTE: the 2026-05-10 spec KEPT a streak — do NOT trust old specs; this file is the source of truth.
+streak
+xp
+\bbadge
+leaderboard
+gamif
+points\b
+level.?up
+combo
+trophy

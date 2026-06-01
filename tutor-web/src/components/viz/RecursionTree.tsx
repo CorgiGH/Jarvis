@@ -1,11 +1,11 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
   animate,
   motionValue,
   useTransform,
   type MotionValue,
 } from "motion/react";
-import { AlgoStepperShell, type Frame } from "./AlgoStepperShell";
+import { AlgoStepperShell, type Frame, type ShellLayout } from "./AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "./theme";
 import {
   AnimatePresence,
@@ -442,14 +442,18 @@ function renderFrame(frame: Frame<RecursionState>): ReactNode {
   );
 }
 
-export function RecursionTree(): ReactNode {
+export function RecursionTree({ n = 5, layout }: { n?: number; layout?: ShellLayout } = {}): ReactNode {
+  // Parametric: data comes from a prop, not a hardcoded buildFibTrace(5).
+  // Default n=5 preserves the original zero-prop registry behaviour.
+  const frames = useMemo(() => (n === 5 ? FRAMES : buildFibTrace(n)), [n]);
   return (
     <AlgoStepperShell<RecursionState>
-      title="PA-1 · Recursion tree (fib 5)"
+      title={`PA-1 · Recursion tree (fib ${n})`}
       desc="Naïve recursive fibonacci. Left pane shows call stack growing/shrinking; right pane shows the recursion tree fanning out. Yellow node = current call. Greyed edges = returned subtrees."
-      frames={FRAMES}
+      frames={frames}
       renderFrame={renderFrame}
       testIdPrefix="recursion-tree"
+      layout={layout}
     />
   );
 }

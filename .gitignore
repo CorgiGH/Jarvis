@@ -33,3 +33,9 @@ review-screens/
 tools/*.png
 tools/node_modules/
 .claude/scheduled_tasks.lock
+
+# Stage-0 baseline (2026-06-01): ephemeral work dirs + exports + CI artifacts
+.tmp-*/
+.tmp-*.sql
+tutor-web/test-results/
+tutor-web/public/audio/
