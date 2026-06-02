@@ -15,6 +15,10 @@ beforeEach(() => {
   // Clear localStorage so last-task fallback doesn't leak between tests.
   try { localStorage.clear(); } catch (_) {}
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (typeof url === "string" && url.includes("/api/v1/me/export")) {
+      return new Response(JSON.stringify({ aiLiteracyConfirmed: true, user: { lang: "ro" } }),
+        { status: 200, headers: { "content-type": "application/json" } });
+    }
     if (typeof url === "string" && url.endsWith("/api/v1/tasks")) {
       return new Response(JSON.stringify({
         tasks: [{ id: "T-REAL", subject: "PS", title: "Tema A", deadline: new Date(Date.now() + 5 * 86400000).toISOString(), status: "ACTIVE" }],
@@ -52,6 +56,10 @@ test("Ã— close button clears last-task and returns to dashboard", async () =>
 test("real taskId pinned in URL renders TutorWorkspace", async () => {
   // Provide a /prep response so TutorWorkspace exits the skeleton state.
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (typeof url === "string" && url.includes("/api/v1/me/export")) {
+      return new Response(JSON.stringify({ aiLiteracyConfirmed: true, user: { lang: "ro" } }),
+        { status: 200, headers: { "content-type": "application/json" } });
+    }
     if (typeof url === "string" && url.endsWith("/api/v1/tasks")) {
       return new Response(JSON.stringify({
         tasks: [{ id: "T-REAL", subject: "PS", title: "Tema A", deadline: new Date(Date.now() + 5 * 86400000).toISOString(), status: "ACTIVE" }],

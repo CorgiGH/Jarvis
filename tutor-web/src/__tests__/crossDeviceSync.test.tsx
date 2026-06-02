@@ -17,6 +17,9 @@ afterEach(() => { vi.unstubAllGlobals(); });
 test("App prefers server jarvis_last_task cookie over localStorage on cold mount", async () => {
   localStorage.setItem("jarvis.lastTaskId", "TASK_LOCAL");
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (typeof url === "string" && url.includes("/api/v1/me/export")) {
+      return new Response(JSON.stringify({ aiLiteracyConfirmed: true, user: { lang: "ro" } }), { status: 200 });
+    }
     if (typeof url === "string" && url.includes("/api/v1/last-task")) {
       return new Response(JSON.stringify({ taskId: "TASK_SERVER" }), { status: 200 });
     }
@@ -43,6 +46,9 @@ test("App prefers server jarvis_last_task cookie over localStorage on cold mount
 test("App falls back to localStorage when server cookie absent", async () => {
   localStorage.setItem("jarvis.lastTaskId", "TASK_LOCAL");
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (typeof url === "string" && url.includes("/api/v1/me/export")) {
+      return new Response(JSON.stringify({ aiLiteracyConfirmed: true, user: { lang: "ro" } }), { status: 200 });
+    }
     if (typeof url === "string" && url.includes("/api/v1/last-task")) {
       return new Response(JSON.stringify({ taskId: null }), { status: 200 });
     }
