@@ -20,8 +20,26 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Fail-closed schema-ALTER precondition (M-DB). The backup MUST refuse if the
+# source corpus looks truncated, so the first Phase-1 ALTER can never run over
+# a culled/wrong-path DB. Default 800; the live corpus is ~871. Overridable via
+# the MIN_EXPECTED_CARDS env var (e.g. for tests / a deliberately smaller DB).
+DEFAULT_MIN_EXPECTED_CARDS = 800
+
 
 def main() -> int:
+    try:
+        min_expected_cards = int(
+            os.environ.get("MIN_EXPECTED_CARDS", DEFAULT_MIN_EXPECTED_CARDS)
+        )
+    except ValueError:
+        print(
+            f"ERROR: MIN_EXPECTED_CARDS env var is not an integer: "
+            f"{os.environ.get('MIN_EXPECTED_CARDS')!r}",
+            file=sys.stderr,
+        )
+        return 1
+
     # --- resolve paths ---
     db_path = Path(os.environ.get("JARVIS_DB", Path.home() / ".jarvis" / "tutor.db"))
     out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("./backups")
@@ -44,6 +62,16 @@ def main() -> int:
         src_count = src.execute("SELECT COUNT(*) FROM fsrs_cards").fetchone()[0]
     except sqlite3.OperationalError as exc:
         print(f"ERROR: cannot read fsrs_cards: {exc}", file=sys.stderr)
+        src.close()
+        return 1
+
+    # --- fail-closed floor: refuse BEFORE writing any dump (M-DB) ---
+    if src_count < min_expected_cards:
+        print(
+            f"ERROR: fsrs_cards={src_count} < MIN_EXPECTED_CARDS={min_expected_cards}"
+            f" — refusing backup (corpus looks truncated; do NOT migrate)",
+            file=sys.stderr,
+        )
         src.close()
         return 1
 
