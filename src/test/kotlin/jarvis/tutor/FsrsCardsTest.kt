@@ -31,6 +31,26 @@ class FsrsCardsTest {
     }
 
     @Test
+    fun `inserted card defaults to status ACTIVE (M-SEED)`() {
+        // M-SEED: a card inserted via the repo (incl. FsrsSeedMain seeds) is ACTIVE so it
+        // surfaces in the status='ACTIVE'-filtered queue. A null TutorCard.status -> ACTIVE.
+        val db = freshDb()
+        val u = TutorTypes.ulid()
+        UserRepo(db).insert(User(u, "v", UserScope.OWNER, Instant.now(), Instant.now()))
+        val repo = FsrsCardRepo(db)
+        val now = Instant.now()
+        repo.insert(
+            TutorCard(
+                TutorTypes.ulid(), u, FsrsSource.MANUAL, "ref",
+                "f", "b", FsrsState(2.5, 1.0, 0.9, now.minusSeconds(10), now, 0),
+            ),
+        )
+        val due = repo.findDueForUser(u, asOf = now)
+        assertEquals(1, due.size)
+        assertEquals(CardStatus.ACTIVE, due[0].status)
+    }
+
+    @Test
     fun `findDueForUser scopes to userId`() {
         val db = freshDb()
         val u1 = TutorTypes.ulid(); val u2 = TutorTypes.ulid()

@@ -2599,29 +2599,12 @@ fun Application.installTutorContext(dbPath: String, ledgerDir: Path) {
     val parent = Path.of(dbPath).parent ?: Path.of(".")
     Files.createDirectories(parent)
     val db = TutorDb.connect(dbPath)
-    transaction(db) {
-        SchemaUtils.createMissingTablesAndColumns(
-            UsersTable,
-            TokensTable,
-            SessionsTable,
-            MagicLinkTokensTable,        // Gate 2 — magic-link auth
-            AiLiteracyConfirmationTable, // Gate 2 — AI-literacy confirmation (AI Act Art. 4)
-            ConsentLogTable,             // Gate 2 — GDPR consent audit log
-            UserPreferencesTable,        // Gate 2 — per-user settings (hint mode, GDPR Art-18 logging pause)
-            TasksTable,
-            SensorEventsTable,
-            TrustGrantsTable,
-            AuditLinesTable,
-            KnowledgeGapsTable,
-            FsrsCardsTable,
-            ProviderConfigTable,
-            EffectorAttemptsTable,
-            jarvis.tutor.CardActionLogTable,
-            jarvis.tutor.taskdetect.DetectedTaskMappingTable,
-            TaskPrepTable,
-            jarvis.tutor.KcMasteryTable, // E1 trustworthy-grader — per-KC mastery
-        )
-    }
+    // Phase-1 migration runner (data-model-lock Task 3): registers all tables (incl. the
+    // CHANGE 4–10 new tables) + runs the explicit post-ALTER backfills (status='ACTIVE',
+    // kc_id, kc_mastery.phase replay) inside ONE try/catch guard. On a failed ALTER it names
+    // the failing column, fires an auto off-box backup, and aborts (recovery = restore-from-backup;
+    // SQLite ALTER is NOT transactional — M-PARTIAL). Idempotent (safe to run every boot — M-IDEMP).
+    jarvis.tutor.TutorMigration.migrate(db)
     // Bootstrap OWNER account (idempotent). This row is the fallback admin
     // identity; the auto-session route does NOT auto-login into it — callers
     // must authenticate via /auth/request-link + /auth/verify.

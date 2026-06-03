@@ -17,6 +17,11 @@ object KcMasteryTable : Table("kc_mastery") {
     val ewmaScore = double("ewma_score")
     val observations = integer("observations")
     val lastGradedAt = timestamp("last_graded_at")
+    // CHANGE 2 (added cols, nullable). `phase` STORED, not derived at call time; sole
+    // owner = PhaseModel.transition (called in the CHANGE-2 backfill + recordIn in Phase 3).
+    // `entry_phase` NULL => treat as intro.
+    val phase = varchar("phase", 16).nullable()
+    val entryPhase = varchar("entry_phase", 16).nullable()
     override val primaryKey = PrimaryKey(userId, kcId)
 }
 
@@ -26,7 +31,13 @@ data class KcMastery(
     val ewmaScore: Double,
     val observations: Int,
     val lastGradedAt: Instant,
+    // CHANGE 2 — null for a never-phased / pre-migration row.
+    val phase: Phase? = null,
+    val entryPhase: Phase? = null,
 ) {
+    /** entry_phase NULL => treat as intro (CHANGE 2 rule). */
+    val effectiveEntryPhase: Phase get() = entryPhase ?: Phase.intro
+
     /** Explicit mastery rule: sustained high EWMA over enough observations. */
     val mastered: Boolean get() = ewmaScore >= MASTERY_THRESHOLD && observations >= MIN_OBSERVATIONS
 
@@ -48,6 +59,8 @@ class KcMasteryRepo(private val db: Database) {
                     it[KcMasteryTable.userId], it[KcMasteryTable.kcId],
                     it[KcMasteryTable.ewmaScore], it[KcMasteryTable.observations],
                     it[KcMasteryTable.lastGradedAt],
+                    phase = it[KcMasteryTable.phase]?.let { p -> Phase.valueOf(p) },
+                    entryPhase = it[KcMasteryTable.entryPhase]?.let { p -> Phase.valueOf(p) },
                 )
             }
             .singleOrNull()

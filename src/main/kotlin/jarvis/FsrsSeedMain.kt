@@ -179,6 +179,9 @@ internal fun runSeedFsrs(args: List<String>) {
                             lastReviewedAt = nowTs,
                             lapses = 0,
                         ),
+                        // M-SEED (CHANGE 1): seeded cards are ACTIVE so they surface in the
+                        // status='ACTIVE'-filtered queue immediately.
+                        status = jarvis.tutor.CardStatus.ACTIVE,
                     ),
                 )
                 inserted++
