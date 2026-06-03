@@ -52,6 +52,12 @@ object PhaseModel {
      *         mastery genuinely drops below a threshold, e.g. retrieval->practice after bad runs).
      */
     fun transition(ewma: Double, observations: Int, mastered: Boolean, current: Phase?): Phase {
+        // DECISION (council 1780526710): phase MAY regress with mastery decay (FSRS is a
+        // forgetting model); `mastered` is the only floor; an entry_phase-floor + demotion/
+        // remediation semantics (NextPhaseAction.remediate, master-plan §4.1) are DEFERRED to
+        // Phase 3. `current` stays in the frozen signature for that future use (today it is
+        // consumed only for the null→intro resolution). No max(computed, current) floor anywhere.
+
         // mastered flag wins unconditionally — checked before anything else
         if (mastered) return Phase.mastered
 

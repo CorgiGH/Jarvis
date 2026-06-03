@@ -15,11 +15,13 @@ import kotlin.test.assertEquals
  *   retrieval : obs >= 3 AND ewma >= 0.65 AND NOT mastered
  *   mastered  : mastered == true  (== ewma≥0.8 && obs≥3, per KcMastery.MASTERY_THRESHOLD/MIN_OBSERVATIONS)
  *
- * No-regression rule: the returned phase is never LOWER than `current` (when non-null)
- * UNLESS mastery drops — that is, when a KC that was retrieval/mastered regresses below
- * the retrieval threshold based on new score, we allow the phase to drop.
- * Implemented as: result = max(computed, current) ONLY when mastered==false AND current!=null
- * AND the computed phase is not mastered.
+ * Regression IS allowed (DECISION, council 1780526710): there is NO no-regression floor.
+ * The returned phase is the raw phase computed from (ewma, observations) — it MAY be LOWER
+ * than `current` when mastery genuinely decays (FSRS is a forgetting model; a learner whose
+ * accuracy collapses SHOULD drop retrieval→practice so the tutor stops drilling closed-book
+ * recall on decayed knowledge). `current` is consumed ONLY for the null→intro resolution; the
+ * `mastered` flag is the sole floor (mastered==true ⇒ Phase.mastered unconditionally).
+ * There is no max(computed, current) anywhere — no test asserts one.
  */
 class PhaseModelTest {
 
@@ -128,16 +130,34 @@ class PhaseModelTest {
     }
 
     // ──────────────────────────────────────────────
-    // Group 6 — no-regression rule
+    // Group 6 — regression IS allowed (no floor); `mastered` is the sole floor
+    // (DECISION, council 1780526710 — these tests assert the FROZEN behavior:
+    //  the returned phase is the raw computed phase, NOT max(computed, current).)
     // ──────────────────────────────────────────────
 
     @Test
-    fun `phase_does_not_regress_below_current_within_retrieval_zone`() {
-        // current=retrieval; ewma=0.55 would compute practice, but no regression rule holds at retrieval
-        // UNLESS mastery genuinely drops — here ewma is 0.55, below the retrieval threshold of 0.65
-        // Rule: allow regression when computed < current AND mastered==false (mastery truly dropped)
-        // So retrieval -> practice IS allowed when ewma drops below retrieval threshold
+    fun `phase_regresses_retrieval_to_practice_when_ewma_decays`() {
+        // FROZEN-BEHAVIOR boundary test (council 1780526710): a KC currently at a HIGH phase
+        // (retrieval) whose (ewma, observations) now compute to a LOWER phase MUST regress to the
+        // LOWER computed phase — there is NO max(computed, current) floor. ewma=0.55 < 0.65
+        // retrieval threshold (obs=3) ⇒ computed=practice ⇒ returns practice, NOT retrieval.
         assertEquals(Phase.practice, PhaseModel.transition(0.55, 3, false, Phase.retrieval))
+    }
+
+    @Test
+    fun `phase_regresses_retrieval_to_intro_when_accuracy_collapses`() {
+        // Deeper collapse from a high current phase: ewma=0.2 < 0.50 ⇒ computed=intro.
+        // Asserts regression spans more than one bucket — current=retrieval ⇒ returns intro.
+        assertEquals(Phase.intro, PhaseModel.transition(0.2, 5, false, Phase.retrieval))
+    }
+
+    @Test
+    fun `mastered_flag_is_the_sole_floor_regardless_of_current`() {
+        // mastered==true ⇒ Phase.mastered unconditionally, even from a LOW current phase and
+        // regardless of `current`. This is the ONLY floor (line-56 `if (mastered) return mastered`).
+        assertEquals(Phase.mastered, PhaseModel.transition(0.95, 6, true, Phase.intro))
+        assertEquals(Phase.mastered, PhaseModel.transition(0.95, 6, true, null))
+        assertEquals(Phase.mastered, PhaseModel.transition(0.95, 6, true, Phase.retrieval))
     }
 
     @Test

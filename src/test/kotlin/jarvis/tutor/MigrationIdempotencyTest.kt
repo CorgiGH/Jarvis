@@ -80,6 +80,62 @@ class MigrationIdempotencyTest {
         c
     }
 
+    /**
+     * Seed N legacy fsrs_cards rows ALL sharing (user_id, source='MANUAL', kc_id absent/NULL),
+     * mirroring the 828 live cards. The legacy table has NO kc_id column yet — the migration ADDs
+     * it (NULL on every existing row) and creates the (user_id, source, kc_id) UNIQUE index. The
+     * whole live corpus coexists only because SQLite treats each NULL as DISTINCT in a UNIQUE
+     * index. Returns the seeded count.
+     */
+    private fun seedManyManualNullKcCards(db: Database, n: Int): Int {
+        transaction(db) { SchemaUtils.create(UsersTable) }
+        val userId = TutorTypes.ulid()
+        UserRepo(db).insert(User(userId, "v", UserScope.OWNER, Instant.now(), Instant.now()))
+        transaction(db) {
+            val ts = sqliteTs.format(Instant.now().minusSeconds(60))
+            // Legacy fsrs_cards shape: NO kc_id / status / paused_at columns (the migration adds them).
+            exec(
+                "CREATE TABLE IF NOT EXISTS fsrs_cards (" +
+                    "id VARCHAR(26) PRIMARY KEY, user_id VARCHAR(26), source VARCHAR(24), " +
+                    "source_ref VARCHAR(32), front TEXT, back TEXT, difficulty DOUBLE, " +
+                    "stability DOUBLE, retrievability DOUBLE, due_at TEXT, last_reviewed_at TEXT, lapses INT)",
+            )
+            repeat(n) {
+                val cardId = TutorTypes.ulid()
+                // Every row: SAME user_id, source='MANUAL', kc_id implicitly NULL (column absent).
+                exec(
+                    "INSERT INTO fsrs_cards (id, user_id, source, source_ref, front, back, difficulty, " +
+                        "stability, retrievability, due_at, last_reviewed_at, lapses) VALUES (" +
+                        "'$cardId','$userId','MANUAL','ref','f','b',5.0,0.5,1.0,'$ts','$ts',0)",
+                )
+            }
+        }
+        return n
+    }
+
+    /**
+     * Item (b) — NULL-distinct UNIQUE-index regression lock. Seeds 100 MANUAL/NULL-kc cards that
+     * all share (owner, 'MANUAL', NULL kc_id) — exactly like the 828 live cards — then runs the
+     * migration (which creates fsrs_cards_user_source_kc_unique) TWICE. Asserts: every row survives
+     * (COUNT unchanged) and NO unique-constraint violation / SQLiteException is thrown. This locks
+     * the SQLite-NULL-is-distinct assumption the entire live corpus depends on.
+     */
+    @Test
+    fun `100 MANUAL null-kc cards survive the unique index across two migrates`(@TempDir tmp: Path) {
+        val db = tempDb(tmp)
+        val seeded = seedManyManualNullKcCards(db, 100)
+        assertEquals(seeded, cardCount(db), "all seeded rows present before migrate")
+
+        // FIRST migrate — creates fsrs_cards_user_source_kc_unique over (user, source, kc_id).
+        // With all rows at (user, MANUAL, NULL), SQLite NULL-distinct must let them all coexist.
+        assertEquals(MigrationResult.Success, TutorMigration.migrate(db))
+        assertEquals(seeded, cardCount(db), "no row dropped by unique-index creation (NULL-distinct)")
+
+        // SECOND migrate — idempotent; index already present, still no constraint violation.
+        assertEquals(MigrationResult.Success, TutorMigration.migrate(db))
+        assertEquals(seeded, cardCount(db), "second migrate keeps every row (no unique violation)")
+    }
+
     @Test
     fun `migrate twice is safe — survival, ACTIVE, phase, no row loss, no error`(@TempDir tmp: Path) {
         val db = tempDb(tmp)

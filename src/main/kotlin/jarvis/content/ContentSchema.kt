@@ -76,6 +76,7 @@ data class KnowledgeConcept(
     val self_explanation_prompt: String? = null,
     /** SERVER decision: true = present the worked example before the drill.
      *  Surfaced in queue/today; consumed by Phase-5 DrillStack. Default = false. */
+    // content/authored default = false; the /queue serving layer (Phase 3) degrades to true when unauthored (worked-example-first scaffold for novices) — data-model-lock §default.
     val worked_example_first: Boolean = false,
 )
 

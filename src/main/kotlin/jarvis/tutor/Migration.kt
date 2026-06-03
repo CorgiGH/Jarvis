@@ -2,7 +2,9 @@ package jarvis.tutor
 
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 
 /**
  * Phase-1 migration runner (data-model-lock Task 3, master-impl-plan-v2 §2.1).
@@ -17,11 +19,13 @@ import org.jetbrains.exposed.sql.transactions.transaction
  *    column needs an explicit post-ALTER `UPDATE … WHERE col IS NULL` in the SAME boot txn.
  *  - SQLite `ALTER TABLE` is NOT transactional: a multi-column add that fails midway leaves
  *    the DB half-migrated and CANNOT be rolled back by the surrounding `transaction{}`. ⇒ on a
- *    failed ALTER we log the failing column, fire an auto off-box backup, and abort non-zero.
+ *    failed ALTER we log the failing column, fire an auto recovery backup, and abort non-zero.
  *    Recovery = restore-from-backup (M-PARTIAL).
- *  - Schema is NEVER ALTERed before a verified off-box `tools/db-backup.py` dump asserting
- *    MIN_EXPECTED_CARDS=800 (M-DB). The operator runs that BEFORE boot; the [backupHook] here
- *    is the M-PARTIAL *recovery* dump fired only when a mid-migration ALTER fails.
+ *  - Schema is NEVER ALTERed before a verified `tools/db-backup.py` dump asserting
+ *    MIN_EXPECTED_CARDS=800 (M-DB). The operator runs that BEFORE boot. By default db-backup.py
+ *    writes a LOCAL ./backups dir (SAME disk as the DB) — for a genuine OFF-DISK copy the operator
+ *    sets JARVIS_BACKUP_DIR to an off-disk/remote-mounted path (see [defaultBackupHook]). The
+ *    [backupHook] here is the M-PARTIAL *recovery* dump fired only when a mid-migration ALTER fails.
  *
  * IDEMPOTENT by design: `createMissingTablesAndColumns` only adds what is missing, and every
  * backfill is `WHERE col IS NULL`-guarded, so a second run is a no-op (M-IDEMP).
@@ -57,10 +61,14 @@ private val ALL_TABLES = arrayOf(
     KcVerificationStatusTable,
 )
 
-/** Outcome of a migration run. */
+/**
+ * Outcome of a migration run. Only [Success] exists: a failed migration THROWS
+ * [MigrationException] (after firing the M-PARTIAL backup hook), it never returns a Failure
+ * result — so a sealed Failure variant would be dead. Kept as a sealed class with the single
+ * Success object so callers `assertEquals(MigrationResult.Success, …)` keep compiling.
+ */
 sealed class MigrationResult {
     object Success : MigrationResult()
-    data class Failure(val failingColumn: String?, val cause: Throwable) : MigrationResult()
 }
 
 /**
@@ -80,9 +88,10 @@ object TutorMigration {
      *
      * @param db          the target DB (tests pass an in-memory / temp SQLite DB — NEVER the live DB).
      * @param backupHook  M-PARTIAL recovery hook, fired ONLY on a mid-migration failure (auto
-     *                    off-box dump). Default shells out to tools/db-backup.py. Tests pass a
-     *                    no-op / spy. The hook itself is best-effort — a backup failure must NOT
-     *                    mask the original migration error.
+     *                    recovery dump). Default shells out to tools/db-backup.py, writing to
+     *                    JARVIS_BACKUP_DIR (off-disk) when set, else a same-disk ./backups dir
+     *                    with a stderr warning. Tests pass a no-op / spy. The hook itself is
+     *                    best-effort — a backup failure must NOT mask the original migration error.
      * @param failAfter   TEST SEAM ONLY. When non-null, forces a failure naming this column AFTER
      *                    tables are created but during the backfill phase, to exercise the
      *                    abort + backup-trigger path (M-PARTIAL). Production callers leave it null.
@@ -129,7 +138,7 @@ object TutorMigration {
                     ": ${e.message?.take(200)}. Firing M-PARTIAL auto-backup; " +
                     "recovery = restore-from-backup (SQLite ALTER is NOT transactional).",
             )
-            // M-PARTIAL: fire the auto off-box dump. Best-effort — never let a backup failure
+            // M-PARTIAL: fire the auto recovery dump. Best-effort — never let a backup failure
             // swallow the original migration error.
             try {
                 backupHook(failingColumn)
@@ -168,14 +177,16 @@ object TutorMigration {
         for (r in rows) {
             val mastered = r.ewma >= KcMastery.MASTERY_THRESHOLD && r.obs >= KcMastery.MIN_OBSERVATIONS
             val phase = PhaseModel.transition(r.ewma, r.obs, mastered, current = null)
-            // Parameterized-by-escaping: user_id/kc_id are app-controlled ids (no quotes); the
-            // phase literal is a fixed enum name. Single-quote-escape defensively anyway.
-            val u = r.userId.replace("'", "''")
-            val k = r.kcId.replace("'", "''")
-            exec(
-                "UPDATE kc_mastery SET phase = '${phase.name}' " +
-                    "WHERE user_id = '$u' AND kc_id = '$k' AND phase IS NULL",
-            )
+            // Bound parameters via the Exposed update DSL (no manual single-quote escaping;
+            // matches the static-SQL hygiene of the sibling backfills above). The WHERE keeps the
+            // `phase IS NULL` guard so a re-run is a no-op (M-IDEMP).
+            KcMasteryTable.update({
+                (KcMasteryTable.userId eq r.userId) and
+                    (KcMasteryTable.kcId eq r.kcId) and
+                    KcMasteryTable.phase.isNull()
+            }) {
+                it[KcMasteryTable.phase] = phase.name
+            }
         }
     }
 
@@ -190,24 +201,40 @@ object TutorMigration {
     }
 
     /**
-     * Default M-PARTIAL recovery backup hook: shell out to tools/db-backup.py for an off-box dump.
+     * Default M-PARTIAL recovery backup hook: shell out to tools/db-backup.py for a recovery dump.
      * Best-effort and synchronous. Only fires on a mid-migration failure.
+     *
+     * Off-disk vs on-box: db-backup.py writes to whatever output dir it is given. When the
+     * JARVIS_BACKUP_DIR env var is set we pass that path — point it at an off-disk / remote-mounted
+     * location for a GENUINELY off-box copy. When it is unset we fall back to a same-disk ./backups
+     * dir and emit an explicit stderr WARNING (a same-disk backup does NOT survive a disk loss).
+     * No VPS host is hardcoded here — the off-disk target is operator-supplied via the env var.
      */
     private fun defaultBackupHook(failingColumn: String?) {
         val scriptPath = java.nio.file.Path.of("tools", "db-backup.py")
         if (!java.nio.file.Files.exists(scriptPath)) {
             System.err.println(
                 "[TutorMigration] M-PARTIAL: tools/db-backup.py not found at $scriptPath; " +
-                    "operator MUST take a manual off-box dump before restoring (failing column=$failingColumn).",
+                    "operator MUST take a manual off-disk dump before restoring (failing column=$failingColumn).",
             )
             return
         }
+        val offDiskDir = System.getenv("JARVIS_BACKUP_DIR")?.takeIf { it.isNotBlank() }
+        val outDir = if (offDiskDir != null) {
+            offDiskDir
+        } else {
+            System.err.println(
+                "[TutorMigration] WARNING: backup is on-box (same disk as the DB); set " +
+                    "JARVIS_BACKUP_DIR to an off-disk/remote-mounted path for a real off-box copy.",
+            )
+            "backups"
+        }
         try {
-            val proc = ProcessBuilder("python3", scriptPath.toString(), "backups")
+            val proc = ProcessBuilder("python3", scriptPath.toString(), outDir)
                 .redirectErrorStream(true)
                 .start()
             proc.waitFor()
-            System.err.println("[TutorMigration] M-PARTIAL auto-backup exit=${proc.exitValue()}")
+            System.err.println("[TutorMigration] M-PARTIAL auto-backup exit=${proc.exitValue()} (out=$outDir)")
         } catch (e: Throwable) {
             System.err.println("[TutorMigration] M-PARTIAL auto-backup invoke failed: ${e.message?.take(160)}")
         }
