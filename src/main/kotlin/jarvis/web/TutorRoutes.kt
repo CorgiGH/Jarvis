@@ -66,6 +66,10 @@ import jarvis.tutor.RcodeRedacted
 import jarvis.tutor.UsersTable
 import jarvis.tutor.CardActionLogTable
 import jarvis.tutor.taskdetect.DetectedTaskMappingTable
+import jarvis.tutor.AttemptsTable
+import jarvis.tutor.ExamDatesTable
+import jarvis.tutor.ReportWrongTable
+import jarvis.tutor.SessionSummariesTable
 import jarvis.tutor.csrfProtect
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -2178,6 +2182,15 @@ fun Application.installTutorRoutes() {
                         FsrsCardsTable.deleteWhere { FsrsCardsTable.userId eq uid }
                         KnowledgeGapsTable.deleteWhere { KnowledgeGapsTable.userId eq uid }
                         TokensTable.deleteWhere { TokensTable.userId eq uid }
+                        // B6 (Task 13) — Phase-1 user-scoped tables, child-first,
+                        // BEFORE SessionsTable/UsersTable. Under PRAGMA foreign_keys=ON
+                        // these must be deleted before the user row or the FK throws.
+                        // verification_audit + kc_verification_status are NOT user-scoped
+                        // (keyed on kc_id) and are intentionally excluded.
+                        SessionSummariesTable.deleteWhere { SessionSummariesTable.userId eq uid }
+                        AttemptsTable.deleteWhere { AttemptsTable.userId eq uid }
+                        ReportWrongTable.deleteWhere { ReportWrongTable.userId eq uid }
+                        ExamDatesTable.deleteWhere { ExamDatesTable.userId eq uid }
                         SessionsTable.deleteWhere { SessionsTable.userId eq uid }
                         UsersTable.deleteWhere { UsersTable.id eq uid }
                     }

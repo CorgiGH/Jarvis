@@ -2,6 +2,7 @@ package jarvis.tutor
 
 import jarvis.ChatMessage
 import jarvis.Llm
+import jarvis.content.SourceRef
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -27,6 +28,16 @@ data class Problem(
     val referenceSolution: String? = null,
     val canonicalAnswer: String? = null,
     val shape: String? = null,   // descriptive: computational|proof-derivation|design-implement|analysis-trace|fact-conceptual
+    // L4 (Phase 1, CHANGE 8) — added with defaults; no DDL (JSON blob in task_prep.problems_json).
+    // tutorJson (TutorTypes.kt:75) has ignoreUnknownKeys=true + encodeDefaults=true → back-compat.
+    /** Verbatim citations to source-of-record documents. Written by Phase-3 P3-GEN; read by
+     *  the verification engine. Back-compat default = emptyList(). */
+    val sourceRefs: List<SourceRef> = emptyList(),
+    /** Model that generated this problem (relay model string, e.g. "claude-sonnet-4-5").
+     *  WRITER is Phase-3 TASK P3-GEN — Phase 1 only declares the field.
+     *  NEVER set to the criticUsed="relay/claude" literal (TutorRoutes.kt:1520).
+     *  Back-compat default = null. */
+    val modelTag: String? = null,
 )
 
 object PdfProblemExtractor {
