@@ -2,6 +2,7 @@ package jarvis.tutor
 
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.Transaction
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.javatime.timestamp
@@ -69,29 +70,59 @@ class KcMasteryRepo(private val db: Database) {
 
     // NOTE: read-then-write. Safe for the current single-user deployment (writes serialize on
     // SQLite). If multi-user lands, replace with an atomic upsert to avoid a TOCTOU PK race.
-    /** Apply one graded score via the EWMA rule; upsert and return the updated mastery. */
-    fun record(userId: String, kcId: String, score: Double, now: Instant = Instant.now()): KcMastery =
-        transaction(db) {
-            val existing = readRow(userId, kcId)
-            val newEwma =
-                if (existing == null) score
-                else KcMastery.EWMA_ALPHA * score + (1 - KcMastery.EWMA_ALPHA) * existing.ewmaScore
-            val newObs = (existing?.observations ?: 0) + 1
-            if (existing == null) {
-                KcMasteryTable.insert {
-                    it[KcMasteryTable.userId] = userId
-                    it[KcMasteryTable.kcId] = kcId
-                    it[ewmaScore] = newEwma
-                    it[observations] = newObs
-                    it[lastGradedAt] = now
-                }
-            } else {
-                KcMasteryTable.update({ (KcMasteryTable.userId eq userId) and (KcMasteryTable.kcId eq kcId) }) {
-                    it[ewmaScore] = newEwma
-                    it[observations] = newObs
-                    it[lastGradedAt] = now
-                }
+
+    /**
+     * NEW (B3, §G) — txn-LESS. Caller owns the transaction; opens NO transaction of its own.
+     *
+     * Applies one graded score via the EWMA rule AND computes the new Phase (via
+     * PhaseModel.transition) and upserts kc_mastery.ewma_score/observations/last_graded_at
+     * AND .phase in the SAME caller-owned txn.
+     *
+     * PhaseModel is called ONLY here (and the CHANGE-2 backfill in TutorMigration).
+     *
+     * @param tx  The caller's Exposed Transaction — all writes target this txn.
+     */
+    fun recordIn(
+        tx: Transaction,
+        userId: String,
+        kcId: String,
+        score: Double,
+        now: Instant = Instant.now(),
+    ): KcMastery {
+        // Use the caller's transaction as the implicit receiver for Exposed table ops.
+        // (Exposed table DSL methods like selectAll/insert/update use the thread-local
+        //  transaction context; since the caller owns the txn, this executes inside it.)
+        val existing = readRow(userId, kcId)
+        val newEwma =
+            if (existing == null) score
+            else KcMastery.EWMA_ALPHA * score + (1 - KcMastery.EWMA_ALPHA) * existing.ewmaScore
+        val newObs = (existing?.observations ?: 0) + 1
+        val computedMastered = newEwma >= KcMastery.MASTERY_THRESHOLD && newObs >= KcMastery.MIN_OBSERVATIONS
+        val newPhase = PhaseModel.transition(newEwma, newObs, computedMastered, current = existing?.phase)
+        if (existing == null) {
+            KcMasteryTable.insert {
+                it[KcMasteryTable.userId] = userId
+                it[KcMasteryTable.kcId] = kcId
+                it[ewmaScore] = newEwma
+                it[observations] = newObs
+                it[lastGradedAt] = now
+                it[phase] = newPhase.name
             }
-            KcMastery(userId, kcId, newEwma, newObs, now)
+        } else {
+            KcMasteryTable.update({ (KcMasteryTable.userId eq userId) and (KcMasteryTable.kcId eq kcId) }) {
+                it[ewmaScore] = newEwma
+                it[observations] = newObs
+                it[lastGradedAt] = now
+                it[phase] = newPhase.name
+            }
         }
+        return KcMastery(userId, kcId, newEwma, newObs, now, phase = newPhase)
+    }
+
+    /**
+     * Thin wrapper (§G back-compat). Opens ONE transaction(db){ recordIn(this, …) }.
+     * Existing callers of record() keep working unchanged.
+     */
+    fun record(userId: String, kcId: String, score: Double, now: Instant = Instant.now()): KcMastery =
+        transaction(db) { recordIn(this, userId, kcId, score, now) }
 }

@@ -4,11 +4,13 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.Transaction
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.update
 import java.time.Instant
 
 enum class FsrsSource { GAP_PROMOTION, RUBRIC_CRITERION, MANUAL }
@@ -52,7 +54,14 @@ object FsrsCardsTable : Table("fsrs_cards") {
     val status = varchar("status", 16).nullable()
     val pausedAt = timestamp("paused_at").nullable()
     override val primaryKey = PrimaryKey(id)
-    init { index(false, userId, dueAt) }
+    init {
+        index(false, userId, dueAt)
+        // CHANGE 1 / Task 9 (B2, §H): dedup key for RUBRIC_CRITERION cards.
+        // uniqueIndex so a second raw INSERT for the same (userId, source, kcId) is storage-rejected
+        // (mirrors TasksTable.uniqueIndex pattern).  GAP_PROMOTION / MANUAL cards have kcId=NULL and
+        // SQLite treats each NULL as distinct, so the unique constraint does NOT block them.
+        uniqueIndex("fsrs_cards_user_source_kc_unique", userId, sourceType, kcId)
+    }
 }
 
 class FsrsCardRepo(private val db: Database) {
@@ -95,6 +104,83 @@ class FsrsCardRepo(private val db: Database) {
         FsrsCardsTable.selectAll()
             .where { (FsrsCardsTable.id eq cardId) and (FsrsCardsTable.userId eq userId) }
             .singleOrNull()?.toCard()
+    }
+
+    /**
+     * NEW (B2, §H) — SELECT-then-UPDATE-or-INSERT inside the CALLER's txn (no own transaction).
+     *
+     * Dedup key = (userId, source=RUBRIC_CRITERION, kcId): one card per (user, KC).
+     * A re-call UPDATEs the existing row's front/back/state, never inserts a duplicate.
+     *
+     * Needs the kc_id column (CHANGE 1, Task 4) and the (userId, sourceType, kcId) unique index.
+     * GAP_PROMOTION / MANUAL cards never go through this method; they keep kc_id=NULL (§H note).
+     *
+     * @param tx       The caller's Exposed Transaction.
+     * @param userId   The owner user id.
+     * @param kcId     The KC id — stored in the new kc_id column AND used as the dedup key.
+     * @param front    The card front text (stem_template ?: name_en, resolved by caller).
+     * @param back     The card back text (canonicalAnswer, resolved by caller).
+     * @param state    The FSRS scheduling state for the new/updated card.
+     * @return         The upserted TutorCard.
+     */
+    fun upsertRubricCriterion(
+        tx: Transaction,
+        userId: String,
+        kcId: String,
+        front: String,
+        back: String,
+        state: FsrsState,
+    ): TutorCard {
+        val existing = FsrsCardsTable.selectAll()
+            .where {
+                (FsrsCardsTable.userId eq userId) and
+                    (FsrsCardsTable.sourceType eq FsrsSource.RUBRIC_CRITERION.name) and
+                    (FsrsCardsTable.kcId eq kcId)
+            }
+            .singleOrNull()
+        return if (existing == null) {
+            // INSERT: new card for this (user, RUBRIC_CRITERION, kc)
+            val newId = TutorTypes.ulid()
+            FsrsCardsTable.insert {
+                it[id] = newId
+                it[FsrsCardsTable.userId] = userId
+                it[sourceType] = FsrsSource.RUBRIC_CRITERION.name
+                // sourceRef = kcId (the rubric/stem id per §H)
+                it[sourceRef] = kcId
+                it[FsrsCardsTable.front] = front
+                it[FsrsCardsTable.back] = back
+                it[difficulty] = state.difficulty
+                it[stability] = state.stability
+                it[retrievability] = state.retrievability
+                it[dueAt] = state.dueAt
+                it[lastReviewedAt] = state.lastReviewedAt
+                it[lapses] = state.lapses
+                it[FsrsCardsTable.kcId] = kcId
+                it[status] = CardStatus.ACTIVE.name
+                it[pausedAt] = null
+            }
+            FsrsCardsTable.selectAll()
+                .where { FsrsCardsTable.id eq newId }
+                .single()
+                .toCard()
+        } else {
+            // UPDATE: re-grade → update front/back/state (never change the id or source)
+            val existingId = existing[FsrsCardsTable.id]
+            FsrsCardsTable.update({ FsrsCardsTable.id eq existingId }) {
+                it[FsrsCardsTable.front] = front
+                it[FsrsCardsTable.back] = back
+                it[difficulty] = state.difficulty
+                it[stability] = state.stability
+                it[retrievability] = state.retrievability
+                it[dueAt] = state.dueAt
+                it[lastReviewedAt] = state.lastReviewedAt
+                it[lapses] = state.lapses
+            }
+            FsrsCardsTable.selectAll()
+                .where { FsrsCardsTable.id eq existingId }
+                .single()
+                .toCard()
+        }
     }
 
     private fun ResultRow.toCard() = TutorCard(
