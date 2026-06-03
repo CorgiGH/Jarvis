@@ -159,10 +159,85 @@ object ContentValidator {
             issues += checkBilingual(sub)
             issues += checkVerbatimSources(sub, sourceText)
             issues += checkVizReferences(sub, validVizIds)
+            issues += checkStrictGrounding(sub)
+            issues += checkVerificationStatusEnum(sub)
         }
         val ok = issues.none { it.severity == "error" }
         return ValidationReport(ok = ok, disclaimer = DISCLAIMER, issues = issues)
     }
+
+    /**
+     * H11 — Strict-grounding check (CHANGE 3 / B4).
+     *
+     * When grounding_tier == "strict", ALL of the following are required:
+     *   - anchored span present (at least one ref with span != null)
+     *   - vision-confirmed (all refs with spans must have provenance == "vision-confirmed")
+     *   - invariant != null
+     *   - grader_rules non-empty
+     *
+     * The span + provenance conditions are ALREADY enforced in checkVerbatimSources; this
+     * function adds the invariant + grader_rules conditions and emits ALL failing conditions
+     * TOGETHER in ONE aggregated issue (H11 "additive not double-error").
+     *
+     * Non-strict KCs are unaffected.
+     */
+    fun checkStrictGrounding(sub: LoadedSubject): List<ValidationIssue> {
+        val issues = mutableListOf<ValidationIssue>()
+        for (kc in sub.kcs) {
+            if (kc.grounding_tier != "strict") continue
+            val failing = mutableListOf<String>()
+            // Check invariant
+            if (kc.invariant == null) failing += "invariant is null (required for strict KC)"
+            // Check grader_rules
+            if (kc.grader_rules.isEmpty()) failing += "grader_rules is empty (required for strict KC)"
+            if (failing.isNotEmpty()) {
+                issues += ValidationIssue(
+                    severity = "error",
+                    rule = "strict_grounding",
+                    subject = sub.subject,
+                    detail = "KC '${kc.id}': strict grounding missing: ${failing.joinToString("; ")}",
+                )
+            }
+        }
+        return issues
+    }
+
+    /**
+     * H11 — verification_status enum check (CHANGE 3 / B4).
+     *
+     * Every KC and Misconception must have a verification_status that is one of the
+     * four AUTHORED literals: {unverified, pending, faithful, uncertain}.
+     * "failed" is runtime-only (never authored in YAML) and is rejected here.
+     */
+    fun checkVerificationStatusEnum(sub: LoadedSubject): List<ValidationIssue> {
+        val issues = mutableListOf<ValidationIssue>()
+        for (kc in sub.kcs) {
+            if (kc.verification_status !in AUTHORED_VERIFICATION_STATUSES) {
+                issues += ValidationIssue(
+                    severity = "error",
+                    rule = "verification_status_enum",
+                    subject = sub.subject,
+                    detail = "KC '${kc.id}': verification_status='${kc.verification_status}' " +
+                        "is not an authored literal (must be one of $AUTHORED_VERIFICATION_STATUSES)",
+                )
+            }
+        }
+        for (m in sub.misconceptions) {
+            if (m.verification_status !in AUTHORED_VERIFICATION_STATUSES) {
+                issues += ValidationIssue(
+                    severity = "error",
+                    rule = "verification_status_enum",
+                    subject = sub.subject,
+                    detail = "misconception '${m.id}': verification_status='${m.verification_status}' " +
+                        "is not an authored literal (must be one of $AUTHORED_VERIFICATION_STATUSES)",
+                )
+            }
+        }
+        return issues
+    }
+
+    /** The four authored verification_status literals. "failed" is runtime-only, never in YAML. */
+    val AUTHORED_VERIFICATION_STATUSES: Set<String> = setOf("unverified", "pending", "faithful", "uncertain")
 
     private fun normalizeWs(s: String): String = s.replace(WS_RE, " ").trim()
 
