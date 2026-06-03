@@ -26,6 +26,33 @@ private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | s
                              or ./google-token.json.
 """
 
+/**
+ * Phase-1 operator tool: apply TutorMigration to the DB at $JARVIS_DB
+ * (default ~/.jarvis/tutor.db). Runs the idempotent schema migration + post-ALTER
+ * backfills. The card cull (tools/card-cull.sql) is a SEPARATE step run BEFORE this
+ * (deploy runbook). Prints fsrs_cards count before/after; exits non-zero on failure
+ * (M-PARTIAL fires an auto-backup; recover by restoring the pre-migration dump).
+ */
+private fun runMigrate(pathArg: String?) {
+    val dbPath = pathArg
+        ?: System.getenv("JARVIS_DB")
+        ?: (System.getProperty("user.home") + "/.jarvis/tutor.db")
+    System.err.println("[migrate] target DB = $dbPath")
+    val db = jarvis.tutor.TutorDb.connect(dbPath)
+    fun cardCount(): Long = org.jetbrains.exposed.sql.transactions.transaction(db) {
+        exec("SELECT COUNT(*) FROM fsrs_cards") { rs -> if (rs.next()) rs.getLong(1) else 0L } ?: 0L
+    }
+    val before = try { cardCount() } catch (e: Exception) { -1L }
+    try {
+        jarvis.tutor.TutorMigration.migrate(db)
+    } catch (e: jarvis.tutor.MigrationException) {
+        System.err.println("[migrate] FAILURE at column=${e.failingColumn}: ${e.message}")
+        exitProcess(1)
+    }
+    val after = cardCount()
+    println("[migrate] SUCCESS — fsrs_cards before=$before after=$after")
+}
+
 fun main(args: Array<String>) {
     when (args.firstOrNull()) {
         null, "chat" -> runBlocking { runChat() }
@@ -46,6 +73,7 @@ fun main(args: Array<String>) {
             )
         }
         "migrate-concept-refs" -> runMigrateConceptRefs()
+        "migrate" -> runMigrate(args.getOrNull(1))
         "seed-fsrs" -> runSeedFsrs(args.drop(1).toList())
         "import-anki" -> {
             val subject = args.getOrNull(1)
