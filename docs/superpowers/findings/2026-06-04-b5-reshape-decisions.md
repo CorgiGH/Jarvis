@@ -26,6 +26,7 @@ Logic + content reshape COMPLETE + tested (1108 green) + dry-run confirms 001-00
 
 ## Open / deferred
 
-- **B5r-6 (next):** wire the local NLI as a `Leg` (family-B) in the AUDIT path (verifyContent CLI / VerificationRunner), reusing the JVM→py3.12 bridge + the SUPPORTED/REFUTED/UNCLEAR contract; behind `JARVIS_PYTHON3`; PC-side only (VPS serve-only per D7).
+- **B5r-6 (IN PROGRESS):** wire the local NLI as a `Leg` (family-B) in the AUDIT path.
+  - **D-R12 (B5r-6):** new `LegFamily.NLI` + `NliEntailmentLlm : Llm` adapter. Its `complete(messages)` parses premise (after "SOURCE QUOTE:") + hypothesis (the CLAIM content, before "STATED INVARIANT:"/"SOURCE QUOTE:") out of the deriver's prompt, runs an EMBEDDED python NLI runner via ProcessBuilder under `JARVIS_PYTHON3` (same proven py3.12 bridge), maps argmax + abstain-floor 0.60 → returns "SUPPORTED"/"REFUTED"/"UNCLEAR". Low-confidence → UNCLEAR, NEVER silent SUPPORTED (council R2). Python/model absent ⇒ THROWS ⇒ the leg's `anyThrew` fires ⇒ FAIL-LOUD (never a silent pass). Wired ONLY at `VerifyContentCli` legB (PC-side audit, D7); the VPS request-path `TrustRoutes` legB stays OpenRouter (VPS can't load the model). Frozen deriver/Leg interface UNCHANGED.
 - **B5r-7:** live acceptance via the OFFLINE verifyContent CLI (off-box DB dump first): prove ≥1 KC lights "matches your lecture" (grounded/faithful) with page_anchor LIVE + a mutated quote REJECTED.
 - coverage monitor (council R2); report_wrong REVERIFY lifecycle; F2 gate wiring default-OFF — all still deferred to after the live acceptance.

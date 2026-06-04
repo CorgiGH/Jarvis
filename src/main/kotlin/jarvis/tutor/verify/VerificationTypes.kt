@@ -75,7 +75,13 @@ data class NonLlmResult(
 /**
  * §L — each verification leg is tagged with its CONFIGURED family. Collapse = two legs
  * share a family (NOT a model-string compare — both clients substitute a non-blank id).
- * Family A = `RelayLlm` (RELAY), family B = `OpenRouterChatLlm :free` (OPENROUTER),
- * non-LLM leg = `NONLLM`. Used by `TwoFamilyDeriver` to detect FAMILY_COLLAPSE.
+ * Family A = `RelayLlm` (RELAY), family B = `OpenRouterChatLlm :free` (OPENROUTER) on the VPS
+ * request path, or `NliEntailmentLlm` (NLI) on the PC-side offline audit path (D6/D-R12 — a LOCAL
+ * NLI entailment model, a TRULY-independent family that is not network-throttled and not a 2nd
+ * :free LLM). non-LLM leg = `NONLLM`. Used by `TwoFamilyDeriver` to detect FAMILY_COLLAPSE.
+ *
+ * NOTE: not a frozen wire literal (it is carried only into the human-readable audit detail string),
+ * so adding NLI does not break the §L lock; but the exhaustive-shape unit test in
+ * `VerificationTypesTest` is updated in lockstep.
  */
-enum class LegFamily { RELAY, OPENROUTER, NONLLM }
+enum class LegFamily { RELAY, OPENROUTER, NONLLM, NLI }

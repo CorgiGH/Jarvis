@@ -28,8 +28,11 @@ class VerificationTypesTest {
     }
 
     @Test
-    fun `LegFamily has exactly RELAY OPENROUTER NONLLM`() {
-        assertEquals(listOf("RELAY", "OPENROUTER", "NONLLM"), LegFamily.entries.map { it.name })
+    fun `LegFamily has RELAY OPENROUTER NONLLM plus the D6 NLI family`() {
+        // §L was {RELAY, OPENROUTER, NONLLM}; D6/D-R12 adds NLI (the PC-side local-entailment family
+        // wired as the offline audit's family-B). LegFamily is not a frozen WIRE literal (it lives only
+        // in the audit detail string), so adding NLI is additive, not a lock break.
+        assertEquals(listOf("RELAY", "OPENROUTER", "NONLLM", "NLI"), LegFamily.entries.map { it.name })
     }
 
     @Test

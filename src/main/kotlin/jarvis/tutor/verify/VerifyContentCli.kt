@@ -116,14 +116,18 @@ object VerifyContentCli {
 
     /**
      * Build the real two-family + non-LLM runner from the env-provisioned families. Family A = RELAY
-     * (`RelayLlm`), family B = OPENROUTER (`OpenRouterChatLlm` :free); the non-LLM leg is per-subject
+     * (`RelayLlm`); family B = NLI (`NliEntailmentLlm`) — a LOCAL DeBERTa-v3 entailment model run via
+     * the py3.12 ProcessBuilder bridge (D6 / D-R12). The NLI swap makes family-B a TRULY-independent
+     * family that is not network-throttled and is not a 2nd OpenRouter `:free` LLM (the old false-
+     * independence + 429 trap). PC-side / OFFLINE ONLY (D7): the VPS request path (`TrustRoutes` legB)
+     * deliberately STAYS OpenRouter — the VPS must not load a model. The non-LLM leg is per-subject
      * (PA ⇒ SymPy, else NONE), and the raw source is the LIVE `_sources/{doc}.md` extraction.
      */
     private fun liveRunner(db: org.jetbrains.exposed.sql.Database, repo: ContentRepo): VerificationRunner =
         VerificationRunner(
             db = db,
             legA = TwoFamilyDeriver.Leg(LegFamily.RELAY, jarvis.RelayLlm()),
-            legB = TwoFamilyDeriver.Leg(LegFamily.OPENROUTER, jarvis.OpenRouterChatLlm()),
+            legB = TwoFamilyDeriver.Leg(LegFamily.NLI, jarvis.NliEntailmentLlm()),
             nonLlmLegFor = { subject -> nonLlmLegFor(subject) },
             rawSourceFor = { claim ->
                 val doc = claim.source?.doc
