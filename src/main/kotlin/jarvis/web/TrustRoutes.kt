@@ -31,7 +31,6 @@ import jarvis.tutor.csrfProtect
 import jarvis.tutor.verify.CitationGuard
 import jarvis.tutor.verify.CitedClaim
 import jarvis.tutor.verify.HonestFloor
-import jarvis.tutor.verify.honestFloorOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -146,6 +145,18 @@ internal fun badgeTextFor(status: VerificationStatus): String =
         else -> "unverified"
     }
 
+/**
+ * B5r-2 (D-R5) — the PINNED badge copy keyed on the SERVED honest floor, not the raw status. The
+ * locked product rule: the lecture badge promises lecture-GROUNDING (every cited quote relocates
+ * LIVE), not the stronger cross-checked `faithful`, so a `faithful` KC AND a merely `lecture_grounded`
+ * KC carry the SAME user-facing string. NEVER "verified correct" (§P / master §1).
+ */
+internal fun badgeTextForFloor(floor: HonestFloor): String =
+    when (floor) {
+        HonestFloor.FAITHFUL_TO_SOURCE -> "matches your lecture / faithful to your source"
+        HonestFloor.UNVERIFIED -> "unverified"
+    }
+
 /** Helpers shared by the routes + the offline CLI. */
 object VerifyAdmin {
     /** The real two-family + non-LLM runner from the env-provisioned families (offline). */
@@ -212,6 +223,52 @@ object VerifyAdmin {
             VerificationStatus.faithful
         } else {
             VerificationStatus.unverified
+        }
+    }
+
+    /**
+     * B5r-2 (D-R5/D-R6) — the SERVED honest floor, DECOUPLED from the strict `faithful` status. The
+     * lecture badge promises lecture-GROUNDING, not the stronger cross-checked `faithful`. Returns
+     * [HonestFloor.FAITHFUL_TO_SOURCE] (⇒ the "matches your lecture / faithful to your source" badge)
+     * when EITHER:
+     *   - the B8 row's status is `faithful`, OR
+     *   - the B8 row's `lecture_grounded == true` (a grounded KC that is only `uncertain` — e.g. an
+     *     equational claim still awaiting its math check — still lights the lecture badge, D-R5),
+     * and in BOTH cases ONLY after the SAME D8 [contentHash] staleness gate passes. Otherwise
+     * [HonestFloor.UNVERIFIED].
+     *
+     * CRITICAL (D-R6) — the D8 staleness gate wraps `lecture_grounded` EXACTLY as it wraps `faithful`:
+     * a hash mismatch (lecture edited after the audit), a NULL `content_hash`, a NULL `lecture_grounded`
+     * (legacy/partial row), or no live [kc] to recompute against ⇒ fail CLOSED to `UNVERIFIED`. A
+     * grounded badge over edited / unproven content is forbidden, same severity as a faithful one.
+     *
+     * NOTE: this is a SERVE-ONLY display floor — it does NOT change [resolveStatus]; the served
+     * `verification_status` stays honest (a grounded-but-not-faithful KC reports `uncertain`).
+     */
+    fun servedHonestFloor(
+        db: org.jetbrains.exposed.sql.Database,
+        kcId: String,
+        kc: KnowledgeConcept?,
+    ): HonestFloor = transaction(db) {
+        val row = KcVerificationStatusTable.selectAll()
+            .where { KcVerificationStatusTable.kcId eq kcId }
+            .singleOrNull()
+            ?: return@transaction HonestFloor.UNVERIFIED
+
+        val status = row[KcVerificationStatusTable.status]
+            .let { runCatching { VerificationStatus.valueOf(it) }.getOrNull() }
+        val grounded = row[KcVerificationStatusTable.lectureGrounded] == true
+        // The lecture badge is gated on faithful OR grounded — but NOTHING shows without fresh content.
+        if (status != VerificationStatus.faithful && !grounded) return@transaction HonestFloor.UNVERIFIED
+
+        // D8 staleness gate — wraps `lecture_grounded` EXACTLY as it wraps `faithful`. Fail CLOSED
+        // unless the audited content_hash and the live-content hash both exist AND match.
+        val rowHash = row[KcVerificationStatusTable.contentHash]
+        val currentHash = kc?.let { ContentReconcile.kcContentHash(it) }
+        if (rowHash != null && currentHash != null && rowHash == currentHash) {
+            HonestFloor.FAITHFUL_TO_SOURCE
+        } else {
+            HonestFloor.UNVERIFIED
         }
     }
 
@@ -355,13 +412,19 @@ fun Route.installTrustRoutes() {
                 }
             }
 
+            // B5r-2 (D-R5/D-R6): the SERVED badge + honest floor are DECOUPLED from the strict
+            // `faithful` status — a `lecture_grounded` KC (cited quotes all relocate LIVE) lights the
+            // "matches your lecture" badge even at `uncertain`, while `verification_status` stays
+            // honest. The D8 staleness gate wraps grounded EXACTLY as it wraps faithful (stale / NULL
+            // hash / NULL grounded ⇒ fail closed to UNVERIFIED). verification_status is unchanged.
+            val servedFloor = VerifyAdmin.servedHonestFloor(ctx.db, kcId, kc)
             call.respond(
                 HttpStatusCode.OK,
                 ApiVerifyStatusReply(
                     verification_status = status,
-                    badge_text = badgeTextFor(status),
+                    badge_text = badgeTextForFloor(servedFloor),
                     claims = claims,
-                    honest_floor = honestFloorOf(status),
+                    honest_floor = servedFloor,
                 ),
             )
         }

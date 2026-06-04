@@ -140,6 +140,14 @@ class VerificationRunnerTest {
             .count().toInt()
     }
 
+    /** Read the B5r-2 `lecture_grounded` column for a KC (null when the column is unset/legacy). */
+    private fun groundedOf(db: Database, kcId: String): Boolean? = transaction(db) {
+        KcVerificationStatusTable.selectAll()
+            .where { KcVerificationStatusTable.kcId eq kcId }
+            .singleOrNull()
+            ?.get(KcVerificationStatusTable.lectureGrounded)
+    }
+
     // --- TESTS ---------------------------------------------------------------------------------
 
     @Test
@@ -744,6 +752,81 @@ class VerificationRunnerTest {
         // a thrown LLM leg must block faithful even when the round-trip would pass.
         val b = runner(dbB, legALlm = ThrowingLlm(), nonLlm = noneLeg).audit(listOf(c))
         assertNotEquals(VerificationStatus.faithful, b[0].newStatus, "a thrown leg blocks faithful for a DEFINITION too")
+    }
+
+    // --- B5-RESHAPE (B5r-2): finalizeKc writes the KC-level `lecture_grounded` signal ----------
+
+    @Test
+    fun `B5r-2 finalizeKc - a KC whose claims all round-trip with no failed is lecture_grounded=true`(@TempDir tmp: Path) = runBlocking {
+        // grounded := (every claim's roundTrip.pass) AND (no claim resolved to failed). Here a single
+        // DEFINITION whose quote round-trips against the live source + NONE non-LLM leg ⇒ faithful AND
+        // grounded. The B8 row records lecture_grounded=true.
+        val db = freshDb(tmp)
+        val c = definitionClaim()
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        runner(db, nonLlm = noneLeg).audit(listOf(c))
+
+        assertEquals(true, groundedOf(db, c.kcId), "all-round-tripped + no-failed ⇒ lecture_grounded=true")
+    }
+
+    @Test
+    fun `B5r-2 finalizeKc - a purely-uncertain-but-round-tripped KC is lecture_grounded=true (D-R6)`(@TempDir tmp: Path) = runBlocking {
+        // D-R6: an equational INVARIANT with NO machine checker (NONLLM_LEG_NONE) floors to `uncertain`,
+        // NOT faithful — yet its quote round-trips LIVE and no claim failed ⇒ the KC is still GROUNDED.
+        // This is the decoupling: grounded=true while status=uncertain (NOT faithful). The non-LLM leg
+        // is genuinely NONE (kind=NONE, ran=false) so the equational claim takes the case-4 uncertain
+        // floor (never-ran ≠ disagreed), NOT failed.
+        val db = freshDb(tmp)
+        val c = claim()  // equational INVARIANT, bothSupported + round-trip passes
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        val out = runner(db, nonLlm = noneLeg).audit(listOf(c))
+
+        assertEquals(VerificationStatus.uncertain, out[0].newStatus, "an equational claim with NO machine check ⇒ uncertain floor")
+        assertEquals("uncertain", statusOf(db, c.kcId), "the KC is NOT faithful")
+        // …but its quote relocated LIVE and nothing failed ⇒ grounded.
+        assertEquals(true, groundedOf(db, c.kcId), "round-tripped + no-failed but uncertain ⇒ lecture_grounded=true (D-R6)")
+    }
+
+    @Test
+    fun `B5r-2 finalizeKc - a KC with ANY failed claim is lecture_grounded=false (D-R6)`(@TempDir tmp: Path) = runBlocking {
+        // D-R6: a `failed` claim SUPPRESSES grounding (a contradicted claim ≠ "matches your lecture").
+        // A DEFINITION whose quote does NOT round-trip ⇒ failed ⇒ grounded=false.
+        val db = freshDb(tmp)
+        val c = definitionClaim(
+            source = SourceRef(
+                doc = "pa-lecture-01",
+                quote = "A QUOTE THAT IS ABSENT FROM THE LIVE SOURCE so the round-trip fails zzz",
+                page = 2,
+                span = Span(0, 1),
+            ),
+        )
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        val out = runner(db, nonLlm = noneLeg).audit(listOf(c))
+
+        assertEquals(VerificationStatus.failed, out[0].newStatus, "a non-round-tripping DEFINITION ⇒ failed")
+        assertEquals(false, groundedOf(db, c.kcId), "any failed claim ⇒ lecture_grounded=false (D-R6)")
+    }
+
+    @Test
+    fun `B5r-2 finalizeKc - a multi-claim KC where ONE claim fails is lecture_grounded=false even if the rest round-trip`(@TempDir tmp: Path) = runBlocking {
+        // Belt-and-braces on D-R6: grounding is a CONJUNCTION — one failed sibling poisons the whole KC.
+        val db = freshDb(tmp)
+        seedStatus(db, "pa-kc-005", VerificationStatus.pending)
+        // 4 round-tripping claims + 1 DEFINITION whose quote is absent ⇒ that one fails.
+        val good = multiClaimKc()
+        val bad = VerificationClaim(
+            claimId = "pa-kc-005:DEFINITION:${jarvis.content.ContentReconcile.sha256_8("absent quote zzz")}",
+            kcId = "pa-kc-005", subject = "PA", kind = ClaimKind.DEFINITION,
+            content = "absent quote zzz", invariant = null,
+            source = SourceRef(doc = "pa-lecture-01", quote = "absent quote zzz never in source", page = 2, span = Span(0, 1)),
+        )
+        val out = runner(db, nonLlm = realisticNonLlm).audit(good + bad)
+
+        assertTrue(out.any { it.newStatus == VerificationStatus.failed }, "the absent-quote claim failed")
+        assertEquals(false, groundedOf(db, "pa-kc-005"), "one failed sibling ⇒ the whole KC is NOT grounded")
     }
 
     private fun VerificationRunner.AuditResult.claimKind(): String = claimId.substringAfter(':').substringBefore(':')

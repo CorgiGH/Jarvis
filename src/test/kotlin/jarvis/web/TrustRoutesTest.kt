@@ -246,11 +246,13 @@ class TrustRoutesTest {
         kcId: String,
         status: VerificationStatus,
         contentHash: String?,
+        lectureGrounded: Boolean? = null,
     ) = transaction(db) {
         KcVerificationStatusTable.insert {
             it[KcVerificationStatusTable.kcId] = kcId
             it[KcVerificationStatusTable.status] = status.name
             it[KcVerificationStatusTable.contentHash] = contentHash
+            it[KcVerificationStatusTable.lectureGrounded] = lectureGrounded
             it[updatedAt] = Instant.now()
         }
     }
@@ -311,6 +313,114 @@ class TrustRoutesTest {
         }.bodyAsText()
         assertTrue(body.contains("\"verification_status\":\"unverified\""), body)
         assertTrue(body.contains("\"honest_floor\":\"UNVERIFIED\""), body)
+    }
+
+    // ── B5r-2: the "matches your lecture" badge is DECOUPLED from strict `faithful` (D-R5/D-R6) ────
+
+    @Test
+    fun `B5r-2 (a) - a lecture_grounded but NOT-faithful KC serves the lecture badge while status stays uncertain`() = testApplication {
+        // D-R5: the badge promises lecture-GROUNDING, not the stronger `faithful`. A KC whose cited
+        // quotes all relocate LIVE (lecture_grounded=true) but is only `uncertain` (e.g. an equational
+        // claim still awaiting its math check) shows "matches your lecture" — yet verification_status
+        // honestly stays `uncertain` (not faithful).
+        val dir = Files.createTempDirectory("trust-b5r2-grounded")
+        val content = dir.resolve("content"); seedContent(content, status = "uncertain")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        // uncertain + grounded=true + a MATCHING content hash (survives the D8 gate).
+        seedB8(db, "pa-kc-005", VerificationStatus.uncertain, seededKcHash(content), lectureGrounded = true)
+        application { installTrust(db, dir) }
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        // The served status is honest: still uncertain, NOT faithful.
+        assertTrue(body.contains("\"verification_status\":\"uncertain\""), body)
+        assertFalse(body.contains("\"verification_status\":\"faithful\""), body)
+        // …but the badge + honest floor reflect grounding.
+        assertTrue(body.contains("matches your lecture"), body)
+        assertTrue(body.contains("\"honest_floor\":\"FAITHFUL_TO_SOURCE\""), body)
+        // Trust-language pin holds.
+        assertFalse(body.contains("verified correct", ignoreCase = true), body)
+    }
+
+    @Test
+    fun `B5r-2 (b) - a KC with a failed claim is NOT grounded - serves unverified`() = testApplication {
+        // D-R6: a failed claim suppresses grounding. lecture_grounded=false + status=failed ⇒ the badge
+        // pins at "unverified" (a contradicted claim is never "matches your lecture").
+        val dir = Files.createTempDirectory("trust-b5r2-failed")
+        val content = dir.resolve("content"); seedContent(content, status = "uncertain")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        seedB8(db, "pa-kc-005", VerificationStatus.failed, seededKcHash(content), lectureGrounded = false)
+        application { installTrust(db, dir) }
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        assertTrue(body.contains("\"badge_text\":\"unverified\""), body)
+        assertTrue(body.contains("\"honest_floor\":\"UNVERIFIED\""), body)
+        assertFalse(body.contains("matches your lecture"), body)
+    }
+
+    @Test
+    fun `B5r-2 (c) - grounded=true but content_hash MISMATCH fails CLOSED to unverified (D8 wraps grounded)`() = testApplication {
+        // CRITICAL: the D8 staleness gate MUST wrap lecture_grounded exactly as it wraps faithful.
+        // A grounded badge over edited content is forbidden — the lecture was edited after the audit
+        // (hash mismatch) ⇒ fall closed to "unverified", never a lying "matches your lecture".
+        val dir = Files.createTempDirectory("trust-b5r2-stale")
+        val content = dir.resolve("content"); seedContent(content, status = "uncertain")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        // grounded=true but a STALE content hash (≠ the live content hash).
+        seedB8(db, "pa-kc-005", VerificationStatus.uncertain, "stale000", lectureGrounded = true)
+        application { installTrust(db, dir) }
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        assertTrue(body.contains("\"badge_text\":\"unverified\""), body)
+        assertTrue(body.contains("\"honest_floor\":\"UNVERIFIED\""), body)
+        assertFalse(body.contains("matches your lecture"), body)
+    }
+
+    @Test
+    fun `B5r-2 (d) - grounded=NULL (legacy row) fails CLOSED to unverified`() = testApplication {
+        // A legacy/partial row predating B5r-2 reads lecture_grounded=NULL ⇒ fail-closed default ⇒
+        // the badge pins at "unverified" even though the content hash matches.
+        val dir = Files.createTempDirectory("trust-b5r2-null")
+        val content = dir.resolve("content"); seedContent(content, status = "uncertain")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        seedB8(db, "pa-kc-005", VerificationStatus.uncertain, seededKcHash(content), lectureGrounded = null)
+        application { installTrust(db, dir) }
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        assertTrue(body.contains("\"badge_text\":\"unverified\""), body)
+        assertTrue(body.contains("\"honest_floor\":\"UNVERIFIED\""), body)
+        assertFalse(body.contains("matches your lecture"), body)
+    }
+
+    @Test
+    fun `B5r-2 (e) - REGRESSION - a genuinely faithful KC still serves the strong badge`() = testApplication {
+        // B5r-2 must not weaken the faithful path: a faithful B8 row with a matching content hash
+        // still serves "matches your lecture / faithful to your source" + FAITHFUL_TO_SOURCE, exactly
+        // as before — independent of lecture_grounded.
+        val dir = Files.createTempDirectory("trust-b5r2-faithful")
+        val content = dir.resolve("content"); seedContent(content, status = "faithful")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        seedB8(db, "pa-kc-005", VerificationStatus.faithful, seededKcHash(content), lectureGrounded = true)
+        application { installTrust(db, dir) }
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        assertTrue(body.contains("\"verification_status\":\"faithful\""), body)
+        assertTrue(body.contains("matches your lecture / faithful to your source"), body)
+        assertTrue(body.contains("\"honest_floor\":\"FAITHFUL_TO_SOURCE\""), body)
     }
 
     // ── F5: per-claim verdicts (NOT the KC-level status broadcast onto every claim) ────────────────

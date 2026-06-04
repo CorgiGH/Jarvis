@@ -122,6 +122,29 @@ object KcVerificationStatusTable : Table("kc_verification_status") {
      * fail-closed, which is the correct honest default). Mirrors the Phase-1 additive-column pattern.
      */
     val contentHash = varchar("content_hash", 16).nullable()
+    /**
+     * B5r-2 (D-R5/D-R6) — the KC-level LECTURE-GROUNDED signal that DECOUPLES the served
+     * "matches your lecture" badge from the stricter [status] == `faithful`. The badge promises
+     * lecture-GROUNDING (every cited quote relocates LIVE), not the stronger cross-checked `faithful`.
+     *
+     * Written by [jarvis.tutor.verify.VerificationRunner] in `finalizeKc` ALONGSIDE [status], in the
+     * SAME transaction, from THIS run's per-claim results:
+     *   `lecture_grounded = (every claim's roundTrip.pass == true) AND (no claim resolved to `failed`)`.
+     * A purely-uncertain-but-grounded KC ⇒ true (D-R6: an equational claim still `uncertain` does not
+     * suppress grounding); ANY `failed` claim ⇒ false (a contradicted claim ≠ "matches your lecture").
+     *
+     * The serve gate ([jarvis.web.VerifyAdmin]) shows the lecture badge when `status == faithful` OR
+     * `lecture_grounded == true`, BUT — exactly like `faithful` — only after the D8 [contentHash]
+     * staleness gate passes. A NULL `lecture_grounded` (legacy/partial row, or a hash mismatch / NULL
+     * hash) falls CLOSED to `unverified`: a grounded badge over edited/unproven content is forbidden,
+     * same as a faithful one.
+     *
+     * Nullable + additive: the live table has 0 rows, so `createMissingTablesAndColumns` adds the bare
+     * `ALTER … ADD COLUMN lecture_grounded` with no backfill (any pre-existing row reads NULL =
+     * fail-closed, the correct honest default). Mirrors the Phase-1 additive-column pattern + the D8
+     * [contentHash] column directly above.
+     */
+    val lectureGrounded = bool("lecture_grounded").nullable()
     val updatedAt = timestamp("updated_at")
     override val primaryKey = PrimaryKey(kcId)
 }

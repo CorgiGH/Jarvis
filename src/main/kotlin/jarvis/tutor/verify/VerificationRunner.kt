@@ -65,6 +65,13 @@ class VerificationRunner(
         val priorStatus: VerificationStatus,
         val outcome: AuditOutcome,
         val newStatus: VerificationStatus,
+        /**
+         * B5r-2 — did THIS claim's cited quote relocate LIVE (the span↔claim round-trip passed)?
+         * Read by [finalizeKc] to compute the KC-level `lecture_grounded` signal (D-R5/D-R6): a KC is
+         * grounded iff EVERY claim round-tripped AND no claim resolved to `failed`. Carried on the
+         * result (not just the audit row) so the conjunction is computed without re-reading the DB.
+         */
+        val roundTripPass: Boolean,
         /** True iff the audit row was written this call (false ⇒ skipped, idempotent on auditRunId). */
         val written: Boolean,
         /** Human-readable forensic detail for the audit row's `notes`. */
@@ -122,6 +129,20 @@ class VerificationRunner(
         else -> VerificationStatus.uncertain
     }
 
+    /**
+     * B5r-2 (D-R5/D-R6) — the KC-level LECTURE-GROUNDED signal: this KC's cited quotes ALL relocate
+     * LIVE AND no claim is contradicted. Computed from THIS run's per-claim results as a CONJUNCTION,
+     * order-independent (mirrors [aggregateKc]):
+     *   `grounded = (every claim's roundTrip.pass == true) AND (no claim resolved to `failed`)`.
+     * D-R6: a purely-uncertain-but-round-tripped KC ⇒ true (an equational claim still `uncertain`,
+     * awaiting its math check, does NOT suppress grounding); ANY `failed` claim ⇒ false (a contradicted
+     * claim ≠ "matches your lecture"). An EMPTY KC ⇒ false (no quote relocated — nothing to ground).
+     */
+    private fun groundedKc(perClaim: List<AuditResult>): Boolean =
+        perClaim.isNotEmpty() &&
+            perClaim.all { it.roundTripPass } &&
+            perClaim.none { it.newStatus == VerificationStatus.failed }
+
     /** Upsert kc_verification_status ONCE for [kcId] with the conjunction over its per-claim verdicts. */
     private fun finalizeKc(
         kcId: String,
@@ -130,6 +151,8 @@ class VerificationRunner(
         contentHash: String?,
     ) {
         val aggregate = aggregateKc(kcResults.map { it.newStatus })
+        // B5r-2 — written ALONGSIDE [status], in the SAME transaction, from THIS run's per-claim results.
+        val grounded = groundedKc(kcResults)
         val now = clock()
         transaction(db) {
             val existing = KcVerificationStatusTable.selectAll()
@@ -141,6 +164,7 @@ class VerificationRunner(
                     it[status] = aggregate.name
                     it[lastAuditRunId] = auditRunId
                     it[KcVerificationStatusTable.contentHash] = contentHash
+                    it[lectureGrounded] = grounded
                     it[updatedAt] = now
                 }
             } else {
@@ -148,6 +172,7 @@ class VerificationRunner(
                     it[status] = aggregate.name
                     it[lastAuditRunId] = auditRunId
                     it[KcVerificationStatusTable.contentHash] = contentHash
+                    it[lectureGrounded] = grounded
                     it[updatedAt] = now
                 }
             }
@@ -185,6 +210,7 @@ class VerificationRunner(
             priorStatus = prior,
             outcome = outcome,
             newStatus = perClaimStatus,
+            roundTripPass = legs.roundTrip.pass,
             written = written,
             notes = notes,
         )
