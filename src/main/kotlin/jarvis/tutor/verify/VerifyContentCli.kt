@@ -13,14 +13,16 @@ import kotlin.system.exitProcess
  * OWNER / MANUAL OFFLINE ONLY. This is the trust-net's offline batch: it re-derives every authored
  * KC claim against two LLM families + a non-LLM leg + the span↔claim round-trip and writes the
  * `verification_audit` + `kc_verification_status` (B8) tables. It NEVER runs on a request path and
- * is NOT wired into `check` (H6) — running it requires a LIVE relay + OpenRouter key, which CI does
- * not have.
+ * is NOT wired into `check` (H6) — running it requires a LIVE relay + the local NLI model (a real
+ * py3.12 with transformers + the DeBERTa-v3 model), which CI does not have.
  *
  * FAIL-LOUD (H4): the task ABORTS with a non-zero exit BEFORE touching any DB if a required family
  * env var is missing — never silently degrades to a one-family (gameable) audit. The two required
- * families are:
- *   - RELAY      — `JARVIS_RELAY_URL` + `JARVIS_RELAY_TOKEN`
- *   - OPENROUTER — `OPENROUTER_API_KEY`
+ * families are (B5r-6 / D6: family B is now the LOCAL NLI, NOT OpenRouter — kills the
+ * same-:free-model false-independence + the 429 throttle; the audit is network-free + PC-side, D7):
+ *   - RELAY — `JARVIS_RELAY_URL` + `JARVIS_RELAY_TOKEN`
+ *   - NLI   — `JARVIS_PYTHON3` (the non-Store python3 with transformers + the DeBERTa-v3 NLI model;
+ *             the model itself fail-louds at runtime via NliEntailmentLlm if absent/unloadable)
  */
 object VerifyContentCli {
 
@@ -29,7 +31,9 @@ object VerifyContentCli {
 
     private val REQUIRED_FAMILIES = listOf(
         RequiredFamily("RELAY", listOf("JARVIS_RELAY_URL", "JARVIS_RELAY_TOKEN")),
-        RequiredFamily("OPENROUTER", listOf("OPENROUTER_API_KEY")),
+        // B5r-6/D6: family B = the LOCAL NLI (NliEntailmentLlm), provisioned by JARVIS_PYTHON3.
+        // OPENROUTER_API_KEY is no longer required — legB never calls OpenRouter.
+        RequiredFamily("NLI", listOf("JARVIS_PYTHON3")),
     )
 
     /**
@@ -57,8 +61,8 @@ object VerifyContentCli {
      * the test can assert the message names the missing var without exercising `exitProcess`.
      */
     fun abortMessage(missing: List<String>): String =
-        "verifyContent ABORTED (FAIL-LOUD, H4): the trust-net requires TWO independent LLM families " +
-            "(RELAY + OPENROUTER) — refusing to run a one-family (gameable) audit. Missing env: " +
+        "verifyContent ABORTED (FAIL-LOUD, H4): the trust-net requires TWO independent families " +
+            "(RELAY + local NLI) — refusing to run a one-family (gameable) audit. Missing env: " +
             missing.joinToString(", ") +
             ". Set them and re-run; this offline batch is owner/manual only and is NOT part of check."
 
