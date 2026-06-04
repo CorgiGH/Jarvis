@@ -41,13 +41,35 @@ object CitationGuard {
      * audited status; this default keeps `attach` pure with no extra arg while never over-claiming.
      */
     fun attach(claim: VerificationClaim): CitedClaim {
-        val source = claim.source
-            ?: throw IllegalStateException(
-                "CitationGuard.attach: claim '${claim.claimId}' has no resolved SourceRef — " +
-                    "an un-cited claim must NEVER be emitted to the learner (FAIL-LOUD, TASK P2-RULE8)",
-            )
+        val source = requireSource(claim)
+        // STOPGAP heuristic (Batch-1): with no audited status available, infer conservatively from
+        // whether the citation is span-anchored. Batch-3 callers (post-audit) MUST use the
+        // `attach(claim, status)` overload below so the RUNNER's real status wins — that is the only
+        // path that can ever say `faithful` (no faithful without non-LLM-pass AND families-agree).
         val status =
             if (source.span != null) VerificationStatus.faithful else VerificationStatus.uncertain
         return CitedClaim(claimKind = claim.kind, status = status, source = source)
     }
+
+    /**
+     * Batch-3 overload — attach with the **runner-resolved** audited status (the §I `VerificationStatus`
+     * the `VerificationRunner.audit` wrote to `kc_verification_status`, B8). The runner is the source
+     * of a claim's REAL status, so this overload carries it onto the `CitedClaim` verbatim — the
+     * span-heuristic default in the no-arg overload is a stopgap only and NEVER over-claims `faithful`.
+     *
+     * Same FAIL-LOUD contract: a claim with a null/unresolved `source` THROWS first (an un-cited
+     * claim never ships, even with an audited status in hand).
+     */
+    fun attach(claim: VerificationClaim, status: VerificationStatus): CitedClaim {
+        val source = requireSource(claim)
+        return CitedClaim(claimKind = claim.kind, status = status, source = source)
+    }
+
+    /** Resolve + require a non-null SourceRef, or THROW (FAIL-LOUD, TASK P2-RULE8). */
+    private fun requireSource(claim: VerificationClaim): SourceRef =
+        claim.source
+            ?: throw IllegalStateException(
+                "CitationGuard.attach: claim '${claim.claimId}' has no resolved SourceRef — " +
+                    "an un-cited claim must NEVER be emitted to the learner (FAIL-LOUD, TASK P2-RULE8)",
+            )
 }
