@@ -14,5 +14,5 @@ source:
   - doc: pa-lecture-01
     quote: "The time cost of an expression evaluation is the sum of time costs of the\noperations included in the expression."
   - doc: pa-lecture-01
-    quote: "The time cost of a computation is the sum of the time costs of its\nexecution steps."
+    quote: "A computation (an execution) is a sequence of execution steps:"
 version: 1

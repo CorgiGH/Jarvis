@@ -6,5 +6,5 @@ trigger: "The student assumes that if a problem can be stated precisely, then so
 refutation: "Hilbert's 10th problem is precisely stated yet non-computable: no algorithm decides whether an integer polynomial has an integer root. This impossibility cannot even be proved with only the intuitive notion of algorithm — it is exactly why a formal definition is needed."
 source:
   - doc: pa-lecture-01
-    quote: "Hibert's 10th problem is non-solvable/non-computable i.e., there is no\n  an algorithm that having a polynomial p as input, decides wether p\n  has an integer root or not."
+    quote: "Hibert’s 10th problem is non-solvable/non-computable i.e., there is no\n  an algorithm that having a polynomial p as input, decides wether p\n  has an integer root or not."
 version: 1
