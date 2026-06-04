@@ -206,8 +206,13 @@ object ContentValidator {
      * H11 — verification_status enum check (CHANGE 3 / B4).
      *
      * Every KC and Misconception must have a verification_status that is one of the
-     * four AUTHORED literals: {unverified, pending, faithful, uncertain}.
-     * "failed" is runtime-only (never authored in YAML) and is rejected here.
+     * three AUTHORED literals: {unverified, pending, uncertain}.
+     *
+     * F4-author: `faithful` is NO LONGER authorable. It certifies an audit that actually ran
+     * (two families agree + non-LLM-leg pass + span round-trip, §2.5) and is earned ONLY at runtime
+     * via `VerificationRunner.audit` writing the B8 `kc_verification_status` row. Authoring it would
+     * be an unearned trust claim with zero legs run, so the validator rejects it here exactly like
+     * the runtime-only `failed`.
      */
     fun checkVerificationStatusEnum(sub: LoadedSubject): List<ValidationIssue> {
         val issues = mutableListOf<ValidationIssue>()
@@ -236,8 +241,11 @@ object ContentValidator {
         return issues
     }
 
-    /** The four authored verification_status literals. "failed" is runtime-only, never in YAML. */
-    val AUTHORED_VERIFICATION_STATUSES: Set<String> = setOf("unverified", "pending", "faithful", "uncertain")
+    /**
+     * The three authored verification_status literals. F4-author: `faithful` is NOT authorable
+     * (earned only at runtime by an audit) and `failed` is runtime-only — both are rejected in YAML.
+     */
+    val AUTHORED_VERIFICATION_STATUSES: Set<String> = setOf("unverified", "pending", "uncertain")
 
     private fun normalizeWs(s: String): String = s.replace(WS_RE, " ").trim()
 

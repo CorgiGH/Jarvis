@@ -383,6 +383,30 @@ class VerificationRunnerTest {
     }
 
     @Test
+    fun `audit writes the KC content_hash on the B8 upsert (D8)`(@TempDir tmp: Path) = runBlocking {
+        val db = freshDb(tmp)
+        val c = claim()
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        runner(db).audit(listOf(c))
+
+        // The B8 row now carries a content_hash == the hash over THIS KC's audited claim set.
+        val written = transaction(db) {
+            var h: String? = null
+            exec("SELECT content_hash FROM kc_verification_status WHERE kc_id='${c.kcId}'") { rs ->
+                if (rs.next()) h = rs.getString(1)
+            }
+            h
+        }
+        assertNotNull(written, "the audit must stamp content_hash on the B8 row (D8)")
+        assertEquals(
+            jarvis.content.ContentReconcile.kcContentHashOf(listOf(c)),
+            written,
+            "content_hash must be the hash over the KC's audited claims (audit-side == serve-side)",
+        )
+    }
+
+    @Test
     fun `audit reads the current status from the B8 table for the transition`(@TempDir tmp: Path) = runBlocking {
         val db = freshDb(tmp)
         val c = claim()

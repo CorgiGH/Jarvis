@@ -34,21 +34,19 @@ object CitationGuard {
      * THROWS (never ships un-cited); a resolved claim returns a `CitedClaim` carrying
      * `{doc, span|page, quote}`.
      *
-     * The status carried onto the [CitedClaim] is inferred conservatively from whether the
-     * citation is span-anchored: a claim with a non-null span is treated as `faithful` (it has a
-     * gold span the round-trip can confirm); a claim cited by quote alone (no span) pins at
-     * `uncertain` (no anchored span ⇒ UNCERTAIN floor, §2.5). The runner overwrites this with the
-     * audited status; this default keeps `attach` pure with no extra arg while never over-claiming.
+     * F3 — this 1-arg form has NO audited status in hand, so it ALWAYS pins the carried status to
+     * `uncertain` and is NEVER faithful-capable. Span-presence alone certifies NOTHING: a gold span
+     * is necessary but not sufficient for faithfulness (the runner still must round-trip it AND have
+     * both families agree AND a non-LLM leg pass, §2.5). The ONLY path that may ever carry `faithful`
+     * onto a [CitedClaim] is the [attach]`(claim, status)` overload below, which takes the RUNNER's
+     * audited status verbatim. This keeps "no faithful without the runner's say-so" true by
+     * construction at the emit chokepoint.
      */
     fun attach(claim: VerificationClaim): CitedClaim {
         val source = requireSource(claim)
-        // STOPGAP heuristic (Batch-1): with no audited status available, infer conservatively from
-        // whether the citation is span-anchored. Batch-3 callers (post-audit) MUST use the
-        // `attach(claim, status)` overload below so the RUNNER's real status wins — that is the only
-        // path that can ever say `faithful` (no faithful without non-LLM-pass AND families-agree).
-        val status =
-            if (source.span != null) VerificationStatus.faithful else VerificationStatus.uncertain
-        return CitedClaim(claimKind = claim.kind, status = status, source = source)
+        // F3: the 1-arg path is never faithful-capable — span-presence does not launder trust into
+        // faithful. Pin to UNCERTAIN; the audited-status overload is the sole faithful-capable path.
+        return CitedClaim(claimKind = claim.kind, status = VerificationStatus.uncertain, source = source)
     }
 
     /**

@@ -16,6 +16,7 @@ import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -124,6 +125,55 @@ class ContentReconcileTest {
         val a = ContentReconcile.claimsFor(strictKc(graderRules = listOf("rule-A", "rule-B", "rule-C")))
         val b = ContentReconcile.claimsFor(strictKc(graderRules = listOf("rule-C", "rule-A", "rule-B")))
         assertEquals(a.map { it.claimId }.toSet(), b.map { it.claimId }.toSet(), "claimIds are content-addressed, order-independent")
+    }
+
+    // --- kcContentHash (D8 — the staleness fingerprint) ----------------------------------------
+
+    @Test
+    fun `kcContentHash is deterministic and 8 lowercase-hex chars`() {
+        val kc = strictKc()
+        val h1 = ContentReconcile.kcContentHash(kc)
+        val h2 = ContentReconcile.kcContentHash(kc)
+        assertEquals(h1, h2, "hashing the same KC twice is deterministic")
+        assertEquals(8, h1.length, "the KC content hash is 8 hex chars (sha256_8 form)")
+        assertTrue(h1.all { it in "0123456789abcdef" }, "lowercase hex")
+    }
+
+    @Test
+    fun `kcContentHash is reorder-stable - shuffling grader_rules does not change it`() {
+        val a = ContentReconcile.kcContentHash(strictKc(graderRules = listOf("rule-A", "rule-B", "rule-C")))
+        val b = ContentReconcile.kcContentHash(strictKc(graderRules = listOf("rule-C", "rule-A", "rule-B")))
+        assertEquals(a, b, "the KC content hash is derived from the content-addressed claim set, order-independent")
+    }
+
+    @Test
+    fun `kcContentHash CHANGES when an audited claim text changes (C1 to C2)`() {
+        val c1 = ContentReconcile.kcContentHash(strictKc(invariant = "1 + 1 + 1 = 3"))
+        val c2 = ContentReconcile.kcContentHash(strictKc(invariant = "1 + 1 + 1 = 4"))
+        assertNotEquals(c1, c2, "editing a claim's text must change the KC content hash (the staleness fingerprint)")
+    }
+
+    @Test
+    fun `kcContentHash CHANGES when a cited span changes`() {
+        val kcA = strictKc()
+        val kcB = strictKc().let { kc ->
+            kc.copy(source = kc.source.map { it.copy(span = Span(99999, 100000)) })
+        }
+        assertNotEquals(
+            ContentReconcile.kcContentHash(kcA),
+            ContentReconcile.kcContentHash(kcB),
+            "moving a cited span must change the KC content hash (span is part of the fingerprint)",
+        )
+    }
+
+    @Test
+    fun `kcContentHash over a KC equals the hash over its emitted claims`() {
+        val kc = strictKc()
+        assertEquals(
+            ContentReconcile.kcContentHash(kc),
+            ContentReconcile.kcContentHashOf(ContentReconcile.claimsFor(kc)),
+            "the KC-level hash and the claim-list hash are the SAME function (audit-side == serve-side)",
+        )
     }
 
     // --- reconcile (DB) ------------------------------------------------------------------------

@@ -59,6 +59,9 @@ class TrustRoutesTest {
     @AfterTest
     fun resetSeam() {
         verifyRunnerFactory = { db, repo -> VerifyAdmin.liveRunnerFor(db, repo) }
+        auditRouteEnabled = {
+            System.getenv("JARVIS_AUDIT_ROUTE")?.trim()?.lowercase() in setOf("1", "true", "yes", "on")
+        }
         System.clearProperty("JARVIS_CONTENT_DIR")
     }
 
@@ -115,11 +118,13 @@ class TrustRoutesTest {
         val db = freshDb(dir)
         val (_, sid) = seedUser(db, UserScope.FRIEND)
         // F4-serve: faithful is now B8-backed only — the KC must carry an audited B8 row to serve
-        // faithful (the YAML seed alone serves unverified).
+        // faithful (the YAML seed alone serves unverified). D8: the row's content_hash must match the
+        // live content for the faithful to survive the staleness gate.
         transaction(db) {
             KcVerificationStatusTable.insert {
                 it[kcId] = "pa-kc-005"
                 it[status] = VerificationStatus.faithful.name
+                it[contentHash] = seededKcHash(content)
                 it[updatedAt] = Instant.now()
             }
         }
@@ -216,6 +221,7 @@ class TrustRoutesTest {
             KcVerificationStatusTable.insert {
                 it[kcId] = "pa-kc-005"
                 it[status] = VerificationStatus.faithful.name
+                it[contentHash] = seededKcHash(content)
                 it[updatedAt] = Instant.now()
             }
         }
@@ -225,6 +231,221 @@ class TrustRoutesTest {
         }.bodyAsText()
         assertTrue(body.contains("\"verification_status\":\"faithful\""), body)
         assertTrue(body.contains("matches your lecture"), body)
+    }
+
+    // ── D8 content-hash staleness gate ───────────────────────────────────────────────────────────
+
+    /** The content hash of the seeded pa-kc-005 (matches what the serve gate recomputes). */
+    private fun seededKcHash(content: Path): String {
+        val kc = jarvis.content.ContentRepo(content).loadSubject("PA").kcs.single { it.id == "pa-kc-005" }
+        return jarvis.content.ContentReconcile.kcContentHash(kc)
+    }
+
+    private fun seedB8(
+        db: org.jetbrains.exposed.sql.Database,
+        kcId: String,
+        status: VerificationStatus,
+        contentHash: String?,
+    ) = transaction(db) {
+        KcVerificationStatusTable.insert {
+            it[KcVerificationStatusTable.kcId] = kcId
+            it[KcVerificationStatusTable.status] = status.name
+            it[KcVerificationStatusTable.contentHash] = contentHash
+            it[updatedAt] = Instant.now()
+        }
+    }
+
+    @Test
+    fun `D8 - a faithful B8 row whose content_hash MATCHES current content serves faithful`() = testApplication {
+        val dir = Files.createTempDirectory("trust-d8-match")
+        val content = dir.resolve("content"); seedContent(content, status = "faithful")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        // Audited faithful AT the current content (matching hash) ⇒ serves faithful.
+        seedB8(db, "pa-kc-005", VerificationStatus.faithful, seededKcHash(content))
+        application { installTrust(db, dir) }
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        assertTrue(body.contains("\"verification_status\":\"faithful\""), body)
+        assertTrue(body.contains("\"honest_floor\":\"FAITHFUL_TO_SOURCE\""), body)
+        assertTrue(body.contains("matches your lecture"), body)
+    }
+
+    @Test
+    fun `D8 - a faithful B8 row whose content_hash MISMATCHES current content serves UNVERIFIED (stale)`() = testApplication {
+        // The lecture was edited after the audit: the B8 row still reads `faithful` (audited at C1)
+        // but the live content is now C2 ⇒ hash mismatch ⇒ the gate must fall to honest UNVERIFIED
+        // (never a lying "matches your lecture" badge over text that was never checked).
+        val dir = Files.createTempDirectory("trust-d8-mismatch")
+        val content = dir.resolve("content"); seedContent(content, status = "faithful")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        // Audited at a DIFFERENT (stale) content hash than the live content now hashes to.
+        seedB8(db, "pa-kc-005", VerificationStatus.faithful, "stale000")
+        application { installTrust(db, dir) }
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        assertTrue(body.contains("\"verification_status\":\"unverified\""), body)
+        assertTrue(body.contains("\"honest_floor\":\"UNVERIFIED\""), body)
+        assertTrue(body.contains("\"badge_text\":\"unverified\""), body)
+        assertFalse(body.contains("matches your lecture"), body)
+    }
+
+    @Test
+    fun `D8 - a faithful B8 row with a NULL content_hash serves UNVERIFIED (fails closed)`() = testApplication {
+        // A legacy/partial row with no recorded content_hash cannot prove it matches the live content
+        // ⇒ fail CLOSED to unverified rather than fail-stale to a lying faithful.
+        val dir = Files.createTempDirectory("trust-d8-null")
+        val content = dir.resolve("content"); seedContent(content, status = "faithful")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        seedB8(db, "pa-kc-005", VerificationStatus.faithful, null)
+        application { installTrust(db, dir) }
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        assertTrue(body.contains("\"verification_status\":\"unverified\""), body)
+        assertTrue(body.contains("\"honest_floor\":\"UNVERIFIED\""), body)
+    }
+
+    // ── F5: per-claim verdicts (NOT the KC-level status broadcast onto every claim) ────────────────
+
+    /**
+     * A PA KC with BOTH an invariant (⇒ an INVARIANT claim) AND a span-bearing source quote
+     * (⇒ a DEFINITION claim), so `claimsFor` emits TWO distinct claims the serve path stamps.
+     */
+    private fun seedMultiClaimKc(content: Path) {
+        content.createDirectories()
+        content.resolve("subjects.yaml").writeText(
+            "version: 1\nsubjects:\n  - id: PA\n    name_ro: \"P\"\n    name_en: \"Algorithm Design\"\n")
+        val pa = content.resolve("PA")
+        pa.resolve("kcs").createDirectories()
+        pa.resolve("_sources").createDirectories()
+        pa.resolve("kcs/pa-kc-005.yaml").writeText(
+            "id: pa-kc-005\nsubject: PA\nname_ro: \"A\"\nname_en: \"Algorithm\"\n" +
+                "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
+                "exam_weight: 1.0\ntier: 1\nversion: 1\n" +
+                "verification_status: \"uncertain\"\n" +
+                "invariant: \"1 + 1 + 1 = 3\"\n" +
+                "source:\n  - doc: pa-lecture-01\n    quote: \"Algorithm\"\n    page: 1\n" +
+                "    span:\n      start: 0\n      end: 9\n")
+        pa.resolve("_sources/pa-lecture-01.md").writeText("Algorithm is a finite sequence.\n")
+        pa.resolve("edges.yaml").writeText("subject: PA\nedges: []\n")
+    }
+
+    private fun loadKc(content: Path, kcId: String): jarvis.content.KnowledgeConcept =
+        jarvis.content.ContentRepo(content).loadSubject("PA").kcs.single { it.id == kcId }
+
+    private fun seedAuditRow(
+        db: org.jetbrains.exposed.sql.Database,
+        claim: jarvis.tutor.verify.VerificationClaim,
+        status: VerificationStatus,
+    ) = transaction(db) {
+        VerificationAuditTable.insert {
+            it[id] = TutorTypes.ulid()
+            it[claimId] = claim.claimId
+            it[kcId] = claim.kcId
+            it[subject] = claim.subject
+            it[claimKind] = claim.kind.name
+            it[VerificationAuditTable.status] = status.name
+            it[doc] = claim.source?.doc ?: ""
+            it[page] = claim.source?.page?.takeIf { p -> p > 0 }
+            it[pageAnchorStatus] = "LIVE"
+            it[spanStart] = claim.source?.span?.start
+            it[spanEnd] = claim.source?.span?.end
+            it[fuzzyDistance] = 0
+            it[familyA] = "RELAY"
+            it[familyB] = "OPENROUTER"
+            it[nonllmLeg] = "SYMPY"
+            it[agree] = (status == VerificationStatus.faithful)
+            it[roundtripPass] = (status == VerificationStatus.faithful)
+            it[collapsedToOneFamily] = false
+            it[auditedAt] = Instant.now()
+            it[auditRunId] = "run-1"
+        }
+    }
+
+    @Test
+    fun `F5 - serve stamps each claim's OWN verdict from verification_audit, not the KC-level status`() = testApplication {
+        // A KC whose B8 row is faithful (hash-matched) — the OLD bug stamped that single faithful
+        // onto EVERY claim. F5: each claim must carry its OWN per-claim verdict read from
+        // verification_audit. Here the INVARIANT claim audited faithful but the DEFINITION claim
+        // audited uncertain ⇒ the served claims must be a MIX, never all-faithful.
+        val dir = Files.createTempDirectory("trust-f5")
+        val content = dir.resolve("content"); seedMultiClaimKc(content)
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+
+        val kc = loadKc(content, "pa-kc-005")
+        val claims = jarvis.content.ContentReconcile.claimsFor(kc)
+        val invariantClaim = claims.single { it.kind == jarvis.tutor.verify.ClaimKind.INVARIANT }
+        val definitionClaim = claims.single { it.kind == jarvis.tutor.verify.ClaimKind.DEFINITION }
+
+        // KC-level B8 row is faithful with a MATCHING content hash (survives the D8 gate) — exactly
+        // the condition under which the broadcast bug would mark every claim faithful.
+        seedB8(db, "pa-kc-005", VerificationStatus.faithful, jarvis.content.ContentReconcile.kcContentHash(kc))
+        // Per-claim audit verdicts: INVARIANT faithful, DEFINITION uncertain.
+        seedAuditRow(db, invariantClaim, VerificationStatus.faithful)
+        seedAuditRow(db, definitionClaim, VerificationStatus.uncertain)
+
+        application { installTrust(db, dir) }
+        val r = client.get("/api/v1/verify/pa-kc-005/status") { header("Cookie", "jarvis_session=$sid") }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val reply = Json { ignoreUnknownKeys = true }
+            .decodeFromString(ApiVerifyStatusReply.serializer(), r.bodyAsText())
+
+        val byKind = reply.claims.associateBy { it.claimKind }
+        assertEquals(
+            VerificationStatus.faithful,
+            byKind[jarvis.tutor.verify.ClaimKind.INVARIANT]?.status,
+            "the INVARIANT claim audited faithful must serve faithful",
+        )
+        assertEquals(
+            VerificationStatus.uncertain,
+            byKind[jarvis.tutor.verify.ClaimKind.DEFINITION]?.status,
+            "the DEFINITION claim audited uncertain must serve uncertain — NOT the broadcast KC faithful",
+        )
+        // The fail-the-old-bug assertion: NOT every claim is faithful.
+        assertFalse(
+            reply.claims.all { it.status == VerificationStatus.faithful },
+            "per-claim verdicts must NOT all be the broadcast KC-level faithful: ${reply.claims.map { it.claimKind to it.status }}",
+        )
+    }
+
+    @Test
+    fun `F5 - a claim with NO audit row falls closed to unverified, never the KC-level faithful`() = testApplication {
+        // Fail-closed: a claim the audit never recorded must NOT inherit the KC's faithful status.
+        val dir = Files.createTempDirectory("trust-f5-norow")
+        val content = dir.resolve("content"); seedMultiClaimKc(content)
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+
+        val kc = loadKc(content, "pa-kc-005")
+        val claims = jarvis.content.ContentReconcile.claimsFor(kc)
+        val invariantClaim = claims.single { it.kind == jarvis.tutor.verify.ClaimKind.INVARIANT }
+
+        seedB8(db, "pa-kc-005", VerificationStatus.faithful, jarvis.content.ContentReconcile.kcContentHash(kc))
+        // ONLY the invariant claim has an audit row; the definition claim has none.
+        seedAuditRow(db, invariantClaim, VerificationStatus.faithful)
+
+        application { installTrust(db, dir) }
+        val r = client.get("/api/v1/verify/pa-kc-005/status") { header("Cookie", "jarvis_session=$sid") }
+        val reply = Json { ignoreUnknownKeys = true }
+            .decodeFromString(ApiVerifyStatusReply.serializer(), r.bodyAsText())
+        val byKind = reply.claims.associateBy { it.claimKind }
+        assertEquals(VerificationStatus.faithful, byKind[jarvis.tutor.verify.ClaimKind.INVARIANT]?.status)
+        assertEquals(
+            VerificationStatus.unverified,
+            byKind[jarvis.tutor.verify.ClaimKind.DEFINITION]?.status,
+            "an unaudited claim must fall closed to unverified, never inherit the KC faithful",
+        )
     }
 
     @Test
@@ -273,6 +494,9 @@ class TrustRoutesTest {
         System.setProperty("JARVIS_CONTENT_DIR", content.toString())
         val db = freshDb(dir)
         val (_, ownerSid) = seedUser(db, UserScope.OWNER)
+        // Bundle-2: the in-handler audit is OWNER-CLI-ONLY by default. This test exercises the
+        // opt-in PC-side path (the owner explicitly enabled JARVIS_AUDIT_ROUTE), so flip the seam on.
+        auditRouteEnabled = { true }
         // Seed the KC at pending so the runner can transition it (curate Stage-9 normally does this).
         transaction(db) {
             KcVerificationStatusTable.insert {
@@ -301,6 +525,77 @@ class TrustRoutesTest {
         // An audit row was written.
         val auditCount = transaction(db) { VerificationAuditTable.selectAll().count() }
         assertTrue(auditCount >= 1, "expected >=1 verification_audit row, got $auditCount")
+    }
+
+    @Test
+    fun `TOPOLOGY GUARD - on the served build admin verify does NOT run the audit in-thread (503, owner-CLI-only)`() = testApplication {
+        // Bundle-2 (D7): the served build leaves JARVIS_AUDIT_ROUTE unset ⇒ the route must short-
+        // circuit with 503 AFTER owner-auth + CSRF and NEVER call runner.audit on the request
+        // thread (no model-load on the weak VPS; the canonical entry is the verifyContent CLI).
+        val dir = Files.createTempDirectory("trust-admin-served")
+        val content = dir.resolve("content"); seedContent(content, status = "pending")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, ownerSid) = seedUser(db, UserScope.OWNER)
+        transaction(db) {
+            KcVerificationStatusTable.insert {
+                it[kcId] = "pa-kc-005"
+                it[status] = VerificationStatus.pending.name
+                it[updatedAt] = Instant.now()
+            }
+        }
+        // Served-build config: the audit route is DISABLED.
+        auditRouteEnabled = { false }
+        // A tripwire runner: if the handler ever calls runner.audit on the request path, the legs
+        // execute and (because nonLlmLegFor / liveRunnerFor would touch the real source) the audit
+        // body would write a row / respond 502 — neither of which may happen on the served build.
+        var runnerBuilt = false
+        verifyRunnerFactory = { d, _ ->
+            runnerBuilt = true
+            VerificationRunner(
+                db = d,
+                legA = TwoFamilyDeriver.Leg(LegFamily.RELAY, FixedLlm("SUPPORTED")),
+                legB = TwoFamilyDeriver.Leg(LegFamily.OPENROUTER, FixedLlm("SUPPORTED")),
+                nonLlmLegFor = { jarvis.tutor.verify.nonLlmLegFor(it) },
+                rawSourceFor = { error("served build must NOT reach runner.audit on the request path") },
+            )
+        }
+        application { installTrust(db, dir) }
+        val r = client.post("/api/v1/admin/verify/pa-kc-005") {
+            header("Cookie", "jarvis_session=$ownerSid; csrf=c"); header("X-CSRF-Token", "c")
+        }
+        // 503 owner-CLI-only — NOT 200 (ran), NOT 502 (audit threw), NOT 422 (claims path reached).
+        assertEquals(HttpStatusCode.ServiceUnavailable, r.status)
+        val body = r.bodyAsText()
+        assertTrue(body.contains("owner-CLI-only", ignoreCase = true), body)
+        assertTrue(body.contains("verifyContent", ignoreCase = true), body)
+        // The audit body never ran: no runner was built and no verification_audit row exists.
+        assertFalse(runnerBuilt, "served build must not build/invoke the audit runner on the request path")
+        val auditCount = transaction(db) { VerificationAuditTable.selectAll().count() }
+        assertEquals(0L, auditCount, "served build must write ZERO verification_audit rows from the request path")
+    }
+
+    @Test
+    fun `TOPOLOGY GUARD - the 503 fires only AFTER owner-auth — a friend still gets 403 on the served build`() = testApplication {
+        // Owner-auth + CSRF stay enforced; the topology guard is the LAST check, so a non-owner is
+        // rejected 403 (not leaked the 503) and an unauthenticated caller is rejected 401.
+        val dir = Files.createTempDirectory("trust-admin-served-gate")
+        val content = dir.resolve("content"); seedContent(content)
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, friendSid) = seedUser(db, UserScope.FRIEND)
+        auditRouteEnabled = { false }
+        application { installTrust(db, dir) }
+        // unauthenticated ⇒ 401 (before the guard)
+        val unauth = client.post("/api/v1/admin/verify/pa-kc-005") {
+            header("Cookie", "csrf=c"); header("X-CSRF-Token", "c")
+        }
+        assertEquals(HttpStatusCode.Unauthorized, unauth.status)
+        // authenticated FRIEND ⇒ 403 (before the guard)
+        val friend = client.post("/api/v1/admin/verify/pa-kc-005") {
+            header("Cookie", "jarvis_session=$friendSid; csrf=c"); header("X-CSRF-Token", "c")
+        }
+        assertEquals(HttpStatusCode.Forbidden, friend.status)
     }
 
     // ── POST /fsrs/{id}/report-wrong ───────────────────────────────────────────────────────────
@@ -365,6 +660,50 @@ class TrustRoutesTest {
                 .single()[KcVerificationStatusTable.status]
         }
         assertEquals(VerificationStatus.pending.name, kcStatus)
+    }
+
+    /** A GAP_PROMOTION-style card with NO kc_id (the orphan-row case F6 must reject). */
+    private fun seedKclessCard(db: org.jetbrains.exposed.sql.Database, userId: String): String {
+        val cardId = TutorTypes.ulid()
+        val now = Instant.now()
+        FsrsCardRepo(db).insert(
+            TutorCard(
+                id = cardId, userId = userId,
+                source = FsrsSource.GAP_PROMOTION, sourceRef = "some-gap",
+                front = "front", back = "back",
+                state = FsrsState(5.0, 1.0, 0.9, now, now, 0),
+                kcId = null, status = CardStatus.ACTIVE,
+            ),
+        )
+        return cardId
+    }
+
+    @Test
+    fun `F6 - report-wrong on a null-kcId card is rejected (422), never writes a report_wrong keyed on empty-string`() = testApplication {
+        // F6: a kc-less card (GAP_PROMOTION) has no KC to flip. The OLD code wrote a report_wrong row
+        // keyed on '' (an orphan that pollutes the kc_id space). It must instead reject with 422 and
+        // write NO report_wrong row keyed on the empty string.
+        val dir = Files.createTempDirectory("trust-f6")
+        val db = freshDb(dir)
+        val (uid, sid) = seedUser(db, UserScope.FRIEND)
+        val cardId = seedKclessCard(db, uid)
+        application { installTrust(db, dir) }
+        val r = client.post("/api/v1/fsrs/$cardId/report-wrong") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("""{"gradeAttemptRaw":"x"}""")
+        }
+        assertEquals(HttpStatusCode.UnprocessableEntity, r.status)
+        // No orphan report_wrong row keyed on '' was written.
+        val emptyKeyed = transaction(db) {
+            ReportWrongTable.selectAll().where { ReportWrongTable.kcId eq "" }.count()
+        }
+        assertEquals(0L, emptyKeyed, "F6: must not write a report_wrong row keyed on the empty string")
+        // And nothing at all was written for this card.
+        val total = transaction(db) {
+            ReportWrongTable.selectAll().where { ReportWrongTable.cardId eq cardId }.count()
+        }
+        assertEquals(0L, total)
     }
 
     @Test

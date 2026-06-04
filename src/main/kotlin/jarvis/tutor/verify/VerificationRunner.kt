@@ -82,15 +82,27 @@ class VerificationRunner(
         claims: List<VerificationClaim>,
         auditRunId: String = TutorTypes.ulid(),
     ): List<AuditResult> {
+        // D8: the per-KC content fingerprint over the AUDITED claim set for that KC. Computed ONCE up
+        // front over the whole batch (a KC's hash folds in every claim being audited for it), then
+        // stamped on each KC's kc_verification_status row. The serve gate recomputes the same hash from
+        // the live content and shows `faithful` only on a match (else fail-closed to unverified).
+        val hashByKc: Map<String, String> = claims
+            .groupBy { it.kcId }
+            .mapValues { (_, kcClaims) -> jarvis.content.ContentReconcile.kcContentHashOf(kcClaims) }
+
         val results = ArrayList<AuditResult>(claims.size)
         for (claim in claims) {
-            results.add(auditOne(claim, auditRunId))
+            results.add(auditOne(claim, auditRunId, hashByKc[claim.kcId]))
         }
         return results
     }
 
     /** Resolve every leg (try/catch each), compute the outcome+status, THEN write once. */
-    private suspend fun auditOne(claim: VerificationClaim, auditRunId: String): AuditResult {
+    private suspend fun auditOne(
+        claim: VerificationClaim,
+        auditRunId: String,
+        contentHash: String?,
+    ): AuditResult {
         // ---- 1. RESOLVE ALL LEGS (no DB; each leg in its OWN try/catch) -----------------------
         val legs = resolveLegs(claim)
 
@@ -104,7 +116,7 @@ class VerificationRunner(
         val notes = buildNotes(claim, legs, outcome)
 
         // ---- 4/5. WRITE ONCE (idempotent on auditRunId) --------------------------------------
-        val written = writeOnce(claim, legs, outcome, newStatus, auditRunId, notes)
+        val written = writeOnce(claim, legs, outcome, newStatus, auditRunId, notes, contentHash)
 
         return AuditResult(
             claimId = claim.claimId,
@@ -248,6 +260,7 @@ class VerificationRunner(
         newStatus: VerificationStatus,
         auditRunId: String,
         notes: String,
+        contentHash: String?,
     ): Boolean = transaction(db) {
         val already = VerificationAuditTable.selectAll()
             .where {
@@ -297,12 +310,14 @@ class VerificationRunner(
                 it[kcId] = claim.kcId
                 it[status] = newStatus.name
                 it[lastAuditRunId] = auditRunId
+                it[KcVerificationStatusTable.contentHash] = contentHash
                 it[updatedAt] = now
             }
         } else {
             KcVerificationStatusTable.update({ KcVerificationStatusTable.kcId eq claim.kcId }) {
                 it[status] = newStatus.name
                 it[lastAuditRunId] = auditRunId
+                it[KcVerificationStatusTable.contentHash] = contentHash
                 it[updatedAt] = now
             }
         }

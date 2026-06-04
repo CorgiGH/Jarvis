@@ -109,6 +109,19 @@ object KcVerificationStatusTable : Table("kc_verification_status") {
     val kcId = varchar("kc_id", 64)
     val status = varchar("status", 16).default("unverified")
     val lastAuditRunId = varchar("last_audit_run_id", 64).nullable()
+    /**
+     * D8 content-hash staleness gate. The KC-level fingerprint (sha256_8 over the KC's audited claim
+     * texts + cited spans, [jarvis.content.ContentReconcile.kcContentHash]) AT the moment of the audit
+     * that wrote [status]. The serve gate (`/verify/{kcId}/status`) shows `faithful` ONLY when
+     * `hash(current serving content) == content_hash`; a mismatch (lecture edited after the audit) or a
+     * NULL (legacy/partial row that can't prove a match) falls CLOSED to `HonestFloor.UNVERIFIED` —
+     * never a lying "matches your lecture" badge over text that was never checked.
+     *
+     * Nullable + additive: the live table has 0 rows, so `createMissingTablesAndColumns` adds the bare
+     * `ALTER … ADD COLUMN content_hash` with no backfill needed (any pre-existing row would read NULL =
+     * fail-closed, which is the correct honest default). Mirrors the Phase-1 additive-column pattern.
+     */
+    val contentHash = varchar("content_hash", 16).nullable()
     val updatedAt = timestamp("updated_at")
     override val primaryKey = PrimaryKey(kcId)
 }

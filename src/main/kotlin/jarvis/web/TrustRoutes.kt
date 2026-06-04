@@ -18,6 +18,7 @@ import jarvis.tutor.FsrsCardRepo
 import jarvis.tutor.FsrsCardsTable
 import jarvis.tutor.KcVerificationStatusTable
 import jarvis.tutor.ReportWrongTable
+import jarvis.tutor.VerificationAuditTable
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.TutorContextKey
 import jarvis.tutor.TutorTypes
@@ -34,6 +35,7 @@ import jarvis.tutor.verify.honestFloorOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
@@ -118,6 +120,25 @@ data class ApiReportWrongReply(
 internal var verifyRunnerFactory: (db: org.jetbrains.exposed.sql.Database, repo: ContentRepo) ->
 jarvis.tutor.verify.VerificationRunner = { db, repo -> VerifyAdmin.liveRunnerFor(db, repo) }
 
+/**
+ * Topology guard (Bundle-2, master-plan §PHASE-2-REMAINING step 2 / D7). The offline audit
+ * (`runner.audit`) is OWNER-CLI-ONLY — it re-derives every claim against two LLM families + a
+ * non-LLM leg and, under D6, will load a ~0.4-0.8 GB NLI model. It MUST NOT run inside the
+ * `POST /admin/verify` HTTP handler on the SERVED build: that would load a model on a request
+ * thread of the weak ~1.9 GB-free VPS (OOM-kills the live box) and violates the LOCKED
+ * "audit is OFFLINE batch, never request-path" rule.
+ *
+ * The served build leaves `JARVIS_AUDIT_ROUTE` UNSET ⇒ this returns false ⇒ the route short-
+ * circuits with 503 "audit is owner-CLI-only" (AFTER owner-auth + CSRF) and NEVER calls
+ * `runner.audit`. The canonical offline entry stays [jarvis.tutor.verify.VerifyContentCli]
+ * (the `verifyContent` gradle task). Only an owner who explicitly sets `JARVIS_AUDIT_ROUTE=1`
+ * on their PC re-enables the in-handler path. A test seam (an `internal var`) so route tests
+ * flip it without touching the real process env.
+ */
+internal var auditRouteEnabled: () -> Boolean = {
+    System.getenv("JARVIS_AUDIT_ROUTE")?.trim()?.lowercase() in setOf("1", "true", "yes", "on")
+}
+
 /** Pinned badge copy. NEVER "verified correct" (§P / master §1). */
 internal fun badgeTextFor(status: VerificationStatus): String =
     when (status) {
@@ -159,10 +180,16 @@ object VerifyAdmin {
      * of served trust. F4-serve: a KC with NO B8 row resolves to `unverified`, NEVER the authored YAML
      * seed. The seed `verification_status: faithful` means "the author hopes so" — with zero audit legs
      * run there is no evidence to serve `faithful`. Only an actual audit (which writes a B8 row) may
-     * promote past `unverified`. The [kc] arg is retained for the call-site contract (and future use)
-     * but is deliberately NOT consulted for status — the seed is never a fallback.
+     * promote past `unverified`.
+     *
+     * D8 content-hash staleness gate: a `faithful` row is served as `faithful` ONLY when the row's
+     * `content_hash` (the fingerprint of the content AT audit time) matches the hash of the CURRENT
+     * serving content ([ContentReconcile.kcContentHash] over the live [kc]). If the lecture was edited
+     * after the audit (hash mismatch), the row carries no hash (NULL — a legacy/partial row that cannot
+     * prove a match), or there is no live [kc] to recompute against, the served status falls CLOSED to
+     * `unverified` — the badge NEVER lies "matches your lecture" over text it never actually checked.
+     * The gate applies ONLY to `faithful`; any non-faithful status is returned verbatim.
      */
-    @Suppress("UNUSED_PARAMETER")
     fun resolveStatus(
         db: org.jetbrains.exposed.sql.Database,
         kcId: String,
@@ -171,9 +198,65 @@ object VerifyAdmin {
         val row = KcVerificationStatusTable.selectAll()
             .where { KcVerificationStatusTable.kcId eq kcId }
             .singleOrNull()
-        row?.get(KcVerificationStatusTable.status)
+        val status = row?.get(KcVerificationStatusTable.status)
             ?.let { runCatching { VerificationStatus.valueOf(it) }.getOrNull() }
             ?: VerificationStatus.unverified
+
+        // D8: only `faithful` may be staled out; every other status is honest as-is.
+        if (status != VerificationStatus.faithful) return@transaction status
+
+        val rowHash = row?.get(KcVerificationStatusTable.contentHash)
+        val currentHash = kc?.let { ContentReconcile.kcContentHash(it) }
+        // Fail CLOSED unless the audited hash and the live-content hash both exist AND match.
+        if (rowHash != null && currentHash != null && rowHash == currentHash) {
+            VerificationStatus.faithful
+        } else {
+            VerificationStatus.unverified
+        }
+    }
+
+    /**
+     * F5 — resolve each claim's OWN per-claim verdict from `verification_audit` (the audit-of-record),
+     * keyed on `claim_id`, NOT the single KC-level status broadcast onto every claim. For each claimId
+     * the LATEST audit row (by `audited_at`) supplies the claim's `status`. A claim with NO audit row
+     * falls CLOSED to `unverified` (it was never audited — never inherit the KC's faithful).
+     *
+     * D8 staleness cap: a per-claim `faithful` is only honest while the KC's content is unchanged since
+     * the audit. [kcStaleness] is the KC-level D8 verdict ([resolveStatus]) — if it demoted the KC's
+     * `faithful` to `unverified` (lecture edited / NULL hash / no live kc), every per-claim `faithful`
+     * is likewise demoted to `unverified`. Non-faithful per-claim verdicts pass through verbatim.
+     *
+     * Returns a `claimId -> VerificationStatus` map (absent ⇒ caller falls closed to `unverified`).
+     */
+    fun resolvePerClaimStatuses(
+        db: org.jetbrains.exposed.sql.Database,
+        claimIds: Collection<String>,
+        kcStaleness: VerificationStatus,
+    ): Map<String, VerificationStatus> {
+        if (claimIds.isEmpty()) return emptyMap()
+        // If the KC-level D8 gate already demoted faithful (stale / NULL hash / no live kc), per-claim
+        // faithful is no longer honest either — cap it down to unverified.
+        val faithfulIsStale = kcStaleness != VerificationStatus.faithful
+        return transaction(db) {
+            val out = HashMap<String, VerificationStatus>(claimIds.size)
+            for (cid in claimIds.toSet()) {
+                val latest = VerificationAuditTable.selectAll()
+                    .where { VerificationAuditTable.claimId eq cid }
+                    .orderBy(VerificationAuditTable.auditedAt to SortOrder.DESC)
+                    .limit(1)
+                    .singleOrNull()
+                    ?: continue   // no audit row ⇒ caller falls closed to unverified
+                val claimStatus = latest[VerificationAuditTable.status]
+                    .let { runCatching { VerificationStatus.valueOf(it) }.getOrNull() }
+                    ?: VerificationStatus.unverified
+                out[cid] = if (claimStatus == VerificationStatus.faithful && faithfulIsStale) {
+                    VerificationStatus.unverified
+                } else {
+                    claimStatus
+                }
+            }
+            out
+        }
     }
 }
 
@@ -221,11 +304,21 @@ fun Route.installTrustRoutes() {
 
             // Build the cited claims. Only span/quote-resolved claims survive the CitationGuard
             // chokepoint; a claim with a null SourceRef is dropped (it throws — never shipped uncited).
+            //
+            // F5: stamp each claim's OWN per-claim verdict (read from verification_audit by claimId),
+            // NOT the single KC-level `status` broadcast onto every claim. An unaudited claim falls
+            // closed to `unverified`; a per-claim `faithful` is capped down when the KC-level D8 gate
+            // already demoted faithful (stale content / NULL hash / no live kc).
             val claims: List<CitedClaim> = if (kc == null) {
                 emptyList()
             } else {
-                ContentReconcile.claimsFor(kc).mapNotNull { claim ->
-                    runCatching { CitationGuard.attach(claim, status) }.getOrNull()
+                val kcClaims = ContentReconcile.claimsFor(kc)
+                val perClaim = VerifyAdmin.resolvePerClaimStatuses(
+                    ctx.db, kcClaims.map { it.claimId }, kcStaleness = status,
+                )
+                kcClaims.mapNotNull { claim ->
+                    val claimStatus = perClaim[claim.claimId] ?: VerificationStatus.unverified
+                    runCatching { CitationGuard.attach(claim, claimStatus) }.getOrNull()
                 }
             }
 
@@ -242,13 +335,26 @@ fun Route.installTrustRoutes() {
     }
 
     // ── POST /api/v1/admin/verify/{kcId} ───────────────────────────────────────────────────────
-    // Owner-only OFFLINE re-audit. Emits the KC's claims (Stage-9), runs the two-family +
-    // non-LLM + round-trip audit, writes verification_audit + kc_verification_status (B8).
+    // TOPOLOGY GUARD (Bundle-2 / D7): the offline audit is OWNER-CLI-ONLY. On the SERVED build
+    // (JARVIS_AUDIT_ROUTE unset) this short-circuits with 503 AFTER owner-auth + CSRF and NEVER
+    // calls runner.audit in-thread — no model-load on a request thread of the weak VPS. The
+    // canonical offline entry is VerifyContentCli (the `verifyContent` gradle task). Only when an
+    // owner explicitly opts in (JARVIS_AUDIT_ROUTE=1, PC-side) does the in-handler path run the
+    // two-family + non-LLM + round-trip audit and write verification_audit + kc_verification_status (B8).
     post("/api/v1/admin/verify/{kcId}") {
         requireOwnerTrust {
             val ctx = call.application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@requireOwnerTrust }
             call.csrfProtect {
+                // Served-build guard: the audit never runs on the request path here. FAIL-CLOSED to
+                // 503 (owner-CLI-only) BEFORE building the runner or touching the LLM families.
+                if (!auditRouteEnabled()) {
+                    call.respondText(
+                        """{"error":"audit is owner-CLI-only — run the verifyContent gradle task (offline batch); the request-path audit is disabled on this build"}""",
+                        ContentType.Application.Json, HttpStatusCode.ServiceUnavailable,
+                    )
+                    return@csrfProtect
+                }
                 val kcId = call.parameters["kcId"]?.takeIf { it.isNotBlank() }
                     ?: run { call.respond(HttpStatusCode.BadRequest, """{"error":"kcId required"}"""); return@csrfProtect }
                 val repo = ContentRepo(trustContentDir())
@@ -311,9 +417,18 @@ fun Route.installTrustRoutes() {
                     ApiReportWrongRequest()  // tolerate a missing/empty body
                 }
 
-                // The KC this card teaches. RUBRIC_CRITERION cards carry kc_id; if absent, there is
-                // no KC to flip — we still pause the card + log the report (FAIL-LOUD: never silently drop).
-                val kcId = card.kcId ?: ""
+                // The KC this card teaches. RUBRIC_CRITERION cards carry kc_id. F6: a kc-less card
+                // (e.g. GAP_PROMOTION) has NO KC to key the report on — writing one keyed on '' would
+                // create an orphan row polluting the kc_id space. Reject with 422 (never store '' as a
+                // real key, never write an orphan report_wrong).
+                val kcId = card.kcId?.takeIf { it.isNotBlank() }
+                    ?: run {
+                        call.respondText(
+                            """{"error":"this card has no kc_id — report-wrong needs a KC to flag; nothing to report on a kc-less card"}""",
+                            ContentType.Application.Json, HttpStatusCode.UnprocessableEntity,
+                        )
+                        return@csrfProtect
+                    }
                 val now = Instant.now()
                 val reportId = TutorTypes.ulid()
 
@@ -337,32 +452,30 @@ fun Route.installTrustRoutes() {
                     }
                 }
 
-                // 3. flip the KC via the REPORT_WRONG transition (faithful→pending). Only when this
-                //    card maps to a KC; the gate now DENYs SR-entry for it (open report_wrong + pending).
-                var newStatus = VerificationStatus.unverified
-                if (kcId.isNotBlank()) {
-                    newStatus = transaction(ctx.db) {
-                        val row = KcVerificationStatusTable.selectAll()
-                            .where { KcVerificationStatusTable.kcId eq kcId }
-                            .singleOrNull()
-                        val prior = row?.get(KcVerificationStatusTable.status)
-                            ?.let { runCatching { VerificationStatus.valueOf(it) }.getOrNull() }
-                            ?: VerificationStatus.unverified
-                        val next = VerificationStatus_.transition(prior, AuditOutcome.REPORT_WRONG)
-                        if (row == null) {
-                            KcVerificationStatusTable.insert {
-                                it[KcVerificationStatusTable.kcId] = kcId
-                                it[status] = next.name
-                                it[updatedAt] = now
-                            }
-                        } else {
-                            KcVerificationStatusTable.update({ KcVerificationStatusTable.kcId eq kcId }) {
-                                it[status] = next.name
-                                it[updatedAt] = now
-                            }
+                // 3. flip the KC via the REPORT_WRONG transition (faithful→pending). The card always
+                //    maps to a KC here (kc-less cards were already rejected 422 above); the gate now
+                //    DENYs SR-entry for it (open report_wrong + pending).
+                val newStatus = transaction(ctx.db) {
+                    val row = KcVerificationStatusTable.selectAll()
+                        .where { KcVerificationStatusTable.kcId eq kcId }
+                        .singleOrNull()
+                    val prior = row?.get(KcVerificationStatusTable.status)
+                        ?.let { runCatching { VerificationStatus.valueOf(it) }.getOrNull() }
+                        ?: VerificationStatus.unverified
+                    val next = VerificationStatus_.transition(prior, AuditOutcome.REPORT_WRONG)
+                    if (row == null) {
+                        KcVerificationStatusTable.insert {
+                            it[KcVerificationStatusTable.kcId] = kcId
+                            it[status] = next.name
+                            it[updatedAt] = now
                         }
-                        next
+                    } else {
+                        KcVerificationStatusTable.update({ KcVerificationStatusTable.kcId eq kcId }) {
+                            it[status] = next.name
+                            it[updatedAt] = now
+                        }
                     }
+                    next
                 }
 
                 call.respond(

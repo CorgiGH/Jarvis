@@ -43,6 +43,24 @@ class CitationGuardTest {
         assertEquals("the size of representation must be mentioned", cited.source.quote)
     }
 
+    // --- F3: the 1-arg path is NEVER faithful-capable (audited-status overload is the only one) --
+
+    @Test
+    fun `F3 - a span-anchored, never-audited claim via the 1-arg path is NEVER faithful`() {
+        // The 1-arg attach has NO audited status in hand (the runner never ran for this claim).
+        // Even though the citation is span-anchored, a span by itself certifies NOTHING — only the
+        // runner (the audited-status overload) may ever mint faithful. So the 1-arg path must pin
+        // to `uncertain`, never `faithful`. (F3: span-presence must not launder trust into faithful.)
+        val ref = SourceRef(
+            doc = "pa-lecture-01",
+            quote = "the size of representation must be mentioned",
+            page = 34,
+            span = Span(900, 944),
+        )
+        val cited = CitationGuard.attach(claim(source = ref))
+        assertEquals(jarvis.tutor.VerificationStatus.uncertain, cited.status)
+    }
+
     @Test
     fun `a claim cited by quote alone (no span) still attaches but does not over-claim faithful`() {
         val ref = SourceRef(doc = "pa-lecture-01", quote = "some quote", page = 34, span = null)

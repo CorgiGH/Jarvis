@@ -55,6 +55,45 @@ class NewTablesMigrationTest {
     }
 
     @Test
+    fun `kc_verification_status has a content_hash column (D8) after migrate`(@TempDir tmp: Path) {
+        val db = tempDb(tmp)
+        TutorMigration.migrate(db)
+        assertTrue(
+            columnType(db, "kc_verification_status", "content_hash") != null,
+            "expected a content_hash column on kc_verification_status after migrate (D8)",
+        )
+    }
+
+    @Test
+    fun `content_hash migration is idempotent on the 0-row shape`(@TempDir tmp: Path) {
+        val db = tempDb(tmp)
+        // Run the migration twice over an empty (0-row) kc_verification_status — the additive
+        // column add must be a no-op on the second pass (M-IDEMP), no crash, column still present.
+        TutorMigration.migrate(db)
+        TutorMigration.migrate(db)
+        assertTrue(
+            columnType(db, "kc_verification_status", "content_hash") != null,
+            "content_hash still present after a second migrate (idempotent)",
+        )
+        // The table is still usable: a write that sets content_hash round-trips.
+        transaction(db) {
+            KcVerificationStatusTable.insert {
+                it[kcId] = "pa-kc-005"
+                it[contentHash] = "abc12345"
+                it[updatedAt] = java.time.Instant.now()
+            }
+        }
+        val hash = transaction(db) {
+            var h: String? = null
+            exec("SELECT content_hash FROM kc_verification_status WHERE kc_id='pa-kc-005'") { rs ->
+                if (rs.next()) h = rs.getString(1)
+            }
+            h
+        }
+        assertEquals("abc12345", hash)
+    }
+
+    @Test
     fun `attempts index on user_id kc_id graded_at is present`(@TempDir tmp: Path) {
         val db = tempDb(tmp)
         TutorMigration.migrate(db)

@@ -173,8 +173,10 @@ class ContentValidatorStrictTest {
     }
 
     @Test
-    fun `all four valid authored literals pass enum check for KCs`() {
-        for (status in listOf("unverified", "pending", "faithful", "uncertain")) {
+    fun `the three valid authored literals pass enum check for KCs`() {
+        // F4-author: `faithful` is NO LONGER an authored literal — authors seed only
+        // {unverified, pending, uncertain}; `faithful` is earned at runtime by an audit, never authored.
+        for (status in listOf("unverified", "pending", "uncertain")) {
             val kc = standardKc(verificationStatus = status)
             val sub = LoadedSubject("PA", kcs = listOf(kc), edges = emptyList(), misconceptions = emptyList())
             val issues = ContentValidator.checkVerificationStatusEnum(sub)
@@ -182,6 +184,22 @@ class ContentValidatorStrictTest {
             assertTrue(enumErrors.isEmpty(),
                 "Status '$status' should pass enum check; got errors: ${enumErrors.map { it.detail }}")
         }
+    }
+
+    @Test
+    fun `F4-author - verification_status=faithful on a KC is rejected as not an authored literal`() {
+        // F4-author: a YAML may seed only {unverified, pending, uncertain}. `faithful` certifies an
+        // audit that ran — authoring it would be an unearned claim, so the validator now rejects it
+        // (same treatment as the runtime-only `failed`).
+        val kc = standardKc(verificationStatus = "faithful")
+        val sub = LoadedSubject("PA", kcs = listOf(kc), edges = emptyList(), misconceptions = emptyList())
+
+        val issues = ContentValidator.checkVerificationStatusEnum(sub)
+        val enumIssues = issues.filter { it.severity == "error" && it.rule == "verification_status_enum" }
+        assertEquals(1, enumIssues.size,
+            "Expected 1 enum error for 'faithful'; got: ${issues.map { it.detail }}")
+        assertTrue(enumIssues.single().detail.contains("faithful"),
+            "Detail should mention the invalid literal; got: ${enumIssues.single().detail}")
     }
 
     @Test
@@ -205,8 +223,9 @@ class ContentValidatorStrictTest {
     }
 
     @Test
-    fun `all four valid authored literals pass enum check for Misconceptions`() {
-        for (status in listOf("unverified", "pending", "faithful", "uncertain")) {
+    fun `the three valid authored literals pass enum check for Misconceptions`() {
+        // F4-author: `faithful` is no longer an authored literal (see the KC test above).
+        for (status in listOf("unverified", "pending", "uncertain")) {
             val m = Misconception(
                 id = "pa-misc-001", kc_id = "pa-kc-001",
                 label_ro = "RO", label_en = "EN",
