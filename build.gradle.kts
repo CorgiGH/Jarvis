@@ -189,7 +189,8 @@ tasks.named("check") { dependsOn("validateContent") }
 tasks.register<JavaExec>("verifyContent") {
     group = "verification"
     description = "OFFLINE trust-net audit (owner/manual ONLY; NOT part of check). Requires a live " +
-        "relay (JARVIS_RELAY_URL+JARVIS_RELAY_TOKEN) + OpenRouter (OPENROUTER_API_KEY); FAIL-LOUD aborts otherwise."
+        "relay (JARVIS_RELAY_URL+JARVIS_RELAY_TOKEN) + the local NLI family (JARVIS_PYTHON3 -> a python " +
+        "with transformers + the DeBERTa-v3 model); FAIL-LOUD aborts otherwise. PC-side only (D7)."
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("jarvis.tutor.verify.VerifyContentCliKt")
     args = (project.findProperty("verifyArgs") as String?)?.split(" ")?.filter { it.isNotEmpty() } ?: listOf()

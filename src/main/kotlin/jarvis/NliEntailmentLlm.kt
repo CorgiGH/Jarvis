@@ -138,9 +138,19 @@ class NliEntailmentLlm : Llm {
          */
         internal fun runNli(premise: String, hypothesis: String): String {
             val python = System.getenv("JARVIS_PYTHON3")?.takeIf { it.isNotBlank() } ?: "python3"
+            // D-R13: pass the runner as a temp FILE, NOT `python -c "<script>"`. On Windows the JVM's
+            // CreateProcess command-line quoting MANGLES the embedded double-quotes in a `-c` arg
+            // (python then hits a SyntaxError → empty stdout → this leg throws "empty output"). The
+            // file path is quote-safe + is the proven bridge. stderr is DISCARDed so transformers'
+            // progress-bar/warnings can never fill an undrained pipe.
+            val scriptFile = java.nio.file.Files.createTempFile("jarvis-nli-", ".py")
+            java.nio.file.Files.write(scriptFile, PY_NLI_RUNNER.toByteArray(StandardCharsets.UTF_8))
             val proc = try {
-                ProcessBuilder(python, "-c", PY_NLI_RUNNER).redirectErrorStream(false).start()
+                ProcessBuilder(python, scriptFile.toString())
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start()
             } catch (e: Exception) {
+                runCatching { java.nio.file.Files.deleteIfExists(scriptFile) }
                 throw RuntimeException(
                     "NLI bridge unavailable: cannot start '$python' (${e.javaClass.simpleName}: ${e.message})",
                     e,
@@ -166,6 +176,8 @@ class NliEntailmentLlm : Llm {
             } catch (e: Exception) {
                 proc.destroyForcibly()
                 throw RuntimeException("NLI bridge error (fail-loud): ${e.javaClass.simpleName}: ${e.message?.take(160)}", e)
+            } finally {
+                runCatching { java.nio.file.Files.deleteIfExists(scriptFile) }
             }
         }
 

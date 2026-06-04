@@ -98,9 +98,21 @@ fun realSymPyEquals(lhs: String, rhs: String): SymPyLeg.PyResult {
         return SymPyLeg.PyResult(ran = false, equal = false, detail = "expression too long (>1000 chars)")
     }
     val python = System.getenv("JARVIS_PYTHON3")?.takeIf { it.isNotBlank() } ?: "python3"
-    val proc = try {
-        ProcessBuilder(python, "-c", PY_EQUALS_RUNNER).redirectErrorStream(false).start()
+    // D-R13: run the runner as a temp FILE, NOT `python -c "<script>"`. On Windows the JVM's
+    // CreateProcess command-line quoting MANGLES embedded double-quotes in a `-c` arg (python then
+    // hits a SyntaxError → empty stdout → ran=false), which silently degraded every equational
+    // claim to the UNCERTAIN floor. The file path is quote-safe.
+    val scriptFile = try {
+        java.nio.file.Files.createTempFile("jarvis-sympy-", ".py").also {
+            java.nio.file.Files.write(it, PY_EQUALS_RUNNER.toByteArray(StandardCharsets.UTF_8))
+        }
     } catch (e: Exception) {
+        return SymPyLeg.PyResult(false, false, "sympy bridge unavailable: cannot stage runner (${e.javaClass.simpleName})")
+    }
+    val proc = try {
+        ProcessBuilder(python, scriptFile.toString()).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+    } catch (e: Exception) {
+        runCatching { java.nio.file.Files.deleteIfExists(scriptFile) }
         return SymPyLeg.PyResult(
             ran = false,
             equal = false,
@@ -123,6 +135,8 @@ fun realSymPyEquals(lhs: String, rhs: String): SymPyLeg.PyResult {
     } catch (e: Exception) {
         proc.destroyForcibly()
         SymPyLeg.PyResult(false, false, "sympy bridge error: ${e.javaClass.simpleName}: ${e.message?.take(160)}")
+    } finally {
+        runCatching { java.nio.file.Files.deleteIfExists(scriptFile) }
     }
 }
 

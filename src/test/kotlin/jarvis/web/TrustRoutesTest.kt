@@ -573,22 +573,22 @@ class TrustRoutesTest {
         // Seed the KC pending so the runner can transition it.
         seedB8(db, "pa-kc-005", VerificationStatus.pending, null)
 
-        // A hermetic runner: both families SUPPORTED; non-LLM = the real routing. B5-RESHAPE: the
-        // DEFINITION / prose-GRADER_RULE claims now reach `faithful` through their LIVE round-trip (the
-        // prose anchor — their quote round-trips against rawSource). To keep a genuine MIX (and prove
-        // serve returns each claim's OWN verdict, not a KC broadcast), the equational INVARIANT's SymPy
-        // leg is faked to FAIL here ⇒ that claim ends `failed` while the prose claims end `faithful`.
+        // A HERMETIC runner (no python/network): both families SUPPORTED; the DEFINITION / prose-
+        // GRADER_RULE claims reach `faithful` through their LIVE round-trip (the B5-RESHAPE prose
+        // anchor — their quote round-trips against rawSource). To keep a genuine MIX (and prove serve
+        // returns each claim's OWN verdict, not a KC broadcast), the equational INVARIANT's non-LLM leg
+        // is UNCONDITIONALLY faked to FAIL ⇒ that claim ends `failed` while the prose claims end
+        // `faithful`. (D-R16: the fake is unconditional so the mix does NOT depend on whether the real
+        // SymPy bridge happens to run in the test env — a TrustRoutesTest must stay hermetic.)
         val runner = VerificationRunner(
             db = db,
             legA = TwoFamilyDeriver.Leg(LegFamily.RELAY, FixedLlm("SUPPORTED")),
             legB = TwoFamilyDeriver.Leg(LegFamily.OPENROUTER, FixedLlm("SUPPORTED")),
-            nonLlmLegFor = { subject ->
+            nonLlmLegFor = {
                 jarvis.tutor.verify.NonLlmLeg { cl ->
-                    val real = jarvis.tutor.verify.nonLlmLegFor(subject).check(cl)
-                    if (real.kind == jarvis.tutor.verify.NonLlmLegKind.SYMPY && real.ran) real
-                    else if (cl.kind == jarvis.tutor.verify.ClaimKind.INVARIANT)
+                    if (cl.kind == jarvis.tutor.verify.ClaimKind.INVARIANT)
                         jarvis.tutor.verify.NonLlmResult(jarvis.tutor.verify.NonLlmLegKind.SYMPY, ran = true, pass = false, detail = "fake!=0")
-                    else real
+                    else jarvis.tutor.verify.NonLlmResult(jarvis.tutor.verify.NonLlmLegKind.NONE, ran = false, pass = false, detail = "prose")
                 }
             },
             rawSourceFor = { "Algorithm is a finite sequence." },
