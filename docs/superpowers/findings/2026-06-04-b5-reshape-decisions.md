@@ -41,6 +41,15 @@ Offline `verifyContent` over the real PA corpus (throwaway temp DB; relay Claude
 
 - **D-R16 (B5r-6 fix fallout, test hermeticity):** the D-R13 SymPy-bridge fix made the real SymPy leg actually RUN in the test env, which broke `TrustRoutesTest…serves each claim's OWN runner verdict` — that test had used `if (real.ran) real else fake-fail`, so a now-working SymPy made all claims faithful → no mix. The serve-per-claim logic was CORRECT (assertion 1 passed; only the "≥2 distinct" mix assertion failed). Fix: make the fake UNCONDITIONAL (INVARIANT always fakes a SymPy FAIL) so the test is hermetic + the mix is deterministic, independent of the python env. Test-only change.
 
+## ⚠️ AUDIT FINDINGS (review+council+audit `council-1780613715-b5reshape-review-audit.md`, conf 9) — overall NEEDS_FIXES_BEFORE_TRUSTING
+
+The reshape spine is RIGHT + pa-kc-001..004 faithful is GENUINE+SAFE, but the audit found **2 LIVE false-faithful holes** (the exact invariant the net protects). **MUST-FIX before trusting/building on the badge:**
+- **MF-1 (D-R3 OVER-GENERALIZED — load-bearing):** case 3p (`!isEquationalKind && roundTrip.pass && !threw && !agreedNonSupported → faithful`) is SAFE only for DEFINITION (content==quote, so round-trip anchors the exact content). For a prose **GRADER_RULE** `content=rule` but `source=anchorRef` → round-trip validates the UNRELATED anchor quote, NOT the rule text; the LLM is veto-only + an unrelated NLI pairing abstains more than it both-REFUTEs ⇒ a hallucinated rule reaches faithful/grounded. LIVE on pa-kc-005:23 / pa-kc-006. **A green test (VerificationRunnerTest.kt:480-532) codifies the unsafe behavior.** Fix: restrict case 3p to `claim.kind==DEFINITION`; route prose GRADER_RULE through a path REQUIRING an independent positive signal on the RULE text (promote NLI to a required `bothSupported` vote where content!=quote) — and invert that test + add the red-then-green hallucinated-rule test.
+- **MF-2 (report-wrong forgets grounded):** report-wrong (TrustRoutes.kt:~569) flips status faithful→pending but never clears `lecture_grounded`/`content_hash`, so `servedHonestFloor` keeps serving "matches your lecture" on student-disputed content. Fix: set `lectureGrounded=false` (+ null content_hash) in that txn; seed `seedFaithfulCard` test with grounded=true (prod reality) + assert UNVERIFIED after report.
+- **MF-3:** the missing red-then-green test for MF-1 (part of MF-1).
+
+**SAFE_TO_DEFER (audit-blessed):** D-R14 groundedKc tighten + exclude `*-fixture-*` from served corpus (before onboarding more subjects); a could-not-run SymPy equational → uncertain not failed; a hermetic `-c`-mangling regression test (would've caught D-R13); D-R15 006 over-reject (content-tune); python-bridge nits (drain-thread/HF_HUB_DISABLE_PROGRESS_BARS, per-claim model reload → persistent process, stale KDoc); delete dead badgeTextFor/honestFloorOf.
+
 ## Open / deferred
 
 - **B5r-6 (IN PROGRESS):** wire the local NLI as a `Leg` (family-B) in the AUDIT path.
