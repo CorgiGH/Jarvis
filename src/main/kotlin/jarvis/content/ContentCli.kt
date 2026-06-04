@@ -1,6 +1,8 @@
 package jarvis.content
 
+import org.jetbrains.exposed.sql.Database
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.io.path.exists
 import kotlin.io.path.writeText
 import kotlin.system.exitProcess
@@ -39,6 +41,32 @@ object ContentCli {
     fun runValidation(contentDir: Path): ValidationReport {
         regenerateMermaid(contentDir)
         return validateOnly(contentDir)
+    }
+
+    /**
+     * curate-tutor **Stage-9 reconcile**. Runs the structural [validateOnly] gate FIRST — a malformed
+     * corpus (any `error`-severity issue) is NEVER reconciled into the audit queue (anti-contamination,
+     * council R2) — then emits each KC's [jarvis.tutor.verify.VerificationClaim]s and sets every
+     * unaudited KC's `kc_verification_status` to `pending` (UNVERIFIED→PENDING, DIRECTLY) via
+     * [ContentReconcile.reconcile]. Idempotent + H10-safe (never regresses a faithful KC).
+     *
+     * @return the [ContentReconcile.ReconcileReport] (emitted claims + promoted kcIds).
+     * @throws IllegalStateException if [validateOnly] reports any error-severity issue.
+     */
+    fun reconcile(
+        contentDir: Path,
+        db: Database,
+        clock: () -> Instant = Instant::now,
+    ): ContentReconcile.ReconcileReport {
+        val report = validateOnly(contentDir)
+        check(report.ok) {
+            "Stage-9 reconcile aborted: content validation has " +
+                "${report.issues.count { it.severity == "error" }} error(s) — fix the corpus first."
+        }
+        val repo = ContentRepo(contentDir)
+        val manifest = repo.loadManifest()
+        val subjects = manifest.subjects.map { repo.loadSubject(it.id) }
+        return ContentReconcile.reconcile(subjects, db, clock)
     }
 }
 

@@ -8,9 +8,28 @@ difficulty: 3
 time_minutes: 30
 exam_weight: 0.13
 tier: 3
+grounding_tier: strict
+# Precise, machine-checkable invariant (SymPyLeg-checkable: a single `lhs = rhs`).
+# Grounded in the lecture's array-size rule |a|_d = |a0|_d + ... + |a_{n-1}|_d together
+# with the uniform scalar rule |n|_unif = 1: the uniform size of a 3-element array whose
+# elements each have uniform size 1 is 1 + 1 + 1 = 3.
+invariant: "1 + 1 + 1 = 3"
+grader_rules:
+  - "sympy: simplify((1 + 1 + 1) - 3) == 0  # uniform array size = sum of element sizes (each |n|_unif = 1)"
+  - "the answer must distinguish the three size measures (uniform, logarithmic, linear) — a value's size is measure-dependent, never a single number"
 source:
   - doc: pa-lecture-01
-    quote: "For the values of each data type, the size of representation must be\n  mentioned."
+    quote: "For the values of each data type, the size of representation must be\nmentioned."
+    page: 34
+    span:
+      start: 16611
+      end: 16690
+    provenance: vision-confirmed
   - doc: pa-lecture-01
     quote: "There are (at least) three ways to define the size of values:"
+    page: 34
+    span:
+      start: 16691
+      end: 16752
+    provenance: vision-confirmed
 version: 1

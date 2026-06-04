@@ -8,11 +8,35 @@ difficulty: 4
 time_minutes: 35
 exam_weight: 0.17
 tier: 4
+grounding_tier: strict
+# Precise, machine-checkable invariant (SymPyLeg-checkable: a single `lhs = rhs`).
+# Grounded in the lecture's rule that a computation's time cost is the SUM of its
+# execution-step costs (time_d(τ) = Σ_i time_d(step_i)): a 3-step computation whose
+# steps each cost t has total time cost t + t + t = 3*t.
+invariant: "t + t + t = 3*t"
+grader_rules:
+  - "sympy: simplify((t + t + t) - 3*t) == 0  # computation time cost = sum of step costs"
+  - "the answer must express the computation cost as a SUM over execution steps, not the cost of a single step"
 source:
   - doc: pa-lecture-01
     quote: "Each operation op has a time cost time(op)."
+    page: 38
+    span:
+      start: 18639
+      end: 18682
+    provenance: vision-confirmed
   - doc: pa-lecture-01
     quote: "The time cost of an expression evaluation is the sum of time costs of the\noperations included in the expression."
+    page: 43
+    span:
+      start: 20858
+      end: 20970
+    provenance: vision-confirmed
   - doc: pa-lecture-01
     quote: "A computation (an execution) is a sequence of execution steps:"
+    page: 45
+    span:
+      start: 21865
+      end: 21927
+    provenance: vision-confirmed
 version: 1

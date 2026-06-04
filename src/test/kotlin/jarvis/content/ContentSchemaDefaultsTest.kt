@@ -71,17 +71,31 @@ class ContentSchemaDefaultsTest {
         assertEquals(false, kc.worked_example_first)
     }
 
+    /** The two authored computational KCs (Batch-4 b) intentionally carry strict-grounding fields
+     *  (invariant + grader_rules) — they are the FAITHFUL-target KCs of the trust-net. They are
+     *  EXEMPT from the "invariant defaults to null" / "grader_rules defaults to empty" assertions;
+     *  their authored shape is pinned by AuthoredStrictKcsTest instead. */
+    private val authoredStrictKcs = setOf("pa-kc-005", "pa-kc-006")
+
     @Test
-    fun `all 8 real KC yamls deserialize without new fields and take defaults`() {
+    fun `all 8 real KC yamls deserialize and the non-authored ones take defaults`() {
         val paths = realKcYamls()
         assertTrue(paths.isNotEmpty(), "No KC yaml paths found — check content/PA/kcs/ exists")
         for (path in paths) {
             assertTrue(path.exists(), "KC yaml not found: $path")
             val kc = Yaml.default.decodeFromString(KnowledgeConcept.serializer(), path.readText())
+            // verification_status is the AUTHORED seed; all real KCs author the default 'unverified'.
             assertEquals("unverified", kc.verification_status,
                 "KC ${kc.id}: verification_status should default to 'unverified'")
-            assertNull(kc.invariant, "KC ${kc.id}: invariant should default to null")
-            assertTrue(kc.grader_rules.isEmpty(), "KC ${kc.id}: grader_rules should default to empty list")
+            // The two authored strict KCs intentionally set invariant + grader_rules — skip those two.
+            if (kc.id !in authoredStrictKcs) {
+                assertNull(kc.invariant, "KC ${kc.id}: invariant should default to null")
+                assertTrue(kc.grader_rules.isEmpty(), "KC ${kc.id}: grader_rules should default to empty list")
+            } else {
+                assertNotNull(kc.invariant, "authored strict KC ${kc.id}: invariant must be set")
+                assertTrue(kc.grader_rules.isNotEmpty(), "authored strict KC ${kc.id}: grader_rules must be non-empty")
+            }
+            // The remaining new fields still default across ALL real KCs (none author them yet).
             assertNull(kc.stem_template, "KC ${kc.id}: stem_template should default to null")
             assertNull(kc.phase_plan, "KC ${kc.id}: phase_plan should default to null")
             assertNull(kc.far_transfer_stem, "KC ${kc.id}: far_transfer_stem should default to null")
