@@ -463,9 +463,11 @@ class TrustRoutesTest {
         // Seed the KC pending so the runner can transition it.
         seedB8(db, "pa-kc-005", VerificationStatus.pending, null)
 
-        // A hermetic runner: both families SUPPORTED; non-LLM = the real routing but with the
-        // equational SymPy pass faked (no python). The DEFINITION/prose-GRADER_RULE claims floor
-        // to uncertain; the equational INVARIANT is faithful.
+        // A hermetic runner: both families SUPPORTED; non-LLM = the real routing. B5-RESHAPE: the
+        // DEFINITION / prose-GRADER_RULE claims now reach `faithful` through their LIVE round-trip (the
+        // prose anchor — their quote round-trips against rawSource). To keep a genuine MIX (and prove
+        // serve returns each claim's OWN verdict, not a KC broadcast), the equational INVARIANT's SymPy
+        // leg is faked to FAIL here ⇒ that claim ends `failed` while the prose claims end `faithful`.
         val runner = VerificationRunner(
             db = db,
             legA = TwoFamilyDeriver.Leg(LegFamily.RELAY, FixedLlm("SUPPORTED")),
@@ -475,7 +477,7 @@ class TrustRoutesTest {
                     val real = jarvis.tutor.verify.nonLlmLegFor(subject).check(cl)
                     if (real.kind == jarvis.tutor.verify.NonLlmLegKind.SYMPY && real.ran) real
                     else if (cl.kind == jarvis.tutor.verify.ClaimKind.INVARIANT)
-                        jarvis.tutor.verify.NonLlmResult(jarvis.tutor.verify.NonLlmLegKind.SYMPY, ran = true, pass = true, detail = "fake=0")
+                        jarvis.tutor.verify.NonLlmResult(jarvis.tutor.verify.NonLlmLegKind.SYMPY, ran = true, pass = false, detail = "fake!=0")
                     else real
                 }
             },
@@ -486,7 +488,7 @@ class TrustRoutesTest {
 
         // The D8 content-staleness signal the serve path passes into resolvePerClaimStatuses. The
         // content is unchanged since the audit (finalizeKc stamped the matching hash), so it is NOT
-        // stale — even though the KC aggregate is `uncertain` (FIX-B). The cap must NOT fire here.
+        // stale. The cap must NOT fire here.
         val stale = VerifyAdmin.contentStale(db, "pa-kc-005", kc)
         val served = VerifyAdmin.resolvePerClaimStatuses(db, claims.map { it.claimId }, contentStale = stale)
 
@@ -496,7 +498,8 @@ class TrustRoutesTest {
                 "serve must return claim ${c.claimId} (${c.kind})'s OWN runner verdict, not a broadcast",
             )
         }
-        // And the verdicts are a genuine MIX (not all one value) — the equational INVARIANT differs.
+        // And the verdicts are a genuine MIX (not all one value) — the prose claims are faithful via
+        // the round-trip anchor (B5-RESHAPE) while the equational INVARIANT failed its SymPy check.
         assertTrue(
             served.values.toSet().size >= 2,
             "the served per-claim verdicts must differ by claim, not be one broadcast value: $served",

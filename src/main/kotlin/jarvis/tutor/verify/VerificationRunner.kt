@@ -213,6 +213,15 @@ class VerificationRunner(
          * to keep an agreed-but-refuted claim out of `faithful`. False when the LLM leg threw.
          */
         val bothSupported: Boolean get() = twoFamily?.bothSupported == true
+        /**
+         * B5-RESHAPE — the families AGREED on a non-SUPPORTED verdict (in practice: both REFUTED). The
+         * agreed-but-REFUTED VETO: it must NEVER be `faithful` for ANY claim kind. The equational path
+         * already excludes it via the `bothSupported` requirement; the prose/DEFINITION path does NOT
+         * read the LLM vote to PROMOTE (self-entailment is zero-signal there), but it reads THIS to keep
+         * the explicit veto even though the LIVE round-trip is the positive anchor. False when the LLM
+         * leg threw (an UNCLEAR/absent verdict is not an agreed REFUTED).
+         */
+        val agreedNonSupported: Boolean get() = agree && twoFamily?.bothSupported == false
     }
 
     private suspend fun resolveLegs(claim: VerificationClaim): ResolvedLegs {
@@ -275,30 +284,75 @@ class VerificationRunner(
      * The §2.5 outcome decision (priority order):
      *  1. no gold span                                    → DEFINITIONAL_NO_GOLD_SPAN (uncertain)
      *  2. two legs share a configured family              → FAMILY_COLLAPSE (uncertain)
-     *  3. BOTH-SUPPORTED && nonllm ran&pass && roundtrip
-     *     && !threw                                       → ALL_AGREE_ROUNDTRIP_NONLLM_PASS (faithful)
-     *  4. the ONLY shortfall is a NONE non-LLM checker
-     *     (BOTH-SUPPORTED, roundtrip passed, nothing threw)→ NONLLM_LEG_NONE (uncertain floor)
+     *  3. EQUATIONAL claim, BOTH-SUPPORTED && nonllm
+     *     ran&pass && roundtrip && !threw                 → ALL_AGREE_ROUNDTRIP_NONLLM_PASS (faithful)
+     *  3p. PROSE/DEFINITION claim, roundtrip && !threw
+     *     && !agreed-REFUTED                              → ALL_AGREE_ROUNDTRIP_NONLLM_PASS (faithful)
+     *  4. EQUATIONAL claim whose SymPy checker could NOT
+     *     run (NONE/ran=false), BOTH-SUPPORTED, roundtrip
+     *     passed, nothing threw                           → NONLLM_LEG_NONE (uncertain floor)
      *  5. anything else (disagree / agreed-REFUTED /
      *     roundtrip fail / threw)                          → DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW (failed)
      *
-     * F1: case 3 + case 4 read [ResolvedLegs.bothSupported], NOT [ResolvedLegs.agree]. An AGREED
+     * F1: case 3 / case 4 read [ResolvedLegs.bothSupported], NOT [ResolvedLegs.agree]. An AGREED
      * verdict that is not SUPPORTED (e.g. both families REFUTED) is NOT faithful and NOT the uncertain
      * floor — it falls through to the `else` (failed). Agreement on the WRONG answer must never certify.
      *
-     * No path reaches `faithful` without BOTH a non-LLM-leg pass AND families-agree-on-SUPPORTED (the
-     * §2.5 LOCKED invariant), enforced by case 3's conjunction.
+     * B5-RESHAPE (B5r-1, Alex GO 2026-06-04) — the §2.5 "non-LLM leg" is RE-SCOPED PER CLAIM KIND, so
+     * the `faithful` path is now ROUTED on whether the CLAIM KIND is equational or prose:
+     *  - EQUATIONAL kind ([isEquationalKind]: INVARIANT, or GRADER_RULE carrying an invariant — the
+     *    kinds SymPy is meant to check): UNCHANGED strong requirement (case 3) — `bothSupported &&
+     *    nonLlm.ran && nonLlm.pass && roundTrip.pass && !anyThrew`. SymPy stays load-bearing for
+     *    equations; an equational claim whose checker could NOT run still floors to case-4 uncertain
+     *    (the round-trip is NOT a substitute for the equational machine check).
+     *  - PROSE / DEFINITION kind (no equational machine check applies — DEFINITION / MISCONCEPTION /
+     *    STEM / prose GRADER_RULE; the leg returns NONE): the LIVE span↔claim ROUND-TRIP *is* the
+     *    deterministic non-LLM leg (case 3p). `faithful` iff `roundTrip.pass && !anyThrew && NOT
+     *    agreed-REFUTED`. The LLM/NLI `bothSupported` self-vote is NOT counted to PROMOTE (a DEFINITION's
+     *    content==quote makes self-entailment zero-signal) — round-trip is the load-bearing anchor. The
+     *    agreed-but-REFUTED VETO ([ResolvedLegs.agreedNonSupported]) still blocks faithful, so the LLM
+     *    can only VETO a prose claim, never CERTIFY it. This is the structural unblock: a DEFINITION had
+     *    NO machine check (NONE/ran=false) ⇒ every KC emits ≥1 DEFINITION ⇒ under the old conjunction NO
+     *    KC could EVER be faithful. signatures-lock §2.5 amended per-kind with sign-off.
+     *
+     * No path reaches `faithful` without an applicable non-LLM-leg pass (SymPy for equational kinds, the
+     * LIVE round-trip for prose kinds) AND no agreed-REFUTED veto AND nothing throwing (the §2.5 LOCKED
+     * invariant, per-kind re-scoped).
      */
     private fun decideOutcome(claim: VerificationClaim, legs: ResolvedLegs): AuditOutcome = when {
         claim.source?.span == null -> AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN
         legs.collapsed -> AuditOutcome.FAMILY_COLLAPSE
-        legs.bothSupported && legs.nonLlm.ran && legs.nonLlm.pass && legs.roundTrip.pass && !legs.anyThrew ->
+        // case 3 — EQUATIONAL claim, SymPy ran+passed: UNCHANGED strong path.
+        isEquationalKind(claim) &&
+            legs.bothSupported && legs.nonLlm.ran && legs.nonLlm.pass && legs.roundTrip.pass && !legs.anyThrew ->
             AuditOutcome.ALL_AGREE_ROUNDTRIP_NONLLM_PASS
-        legs.nonLlm.kind == NonLlmLegKind.NONE && !legs.nonLlm.ran && !legs.anyThrew &&
-            legs.bothSupported && legs.roundTrip.pass ->
+        // case 3p (B5-RESHAPE) — PROSE / DEFINITION claim: the LIVE round-trip IS the deterministic
+        // non-LLM leg. faithful iff round-trip passes + nothing threw + NOT agreed-REFUTED. The LLM vote
+        // is NOT read to promote (self-entailment is zero-signal); it can only veto (agreedNonSupported).
+        !isEquationalKind(claim) &&
+            legs.roundTrip.pass && !legs.anyThrew && !legs.agreedNonSupported ->
+            AuditOutcome.ALL_AGREE_ROUNDTRIP_NONLLM_PASS
+        // case 4 — an EQUATIONAL claim whose SymPy/non-LLM checker could NOT run (NONE/ran=false) but
+        // otherwise looks good: UNCERTAIN floor, never faithful (never-ran ≠ disagreed, FAIL-LOUD H5; the
+        // round-trip is NOT a substitute for the equational check). Prose claims never reach here — case 3p
+        // already routed a passing-round-trip prose claim to faithful and a non-anchoring one to `else`.
+        isEquationalKind(claim) && legs.nonLlm.kind == NonLlmLegKind.NONE && !legs.nonLlm.ran &&
+            !legs.anyThrew && legs.bothSupported && legs.roundTrip.pass ->
             AuditOutcome.NONLLM_LEG_NONE
         else -> AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW
     }
+
+    /**
+     * B5-RESHAPE — is this claim of an EQUATIONAL KIND (a machine-checkable equation is expected)?
+     * Mirrors [SymPyLeg]'s own gate: INVARIANT, or GRADER_RULE that carries an invariant. Everything
+     * else (DEFINITION, MISCONCEPTION_REFUTATION, STEM, prose GRADER_RULE with no invariant) is PROSE —
+     * its deterministic non-LLM leg is the LIVE span↔claim round-trip, not SymPy. Keying on the CLAIM
+     * KIND (not the resolved leg kind) keeps an equational claim whose checker merely COULDN'T RUN on the
+     * uncertain floor (case 4) instead of letting the prose round-trip silently certify it.
+     */
+    private fun isEquationalKind(claim: VerificationClaim): Boolean =
+        (claim.kind == ClaimKind.INVARIANT || claim.kind == ClaimKind.GRADER_RULE) &&
+            !claim.invariant.isNullOrBlank()
 
     /**
      * Write the per-claim audit row in ONE transaction. Idempotent: if a row for (claimId, auditRunId)

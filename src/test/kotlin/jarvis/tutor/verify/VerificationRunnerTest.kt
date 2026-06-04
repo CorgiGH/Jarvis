@@ -491,7 +491,7 @@ class VerificationRunnerTest {
     }
 
     @Test
-    fun `multi-claim KC - DEFINITION and prose GRADER_RULE floor to uncertain, equational INVARIANT is faithful, NONE failed`(
+    fun `multi-claim KC - DEFINITION and prose GRADER_RULE reach faithful via the LIVE round-trip (B5-RESHAPE), equational INVARIANT is faithful too`(
         @TempDir tmp: Path,
     ) = runBlocking {
         val db = freshDb(tmp)
@@ -506,11 +506,13 @@ class VerificationRunnerTest {
             out.none { it.newStatus == VerificationStatus.failed },
             "no claim may auto-route to failed: ${out.map { it.claimKind() to it.newStatus }}",
         )
-        // DEFINITION + prose GRADER_RULE ⇒ uncertain floor (no machine check applies — NOT failed).
+        // B5-RESHAPE: a DEFINITION / prose GRADER_RULE has no equational machine check, so the LIVE
+        // round-trip IS its deterministic non-LLM leg. Every claim here round-trips against the source
+        // ⇒ faithful via the prose anchor (this is the unblock that supersedes the old uncertain floor).
         for (c in claims.filter { it.kind == ClaimKind.DEFINITION || (it.kind == ClaimKind.GRADER_RULE && it.invariant == null) }) {
             assertEquals(
-                VerificationStatus.uncertain, byId[c.claimId]!!.newStatus,
-                "a ${c.kind} claim with no applicable machine check ⇒ uncertain floor, never failed",
+                VerificationStatus.faithful, byId[c.claimId]!!.newStatus,
+                "a ${c.kind} claim with a passing LIVE round-trip ⇒ faithful (the prose anchor), never the old uncertain floor",
             )
         }
         // The equational INVARIANT ⇒ faithful (SymPy ran + passed, families agree, round-trip passes).
@@ -580,20 +582,168 @@ class VerificationRunnerTest {
     }
 
     @Test
-    fun `multi-claim KC - all-agree current PA shape aggregates to uncertain, NOT faithful (honest floor)`(
+    fun `multi-claim KC - all-agree current PA shape aggregates to faithful via the LIVE round-trip (B5-RESHAPE)`(
         @TempDir tmp: Path,
     ) = runBlocking {
-        // On the CURRENT PA content shape (DEFINITION + prose GRADER_RULE + 1 equational INVARIANT),
-        // every family agrees-SUPPORTED and round-trips pass, but the DEFINITION/GRADER_RULE claims
-        // floor to uncertain (no independent machine check until the D6 NLI leg). The KC conjunction
-        // is therefore uncertain — NOT faithful. This is CORRECT + honest; do NOT hack to faithful.
+        // B5-RESHAPE supersedes the old "honest uncertain floor" for this shape: on the CURRENT PA
+        // content shape (DEFINITION + prose GRADER_RULE + 1 equational INVARIANT), every family
+        // agrees-SUPPORTED and every claim round-trips against the LIVE source. The DEFINITION/prose
+        // GRADER_RULE claims now reach faithful through the round-trip prose anchor (their deterministic
+        // non-LLM leg), and the equational INVARIANT is faithful too ⇒ the KC conjunction is faithful.
         val db = freshDb(tmp)
         seedStatus(db, "pa-kc-005", VerificationStatus.pending)
         runner(db, nonLlm = realisticNonLlm).audit(multiClaimKc())
         assertEquals(
-            "uncertain", statusOf(db, "pa-kc-005"),
-            "a KC with any uncertain-floor claim aggregates to uncertain (honest until the NLI leg)",
+            "faithful", statusOf(db, "pa-kc-005"),
+            "every claim round-trips LIVE ⇒ each is faithful per its kind ⇒ the KC conjunction is faithful",
         )
+    }
+
+    // --- B5-RESHAPE: per-claim-kind `faithful` routing (B5r-1) ---------------------------------
+
+    /**
+     * A DEFINITION claim's prose source helper — span present so it is NOT the no-gold-span floor;
+     * its quote round-trips against [rawSource]. The non-LLM leg is genuinely NONE (no machine
+     * check applies to prose). This is the shape every KC emits ≥1 of (ContentReconcile.claimsFor).
+     */
+    private fun definitionClaim(
+        content: String = goldQuote,
+        source: SourceRef? = goldSource(),
+    ) = VerificationClaim(
+        claimId = "pa-kc-def:DEFINITION:${jarvis.content.ContentReconcile.sha256_8(content)}",
+        kcId = "pa-kc-def",
+        subject = "PA",
+        kind = ClaimKind.DEFINITION,
+        content = content,
+        invariant = null,
+        source = source,
+    )
+
+    /** The real NONE leg the runner sees for a DEFINITION (no machine check applies). */
+    private val noneLeg = NonLlmLeg {
+        NonLlmResult(kind = NonLlmLegKind.NONE, ran = false, pass = false, detail = "no machine check for DEFINITION")
+    }
+
+    @Test
+    fun `B5r-1 (a) - a DEFINITION with span + round-trip PASS + NONE non-LLM leg reaches faithful`(@TempDir tmp: Path) = runBlocking {
+        // THE UNBLOCK: under the old conjunction a DEFINITION had no machine check (NONE/ran=false) so
+        // it floored to NONLLM_LEG_NONE/uncertain and NO KC could ever be faithful. Per-kind routing
+        // makes the LIVE round-trip the deterministic non-LLM leg for prose: round-trip PASS + nothing
+        // threw ⇒ faithful. SymPy is NOT required for a DEFINITION.
+        val db = freshDb(tmp)
+        val c = definitionClaim()
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        val out = runner(db, nonLlm = noneLeg).audit(listOf(c))
+
+        assertEquals(
+            VerificationStatus.faithful, out[0].newStatus,
+            "a DEFINITION with a passing LIVE round-trip + NONE non-LLM leg ⇒ faithful (the prose anchor)",
+        )
+        assertEquals("faithful", statusOf(db, c.kcId))
+    }
+
+    @Test
+    fun `B5r-1 (b) - a DEFINITION whose round-trip FAILS is never faithful`(@TempDir tmp: Path) = runBlocking {
+        // The round-trip IS the load-bearing anchor for prose: a mutated/absent quote ⇒ round-trip
+        // fail ⇒ NOT faithful (it routes to failed via DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW).
+        val db = freshDb(tmp)
+        val c = definitionClaim(
+            source = SourceRef(
+                doc = "pa-lecture-01",
+                quote = "A QUOTE THAT APPEARS NOWHERE IN THE LIVE SOURCE zzz unrelated text",
+                page = 2,
+                span = Span(0, 1),
+            ),
+        )
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        val out = runner(db, nonLlm = noneLeg).audit(listOf(c))
+
+        assertNotEquals(VerificationStatus.faithful, out[0].newStatus, "round-trip FAIL ⇒ a DEFINITION is never faithful")
+        assertEquals(VerificationStatus.failed, out[0].newStatus, "a DEFINITION whose quote does not round-trip ⇒ failed")
+    }
+
+    @Test
+    fun `B5r-1 (c) - SELF-ENTAILMENT GUARD - LLM agreement ALONE cannot make a DEFINITION faithful when round-trip fails`(@TempDir tmp: Path) = runBlocking {
+        // The machine anchor for a DEFINITION is the LIVE round-trip, NOT the LLM/NLI vote (a
+        // DEFINITION's content==quote makes NLI self-entailment zero-signal). So even with BOTH
+        // families SUPPORTED (bothSupported=true) + non-LLM "passing", a FAILED round-trip must NOT
+        // promote to faithful. bothSupported alone never certifies a DEFINITION.
+        val db = freshDb(tmp)
+        val c = definitionClaim(
+            source = SourceRef(
+                doc = "pa-lecture-01",
+                quote = "ANOTHER QUOTE ABSENT FROM THE LIVE SOURCE so the round-trip cannot pass yyy",
+                page = 2,
+                span = Span(0, 1),
+            ),
+        )
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        // Both families SUPPORTED + a (spurious) passing non-LLM leg — yet round-trip fails.
+        val out = runner(db, legAReply = "SUPPORTED", legBReply = "SUPPORTED", nonLlm = passingNonLlm).audit(listOf(c))
+
+        assertNotEquals(
+            VerificationStatus.faithful, out[0].newStatus,
+            "bothSupported ALONE must NOT promote a DEFINITION to faithful — round-trip is the anchor",
+        )
+    }
+
+    @Test
+    fun `B5r-1 (c2) - SELF-ENTAILMENT GUARD - an agreed-REFUTED DEFINITION is never faithful even with a passing round-trip`(@TempDir tmp: Path) = runBlocking {
+        // Belt-and-braces on the explicit guard: agreed-but-REFUTED must NEVER be faithful for ANY
+        // kind. A DEFINITION whose round-trip passes but whose families AGREE on REFUTED is vetoed.
+        val db = freshDb(tmp)
+        val c = definitionClaim()
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        val out = runner(db, legAReply = "REFUTED", legBReply = "REFUTED", nonLlm = noneLeg).audit(listOf(c))
+
+        assertNotEquals(
+            VerificationStatus.faithful, out[0].newStatus,
+            "an agreed-REFUTED DEFINITION must NEVER be faithful (the agreed-REFUTED veto holds for prose too)",
+        )
+    }
+
+    @Test
+    fun `B5r-1 (d) - REGRESSION - an INVARIANT whose equational non-LLM leg did NOT run is never faithful`(@TempDir tmp: Path) = runBlocking {
+        // The equational path is UNCHANGED: an INVARIANT keeps the strong requirement
+        // (bothSupported && sympy.ran && sympy.pass && roundTrip.pass && !threw). A SYMPY leg that
+        // could not run (ran=false) must NOT be promoted to faithful by the prose anchor — the
+        // round-trip is NOT a substitute for the equational machine check on an equational claim.
+        val db = freshDb(tmp)
+        val c = claim()  // default = equational INVARIANT, round-trip passes
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        // A SYMPY-kind leg that did NOT run (e.g. python/sympy unavailable) — NOT a NONE leg.
+        val sympyNotRun = NonLlmLeg {
+            NonLlmResult(kind = NonLlmLegKind.SYMPY, ran = false, pass = false, detail = "sympy unavailable")
+        }
+        val out = runner(db, nonLlm = sympyNotRun).audit(listOf(c))
+
+        assertNotEquals(
+            VerificationStatus.faithful, out[0].newStatus,
+            "an INVARIANT whose SymPy leg did not run must NOT be faithful (round-trip is not a substitute)",
+        )
+    }
+
+    @Test
+    fun `B5r-1 (e) - guards still hold for a DEFINITION - no gold span floors, a thrown leg blocks faithful`(@TempDir tmp: Path) = runBlocking {
+        // span==null still floors to the definitional-no-gold-span UNCERTAIN floor (NOT faithful)
+        // even on the prose path; and a thrown leg still blocks faithful for a DEFINITION.
+        val dbA = freshDb(tmp.resolve("nospan").also { java.nio.file.Files.createDirectories(it) })
+        val noSpan = definitionClaim(source = SourceRef(doc = "pa-lecture-01", quote = goldQuote, page = 0, span = null))
+        seedStatus(dbA, noSpan.kcId, VerificationStatus.pending)
+        val a = runner(dbA, nonLlm = noneLeg).audit(listOf(noSpan))
+        assertEquals(VerificationStatus.uncertain, a[0].newStatus, "no gold span ⇒ uncertain floor, never faithful (prose path too)")
+
+        val dbB = freshDb(tmp.resolve("threw").also { java.nio.file.Files.createDirectories(it) })
+        val c = definitionClaim()
+        seedStatus(dbB, c.kcId, VerificationStatus.pending)
+        // a thrown LLM leg must block faithful even when the round-trip would pass.
+        val b = runner(dbB, legALlm = ThrowingLlm(), nonLlm = noneLeg).audit(listOf(c))
+        assertNotEquals(VerificationStatus.faithful, b[0].newStatus, "a thrown leg blocks faithful for a DEFINITION too")
     }
 
     private fun VerificationRunner.AuditResult.claimKind(): String = claimId.substringAfter(':').substringBefore(':')
