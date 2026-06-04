@@ -122,3 +122,36 @@ Audit + sequencing transcripts: `.claude/council-cache/council-1780580000-phase2
 - **Contract/content reconciliation (low, fold into the D8/lock pass):** D8 `content_hash` omits the source-file/git-SHA — editing `_sources/{doc}.md` without touching the KC YAML leaves a faithful badge stale-true; reconcile correctness-engine "+ git SHA" vs the FROZEN lock (which dropped it). Annotate signatures-lock §Q write-site #2 (`/drill/grade` emit) as Phase-3-activated. **pa-kc-005/006 invariants are SymPy tautologies (`1+1+1=3`, `t+t+t=3*t`) — author real, non-tautological invariants** (the tautology contributes no independent signal; the NLI leg is the real check). F6-LOW residue: audit row hardcodes `fuzzy_distance=0` + authored page — thread the real `LocateResult` through. A `faithful`-on-DEGRADED-anchor policy test (the acceptance demands LIVE).
 
 Post-fix audit transcript: `.claude/council-cache/council-1780585000-phase2-postfix-audit.md`.
+
+---
+
+## B5-RESHAPE — per-claim-kind `faithful` + badge decoupled from `faithful` (SESSION-54, Alex GO 2026-06-04)
+
+**Why this section supersedes "B5 = swap family-B + wire gate" as the immediate next move.** A spike proved the local NLI model runs + judges prose correctly + the JVM→py3.12 bridge works (`council-1780598020`). A corpus DRY-RUN (`tools/nli_dryrun.py`, all 6 real PA KCs) then measured **0/6 faithful-eligible** and a **structural** cause, confirmed by two grounded councils (`council-1780600422-coa-post-spike`, `council-1780601847-claim-model-reshape`, 6/6 each):
+
+- `aggregateKc` (VerificationRunner.kt:118-122) = `faithful` IFF **every** claim faithful. Every KC emits ≥1 **DEFINITION** claim (ContentReconcile.claimsFor, one per source ref, `content = ref.quote`). A DEFINITION has no equation ⇒ `SymPyLeg` returns NONE/`ran=false` (NonLlmLegs.kt:46-48) ⇒ `decideOutcome` case-4 `NONLLM_LEG_NONE` ⇒ uncertain, **never faithful**. ⟹ **No KC can EVER reach `faithful`** under the current model. Structural, not calibration. D6 (the NLI leg the plan banked on) does **not** fix it (dry-run: NLI correctly returns UNCLEAR on the bare equation `1+1+1=3` and on the literal `sympy: …` grader-rule string; self-entailment on DEFINITION `content==quote` is zero-signal).
+
+**LOCKED-invariant re-scope (Alex blessed 2026-06-04 — was `MUST_REVISIT`).** signatures-lock.md:224 §2.5 "no `faithful` without a non-LLM-leg pass AND families-agree" is **structurally unsatisfiable for prose**. RE-SCOPE the "non-LLM leg" per claim kind: **SymPyLeg for equational claims; SpanClaimRoundTrip (live re-locate) for prose/DEFINITION claims** (the round-trip IS the deterministic non-LLM check for prose). This is an amendment of a frozen decision, recorded with sign-off — NOT a silent widen.
+
+**Chosen design = council option A (per-claim-kind routing) + badge-decouple. The reshape:**
+1. **`decideOutcome` keyed by `ClaimKind`:**
+   - **DEFINITION / non-equational prose** → faithful iff `roundTrip.pass && !anyThrew` (round-trip = the prose non-LLM leg). The LLM/NLI self-vote on `content==quote` is **NOT** counted (zero independent signal); if an NLI vote is kept it must run on an INDEPENDENT restatement, never the verbatim quote.
+   - **INVARIANT / GRADER_RULE (equational)** → faithful iff `bothSupported (on an NL RESTATEMENT of the invariant, not the bare equation) && sympy.ran && sympy.pass && roundTrip.pass && !anyThrew`.
+   - The `sympy: …` grader-rule string is a SymPy directive — **strip it from the NLI/LLM path entirely**; route only the equation to SymPy.
+2. **Badge decoupled from `faithful`.** `badgeTextFor` / `HonestFloor` "matches your lecture" is driven by **`SpanClaimRoundTrip.pass` against the LIVE source** (a served "lecture-grounded" signal), NOT by the `faithful` status. `faithful` stays the rarer strong "machine-verified" tier. **Build decision (confirm at TDD):** prefer DERIVING the badge from the stored round-trip result over adding a new `VerificationStatus` enum value (the enum is frozen + widely consumed; deriving keeps the frozen surface intact). A KC may light "matches your lecture" at status `uncertain`.
+3. **Self-entailment guard (mandatory):** a test asserting `NLI(premise==hypothesis)` can NEVER alone produce faithful/grounded; the machine anchor for a DEFINITION is round-trip against the LIVE source (re-located, never trusted-as-authored) — guards the false-faithful regression.
+
+**ACCOMMODATION LEDGER (downstream of this change — Alex's standing ask, [[feedback_account_for_accommodations]]):**
+| Consumer | Change needed | Built? |
+|---|---|---|
+| `TrustRoutes.badgeTextFor` (TrustRoutes.kt:143-146) | badge from round-trip result, not `faithful` | BUILT — small edit |
+| `HonestFloor` (HonestFloor.kt:29) | add/feed a "lecture-grounded" served signal | BUILT — small edit |
+| Phase-3 SR-admission gate + `/queue` (VerificationGate; signatures-lock:76,254,267) | admit on the "lecture-grounded" tier, NOT only `faithful` (else admits ~nothing) | **NOT built — plan update; the catch that justified measuring first** |
+| `VerificationStatus` enum (VerificationStatus.kt:17) | likely NO new value (derive badge) — confirm at TDD | frozen — avoid touching |
+| B7 acceptance (this doc step 7) | "≥1 KC lecture-grounded LIVE" + "≥1 genuine machine-checkable KC faithful (if any authored)" + corrupted-quote REJECTED | plan update |
+| signatures-lock.md:224 §2.5 | amend invariant text to the per-kind re-scope + sign-off note | frozen doc — amend |
+| Content hygiene (follow-up, not the unblock) | add `span` to pa-kc-001..004; author real non-tautological invariants + NL restatements for 005/006; fix `sympy:` rule routing | content task |
+
+**Build order (TDD, per-step :check green):** (B5r-1) `decideOutcome` per-kind rule + self-entailment guard test → (B5r-2) badge/HonestFloor decouple to round-trip → (B5r-3) NL-restatement field for equational claims + `sympy:`-string strip → (B5r-4) content hygiene (spans + real invariants) → (B5r-5) re-run `nli_dryrun` + the offline acceptance CLI: prove ≥1 KC lights "matches your lecture" LIVE and a mutated quote is REJECTED. Gate F2 stays default-OFF until (B5r-5) shows a non-trivial grounded-rate. D6 (NLI leg as family-B) still lands — but as the strong-tier signal for equational claims, NOT the prose unblock.
+
+Reshape councils: `.claude/council-cache/council-1780600422-coa-post-spike.md`, `council-1780601847-claim-model-reshape.md`. Dry-run harness: `tools/nli_dryrun.py` (+ `tools/nli_spike.py`, `tools/pb_probe.jsh`).
