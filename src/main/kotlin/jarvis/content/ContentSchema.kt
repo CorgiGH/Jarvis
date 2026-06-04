@@ -62,6 +62,15 @@ data class KnowledgeConcept(
     /** Precise math/logical invariant the two-family re-derivation + non-LLM leg checks.
      *  Required for grounding_tier=strict (H11). */
     val invariant: String? = null,
+    /**
+     * B5r-3 (D-R7) — a plain-English restatement of [invariant]: the natural-language meaning a
+     * student would read (e.g. "the uniform size of a 3-element array, each element of size 1, is 3").
+     * When present it becomes the LLM/NLI HYPOTHESIS for the INVARIANT claim (ContentReconcile.claimsFor
+     * sets `content = invariant_statement`), so the family votes on the NL meaning against the lecture
+     * quote rather than on a bare equation like `1 + 1 + 1 = 3` (which NLI correctly returns UNCLEAR on).
+     * The raw [invariant] still feeds the SymPy leg unchanged. Optional/nullable so all existing YAML
+     * parses; folded into the D8 content-hash so editing it re-triggers staleness. */
+    val invariant_statement: String? = null,
     /** Machine-checkable rubric items the non-LLM leg runs.
      *  Required (non-empty) for grounding_tier=strict (H11). */
     val grader_rules: List<String> = emptyList(),

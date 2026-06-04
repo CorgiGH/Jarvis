@@ -77,6 +77,16 @@ class VerificationStatusTest {
         )
     }
 
+    @Test
+    fun `PENDING + EQUATIONAL_LLM_UNCONFIRMED yields UNCERTAIN (D-R9)`() {
+        // B5r-3 / D-R9: SymPy machine-proved the equation but the LLM merely couldn't confirm the NL
+        // meaning ⇒ not-yet-cross-checked, NOT a contradiction ⇒ uncertain (never failed, never faithful).
+        assertEquals(
+            VerificationStatus.uncertain,
+            VerificationStatus_.transition(VerificationStatus.pending, AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED)
+        )
+    }
+
     // ──────────────────────────────────────────────
     // Group 3 — PENDING → FAILED (disagree/roundtrip fail — FAIL-LOUD)
     // ──────────────────────────────────────────────

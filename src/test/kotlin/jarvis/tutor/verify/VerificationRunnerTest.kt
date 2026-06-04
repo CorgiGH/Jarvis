@@ -829,6 +829,67 @@ class VerificationRunnerTest {
         assertEquals(false, groundedOf(db, "pa-kc-005"), "one failed sibling ⇒ the whole KC is NOT grounded")
     }
 
+    // --- B5r-3 (D-R9): honest floor for an equational claim whose LLM family is merely UNCLEAR ------
+
+    @Test
+    fun `D-R9 (2) - an INVARIANT whose SymPy PASSES but the LLM family is UNCLEAR floors to uncertain, NOT failed`(@TempDir tmp: Path) = runBlocking {
+        // SymPy machine-proved the equation (ran+pass), the quote round-trips, nothing threw, the
+        // families do NOT agree-REFUTED — they are merely UNCLEAR on the NL restatement. That is a
+        // not-yet-cross-checked state, NOT a contradiction ⇒ uncertain floor, never failed.
+        val db = freshDb(tmp)
+        val c = claim()  // equational INVARIANT, round-trip passes against rawSource
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        // Both families reply UNCLEAR (an unparseable/hedged answer ⇒ Verdict.UNCLEAR). SymPy passes.
+        val out = runner(db, legAReply = "UNCLEAR", legBReply = "UNCLEAR", nonLlm = passingNonLlm).audit(listOf(c))
+
+        assertEquals(
+            VerificationStatus.uncertain, out[0].newStatus,
+            "SymPy-proved + LLM-UNCLEAR equational claim ⇒ uncertain (D-R9), NOT failed",
+        )
+        assertEquals("uncertain", statusOf(db, c.kcId))
+    }
+
+    @Test
+    fun `D-R9 (1) - an INVARIANT whose SymPy passes AND both families SUPPORTED reaches faithful (case 3 preserved)`(@TempDir tmp: Path) = runBlocking {
+        // The strong tier is preserved: bothSupported (the family confirmed the NL restatement against
+        // the lecture quote) + SymPy pass + round-trip ⇒ faithful.
+        val db = freshDb(tmp)
+        val c = claim()
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        val out = runner(db, legAReply = "SUPPORTED", legBReply = "SUPPORTED", nonLlm = passingNonLlm).audit(listOf(c))
+
+        assertEquals(VerificationStatus.faithful, out[0].newStatus, "bothSupported + SymPy pass + round-trip ⇒ faithful")
+        assertEquals("faithful", statusOf(db, c.kcId))
+    }
+
+    @Test
+    fun `D-R9 (3) - an INVARIANT whose SymPy FAILS is failed (even when the LLM family is UNCLEAR)`(@TempDir tmp: Path) = runBlocking {
+        // SymPy ran and DISAGREED (the equation is mathematically false) ⇒ failed, regardless of the
+        // LLM verdict. A machine-disproved equation is a contradiction, not an uncertainty.
+        val db = freshDb(tmp)
+        val c = claim()
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        val out = runner(db, legAReply = "UNCLEAR", legBReply = "UNCLEAR", nonLlm = failingNonLlm).audit(listOf(c))
+
+        assertEquals(VerificationStatus.failed, out[0].newStatus, "SymPy FAIL ⇒ failed (machine-disproved equation is a contradiction)")
+    }
+
+    @Test
+    fun `D-R9 - an equational claim that is agreed-REFUTED is still failed (the LLM veto holds over the floor)`(@TempDir tmp: Path) = runBlocking {
+        // The D-R9 floor only catches UNCLEAR. An agreed-REFUTED equational claim is an explicit
+        // contradiction and must stay failed, NOT be softened to uncertain.
+        val db = freshDb(tmp)
+        val c = claim()
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        val out = runner(db, legAReply = "REFUTED", legBReply = "REFUTED", nonLlm = passingNonLlm).audit(listOf(c))
+
+        assertEquals(VerificationStatus.failed, out[0].newStatus, "agreed-REFUTED equational claim ⇒ failed, not the uncertain floor")
+    }
+
     private fun VerificationRunner.AuditResult.claimKind(): String = claimId.substringAfter(':').substringBefore(':')
 
     // helper: seed a kc_verification_status row at a chosen status

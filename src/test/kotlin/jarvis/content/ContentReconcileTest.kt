@@ -16,6 +16,7 @@ import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -112,12 +113,103 @@ class ContentReconcileTest {
         val claims = ContentReconcile.claimsFor(strictKc())
         val kinds = claims.map { it.kind }
         assertTrue(ClaimKind.INVARIANT in kinds, "invariant != null ⇒ an INVARIANT claim")
-        assertEquals(2, claims.count { it.kind == ClaimKind.GRADER_RULE }, "one GRADER_RULE claim per grader rule")
+        // CONTRACT CHANGE (D-R8): the fixture's two rules are (1) a `sympy:` DIRECTIVE and (2) a PROSE
+        // rule. The directive no longer emits a bare-string GRADER_RULE — instead it routes its
+        // extracted equation to the SymPy leg as an EQUATIONAL GRADER_RULE; the prose rule stays an
+        // LLM-judged GRADER_RULE. So there are still 2 GRADER_RULE claims, but the directive's claim now
+        // carries an invariant (the extracted equation), never the literal "sympy: …" string.
+        assertEquals(2, claims.count { it.kind == ClaimKind.GRADER_RULE }, "one GRADER_RULE claim per rule (directive → equational, prose → LLM)")
         assertTrue(ClaimKind.DEFINITION in kinds, "each source ref ⇒ a DEFINITION claim")
         // the INVARIANT/GRADER_RULE claims carry the KC's invariant + a span-bearing source.
         val inv = claims.single { it.kind == ClaimKind.INVARIANT }
         assertEquals("1 + 1 + 1 = 3", inv.content)
         assertNotNull(inv.source?.span, "an INVARIANT claim must carry a span-anchored source for the round-trip leg")
+    }
+
+    // --- D-R7: invariant_statement → the LLM/NLI hypothesis for the INVARIANT claim ----------------
+
+    @Test
+    fun `D-R7 an INVARIANT claim's content is invariant_statement when present (the NLI hypothesis), invariant stays the raw equation`() {
+        val kc = strictKc().copy(
+            invariant = "1 + 1 + 1 = 3",
+            invariant_statement = "the uniform size of a 3-element array whose elements each have size 1 is 3",
+        )
+        val inv = ContentReconcile.claimsFor(kc).single { it.kind == ClaimKind.INVARIANT }
+        assertEquals(
+            "the uniform size of a 3-element array whose elements each have size 1 is 3",
+            inv.content,
+            "the INVARIANT claim's content (= the NLI hypothesis) is the plain-English invariant_statement",
+        )
+        assertEquals("1 + 1 + 1 = 3", inv.invariant, "the invariant (SymPy input) stays the raw equation regardless")
+    }
+
+    @Test
+    fun `D-R7 an INVARIANT claim falls back to the equation as content when invariant_statement is absent or blank`() {
+        val noStatement = ContentReconcile.claimsFor(strictKc().copy(invariant_statement = null))
+            .single { it.kind == ClaimKind.INVARIANT }
+        assertEquals("1 + 1 + 1 = 3", noStatement.content, "no invariant_statement ⇒ content falls back to the equation (current behavior)")
+        assertEquals("1 + 1 + 1 = 3", noStatement.invariant)
+
+        val blankStatement = ContentReconcile.claimsFor(strictKc().copy(invariant_statement = "   "))
+            .single { it.kind == ClaimKind.INVARIANT }
+        assertEquals("1 + 1 + 1 = 3", blankStatement.content, "blank invariant_statement ⇒ falls back to the equation")
+    }
+
+    // --- D-R8: a `sympy:` directive grader_rule is stripped from the NLI path -----------------------
+
+    @Test
+    fun `D-R8 a sympy-directive grader_rule emits an EQUATIONAL claim (extracted equation as invariant), NEVER a bare sympy hypothesis`() {
+        val kc = strictKc(
+            invariant = "1 + 1 + 1 = 3",
+            graderRules = listOf("sympy: simplify((1 + 1 + 1) - 3) == 0  # uniform array size"),
+        ).copy(invariant_statement = "the uniform size of a 3-element array of unit-size elements is 3")
+        val rule = ContentReconcile.claimsFor(kc).single { it.kind == ClaimKind.GRADER_RULE }
+
+        // The directive's equation is extracted and routed to the SymPy leg.
+        assertEquals("1 + 1 + 1 = 3", rule.invariant, "the sympy directive's extracted equation feeds the SymPy leg")
+        // The claim content is NEVER the literal directive — no NLI hypothesis may contain `sympy:`.
+        assertFalse(rule.content.lowercase().contains("sympy:"), "a `sympy:` directive must NEVER reach NLI as a hypothesis")
+        // Content = invariant_statement when present (so the NLI family judges the NL meaning).
+        assertEquals("the uniform size of a 3-element array of unit-size elements is 3", rule.content)
+    }
+
+    @Test
+    fun `D-R8 a sympy-directive grader_rule with no invariant_statement uses the extracted equation as content`() {
+        val kc = strictKc(
+            invariant = "t + t + t = 3*t",
+            graderRules = listOf("sympy: simplify((t + t + t) - 3*t) == 0  # step costs sum"),
+        ).copy(invariant_statement = null)
+        val rule = ContentReconcile.claimsFor(kc).single { it.kind == ClaimKind.GRADER_RULE }
+        assertEquals("t + t + t = 3*t", rule.invariant, "extracted from simplify((A)-(B))==0 ⇒ A = B")
+        assertEquals("t + t + t = 3*t", rule.content, "no invariant_statement ⇒ content = the extracted equation, not the directive")
+        assertFalse(rule.content.lowercase().contains("sympy:"))
+    }
+
+    @Test
+    fun `D-R8 an UNPARSEABLE sympy directive emits NO claim (never feeds garbage to NLI)`() {
+        val kc = strictKc(graderRules = listOf("sympy: assert is_valid(tree)  # not an equation at all"))
+        val rules = ContentReconcile.claimsFor(kc).filter { it.kind == ClaimKind.GRADER_RULE }
+        assertTrue(rules.isEmpty(), "a sympy directive with no extractable equation emits NO GRADER_RULE claim (no garbage to NLI)")
+    }
+
+    @Test
+    fun `D-R8 a bare lhs=rhs equation grader_rule is treated as equational, not an NLI hypothesis`() {
+        // A rule that is itself a plain `lhs = rhs` equation (no sympy: prefix) is also a directive:
+        // it routes to SymPy with the equation as its invariant, and its content is NOT the bare equation
+        // string fed to NLI as prose — content = invariant_statement when present.
+        val kc = strictKc(graderRules = listOf("1 + 1 + 1 = 3"))
+            .copy(invariant_statement = "three unit-size elements sum to size 3")
+        val rule = ContentReconcile.claimsFor(kc).single { it.kind == ClaimKind.GRADER_RULE }
+        assertEquals("1 + 1 + 1 = 3", rule.invariant, "a plain equation rule feeds the SymPy leg")
+        assertEquals("three unit-size elements sum to size 3", rule.content, "its NLI hypothesis = invariant_statement, not the bare equation")
+    }
+
+    @Test
+    fun `D-R8 a PROSE grader_rule stays an LLM-judged prose claim (invariant null, content = the rule)`() {
+        val kc = strictKc(graderRules = listOf("the answer must distinguish the three size measures"))
+        val rule = ContentReconcile.claimsFor(kc).single { it.kind == ClaimKind.GRADER_RULE }
+        assertEquals(null, rule.invariant, "a prose rule carries no equational invariant ⇒ stays the LLM/round-trip path")
+        assertEquals("the answer must distinguish the three size measures", rule.content, "a prose rule's content is the rule text verbatim")
     }
 
     @Test
@@ -151,6 +243,23 @@ class ContentReconcileTest {
         val c1 = ContentReconcile.kcContentHash(strictKc(invariant = "1 + 1 + 1 = 3"))
         val c2 = ContentReconcile.kcContentHash(strictKc(invariant = "1 + 1 + 1 = 4"))
         assertNotEquals(c1, c2, "editing a claim's text must change the KC content hash (the staleness fingerprint)")
+    }
+
+    @Test
+    fun `kcContentHash CHANGES when invariant_statement changes (D-R7 staleness)`() {
+        val base = strictKc().copy(invariant_statement = "size of a 3-element unit array is 3")
+        val edited = strictKc().copy(invariant_statement = "size of a 3-element unit array is THREE")
+        assertNotEquals(
+            ContentReconcile.kcContentHash(base),
+            ContentReconcile.kcContentHash(edited),
+            "editing invariant_statement must re-trigger staleness (folded into the content hash)",
+        )
+        // and adding an invariant_statement where there was none also changes the hash.
+        assertNotEquals(
+            ContentReconcile.kcContentHash(strictKc().copy(invariant_statement = null)),
+            ContentReconcile.kcContentHash(base),
+            "adding an invariant_statement changes the content hash",
+        )
     }
 
     @Test
@@ -264,5 +373,21 @@ class ContentReconcileTest {
         val inv005 = report.claims.filter { it.kcId == "pa-kc-005" && it.kind == ClaimKind.INVARIANT }
         assertTrue(inv005.isNotEmpty(), "pa-kc-005 emits an INVARIANT claim")
         assertNotNull(inv005.first().source?.span, "pa-kc-005's INVARIANT claim is span-anchored")
+
+        // D-R8 over the REAL corpus: pa-kc-005's `sympy:` directive grader_rule
+        // ("sympy: simplify((1 + 1 + 1) - 3) == 0  # …") is routed to the SymPy leg with the EXTRACTED
+        // equation as its invariant — and its content NEVER contains the literal `sympy:` string (no
+        // garbage to NLI). NO emitted claim anywhere may carry a `sympy:` hypothesis.
+        val gr005 = report.claims.filter { it.kcId == "pa-kc-005" && it.kind == ClaimKind.GRADER_RULE }
+        val equational = gr005.filter { it.invariant != null }
+        assertTrue(equational.isNotEmpty(), "pa-kc-005's sympy directive emits an EQUATIONAL grader_rule (invariant set)")
+        assertEquals("1 + 1 + 1 = 3", equational.first().invariant, "the directive's extracted equation matches the KC invariant")
+        assertTrue(
+            report.claims.none { it.content.lowercase().contains("sympy:") },
+            "NO emitted claim may contain a `sympy:` directive as its NLI hypothesis (D-R8)",
+        )
+        // pa-kc-006's directive extracts `t + t + t = 3*t` too.
+        val gr006 = report.claims.filter { it.kcId == "pa-kc-006" && it.kind == ClaimKind.GRADER_RULE && it.invariant != null }
+        assertEquals("t + t + t = 3*t", gr006.first().invariant, "pa-kc-006's sympy directive extracts t + t + t = 3*t")
     }
 }

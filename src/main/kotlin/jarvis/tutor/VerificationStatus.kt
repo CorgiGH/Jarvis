@@ -24,14 +24,25 @@ enum class VerificationStatus { unverified, pending, faithful, uncertain, failed
  *   FAMILY_COLLAPSE                     -> uncertain  (both legs same configured family)
  *   DEFINITIONAL_NO_GOLD_SPAN           -> uncertain  (no verbatim citation to anchor)
  *   NONLLM_LEG_NONE                     -> uncertain  (domain has no non-LLM checker; UNCERTAIN floor)
+ *   EQUATIONAL_LLM_UNCONFIRMED          -> uncertain  (SymPy proved the math; the LLM merely couldn't
+ *                                                      confirm the NL meaning — not-yet-cross-checked,
+ *                                                      NOT a contradiction; B5r-3 / D-R9)
  *   DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW -> failed     (FAIL-LOUD; explicit disagreement/failure)
  *   REPORT_WRONG                        -> faithful -> pending  (student filed a correction)
+ *
+ * NOTE on the frozen surface: [VerificationStatus] (the 5 wire literals) is FROZEN and untouched.
+ * [AuditOutcome] is an internal driver of the §2.4/§2.5 machine, NOT a wire enum — adding
+ * [EQUATIONAL_LLM_UNCONFIRMED] (which maps to the existing `uncertain` status) does not widen the
+ * frozen status surface.
  */
 enum class AuditOutcome {
     ALL_AGREE_ROUNDTRIP_NONLLM_PASS,
     FAMILY_COLLAPSE,
     DEFINITIONAL_NO_GOLD_SPAN,
     NONLLM_LEG_NONE,
+    /** B5r-3 (D-R9): equational claim, SymPy ran+passed, round-trip passed, nothing threw, NOT
+     *  agreed-REFUTED — but the LLM family was merely UNCLEAR (not bothSupported). Maps to `uncertain`. */
+    EQUATIONAL_LLM_UNCONFIRMED,
     DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW,
     REPORT_WRONG,
 }
@@ -66,6 +77,7 @@ object VerificationStatus_ {
                 AuditOutcome.FAMILY_COLLAPSE                      -> VerificationStatus.uncertain
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
+                AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
                 // REPORT_WRONG from pending: already pending; no change meaningful — stay pending
                 AuditOutcome.REPORT_WRONG                         -> VerificationStatus.pending
@@ -77,6 +89,7 @@ object VerificationStatus_ {
                 AuditOutcome.FAMILY_COLLAPSE                      -> VerificationStatus.uncertain
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
+                AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
             }
             // UNVERIFIED: curate-tutor sets PENDING directly; an audit MUST NOT run until
@@ -91,6 +104,7 @@ object VerificationStatus_ {
                 AuditOutcome.FAMILY_COLLAPSE                      -> VerificationStatus.uncertain
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
+                AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
                 AuditOutcome.REPORT_WRONG                         -> VerificationStatus.unverified
             }
@@ -106,6 +120,7 @@ object VerificationStatus_ {
                 AuditOutcome.FAMILY_COLLAPSE                      -> VerificationStatus.uncertain
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
+                AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
                 AuditOutcome.REPORT_WRONG                         -> VerificationStatus.uncertain
             }
@@ -114,6 +129,7 @@ object VerificationStatus_ {
                 AuditOutcome.FAMILY_COLLAPSE                      -> VerificationStatus.uncertain
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
+                AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
                 AuditOutcome.REPORT_WRONG                         -> VerificationStatus.failed
             }

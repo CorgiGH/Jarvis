@@ -248,6 +248,15 @@ class VerificationRunner(
          * leg threw (an UNCLEAR/absent verdict is not an agreed REFUTED).
          */
         val agreedNonSupported: Boolean get() = agree && twoFamily?.bothSupported == false
+        /**
+         * B5r-3 (D-R9) — did EITHER family return REFUTED? A REFUTED verdict (agreed OR disagreeing) is
+         * an explicit contradiction signal that must stay `failed`, NOT soften to the D-R9 uncertain
+         * floor. The D-R9 floor is for the genuinely-INCONCLUSIVE case (both families UNCLEAR / one
+         * SUPPORTED + one UNCLEAR) where SymPy already proved the math but the LLM couldn't confirm the NL
+         * meaning. False when the LLM leg threw (no verdict to read).
+         */
+        val anyRefuted: Boolean
+            get() = twoFamily?.let { it.familyAVerdict == Verdict.REFUTED || it.familyBVerdict == Verdict.REFUTED } == true
     }
 
     private suspend fun resolveLegs(claim: VerificationClaim): ResolvedLegs {
@@ -317,8 +326,11 @@ class VerificationRunner(
      *  4. EQUATIONAL claim whose SymPy checker could NOT
      *     run (NONE/ran=false), BOTH-SUPPORTED, roundtrip
      *     passed, nothing threw                           → NONLLM_LEG_NONE (uncertain floor)
+     *  4b. EQUATIONAL claim, SymPy RAN+PASSED, roundtrip
+     *     passed, nothing threw, NOT agreed-REFUTED, but
+     *     NOT bothSupported (LLM merely UNCLEAR)          → EQUATIONAL_LLM_UNCONFIRMED (uncertain, D-R9)
      *  5. anything else (disagree / agreed-REFUTED /
-     *     roundtrip fail / threw)                          → DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW (failed)
+     *     SymPy-FAIL / roundtrip fail / threw)             → DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW (failed)
      *
      * F1: case 3 / case 4 read [ResolvedLegs.bothSupported], NOT [ResolvedLegs.agree]. An AGREED
      * verdict that is not SUPPORTED (e.g. both families REFUTED) is NOT faithful and NOT the uncertain
@@ -365,6 +377,18 @@ class VerificationRunner(
         isEquationalKind(claim) && legs.nonLlm.kind == NonLlmLegKind.NONE && !legs.nonLlm.ran &&
             !legs.anyThrew && legs.bothSupported && legs.roundTrip.pass ->
             AuditOutcome.NONLLM_LEG_NONE
+        // case 4b (B5r-3 / D-R9) — an EQUATIONAL claim whose SymPy leg RAN + PASSED (the math is
+        // machine-proved), round-trip passed, nothing threw, and NO family returned REFUTED — but the
+        // families did not reach bothSupported either (they are merely UNCLEAR on the NL restatement, so
+        // case 3 did not fire). This is a NOT-YET-CROSS-CHECKED state, NOT a contradiction: SymPy proved
+        // the equation; the LLM simply couldn't confirm its plain-English meaning. Floor to UNCERTAIN,
+        // never `failed`. A REFUTED from EITHER family (agreed-REFUTED OR a genuine SUPPORTED/REFUTED
+        // disagreement) is an explicit contradiction signal ([anyRefuted]) and falls through to the
+        // `else` (failed) — so this floor catches ONLY the genuinely-inconclusive LLM verdict.
+        isEquationalKind(claim) &&
+            legs.nonLlm.ran && legs.nonLlm.pass && legs.roundTrip.pass && !legs.anyThrew &&
+            !legs.anyRefuted && !legs.bothSupported ->
+            AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED
         else -> AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW
     }
 
