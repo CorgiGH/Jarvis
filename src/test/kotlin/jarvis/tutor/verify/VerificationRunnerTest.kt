@@ -407,17 +407,196 @@ class VerificationRunnerTest {
     }
 
     @Test
-    fun `audit reads the current status from the B8 table for the transition`(@TempDir tmp: Path) = runBlocking {
+    fun `per-claim verdict is computed from a fresh pending prior, independent of the B8 seed row (FIX-A)`(@TempDir tmp: Path) = runBlocking {
+        // FIX-A: each claim's OWN verdict is `transition(pending, outcome)` from a FRESH pending prior —
+        // NOT read off the shared kc_verification_status row. So the per-claim verdict is the SAME
+        // whether the B8 row is absent, unverified, or pending. Here: no seed row at all; an all-agree
+        // equational INVARIANT claim ⇒ faithful per-claim (the runner no longer needs a pre-seeded
+        // pending row to certify, because it always starts the per-claim transition from pending).
         val db = freshDb(tmp)
-        val c = claim()
-        // No seed row at all ⇒ runner must fall back to a sane default (unverified) and STILL not
-        // emit a silent faithful (transition from unverified never yields faithful — FAIL-LOUD).
+        val c = claim()  // equational INVARIANT, all legs agree-SUPPORTED + non-LLM pass + round-trip
         val out = runner(db).audit(listOf(c))
 
-        assertNotEquals(VerificationStatus.faithful, out[0].newStatus, "from unverified, all-agree must NOT short-cut to faithful")
-        // and a B8 row now exists
-        assertNotNull(statusOf(db, c.kcId), "the audit must upsert a B8 row even when none existed")
+        assertEquals(
+            VerificationStatus.faithful, out[0].newStatus,
+            "a fully-passing equational claim ⇒ faithful per-claim from a fresh pending prior (seed-independent)",
+        )
+        // and a B8 row was upserted even though none existed (the KC aggregate over its single claim).
+        assertEquals("faithful", statusOf(db, c.kcId), "the audit upserts the KC aggregate even with no prior row")
     }
+
+    @Test
+    fun `the per-claim verdict does NOT depend on the seeded B8 status (order-independent prior)`(@TempDir tmp: Path) = runBlocking {
+        // Prove seed-independence directly: the SAME claim audited against a `failed`-seeded B8 row and
+        // against a `pending`-seeded B8 row yields the SAME per-claim verdict (faithful). The OLD code
+        // read the seed as the per-claim prior, so a `failed` seed would have poisoned it.
+        val cFailedSeed = claim(kcId = "pa-kc-seed-a")
+        val dbA = freshDb(tmp.resolve("seedfailed").also { java.nio.file.Files.createDirectories(it) })
+        seedStatus(dbA, cFailedSeed.kcId, VerificationStatus.failed)
+        val a = runner(dbA).audit(listOf(cFailedSeed))[0].newStatus
+
+        val cPendingSeed = claim(kcId = "pa-kc-seed-b")
+        val dbB = freshDb(tmp.resolve("seedpending").also { java.nio.file.Files.createDirectories(it) })
+        seedStatus(dbB, cPendingSeed.kcId, VerificationStatus.pending)
+        val b = runner(dbB).audit(listOf(cPendingSeed))[0].newStatus
+
+        assertEquals(VerificationStatus.faithful, a, "a failed B8 seed must NOT poison the per-claim verdict")
+        assertEquals(a, b, "the per-claim verdict is independent of the seeded B8 status")
+    }
+
+    // --- MULTI-CLAIM KC POISONING (post-fix audit wayrajnng) -----------------------------------
+
+    /**
+     * Build a REAL multi-claim pa-kc-005 claim set the way curate-tutor Stage-9 emits it:
+     *  - 2 DEFINITION claims (source-anchored, no invariant) ⇒ no machine check applies ⇒ uncertain floor,
+     *  - 2 GRADER_RULE claims that are PROSE (non-equational, invariant=null) ⇒ uncertain floor,
+     *  - 1 equational INVARIANT claim ⇒ the SymPy leg runs + passes ⇒ faithful.
+     * Every claim is span-anchored (round-trip passes against [rawSource]) so the ONLY differentiator
+     * is the per-claim machine check, NOT a missing gold span.
+     */
+    private fun multiClaim(
+        kind: ClaimKind,
+        content: String,
+        invariant: String?,
+    ) = VerificationClaim(
+        claimId = "pa-kc-005:$kind:${jarvis.content.ContentReconcile.sha256_8(content)}",
+        kcId = "pa-kc-005",
+        subject = "PA",
+        kind = kind,
+        content = content,
+        invariant = invariant,
+        source = goldSource(),
+    )
+
+    /** The 5-claim pa-kc-005 set (2 DEFINITION + 2 GRADER_RULE prose + 1 equational INVARIANT). */
+    private fun multiClaimKc(): List<VerificationClaim> = listOf(
+        multiClaim(ClaimKind.DEFINITION, goldQuote, invariant = null),
+        multiClaim(ClaimKind.DEFINITION, "a data type is a set of values with operations", invariant = null),
+        multiClaim(ClaimKind.GRADER_RULE, "award full marks when the size is mentioned for every type", invariant = null),
+        multiClaim(ClaimKind.GRADER_RULE, "deduct one point per type whose representation size is omitted", invariant = null),
+        multiClaim(ClaimKind.INVARIANT, "x + x = 2*x", invariant = "x + x = 2*x"),
+    )
+
+    /** A non-LLM leg that mirrors the REAL routing: equational INVARIANT/GRADER_RULE ⇒ SYMPY pass;
+     *  a non-equational / DEFINITION claim ⇒ NONE/ran=false (no machine check applies). */
+    private val realisticNonLlm = NonLlmLeg { cl ->
+        nonLlmLegFor(cl.subject).check(cl).let { real ->
+            // The real SymPyLeg shells to python on an equational claim; in the hermetic suite we
+            // fake the equational pass but keep the REAL "no machine check applies" routing.
+            if (real.kind == NonLlmLegKind.SYMPY && real.ran) real
+            else if (cl.kind == ClaimKind.INVARIANT || (cl.kind == ClaimKind.GRADER_RULE && cl.invariant != null))
+                NonLlmResult(NonLlmLegKind.SYMPY, ran = true, pass = true, detail = "fake simplify=0")
+            else real
+        }
+    }
+
+    @Test
+    fun `multi-claim KC - DEFINITION and prose GRADER_RULE floor to uncertain, equational INVARIANT is faithful, NONE failed`(
+        @TempDir tmp: Path,
+    ) = runBlocking {
+        val db = freshDb(tmp)
+        seedStatus(db, "pa-kc-005", VerificationStatus.pending)
+        val claims = multiClaimKc()
+
+        val out = runner(db, nonLlm = realisticNonLlm).audit(claims)
+
+        val byId = out.associateBy { it.claimId }
+        // (a) NO claim ends failed when every family agrees-SUPPORTED + round-trips pass.
+        assertTrue(
+            out.none { it.newStatus == VerificationStatus.failed },
+            "no claim may auto-route to failed: ${out.map { it.claimKind() to it.newStatus }}",
+        )
+        // DEFINITION + prose GRADER_RULE ⇒ uncertain floor (no machine check applies — NOT failed).
+        for (c in claims.filter { it.kind == ClaimKind.DEFINITION || (it.kind == ClaimKind.GRADER_RULE && it.invariant == null) }) {
+            assertEquals(
+                VerificationStatus.uncertain, byId[c.claimId]!!.newStatus,
+                "a ${c.kind} claim with no applicable machine check ⇒ uncertain floor, never failed",
+            )
+        }
+        // The equational INVARIANT ⇒ faithful (SymPy ran + passed, families agree, round-trip passes).
+        val inv = claims.single { it.kind == ClaimKind.INVARIANT }
+        assertEquals(
+            VerificationStatus.faithful, byId[inv.claimId]!!.newStatus,
+            "the equational INVARIANT claim ⇒ faithful",
+        )
+    }
+
+    @Test
+    fun `multi-claim per-claim verdicts are IDENTICAL under shuffled claim order`(@TempDir tmp: Path) = runBlocking {
+        val claims = multiClaimKc()
+
+        // Audit in the natural order.
+        val db1 = freshDb(tmp.resolve("a").also { java.nio.file.Files.createDirectories(it) })
+        seedStatus(db1, "pa-kc-005", VerificationStatus.pending)
+        val natural = runner(db1, nonLlm = realisticNonLlm).audit(claims)
+            .associate { it.claimId to it.newStatus }
+
+        // Audit the SAME claims in a reversed/shuffled order on a FRESH db.
+        val db2 = freshDb(tmp.resolve("b").also { java.nio.file.Files.createDirectories(it) })
+        seedStatus(db2, "pa-kc-005", VerificationStatus.pending)
+        val shuffled = runner(db2, nonLlm = realisticNonLlm).audit(claims.shuffled(java.util.Random(7)))
+            .associate { it.claimId to it.newStatus }
+
+        assertEquals(
+            natural, shuffled,
+            "each claim's OWN verdict must be order-INDEPENDENT (no shared-KC-row prior poisoning)",
+        )
+    }
+
+    @Test
+    fun `multi-claim KC - ONE genuinely disagreeing claim ends failed and the KC aggregates to failed`(
+        @TempDir tmp: Path,
+    ) = runBlocking {
+        val db = freshDb(tmp)
+        seedStatus(db, "pa-kc-005", VerificationStatus.pending)
+        val claims = multiClaimKc()
+        // The INVARIANT claim genuinely DISAGREES (family B refutes it); every other claim agrees.
+        val disagreeingInvariant: (String) -> jarvis.Llm = { _ -> FakeLlm("SUPPORTED") }
+        val r = VerificationRunner(
+            db = db,
+            legA = TwoFamilyDeriver.Leg(LegFamily.RELAY, FakeLlm("SUPPORTED")),
+            legB = TwoFamilyDeriver.Leg(LegFamily.OPENROUTER, object : Llm {
+                override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+                    // Refute ONLY the equational invariant claim; support everything else.
+                    val refute = messages.any { it.content.contains("x + x = 2*x") }
+                    return (if (refute) "REFUTED" else "SUPPORTED") to "fake-model"
+                }
+            }),
+            nonLlmLegFor = { realisticNonLlm },
+            rawSourceFor = { rawSource },
+            clock = { Instant.parse("2026-06-04T12:00:00Z") },
+        )
+
+        val out = r.audit(claims)
+        val byId = out.associateBy { it.claimId }
+        val inv = claims.single { it.kind == ClaimKind.INVARIANT }
+        // (c) the disagreeing claim ⇒ failed.
+        assertEquals(
+            VerificationStatus.failed, byId[inv.claimId]!!.newStatus,
+            "a genuinely-disagreeing claim ⇒ failed",
+        )
+        // The KC aggregates to failed (any failed ⇒ failed).
+        assertEquals("failed", statusOf(db, "pa-kc-005"), "any failed per-claim verdict ⇒ KC aggregates to failed")
+    }
+
+    @Test
+    fun `multi-claim KC - all-agree current PA shape aggregates to uncertain, NOT faithful (honest floor)`(
+        @TempDir tmp: Path,
+    ) = runBlocking {
+        // On the CURRENT PA content shape (DEFINITION + prose GRADER_RULE + 1 equational INVARIANT),
+        // every family agrees-SUPPORTED and round-trips pass, but the DEFINITION/GRADER_RULE claims
+        // floor to uncertain (no independent machine check until the D6 NLI leg). The KC conjunction
+        // is therefore uncertain — NOT faithful. This is CORRECT + honest; do NOT hack to faithful.
+        val db = freshDb(tmp)
+        seedStatus(db, "pa-kc-005", VerificationStatus.pending)
+        runner(db, nonLlm = realisticNonLlm).audit(multiClaimKc())
+        assertEquals(
+            "uncertain", statusOf(db, "pa-kc-005"),
+            "a KC with any uncertain-floor claim aggregates to uncertain (honest until the NLI leg)",
+        )
+    }
+
+    private fun VerificationRunner.AuditResult.claimKind(): String = claimId.substringAfter(':').substringBefore(':')
 
     // helper: seed a kc_verification_status row at a chosen status
     private fun seedStatus(db: Database, kcId: String, status: VerificationStatus) {

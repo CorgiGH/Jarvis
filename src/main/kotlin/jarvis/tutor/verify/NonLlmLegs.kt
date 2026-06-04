@@ -36,32 +36,24 @@ class SymPyLeg(
     data class PyResult(val ran: Boolean, val equal: Boolean, val detail: String?)
 
     override fun check(claim: VerificationClaim): NonLlmResult {
-        // Only equational claims are machine-checkable. No invariant ⇒ nothing to run.
+        // FIX-C: a claim for which NO machine check applies (a non-equational / DEFINITION claim, or a
+        // GRADER_RULE/INVARIANT whose text is not a plain `lhs = rhs` equation) reports kind=NONE
+        // (ran=false) — NOT kind=SYMPY. The runner's NONLLM_LEG_NONE branch then floors it to the
+        // UNCERTAIN floor; a SYMPY tag here would fall through decideOutcome's else ⇒ failed (the
+        // multi-claim KC-poisoning bug). 'SYMPY' is reserved for a claim the sympy bridge ACTUALLY ran.
+
+        // Only equational claims are machine-checkable. No invariant ⇒ nothing to run ⇒ NONE floor.
         if (claim.kind != ClaimKind.INVARIANT && claim.kind != ClaimKind.GRADER_RULE) {
-            return NonLlmResult(
-                kind = NonLlmLegKind.SYMPY,
-                ran = false,
-                pass = false,
-                detail = "no machine-checkable invariant for a ${claim.kind} claim",
-            )
+            return noMachineCheck("no machine-checkable invariant for a ${claim.kind} claim")
         }
         val equation = claim.invariant
         if (equation.isNullOrBlank()) {
-            return NonLlmResult(
-                kind = NonLlmLegKind.SYMPY,
-                ran = false,
-                pass = false,
-                detail = "claim has no invariant equation to check",
-            )
+            return noMachineCheck("claim has no invariant equation to check")
         }
         val (lhs, rhs) = splitEquation(equation)
-            ?: return NonLlmResult(
-                kind = NonLlmLegKind.SYMPY,
-                ran = false,
-                pass = false,
-                detail = "invariant is not an equation (no single '=' to split): $equation",
-            )
+            ?: return noMachineCheck("invariant is not an equation (no single '=' to split): $equation")
 
+        // A real equation: NOW the SYMPY checker genuinely runs (kind=SYMPY).
         val py = pythonEquals(lhs, rhs)
         return NonLlmResult(
             kind = NonLlmLegKind.SYMPY,
@@ -70,6 +62,10 @@ class SymPyLeg(
             detail = py.detail,
         )
     }
+
+    /** No machine check applies to this claim ⇒ the NONLLM_LEG_NONE uncertain floor (NOT failed). */
+    private fun noMachineCheck(detail: String): NonLlmResult =
+        NonLlmResult(kind = NonLlmLegKind.NONE, ran = false, pass = false, detail = detail)
 
     private companion object {
         /** Split an `lhs = rhs` invariant on its single top-level `=`. Returns null when the

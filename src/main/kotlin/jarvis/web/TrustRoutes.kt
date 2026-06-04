@@ -216,27 +216,57 @@ object VerifyAdmin {
     }
 
     /**
+     * D8 content-staleness predicate. True iff the KC's audited content_hash can NO LONGER prove it
+     * matches the live serving content — i.e. the row's `content_hash` is absent (NULL / no B8 row),
+     * there is no live [kc] to recompute against, or the recomputed hash differs from the stored one
+     * (the lecture was edited after the audit). This is the SOLE condition under which a per-claim
+     * `faithful` must be demoted (a faithful verdict over text that was actually re-checked stays
+     * honest while the text is unchanged).
+     *
+     * NOTE (multi-claim KC, FIX-B): content-staleness is INDEPENDENT of the KC-level aggregate. A
+     * multi-claim KC legitimately aggregates to `uncertain` (some claims floor to the uncertain floor)
+     * while a sibling INVARIANT claim is genuinely `faithful` at the CURRENT content. The cap must key
+     * on actual content change, NOT on the aggregate being non-faithful — otherwise it would wrongly
+     * bury every honestly-faithful per-claim verdict the moment any sibling claim floors to uncertain.
+     */
+    fun contentStale(
+        db: org.jetbrains.exposed.sql.Database,
+        kcId: String,
+        kc: KnowledgeConcept?,
+    ): Boolean = transaction(db) {
+        val row = KcVerificationStatusTable.selectAll()
+            .where { KcVerificationStatusTable.kcId eq kcId }
+            .singleOrNull()
+        val rowHash = row?.get(KcVerificationStatusTable.contentHash)
+        val currentHash = kc?.let { ContentReconcile.kcContentHash(it) }
+        // Stale unless BOTH hashes exist AND match.
+        !(rowHash != null && currentHash != null && rowHash == currentHash)
+    }
+
+    /**
      * F5 — resolve each claim's OWN per-claim verdict from `verification_audit` (the audit-of-record),
      * keyed on `claim_id`, NOT the single KC-level status broadcast onto every claim. For each claimId
      * the LATEST audit row (by `audited_at`) supplies the claim's `status`. A claim with NO audit row
      * falls CLOSED to `unverified` (it was never audited — never inherit the KC's faithful).
      *
      * D8 staleness cap: a per-claim `faithful` is only honest while the KC's content is unchanged since
-     * the audit. [kcStaleness] is the KC-level D8 verdict ([resolveStatus]) — if it demoted the KC's
-     * `faithful` to `unverified` (lecture edited / NULL hash / no live kc), every per-claim `faithful`
-     * is likewise demoted to `unverified`. Non-faithful per-claim verdicts pass through verbatim.
+     * the audit. [contentStale] is the D8 content-change verdict ([contentStale]) — when the live
+     * content no longer hashes to the audited content (lecture edited / NULL hash / no live kc), every
+     * per-claim `faithful` is demoted to `unverified`. Non-faithful per-claim verdicts pass through
+     * verbatim. The cap is keyed on CONTENT CHANGE only, never on the KC aggregate being non-faithful —
+     * so a genuinely-faithful claim under a multi-claim `uncertain` KC still serves faithful (FIX-B).
      *
      * Returns a `claimId -> VerificationStatus` map (absent ⇒ caller falls closed to `unverified`).
      */
     fun resolvePerClaimStatuses(
         db: org.jetbrains.exposed.sql.Database,
         claimIds: Collection<String>,
-        kcStaleness: VerificationStatus,
+        contentStale: Boolean,
     ): Map<String, VerificationStatus> {
         if (claimIds.isEmpty()) return emptyMap()
-        // If the KC-level D8 gate already demoted faithful (stale / NULL hash / no live kc), per-claim
-        // faithful is no longer honest either — cap it down to unverified.
-        val faithfulIsStale = kcStaleness != VerificationStatus.faithful
+        // A per-claim faithful is only honest while the audited content is unchanged. When the content
+        // is stale (hash mismatch / NULL hash / no live kc), demote it to unverified.
+        val faithfulIsStale = contentStale
         return transaction(db) {
             val out = HashMap<String, VerificationStatus>(claimIds.size)
             for (cid in claimIds.toSet()) {
@@ -313,8 +343,11 @@ fun Route.installTrustRoutes() {
                 emptyList()
             } else {
                 val kcClaims = ContentReconcile.claimsFor(kc)
+                // D8 cap keys on CONTENT change only, not on the KC aggregate. A genuinely-faithful
+                // per-claim verdict under a multi-claim `uncertain` KC still serves faithful (FIX-B).
                 val perClaim = VerifyAdmin.resolvePerClaimStatuses(
-                    ctx.db, kcClaims.map { it.claimId }, kcStaleness = status,
+                    ctx.db, kcClaims.map { it.claimId },
+                    contentStale = VerifyAdmin.contentStale(ctx.db, kcId, kc),
                 )
                 kcClaims.mapNotNull { claim ->
                     val claimStatus = perClaim[claim.claimId] ?: VerificationStatus.unverified

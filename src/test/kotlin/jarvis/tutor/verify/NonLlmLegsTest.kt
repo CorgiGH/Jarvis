@@ -64,15 +64,39 @@ class NonLlmLegsTest {
     }
 
     @Test
-    fun `SymPyLeg does NOT run a DEFINITION claim - no invariant to check, ran is false`() {
-        // A purely definitional PA claim has no machine-checkable invariant: the SYMPY leg can't
-        // run it. ran=false (FAIL-LOUD: not a disagreement, the §2.5 DEFINITIONAL_NO_GOLD floor).
+    fun `SymPyLeg does NOT run a DEFINITION claim - returns NONE-kind ran false (no machine check applies)`() {
+        // A purely definitional PA claim has no machine-checkable invariant: the SYMPY leg can't run
+        // it. FIX-C: it must report kind=NONE (ran=false), NOT kind=SYMPY — so the runner's
+        // NONLLM_LEG_NONE uncertain floor catches it instead of auto-routing the claim to failed.
         var seamCalled = false
         val leg = SymPyLeg(pythonEquals = { _, _ -> seamCalled = true; SymPyLeg.PyResult(true, true, "x") })
         val r = leg.check(claim(ClaimKind.DEFINITION, "a data type is a set of values", invariant = null))
-        assertEquals(NonLlmLegKind.SYMPY, r.kind)
-        assertFalse(r.ran, "no invariant ⇒ nothing to check ⇒ ran=false")
+        assertEquals(NonLlmLegKind.NONE, r.kind, "a non-equational claim ⇒ NONE-kind (uncertain floor), never SYMPY")
+        assertFalse(r.ran, "no machine check applies ⇒ ran=false")
         assertFalse(seamCalled, "the python seam must not be invoked for a non-invariant claim")
+    }
+
+    @Test
+    fun `SymPyLeg returns NONE for a prose GRADER_RULE with no invariant - no machine check applies`() {
+        // FIX-C: a prose GRADER_RULE carrying NO invariant equation is not machine-checkable. It must
+        // report kind=NONE (ran=false) so the runner floors it to uncertain — NOT a SYMPY tag that
+        // would fall through decideOutcome's else ⇒ failed.
+        var seamCalled = false
+        val leg = SymPyLeg(pythonEquals = { _, _ -> seamCalled = true; SymPyLeg.PyResult(true, true, "x") })
+        val r = leg.check(claim(ClaimKind.GRADER_RULE, "award full marks when every size is mentioned", invariant = null))
+        assertEquals(NonLlmLegKind.NONE, r.kind, "a prose GRADER_RULE (no equation) ⇒ NONE-kind uncertain floor")
+        assertFalse(r.ran)
+        assertFalse(seamCalled, "the python seam must not be invoked for a non-equational rule")
+    }
+
+    @Test
+    fun `SymPyLeg returns NONE when the invariant is not a plain equation - no machine check applies`() {
+        // An INVARIANT whose text has no single '=' to split (e.g. a relational inequality) is not
+        // machine-checkable by the sympy equality bridge ⇒ NONE-kind uncertain floor, never failed.
+        val leg = SymPyLeg(pythonEquals = { _, _ -> SymPyLeg.PyResult(true, true, "x") })
+        val r = leg.check(claim(ClaimKind.INVARIANT, "n <= 2*n for n >= 0", invariant = "n <= 2*n"))
+        assertEquals(NonLlmLegKind.NONE, r.kind, "a non-equational invariant ⇒ NONE-kind uncertain floor")
+        assertFalse(r.ran)
     }
 
     @Test

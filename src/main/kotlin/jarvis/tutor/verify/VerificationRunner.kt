@@ -90,18 +90,74 @@ class VerificationRunner(
             .groupBy { it.kcId }
             .mapValues { (_, kcClaims) -> jarvis.content.ContentReconcile.kcContentHashOf(kcClaims) }
 
+        // Per-claim audit (FIX-A): each claim's OWN verdict is computed from a FRESH `pending` prior —
+        // NOT the rolling shared kc_verification_status row — so it is ORDER-INDEPENDENT. The audit row
+        // carries this per-claim verdict.
         val results = ArrayList<AuditResult>(claims.size)
         for (claim in claims) {
-            results.add(auditOne(claim, auditRunId, hashByKc[claim.kcId]))
+            results.add(auditOne(claim, auditRunId))
+        }
+
+        // KC-level finalization (FIX-B): a single CONJUNCTION over ALL of each KC's per-claim verdicts
+        // in THIS run, written ONCE per KC (order-independent). faithful iff EVERY claim faithful; any
+        // failed ⇒ failed; otherwise uncertain. Carries the D8 content_hash (B3).
+        for ((kcId, kcResults) in results.groupBy { it.kcId }) {
+            finalizeKc(kcId, kcResults, auditRunId, hashByKc[kcId])
         }
         return results
     }
 
-    /** Resolve every leg (try/catch each), compute the outcome+status, THEN write once. */
+    /**
+     * FIX-B — the KC-level [VerificationStatus] is an explicit CONJUNCTION over every per-claim verdict
+     * for this KC in this run (a single finalization step, order-independent):
+     *  - `faithful` iff EVERY claim's per-claim verdict is `faithful`;
+     *  - any `failed`  ⇒ `failed`;
+     *  - otherwise (any `uncertain`/`pending`, no `failed`) ⇒ `uncertain`.
+     * Writes the aggregate ONCE per KC, stamping the D8 [contentHash].
+     */
+    private fun aggregateKc(perClaim: List<VerificationStatus>): VerificationStatus = when {
+        perClaim.isEmpty() -> VerificationStatus.uncertain
+        perClaim.any { it == VerificationStatus.failed } -> VerificationStatus.failed
+        perClaim.all { it == VerificationStatus.faithful } -> VerificationStatus.faithful
+        else -> VerificationStatus.uncertain
+    }
+
+    /** Upsert kc_verification_status ONCE for [kcId] with the conjunction over its per-claim verdicts. */
+    private fun finalizeKc(
+        kcId: String,
+        kcResults: List<AuditResult>,
+        auditRunId: String,
+        contentHash: String?,
+    ) {
+        val aggregate = aggregateKc(kcResults.map { it.newStatus })
+        val now = clock()
+        transaction(db) {
+            val existing = KcVerificationStatusTable.selectAll()
+                .where { KcVerificationStatusTable.kcId eq kcId }
+                .singleOrNull()
+            if (existing == null) {
+                KcVerificationStatusTable.insert {
+                    it[KcVerificationStatusTable.kcId] = kcId
+                    it[status] = aggregate.name
+                    it[lastAuditRunId] = auditRunId
+                    it[KcVerificationStatusTable.contentHash] = contentHash
+                    it[updatedAt] = now
+                }
+            } else {
+                KcVerificationStatusTable.update({ KcVerificationStatusTable.kcId eq kcId }) {
+                    it[status] = aggregate.name
+                    it[lastAuditRunId] = auditRunId
+                    it[KcVerificationStatusTable.contentHash] = contentHash
+                    it[updatedAt] = now
+                }
+            }
+        }
+    }
+
+    /** Resolve every leg (try/catch each), compute the outcome + the PER-CLAIM verdict, THEN write. */
     private suspend fun auditOne(
         claim: VerificationClaim,
         auditRunId: String,
-        contentHash: String?,
     ): AuditResult {
         // ---- 1. RESOLVE ALL LEGS (no DB; each leg in its OWN try/catch) -----------------------
         val legs = resolveLegs(claim)
@@ -109,21 +165,26 @@ class VerificationRunner(
         // ---- 2. COMPUTE THE OUTCOME ----------------------------------------------------------
         val outcome = decideOutcome(claim, legs)
 
-        // ---- 3. READ CURRENT STATUS + APPLY THE PURE TRANSITION ------------------------------
-        val prior = readStatus(claim)
-        val newStatus = VerificationStatus_.transition(prior, outcome)
+        // ---- 3. THE PER-CLAIM VERDICT (FIX-A) ------------------------------------------------
+        // ORDER-INDEPENDENT: a claim's own verdict is `transition(pending, thisClaimsOutcome)` from a
+        // FRESH `pending` prior — NEVER the rolling shared kc_verification_status row. Reading that
+        // shared row would make claim N's verdict depend on claims 1..N-1 audited earlier this run
+        // (the multi-claim KC-poisoning bug). The KC-level aggregate is computed separately in
+        // finalizeKc as an explicit conjunction.
+        val prior = VerificationStatus.pending
+        val perClaimStatus = VerificationStatus_.transition(prior, outcome)
 
         val notes = buildNotes(claim, legs, outcome)
 
-        // ---- 4/5. WRITE ONCE (idempotent on auditRunId) --------------------------------------
-        val written = writeOnce(claim, legs, outcome, newStatus, auditRunId, notes, contentHash)
+        // ---- 4/5. WRITE THE AUDIT ROW ONCE (idempotent on auditRunId) ------------------------
+        val written = writeOnce(claim, legs, outcome, perClaimStatus, auditRunId, notes)
 
         return AuditResult(
             claimId = claim.claimId,
             kcId = claim.kcId,
             priorStatus = prior,
             outcome = outcome,
-            newStatus = newStatus,
+            newStatus = perClaimStatus,
             written = written,
             notes = notes,
         )
@@ -239,28 +300,18 @@ class VerificationRunner(
         else -> AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW
     }
 
-    /** Read the KC's CURRENT resolved status from the B8 table; fall back to unverified (no row yet). */
-    private fun readStatus(claim: VerificationClaim): VerificationStatus = transaction(db) {
-        val row = KcVerificationStatusTable.selectAll()
-            .where { KcVerificationStatusTable.kcId eq claim.kcId }
-            .singleOrNull()
-        val literal = row?.get(KcVerificationStatusTable.status)
-        literal?.let { runCatching { VerificationStatus.valueOf(it) }.getOrNull() }
-            ?: VerificationStatus.unverified
-    }
-
     /**
-     * Write the audit row + upsert kc_verification_status in ONE transaction. Idempotent: if a row
-     * for (claimId, auditRunId) already exists, write nothing and return false.
+     * Write the per-claim audit row in ONE transaction. Idempotent: if a row for (claimId, auditRunId)
+     * already exists, write nothing and return false. The KC-level kc_verification_status aggregate is
+     * written SEPARATELY, once per KC, by [finalizeKc] (FIX-B) — NOT here per claim.
      */
     private fun writeOnce(
         claim: VerificationClaim,
         legs: ResolvedLegs,
         outcome: AuditOutcome,
-        newStatus: VerificationStatus,
+        perClaimStatus: VerificationStatus,
         auditRunId: String,
         notes: String,
-        contentHash: String?,
     ): Boolean = transaction(db) {
         val already = VerificationAuditTable.selectAll()
             .where {
@@ -281,7 +332,8 @@ class VerificationRunner(
             it[kcId] = claim.kcId
             it[subject] = claim.subject
             it[claimKind] = claim.kind.name
-            it[status] = newStatus.name
+            // FIX-A: the row carries this claim's OWN order-independent verdict, not a shared KC status.
+            it[status] = perClaimStatus.name
             it[doc] = claim.source?.doc ?: ""
             it[page] = claim.source?.page?.takeIf { p -> p > 0 }
             it[pageAnchorStatus] = legs.roundTrip.pageAnchorStatus.name
@@ -299,27 +351,6 @@ class VerificationRunner(
             it[auditedAt] = now
             it[VerificationAuditTable.auditRunId] = auditRunId
             it[VerificationAuditTable.notes] = (notes + (tf?.let { r -> " | ${r.details}" } ?: "")).take(8000)
-        }
-
-        // -- B8 upsert: SELECT-then-UPDATE-or-INSERT (the codebase idiom) ----------------------
-        val existing = KcVerificationStatusTable.selectAll()
-            .where { KcVerificationStatusTable.kcId eq claim.kcId }
-            .singleOrNull()
-        if (existing == null) {
-            KcVerificationStatusTable.insert {
-                it[kcId] = claim.kcId
-                it[status] = newStatus.name
-                it[lastAuditRunId] = auditRunId
-                it[KcVerificationStatusTable.contentHash] = contentHash
-                it[updatedAt] = now
-            }
-        } else {
-            KcVerificationStatusTable.update({ KcVerificationStatusTable.kcId eq claim.kcId }) {
-                it[status] = newStatus.name
-                it[lastAuditRunId] = auditRunId
-                it[KcVerificationStatusTable.contentHash] = contentHash
-                it[updatedAt] = now
-            }
         }
         true
     }

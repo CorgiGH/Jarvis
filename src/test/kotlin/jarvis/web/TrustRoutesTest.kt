@@ -449,6 +449,87 @@ class TrustRoutesTest {
     }
 
     @Test
+    fun `resolvePerClaimStatuses serves each claim's OWN runner verdict over a REAL multi-claim audit`() = testApplication {
+        // End-to-end (case d): run the REAL runner over a multi-claim pa-kc-005 (2 DEFINITION +
+        // 2 GRADER_RULE prose + 1 equational INVARIANT), then assert resolvePerClaimStatuses serves
+        // each claim its OWN per-claim verdict matching the runner output — NOT a broadcast KC status.
+        val dir = Files.createTempDirectory("trust-perclaim-e2e")
+        val content = dir.resolve("content"); seedMultiGraderKc(content)
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val kc = loadKc(content, "pa-kc-005")
+        val claims = jarvis.content.ContentReconcile.claimsFor(kc)
+
+        // Seed the KC pending so the runner can transition it.
+        seedB8(db, "pa-kc-005", VerificationStatus.pending, null)
+
+        // A hermetic runner: both families SUPPORTED; non-LLM = the real routing but with the
+        // equational SymPy pass faked (no python). The DEFINITION/prose-GRADER_RULE claims floor
+        // to uncertain; the equational INVARIANT is faithful.
+        val runner = VerificationRunner(
+            db = db,
+            legA = TwoFamilyDeriver.Leg(LegFamily.RELAY, FixedLlm("SUPPORTED")),
+            legB = TwoFamilyDeriver.Leg(LegFamily.OPENROUTER, FixedLlm("SUPPORTED")),
+            nonLlmLegFor = { subject ->
+                jarvis.tutor.verify.NonLlmLeg { cl ->
+                    val real = jarvis.tutor.verify.nonLlmLegFor(subject).check(cl)
+                    if (real.kind == jarvis.tutor.verify.NonLlmLegKind.SYMPY && real.ran) real
+                    else if (cl.kind == jarvis.tutor.verify.ClaimKind.INVARIANT)
+                        jarvis.tutor.verify.NonLlmResult(jarvis.tutor.verify.NonLlmLegKind.SYMPY, ran = true, pass = true, detail = "fake=0")
+                    else real
+                }
+            },
+            rawSourceFor = { "Algorithm is a finite sequence." },
+        )
+        val runnerOut = kotlinx.coroutines.runBlocking { runner.audit(claims) }
+        val runnerById = runnerOut.associate { it.claimId to it.newStatus }
+
+        // The D8 content-staleness signal the serve path passes into resolvePerClaimStatuses. The
+        // content is unchanged since the audit (finalizeKc stamped the matching hash), so it is NOT
+        // stale — even though the KC aggregate is `uncertain` (FIX-B). The cap must NOT fire here.
+        val stale = VerifyAdmin.contentStale(db, "pa-kc-005", kc)
+        val served = VerifyAdmin.resolvePerClaimStatuses(db, claims.map { it.claimId }, contentStale = stale)
+
+        for (c in claims) {
+            assertEquals(
+                runnerById[c.claimId], served[c.claimId],
+                "serve must return claim ${c.claimId} (${c.kind})'s OWN runner verdict, not a broadcast",
+            )
+        }
+        // And the verdicts are a genuine MIX (not all one value) — the equational INVARIANT differs.
+        assertTrue(
+            served.values.toSet().size >= 2,
+            "the served per-claim verdicts must differ by claim, not be one broadcast value: $served",
+        )
+    }
+
+    /**
+     * A PA KC with an equational invariant + TWO prose grader_rules (non-equational) + a span-bearing
+     * source quote — so claimsFor emits a DEFINITION + 2 GRADER_RULE + 1 INVARIANT claim set.
+     */
+    private fun seedMultiGraderKc(content: Path) {
+        content.createDirectories()
+        content.resolve("subjects.yaml").writeText(
+            "version: 1\nsubjects:\n  - id: PA\n    name_ro: \"P\"\n    name_en: \"Algorithm Design\"\n")
+        val pa = content.resolve("PA")
+        pa.resolve("kcs").createDirectories()
+        pa.resolve("_sources").createDirectories()
+        pa.resolve("kcs/pa-kc-005.yaml").writeText(
+            "id: pa-kc-005\nsubject: PA\nname_ro: \"A\"\nname_en: \"Algorithm\"\n" +
+                "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
+                "exam_weight: 1.0\ntier: 1\nversion: 1\n" +
+                "verification_status: \"pending\"\n" +
+                "invariant: \"x + x = 2*x\"\n" +
+                "grader_rules:\n" +
+                "  - \"award full marks when the size is mentioned for every type\"\n" +
+                "  - \"deduct one point per type whose representation size is omitted\"\n" +
+                "source:\n  - doc: pa-lecture-01\n    quote: \"Algorithm\"\n    page: 1\n" +
+                "    span:\n      start: 0\n      end: 9\n")
+        pa.resolve("_sources/pa-lecture-01.md").writeText("Algorithm is a finite sequence.\n")
+        pa.resolve("edges.yaml").writeText("subject: PA\nedges: []\n")
+    }
+
+    @Test
     fun `verify status requires auth — 401 without a session`() = testApplication {
         val dir = Files.createTempDirectory("trust-noauth")
         val content = dir.resolve("content"); seedContent(content)
