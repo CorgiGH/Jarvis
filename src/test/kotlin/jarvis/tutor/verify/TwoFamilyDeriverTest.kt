@@ -49,6 +49,34 @@ class TwoFamilyDeriverTest {
     }
 
     @Test
+    fun `two families that both re-derive REFUTED agree on the verdict but are NOT bothSupported`() = runBlocking {
+        // F1: both families REFUTED is AGREEMENT on a verdict, but it is NOT a SUPPORTED agreement.
+        // The faithful path must demand SUPPORTED==SUPPORTED, so `bothSupported` must be FALSE here
+        // even though `agree` is true. Certifying a both-REFUTED claim as faithful is the live
+        // false-faithful bug this guards.
+        val a = TwoFamilyDeriver.Leg(LegFamily.RELAY, FakeLlm("REFUTED: the source contradicts it", "claude-max-relay"))
+        val b = TwoFamilyDeriver.Leg(LegFamily.OPENROUTER, FakeLlm("REFUTED: not entailed at all", "llama-3.3-70b:free"))
+
+        val r = TwoFamilyDeriver(a, b).derive(claim)
+
+        assertTrue(r.agree, "both families reached the SAME non-UNCLEAR verdict ⇒ agree")
+        assertFalse(r.bothSupported, "both REFUTED is agreement, but NOT a SUPPORTED agreement (no faithful)")
+        assertEquals(Verdict.REFUTED, r.familyAVerdict)
+        assertEquals(Verdict.REFUTED, r.familyBVerdict)
+    }
+
+    @Test
+    fun `two families that both re-derive SUPPORTED are bothSupported`() = runBlocking {
+        val a = TwoFamilyDeriver.Leg(LegFamily.RELAY, FakeLlm("SUPPORTED: the claim follows", "claude-max-relay"))
+        val b = TwoFamilyDeriver.Leg(LegFamily.OPENROUTER, FakeLlm("SUPPORTED: yes, it holds", "llama-3.3-70b:free"))
+
+        val r = TwoFamilyDeriver(a, b).derive(claim)
+
+        assertTrue(r.agree, "both SUPPORTED ⇒ agree")
+        assertTrue(r.bothSupported, "both families SUPPORTED ⇒ bothSupported true (the only faithful-eligible case)")
+    }
+
+    @Test
     fun `two families that re-derive opposite verdicts DISAGREE`() = runBlocking {
         val a = TwoFamilyDeriver.Leg(LegFamily.RELAY, FakeLlm("SUPPORTED: the claim follows", "claude-max-relay"))
         val b = TwoFamilyDeriver.Leg(LegFamily.OPENROUTER, FakeLlm("REFUTED: the claim does not follow", "llama-3.3-70b:free"))

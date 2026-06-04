@@ -154,7 +154,15 @@ object VerifyAdmin {
                 runCatching { repo.loadSubject(sub.id).kcs.firstOrNull { it.id == kcId } }.getOrNull()
             }
 
-    /** Resolve the KC's runtime status from the B8 table; fall back to the YAML seed, else unverified. */
+    /**
+     * Resolve the KC's runtime status from the B8 table (`kc_verification_status`) — the ONLY source
+     * of served trust. F4-serve: a KC with NO B8 row resolves to `unverified`, NEVER the authored YAML
+     * seed. The seed `verification_status: faithful` means "the author hopes so" — with zero audit legs
+     * run there is no evidence to serve `faithful`. Only an actual audit (which writes a B8 row) may
+     * promote past `unverified`. The [kc] arg is retained for the call-site contract (and future use)
+     * but is deliberately NOT consulted for status — the seed is never a fallback.
+     */
+    @Suppress("UNUSED_PARAMETER")
     fun resolveStatus(
         db: org.jetbrains.exposed.sql.Database,
         kcId: String,
@@ -163,10 +171,8 @@ object VerifyAdmin {
         val row = KcVerificationStatusTable.selectAll()
             .where { KcVerificationStatusTable.kcId eq kcId }
             .singleOrNull()
-        val live = row?.get(KcVerificationStatusTable.status)
+        row?.get(KcVerificationStatusTable.status)
             ?.let { runCatching { VerificationStatus.valueOf(it) }.getOrNull() }
-        live
-            ?: kc?.verification_status?.let { runCatching { VerificationStatus.valueOf(it) }.getOrNull() }
             ?: VerificationStatus.unverified
     }
 }

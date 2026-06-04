@@ -32,6 +32,8 @@ class TwoFamilyDeriver(
      *   decide it), but we still run both derivations so the audit row records each leg's verdict.
      * - `agree` is true iff both families return the SAME non-UNCLEAR verdict. An UNCLEAR verdict
      *   from either side is NOT agreement (FAIL-LOUD: an unparseable / hedged answer ≠ a match).
+     * - `bothSupported` (F1) is the STRICTER signal the runner uses to certify: true iff BOTH families
+     *   returned SUPPORTED. A both-REFUTED is `agree` but NOT `bothSupported` ⇒ never faithful.
      */
     suspend fun derive(claim: VerificationClaim): TwoFamilyResult {
         val a = deriveOne(legA, claim)
@@ -39,6 +41,10 @@ class TwoFamilyDeriver(
 
         val collapsed = legA.family == legB.family
         val agree = a.verdict != Verdict.UNCLEAR && a.verdict == b.verdict
+        // F1: agreement on a verdict is NOT enough for the faithful path — both families must agree
+        // on SUPPORTED specifically. A both-REFUTED agreement (or any non-SUPPORTED agreement) must
+        // NOT certify the claim. The runner requires this for case-3 (ALL_AGREE_ROUNDTRIP_NONLLM_PASS).
+        val bothSupported = a.verdict == Verdict.SUPPORTED && b.verdict == Verdict.SUPPORTED
 
         val details = buildString {
             append("A[").append(legA.family).append('/').append(a.model).append("]=").append(a.verdict)
@@ -49,6 +55,7 @@ class TwoFamilyDeriver(
 
         return TwoFamilyResult(
             agree = agree,
+            bothSupported = bothSupported,
             collapsed = collapsed,
             familyA = legA.family,
             familyB = legB.family,
@@ -107,8 +114,14 @@ enum class Verdict { SUPPORTED, REFUTED, UNCLEAR }
  * readable string written to `verification_audit`.
  */
 data class TwoFamilyResult(
-    /** Both families reached the SAME non-UNCLEAR verdict. */
+    /** Both families reached the SAME non-UNCLEAR verdict (SUPPORTED==SUPPORTED OR REFUTED==REFUTED). */
     val agree: Boolean,
+    /**
+     * Both families reached SUPPORTED (the ONLY agreement that may certify a claim, §2.5 / F1).
+     * STRICTLY stronger than [agree]: a both-REFUTED is `agree=true` but `bothSupported=false`, so the
+     * runner's faithful path (case-3) must read THIS, never [agree], to avoid certifying a refuted claim.
+     */
+    val bothSupported: Boolean,
     /** Both legs share a configured [LegFamily] ⇒ independence violated (§L/H3). */
     val collapsed: Boolean,
     val familyA: LegFamily,

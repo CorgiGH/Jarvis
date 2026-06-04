@@ -244,6 +244,23 @@ class VerificationRunnerTest {
     }
 
     @Test
+    fun `both families REFUTED is an AGREED non-SUPPORTED verdict and must NEVER be faithful`(@TempDir tmp: Path) = runBlocking {
+        val db = freshDb(tmp)
+        val c = claim()
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        // F1: both families REFUTED ⇒ they AGREE on a verdict, the non-LLM leg passes, the round-trip
+        // passes, nothing threw — yet the agreed verdict is REFUTED, NOT SUPPORTED. The faithful path
+        // must demand SUPPORTED==SUPPORTED, so this must route to failed (DISAGREE_OR_…), never faithful.
+        val out = runner(db, legAReply = "REFUTED", legBReply = "REFUTED").audit(listOf(c))
+
+        assertNotEquals(VerificationStatus.faithful, out[0].newStatus, "both REFUTED ⇒ NEVER faithful (agreed but not SUPPORTED)")
+        assertEquals(VerificationStatus.failed, out[0].newStatus, "an agreed non-SUPPORTED verdict ⇒ failed")
+        assertEquals("failed", statusOf(db, c.kcId))
+        assertEquals(1, auditRowCount(db, c.claimId))
+    }
+
+    @Test
     fun `a claim with no gold span drives the definitional uncertain floor - never faithful`(@TempDir tmp: Path) = runBlocking {
         val db = freshDb(tmp)
         // a purely definitional claim: source present but span null (no anchored gold span).

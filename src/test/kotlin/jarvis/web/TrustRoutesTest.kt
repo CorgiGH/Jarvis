@@ -114,6 +114,15 @@ class TrustRoutesTest {
         System.setProperty("JARVIS_CONTENT_DIR", content.toString())
         val db = freshDb(dir)
         val (_, sid) = seedUser(db, UserScope.FRIEND)
+        // F4-serve: faithful is now B8-backed only — the KC must carry an audited B8 row to serve
+        // faithful (the YAML seed alone serves unverified).
+        transaction(db) {
+            KcVerificationStatusTable.insert {
+                it[kcId] = "pa-kc-005"
+                it[status] = VerificationStatus.faithful.name
+                it[updatedAt] = Instant.now()
+            }
+        }
         application { installTrust(db, dir) }
         val r = client.get("/api/v1/verify/pa-kc-005/status") { header("Cookie", "jarvis_session=$sid") }
         assertEquals(HttpStatusCode.OK, r.status)
@@ -171,6 +180,51 @@ class TrustRoutesTest {
         assertTrue(body.contains("\"verification_status\":\"unverified\""), body)
         assertTrue(body.contains("\"honest_floor\":\"UNVERIFIED\""), body)
         assertTrue(body.contains("\"claims\":[]"), body)
+    }
+
+    @Test
+    fun `F4-serve - a faithful YAML seed with NO B8 row serves unverified, never the seed faithful`() = testApplication {
+        // F4-serve: `faithful` is authorable as a YAML seed, but with ZERO audit legs run (no B8
+        // row) the served status must be `unverified` — NOT the authored seed. resolveStatus must
+        // NOT fall back to the YAML `verification_status: faithful`.
+        val dir = Files.createTempDirectory("trust-f4-serve")
+        val content = dir.resolve("content"); seedContent(content, status = "faithful")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        // NB: NO kc_verification_status (B8) row inserted — the KC was never audited.
+        application { installTrust(db, dir) }
+        val r = client.get("/api/v1/verify/pa-kc-005/status") { header("Cookie", "jarvis_session=$sid") }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        assertTrue(body.contains("\"verification_status\":\"unverified\""), body)
+        assertTrue(body.contains("\"badge_text\":\"unverified\""), body)
+        assertFalse(body.contains("\"verification_status\":\"faithful\""), body)
+    }
+
+    @Test
+    fun `F4-serve - a B8 row IS still honored - audited faithful serves faithful`() = testApplication {
+        // The flip side: once the KC has actually been audited (a B8 row exists), the B8 status
+        // IS the served truth. This proves F4-serve only kills the YAML-seed fallback, not the
+        // legitimate B8-backed faithful.
+        val dir = Files.createTempDirectory("trust-f4-b8")
+        val content = dir.resolve("content"); seedContent(content, status = "faithful")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        transaction(db) {
+            KcVerificationStatusTable.insert {
+                it[kcId] = "pa-kc-005"
+                it[status] = VerificationStatus.faithful.name
+                it[updatedAt] = Instant.now()
+            }
+        }
+        application { installTrust(db, dir) }
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        assertTrue(body.contains("\"verification_status\":\"faithful\""), body)
+        assertTrue(body.contains("matches your lecture"), body)
     }
 
     @Test

@@ -134,6 +134,12 @@ class VerificationRunner(
         val anyThrew: Boolean get() = twoFamilyThrew || nonLlmThrew || roundTripThrew
         /** Both families reached the same non-UNCLEAR verdict (false when the LLM leg threw). */
         val agree: Boolean get() = twoFamily?.agree == true
+        /**
+         * Both families reached SUPPORTED — the ONLY agreement that may certify (§2.5 / F1). Strictly
+         * stronger than [agree]: a both-REFUTED is `agree` but NOT `bothSupported`, so case-3 reads THIS
+         * to keep an agreed-but-refuted claim out of `faithful`. False when the LLM leg threw.
+         */
+        val bothSupported: Boolean get() = twoFamily?.bothSupported == true
     }
 
     private suspend fun resolveLegs(claim: VerificationClaim): ResolvedLegs {
@@ -196,21 +202,27 @@ class VerificationRunner(
      * The §2.5 outcome decision (priority order):
      *  1. no gold span                                    → DEFINITIONAL_NO_GOLD_SPAN (uncertain)
      *  2. two legs share a configured family              → FAMILY_COLLAPSE (uncertain)
-     *  3. agree && nonllm ran&pass && roundtrip && !threw → ALL_AGREE_ROUNDTRIP_NONLLM_PASS (faithful)
+     *  3. BOTH-SUPPORTED && nonllm ran&pass && roundtrip
+     *     && !threw                                       → ALL_AGREE_ROUNDTRIP_NONLLM_PASS (faithful)
      *  4. the ONLY shortfall is a NONE non-LLM checker
-     *     (legs agreed, roundtrip passed, nothing threw)  → NONLLM_LEG_NONE (uncertain floor)
-     *  5. anything else (disagree / roundtrip fail / threw)→ DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW (failed)
+     *     (BOTH-SUPPORTED, roundtrip passed, nothing threw)→ NONLLM_LEG_NONE (uncertain floor)
+     *  5. anything else (disagree / agreed-REFUTED /
+     *     roundtrip fail / threw)                          → DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW (failed)
      *
-     * No path reaches `faithful` without BOTH a non-LLM-leg pass AND families-agree (the §2.5
-     * LOCKED invariant), enforced by case 3's conjunction.
+     * F1: case 3 + case 4 read [ResolvedLegs.bothSupported], NOT [ResolvedLegs.agree]. An AGREED
+     * verdict that is not SUPPORTED (e.g. both families REFUTED) is NOT faithful and NOT the uncertain
+     * floor — it falls through to the `else` (failed). Agreement on the WRONG answer must never certify.
+     *
+     * No path reaches `faithful` without BOTH a non-LLM-leg pass AND families-agree-on-SUPPORTED (the
+     * §2.5 LOCKED invariant), enforced by case 3's conjunction.
      */
     private fun decideOutcome(claim: VerificationClaim, legs: ResolvedLegs): AuditOutcome = when {
         claim.source?.span == null -> AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN
         legs.collapsed -> AuditOutcome.FAMILY_COLLAPSE
-        legs.agree && legs.nonLlm.ran && legs.nonLlm.pass && legs.roundTrip.pass && !legs.anyThrew ->
+        legs.bothSupported && legs.nonLlm.ran && legs.nonLlm.pass && legs.roundTrip.pass && !legs.anyThrew ->
             AuditOutcome.ALL_AGREE_ROUNDTRIP_NONLLM_PASS
         legs.nonLlm.kind == NonLlmLegKind.NONE && !legs.nonLlm.ran && !legs.anyThrew &&
-            legs.agree && legs.roundTrip.pass ->
+            legs.bothSupported && legs.roundTrip.pass ->
             AuditOutcome.NONLLM_LEG_NONE
         else -> AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW
     }
