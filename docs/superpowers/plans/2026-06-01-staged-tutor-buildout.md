@@ -1,5 +1,7 @@
 # Staged Tutor Buildout — Implementation Plan
 
+> ⛔ **SUPERSEDED — folded into `2026-06-02-master-impl-plan-v2.md`; its Stage 0 = DONE (Phase 0 shipped SESSION-52). Do NOT build from this file.**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Stand up the north-star tutor on a trustworthy base — fix the viz that teaches falsehoods + build the verification-net + clean baseline FIRST (Stage 0), then a backend walking-skeleton on one computational KC end-to-end (Stage 1), then breadth (Stage 2+).

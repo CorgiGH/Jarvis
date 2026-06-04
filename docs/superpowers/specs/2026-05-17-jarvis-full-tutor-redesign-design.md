@@ -1,6 +1,6 @@
 # Spec: Jarvis Full Tutor Redesign — Novice Pedagogy + Brutalist UX + Multi-User
 
-**Date:** 2026-05-17 · **Author:** Alex (Corgi) + brainstorming skill · **Status:** draft
+**Date:** 2026-05-17 · **Author:** Alex (Corgi) + brainstorming skill · **Status:** draft — ⛔ **SUPERSEDED for sequencing/architecture by `plans/2026-06-02-master-impl-plan-v2.md` + `2026-05-31-north-star-roadmap-design.md`; §14 gate order + auth/DB sections are STALE. Keep ONLY as a surface/scope inventory.**
 **Plan:** *(pending — writing-plans skill is next step after user approval)*
 **Research wiki:** `docs/superpowers/research/2026-05-17-novice-pedagogy-tutor-redesign-research.md` (3,500+ lines, Rounds 1-9, 8 parallel subagents)
 **Council verdict:** `.claude/council-cache/council-1779022799-backend-path-decision.md` (Path B hybrid)
