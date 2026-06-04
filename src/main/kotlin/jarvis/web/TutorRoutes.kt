@@ -161,6 +161,9 @@ fun Application.installTutorRoutes() {
         // Gate 3: content-authoring curator routes (read + validate only).
         installCuratorRoutes()
 
+        // Phase 2: trust-net routes (verify status / owner re-audit / report-wrong).
+        installTrustRoutes()
+
         // Daemon health probe: checks if the local background daemon at
         // port 7331 is reachable. No auth required (public liveness data).
         get("/api/v1/daemon/health") {

@@ -179,3 +179,19 @@ tasks.register<JavaExec>("validateContent") {
 // Gate 3: content corpus validation runs as part of the standard verification
 // lifecycle. `gradle check` (and `gradle build`) now fail on a malformed corpus.
 tasks.named("check") { dependsOn("validateContent") }
+
+// Phase 2 (Batch-5, master-plan H6): the trust-net OFFLINE audit batch. OWNER / MANUAL ONLY —
+// it re-derives every authored KC claim against TWO live LLM families (RELAY + OPENROUTER) + a
+// non-LLM leg + the span↔claim round-trip and writes verification_audit + kc_verification_status.
+// It is DELIBERATELY NOT a dependency of `check` (H6): CI has no live relay/OpenRouter key, and the
+// CLI FAIL-LOUD aborts (exit 2) the moment a required family env var is missing — so wiring it into
+// check would break the build. Run it by hand: `./gradlew verifyContent`.
+tasks.register<JavaExec>("verifyContent") {
+    group = "verification"
+    description = "OFFLINE trust-net audit (owner/manual ONLY; NOT part of check). Requires a live " +
+        "relay (JARVIS_RELAY_URL+JARVIS_RELAY_TOKEN) + OpenRouter (OPENROUTER_API_KEY); FAIL-LOUD aborts otherwise."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("jarvis.tutor.verify.VerifyContentCliKt")
+    args = (project.findProperty("verifyArgs") as String?)?.split(" ")?.filter { it.isNotEmpty() } ?: listOf()
+    jvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+}
