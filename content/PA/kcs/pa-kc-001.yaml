@@ -11,8 +11,23 @@ tier: 1
 source:
   - doc: pa-lecture-01
     quote: "It does not exists a standard definition for the notion of algorithm."
+    page: 4
+    span:
+      start: 811
+      end: 880
+    provenance: located
   - doc: pa-lecture-01
     quote: "An algorithm is a well-ordered collection of unambiguous and effectively computable\noperations that when executed produces a result and halts in a finite amount of time."
+    page: 4
+    span:
+      start: 1184
+      end: 1353
+    provenance: located
   - doc: pa-lecture-01
     quote: "An algorithm is an ordered sequence of instructions that is guaranteed to solve a\nspecific problem."
+    page: 4
+    span:
+      start: 1433
+      end: 1532
+    provenance: located
 version: 1

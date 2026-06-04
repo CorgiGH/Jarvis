@@ -14,6 +14,10 @@ grounding_tier: strict
 # execution-step costs (time_d(τ) = Σ_i time_d(step_i)): a 3-step computation whose
 # steps each cost t has total time cost t + t + t = 3*t.
 invariant: "t + t + t = 3*t"
+# B5r-3 (D-R7): plain-English restatement of the invariant — the NLI hypothesis for the
+# INVARIANT claim. Grounded in the lecture's rule that a computation is a sequence of execution
+# steps and its time cost is the sum over those steps, time_d(τ) = Σ_i time_d(step_i) (page 45).
+invariant_statement: "The time cost of a computation is the sum of the time costs of its execution steps, so a computation of 3 steps that each cost t has total time cost t + t + t = 3*t."
 grader_rules:
   - "sympy: simplify((t + t + t) - 3*t) == 0  # computation time cost = sum of step costs"
   - "the answer must express the computation cost as a SUM over execution steps, not the cost of a single step"

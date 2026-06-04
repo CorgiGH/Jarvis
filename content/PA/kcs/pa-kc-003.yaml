@@ -11,6 +11,16 @@ tier: 2
 source:
   - doc: pa-lecture-01
     quote: "There are various ways to describe an algorithm:"
+    page: 8
+    span:
+      start: 3927
+      end: 3975
+    provenance: located
   - doc: pa-lecture-01
     quote: "pseudo-code, combines a formal notation with a informal one"
+    page: 8
+    span:
+      start: 4220
+      end: 4279
+    provenance: located
 version: 1

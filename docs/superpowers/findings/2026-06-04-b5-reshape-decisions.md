@@ -17,6 +17,15 @@ Running log of judgment calls taken while executing the B5-RESHAPE (per-claim-ki
 - **D-R8 (B5r-3, strip `sympy:` directive):** a `grader_rule` that is a SymPy DIRECTIVE (prefixed `sympy:` or otherwise a machine directive, not an NL instruction) is NOT emitted as an LLM/NLI-judged claim — its equation is routed to the SymPy leg only (folded into the equational check). A real prose grader_rule (an NL instruction like "the answer must distinguish the three size measures") STAYS an LLM-judged prose claim as today. Kills the garbage-NLI path + its false-REFUTED-veto risk.
 - **D-R9 (B5r-3, honest floor for equational, decideOutcome refinement):** an EQUATIONAL claim whose SymPy leg RAN+PASSED + round-trip passed + nothing threw + NOT agreed-REFUTED, but the LLM family is merely UNCLEAR (not SUPPORTED) ⇒ floor to **uncertain**, NOT `failed`. Rationale: the math was machine-proven; "the LLM couldn't confirm the NL meaning" is a not-yet-cross-checked state, not a contradiction. Only agreed-REFUTED / SymPy-FAIL / round-trip-FAIL / threw ⇒ `failed`. (New decideOutcome case; TDD.)
 
+- **D-R10 (B5r-4, content):** added `located`-provenance spans+pages to pa-kc-001..004 (all 10 quotes relocate, round-trip PASS, diacritic-exact). Span coords = char offsets into `content/PA/_sources/pa-lecture-01.md` raw (LF-only, no astral chars). **Quote correction:** 3 quotes (002 q1/q2, 004 q1) carried a phantom `\n  ` list-indent never present in the raw source → corrected to verbatim raw text (a source.quote MUST be verbatim; this is the opposite of fabrication). validateContent GREEN.
+- **D-R11 (B5r-4, content):** authored honest `invariant_statement` for 005/006 grounded in the lecture's array-size rule (|a|_d = Σ|a_i|_d, |n|_unif=1) / step-cost sum rule. NOT padded to game SUPPORTED — they land UNCLEAR/partial vs the quotes ⇒ honest `uncertain` (D-R9); the KCs still light "matches your lecture" via grounded DEFINITIONs.
+
+## Status after B5r-1..4
+
+Logic + content reshape COMPLETE + tested (1108 green) + dry-run confirms 001-004 faithful-eligible. **REACHABILITY unblocked.** The remaining LIVE end-to-end acceptance (real engine audit over the real corpus) needs the **D6 NLI leg wired as family-B** (else the audit's family-B = OpenRouterChatLlm 429-throttles + throws ⇒ blocks the path). That wiring (B5r-6) is the next step; it's PC-side/offline (D7), reusing the proven py3.12 ProcessBuilder bridge.
+
 ## Open / deferred
 
-- (filled as steps land)
+- **B5r-6 (next):** wire the local NLI as a `Leg` (family-B) in the AUDIT path (verifyContent CLI / VerificationRunner), reusing the JVM→py3.12 bridge + the SUPPORTED/REFUTED/UNCLEAR contract; behind `JARVIS_PYTHON3`; PC-side only (VPS serve-only per D7).
+- **B5r-7:** live acceptance via the OFFLINE verifyContent CLI (off-box DB dump first): prove ≥1 KC lights "matches your lecture" (grounded/faithful) with page_anchor LIVE + a mutated quote REJECTED.
+- coverage monitor (council R2); report_wrong REVERIFY lifecycle; F2 gate wiring default-OFF — all still deferred to after the live acceptance.

@@ -10,7 +10,17 @@ exam_weight: 0.18
 tier: 2
 source:
   - doc: pa-lecture-01
-    quote: "The general formal description\n  of this is that of computation model"
+    quote: "The general formal description\nof this is that of computation model"
+    page: 7
+    span:
+      start: 3251
+      end: 3318
+    provenance: located
   - doc: pa-lecture-01
-    quote: "An algorithm must solve a problem given by a pair (input,output),\n  where the input is represented in the start configuration and the\n  output in the final configuration."
+    quote: "An algorithm must solve a problem given by a pair (input,output),\nwhere the input is represented in the start configuration and the\noutput in the final configuration."
+    page: 7
+    span:
+      start: 3630
+      end: 3796
+    provenance: located
 version: 1

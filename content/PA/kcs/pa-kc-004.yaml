@@ -10,9 +10,24 @@ exam_weight: 0.17
 tier: 3
 source:
   - doc: pa-lecture-01
-    quote: "To prove that there is no algorithm that solve this problem, we need a\n  formal definition for algorithm!"
+    quote: "To prove that there is no algorithm that solve this problem, we need a\nformal definition for algorithm!"
+    page: 10
+    span:
+      start: 5370
+      end: 5473
+    provenance: located
   - doc: pa-lecture-01
     quote: "The formal definition for an algorithm was introduced using various\ncomputational models:"
+    page: 11
+    span:
+      start: 5606
+      end: 5695
+    provenance: located
   - doc: pa-lecture-01
     quote: "All these models are computationally equivalent."
+    page: 11
+    span:
+      start: 5863
+      end: 5911
+    provenance: located
 version: 1
