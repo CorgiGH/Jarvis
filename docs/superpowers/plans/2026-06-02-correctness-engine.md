@@ -105,3 +105,20 @@ A quality audit (`council-1780580000-phase2-audit`, 27 raised / 26 confirmed, ju
 **Must-build-before (hard edges):** F1-agree + F1-decideOutcome same bundle · F4-serve with F1 · D7 route-extraction before any D6 model code · D8 before F2 · F3+D8 = ONE coordinated frozen-lock edit · F5 reads Bundle-1's audit rows · confirm D6 adapter contract before Bundle-1 internals · Bundle-7 acceptance via the offline CLI, not the admin route.
 
 Audit + sequencing transcripts: `.claude/council-cache/council-1780580000-phase2-audit.md`, `council-1780584000-fix-bundling.md`.
+
+---
+
+## POST-FIX AUDIT (SESSION-54, workflow `wayrajnng`) — STATE + MISSING ITEMS
+
+23 raised / 23 confirmed. Judge: **trust-net is HONEST-SAFE but was FUNCTIONALLY BROKEN** — no false-faithful path exists (F1 holds; every defect fails CLOSED), but a multi-claim poisoning bug made the locked "≥1 KC faithful" acceptance UNREACHABLE.
+
+**FIXED this session (commit `c8e8d9d`):** the multi-claim KC poisoning (CRITICAL) — per-claim verdict now order-independent (`transition(pending,outcome)` per claim), KC = `aggregateKc` conjunction, DEFINITION/non-equational/prose-GRADER_RULE claims floor to NONE/uncertain instead of `failed`. Tests cover the same-KC multi-claim + shuffle-order + one-disagreeing-claim + honest-uncertain cases. **On current PA content a KC honestly aggregates to `uncertain` — real `faithful` needs the D6 NLI leg (Bundle 5).**
+
+**MISSING — fold into the bundles (build-later, NOT live bugs):**
+- **Bundle 5 (engine swap) — write 2 contracts BEFORE wiring:** (a) D6 NLI adapter output contract — raw type + probability→`SUPPORTED|REFUTED|UNCLEAR` thresholds, with a load-bearing UNCLEAR band (low-confidence entailment must be UNCLEAR, never silently SUPPORTED, or it re-opens a false-faithful seam); (b) coverage monitor spec (council R2) — metric = % audited KCs stuck `uncertain` because a leg never ran, by subject + blocking-leg; sourced from the `verification_audit` boolean cols (no schema change) + the `VerifyContentCli` byStatus summary; explicit fail-loud threshold.
+- **Bundle 5 (gate wiring, F2):** `VerificationGate.gate` has ZERO production callers. Wire at cold-start seed (`FsrsSeedMain`) / `GapPromotion.promote` (kc-less path = EXPLICIT documented ALLOW, a gap card has no KC to deny) / B1 `upsertRubricCriterion`; supply `hasOpenReportWrong` from a real OPEN-row query; per-site "non-faithful KC produces no card" test. (Phase 3 owns the `/drill/grade` SR-admission read-gate.)
+- **Bundle 5/6 — `report_wrong` REVERIFY lifecycle (HIGH):** today `resolution` is write-OPEN-only; `REVERIFIED_FAITHFUL`/`RETRACTED` appear in zero code; nothing un-pauses a report-paused card or closes a report → a learner report is a permanent trap + permanent gate-DENY. Spec + build (owner re-audit returning faithful closes the report + un-pauses), or explicitly defer in writing.
+- **Bundle 6 (D9 sync) provenance hygiene:** report-wrong's faithful→pending flip leaves `content_hash` + `last_audit_run_id` STALE (`TrustRoutes.kt` sets only status+updatedAt) — NULL them on report-wrong (fail-closed); `last_audit_run_id` is currently write-only/dead (D9 reads it).
+- **Contract/content reconciliation (low, fold into the D8/lock pass):** D8 `content_hash` omits the source-file/git-SHA — editing `_sources/{doc}.md` without touching the KC YAML leaves a faithful badge stale-true; reconcile correctness-engine "+ git SHA" vs the FROZEN lock (which dropped it). Annotate signatures-lock §Q write-site #2 (`/drill/grade` emit) as Phase-3-activated. **pa-kc-005/006 invariants are SymPy tautologies (`1+1+1=3`, `t+t+t=3*t`) — author real, non-tautological invariants** (the tautology contributes no independent signal; the NLI leg is the real check). F6-LOW residue: audit row hardcodes `fuzzy_distance=0` + authored page — thread the real `LocateResult` through. A `faithful`-on-DEGRADED-anchor policy test (the acceptance demands LIVE).
+
+Post-fix audit transcript: `.claude/council-cache/council-1780585000-phase2-postfix-audit.md`.
