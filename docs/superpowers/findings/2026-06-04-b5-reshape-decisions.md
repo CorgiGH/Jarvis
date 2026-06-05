@@ -50,6 +50,16 @@ The reshape spine is RIGHT + pa-kc-001..004 faithful is GENUINE+SAFE, but the au
 
 **SAFE_TO_DEFER (audit-blessed):** D-R14 groundedKc tighten + exclude `*-fixture-*` from served corpus (before onboarding more subjects); a could-not-run SymPy equational → uncertain not failed; a hermetic `-c`-mangling regression test (would've caught D-R13); D-R15 006 over-reject (content-tune); python-bridge nits (drain-thread/HF_HUB_DISABLE_PROGRESS_BARS, per-claim model reload → persistent process, stale KDoc); delete dead badgeTextFor/honestFloorOf.
 
+## MUST-FIX BUILD (Alex GO 2026-06-04, post-audit)
+
+- **D-R17 (MF-1, the load-bearing safety fix):** a claim contributes to `faithful`/`lecture_grounded` ONLY if its OWN content is validated against the lecture, routed by kind:
+  - **DEFINITION** (content==quote): `roundTrip.pass && !threw && !agreedNonSupported` ⇒ faithful (round-trip validates the content because content IS the quote). [case 3p — now RESTRICTED to DEFINITION]
+  - **EQUATIONAL** INVARIANT/GRADER_RULE: unchanged — `bothSupported && SymPy ran+pass && roundTrip && !threw` ⇒ faithful; SymPy-pass + round-trip + no-REFUTED + not-bothSupported ⇒ uncertain (EQUATIONAL_LLM_UNCONFIRMED); REFUTED ⇒ failed.
+  - **PROSE non-DEFINITION** (GRADER_RULE invariant==null, MISCONCEPTION, STEM, …; content≠quote): the round-trip only proves the UNRELATED anchor quote exists, NOT the claim text ⇒ require an INDEPENDENT positive signal: `bothSupported && roundTrip.pass && !threw` ⇒ faithful. Round-trip + !threw + !anyRefuted + NOT bothSupported ⇒ **uncertain** (new outcome, e.g. PROSE_LLM_UNCONFIRMED → uncertain). anyRefuted ⇒ failed. (Promotes the LLM from veto-only to a REQUIRED vote for content≠quote claims — closes the MF-1 false-faithful hole.)
+  - **groundedKc tightened:** `perClaim.isNotEmpty() && perClaim.all { it == faithful }` — a claim contributes to "grounded" ONLY if it is faithful (content-validated per its kind). Drops the raw `roundTripPass`-based grounded (which trusted an unrelated anchor). This also subsumes the D-R14 fixture edge. **Consequence (honest):** 001-004 (pure definitions) stay faithful+grounded → light "matches your lecture"; 005/006 (whose grader/invariant text isn't independently content-confirmed) drop to `unverified` until content gets its own anchor — expected + safe.
+- **D-R18 (MF-2):** report-wrong (TrustRoutes.kt) must set `lectureGrounded=false` (+ null `content_hash`, null `last_audit_run_id`) in the SAME txn as status→pending, so a disputed KC drops the badge. Fix `seedFaithfulCard` test to seed grounded=true (prod reality); assert `servedHonestFloor`→UNVERIFIED after a report.
+- **D-R19 (MF-3):** invert VerificationRunnerTest.kt:480-532 (it asserted the unsafe prose-grader-faithful as correct) + add a red-then-green: a prose GRADER_RULE with FABRICATED content + a real relocating anchor quote + families NOT both-REFUTED ⇒ assert NOT faithful AND grounded=false.
+
 ## Open / deferred
 
 - **B5r-6 (IN PROGRESS):** wire the local NLI as a `Leg` (family-B) in the AUDIT path.

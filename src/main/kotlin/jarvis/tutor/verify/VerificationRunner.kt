@@ -130,18 +130,28 @@ class VerificationRunner(
     }
 
     /**
-     * B5r-2 (D-R5/D-R6) — the KC-level LECTURE-GROUNDED signal: this KC's cited quotes ALL relocate
-     * LIVE AND no claim is contradicted. Computed from THIS run's per-claim results as a CONJUNCTION,
+     * B5r-2 (D-R5/D-R6), TIGHTENED by MF-1 (D-R17) — the KC-level LECTURE-GROUNDED signal: a claim
+     * contributes to "grounded" ONLY if it is itself `faithful` (its OWN content was validated against
+     * the lecture per its kind: SymPy + the promoted LLM vote for equational; the content-relocating
+     * round-trip for DEFINITION; the LLM `bothSupported` vote on the rule text + the anchor round-trip
+     * for prose non-DEFINITION). Computed from THIS run's per-claim results as a CONJUNCTION,
      * order-independent (mirrors [aggregateKc]):
-     *   `grounded = (every claim's roundTrip.pass == true) AND (no claim resolved to `failed`)`.
-     * D-R6: a purely-uncertain-but-round-tripped KC ⇒ true (an equational claim still `uncertain`,
-     * awaiting its math check, does NOT suppress grounding); ANY `failed` claim ⇒ false (a contradicted
-     * claim ≠ "matches your lecture"). An EMPTY KC ⇒ false (no quote relocated — nothing to ground).
+     *   `grounded = perClaim.isNotEmpty() && perClaim.all { it.newStatus == faithful }`.
+     *
+     * This DROPS the old `roundTripPass`-based grounding, which trusted the mere relocation of an
+     * UNRELATED anchor quote — the exact MF-1 false-faithful hole (a hallucinated prose rule whose anchor
+     * relocated lit "matches your lecture"). It also subsumes the D-R14 fixture edge (a quote that
+     * relocates but whose claim floored to uncertain no longer grounds the KC). An EMPTY KC ⇒ false.
+     *
+     * CONSEQUENCE (honest, per D-R17): a KC is now grounded == it is faithful at the KC level (every
+     * claim faithful ⇒ [aggregateKc] is faithful too). A KC with any merely-`uncertain` claim (e.g. an
+     * equational claim still awaiting its math confirmation) is NO LONGER grounded — it drops to
+     * `unverified` at serve time until that claim's own content is independently confirmed. Expected +
+     * safe: the badge promises lecture-grounding ONLY over content that was actually content-validated.
      */
     private fun groundedKc(perClaim: List<AuditResult>): Boolean =
         perClaim.isNotEmpty() &&
-            perClaim.all { it.roundTripPass } &&
-            perClaim.none { it.newStatus == VerificationStatus.failed }
+            perClaim.all { it.newStatus == VerificationStatus.faithful }
 
     /** Upsert kc_verification_status ONCE for [kcId] with the conjunction over its per-claim verdicts. */
     private fun finalizeKc(
@@ -321,14 +331,20 @@ class VerificationRunner(
      *  2. two legs share a configured family              → FAMILY_COLLAPSE (uncertain)
      *  3. EQUATIONAL claim, BOTH-SUPPORTED && nonllm
      *     ran&pass && roundtrip && !threw                 → ALL_AGREE_ROUNDTRIP_NONLLM_PASS (faithful)
-     *  3p. PROSE/DEFINITION claim, roundtrip && !threw
-     *     && !agreed-REFUTED                              → ALL_AGREE_ROUNDTRIP_NONLLM_PASS (faithful)
+     *  3p. DEFINITION claim (content==quote), roundtrip
+     *     && !threw && !agreed-REFUTED                    → ALL_AGREE_ROUNDTRIP_NONLLM_PASS (faithful)
+     *  3pr. PROSE non-DEFINITION claim (content≠quote:
+     *     GRADER_RULE w/ invariant==null, MISCONCEPTION,
+     *     STEM), BOTH-SUPPORTED && roundtrip && !threw    → ALL_AGREE_ROUNDTRIP_NONLLM_PASS (faithful)
      *  4. EQUATIONAL claim whose SymPy checker could NOT
      *     run (NONE/ran=false), BOTH-SUPPORTED, roundtrip
      *     passed, nothing threw                           → NONLLM_LEG_NONE (uncertain floor)
      *  4b. EQUATIONAL claim, SymPy RAN+PASSED, roundtrip
      *     passed, nothing threw, NOT agreed-REFUTED, but
      *     NOT bothSupported (LLM merely UNCLEAR)          → EQUATIONAL_LLM_UNCONFIRMED (uncertain, D-R9)
+     *  4p. PROSE non-DEFINITION claim, roundtrip passed,
+     *     nothing threw, NO family REFUTED, but NOT
+     *     bothSupported (LLM did not confirm the RULE)    → PROSE_LLM_UNCONFIRMED (uncertain, D-R17)
      *  5. anything else (disagree / agreed-REFUTED /
      *     SymPy-FAIL / roundtrip fail / threw)             → DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW (failed)
      *
@@ -343,18 +359,30 @@ class VerificationRunner(
      *    nonLlm.ran && nonLlm.pass && roundTrip.pass && !anyThrew`. SymPy stays load-bearing for
      *    equations; an equational claim whose checker could NOT run still floors to case-4 uncertain
      *    (the round-trip is NOT a substitute for the equational machine check).
-     *  - PROSE / DEFINITION kind (no equational machine check applies — DEFINITION / MISCONCEPTION /
-     *    STEM / prose GRADER_RULE; the leg returns NONE): the LIVE span↔claim ROUND-TRIP *is* the
+     *  - DEFINITION kind (content == the cited quote): the LIVE span↔claim ROUND-TRIP *is* the
      *    deterministic non-LLM leg (case 3p). `faithful` iff `roundTrip.pass && !anyThrew && NOT
-     *    agreed-REFUTED`. The LLM/NLI `bothSupported` self-vote is NOT counted to PROMOTE (a DEFINITION's
-     *    content==quote makes self-entailment zero-signal) — round-trip is the load-bearing anchor. The
-     *    agreed-but-REFUTED VETO ([ResolvedLegs.agreedNonSupported]) still blocks faithful, so the LLM
-     *    can only VETO a prose claim, never CERTIFY it. This is the structural unblock: a DEFINITION had
-     *    NO machine check (NONE/ran=false) ⇒ every KC emits ≥1 DEFINITION ⇒ under the old conjunction NO
-     *    KC could EVER be faithful. signatures-lock §2.5 amended per-kind with sign-off.
+     *    agreed-REFUTED`. The round-trip re-locates the EXACT content (content==quote), so it is a
+     *    genuine content check; the LLM/NLI `bothSupported` self-vote is NOT counted to PROMOTE (a
+     *    DEFINITION's content==quote makes self-entailment zero-signal). The agreed-but-REFUTED VETO
+     *    ([ResolvedLegs.agreedNonSupported]) still blocks faithful, so the LLM can only VETO a DEFINITION,
+     *    never CERTIFY it. This is the structural unblock: a DEFINITION had NO machine check (NONE/
+     *    ran=false) ⇒ every KC emits ≥1 DEFINITION ⇒ under the old conjunction NO KC could EVER be
+     *    faithful. signatures-lock §2.5 amended per-kind with sign-off.
+     *  - PROSE non-DEFINITION kind (content ≠ the cited quote — GRADER_RULE with invariant==null,
+     *    MISCONCEPTION, STEM, …): MF-1 (D-R17). Here the round-trip only proves the UNRELATED anchor quote
+     *    relocates — it does NOT validate the claim's OWN text (the rule / misconception / stem prose). So
+     *    the round-trip ALONE is NOT a sufficient content check: it must be paired with an INDEPENDENT
+     *    positive signal on the content. `faithful` iff `bothSupported && roundTrip.pass && !anyThrew`
+     *    (case 3pr) — the LLM/NLI is PROMOTED from veto-only to a REQUIRED vote on the rule text. A
+     *    round-tripping prose claim that is NOT bothSupported but had NO family REFUTED + nothing threw
+     *    floors to UNCERTAIN ([AuditOutcome.PROSE_LLM_UNCONFIRMED], case 4p) — not-yet-content-confirmed,
+     *    NOT a contradiction. A REFUTED (agreed or disagreeing) ⇒ `else` (failed). This closes the MF-1
+     *    false-faithful hole where a FABRICATED rule reached faithful on an unrelated anchor's round-trip.
      *
-     * No path reaches `faithful` without an applicable non-LLM-leg pass (SymPy for equational kinds, the
-     * LIVE round-trip for prose kinds) AND no agreed-REFUTED veto AND nothing throwing (the §2.5 LOCKED
+     * No path reaches `faithful` without an applicable per-kind CONTENT check passing — SymPy + the
+     * promoted LLM vote for equational kinds; the content-relocating round-trip for DEFINITION (content==
+     * quote); the LLM `bothSupported` vote on the rule text PLUS the anchor round-trip for prose non-
+     * DEFINITION (content≠quote) — AND no agreed/any REFUTED veto AND nothing throwing (the §2.5 LOCKED
      * invariant, per-kind re-scoped).
      */
     private fun decideOutcome(claim: VerificationClaim, legs: ResolvedLegs): AuditOutcome = when {
@@ -364,16 +392,25 @@ class VerificationRunner(
         isEquationalKind(claim) &&
             legs.bothSupported && legs.nonLlm.ran && legs.nonLlm.pass && legs.roundTrip.pass && !legs.anyThrew ->
             AuditOutcome.ALL_AGREE_ROUNDTRIP_NONLLM_PASS
-        // case 3p (B5-RESHAPE) — PROSE / DEFINITION claim: the LIVE round-trip IS the deterministic
-        // non-LLM leg. faithful iff round-trip passes + nothing threw + NOT agreed-REFUTED. The LLM vote
-        // is NOT read to promote (self-entailment is zero-signal); it can only veto (agreedNonSupported).
-        !isEquationalKind(claim) &&
+        // case 3p (B5-RESHAPE, RESTRICTED by MF-1/D-R17 to DEFINITION) — a DEFINITION's content IS its
+        // cited quote, so the LIVE round-trip re-locates the EXACT content ⇒ it is a genuine content
+        // check. faithful iff round-trip passes + nothing threw + NOT agreed-REFUTED. The LLM vote is NOT
+        // read to promote (self-entailment is zero-signal); it can only veto (agreedNonSupported).
+        claim.kind == ClaimKind.DEFINITION &&
             legs.roundTrip.pass && !legs.anyThrew && !legs.agreedNonSupported ->
+            AuditOutcome.ALL_AGREE_ROUNDTRIP_NONLLM_PASS
+        // case 3pr (MF-1 / D-R17) — a PROSE non-DEFINITION non-EQUATIONAL claim (content ≠ quote): the
+        // round-trip only proves the UNRELATED anchor quote relocates, NOT the claim's own text. So it is
+        // NOT sufficient alone — require an INDEPENDENT positive signal on the content: bothSupported (the
+        // LLM/NLI family independently confirmed the RULE text) AND round-trip passes AND nothing threw.
+        // This promotes the LLM from veto-only to a REQUIRED vote where content≠quote.
+        !isEquationalKind(claim) && claim.kind != ClaimKind.DEFINITION &&
+            legs.bothSupported && legs.roundTrip.pass && !legs.anyThrew ->
             AuditOutcome.ALL_AGREE_ROUNDTRIP_NONLLM_PASS
         // case 4 — an EQUATIONAL claim whose SymPy/non-LLM checker could NOT run (NONE/ran=false) but
         // otherwise looks good: UNCERTAIN floor, never faithful (never-ran ≠ disagreed, FAIL-LOUD H5; the
-        // round-trip is NOT a substitute for the equational check). Prose claims never reach here — case 3p
-        // already routed a passing-round-trip prose claim to faithful and a non-anchoring one to `else`.
+        // round-trip is NOT a substitute for the equational check). Prose claims never reach here — case
+        // 3p/3pr already routed a passing prose claim to faithful or case 4p to uncertain.
         isEquationalKind(claim) && legs.nonLlm.kind == NonLlmLegKind.NONE && !legs.nonLlm.ran &&
             !legs.anyThrew && legs.bothSupported && legs.roundTrip.pass ->
             AuditOutcome.NONLLM_LEG_NONE
@@ -389,6 +426,17 @@ class VerificationRunner(
             legs.nonLlm.ran && legs.nonLlm.pass && legs.roundTrip.pass && !legs.anyThrew &&
             !legs.anyRefuted && !legs.bothSupported ->
             AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED
+        // case 4p (MF-1 / D-R17) — a PROSE non-DEFINITION non-EQUATIONAL claim (content ≠ quote) whose
+        // anchor round-tripped + nothing threw + NO family REFUTED, but the LLM family did NOT
+        // independently confirm the RULE text (NOT bothSupported, so case 3pr did not fire). The round-
+        // trip only proved the UNRELATED anchor quote — the claim's own text is NOT yet content-confirmed.
+        // This is a not-yet-cross-checked state, NOT a contradiction ⇒ UNCERTAIN floor, never faithful.
+        // A REFUTED from EITHER family ([anyRefuted], which also covers agreed-REFUTED) is an explicit
+        // contradiction and falls through to the `else` (failed) — so this floor catches ONLY the
+        // genuinely-inconclusive LLM verdict (both UNCLEAR / one SUPPORTED + one UNCLEAR).
+        !isEquationalKind(claim) && claim.kind != ClaimKind.DEFINITION &&
+            legs.roundTrip.pass && !legs.anyThrew && !legs.anyRefuted && !legs.bothSupported ->
+            AuditOutcome.PROSE_LLM_UNCONFIRMED
         else -> AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW
     }
 

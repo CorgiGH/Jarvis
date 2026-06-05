@@ -27,13 +27,21 @@ enum class VerificationStatus { unverified, pending, faithful, uncertain, failed
  *   EQUATIONAL_LLM_UNCONFIRMED          -> uncertain  (SymPy proved the math; the LLM merely couldn't
  *                                                      confirm the NL meaning — not-yet-cross-checked,
  *                                                      NOT a contradiction; B5r-3 / D-R9)
+ *   PROSE_LLM_UNCONFIRMED               -> uncertain  (a content≠quote prose claim — GRADER_RULE with
+ *                                                      invariant==null, MISCONCEPTION, STEM — whose anchor
+ *                                                      round-trips + nothing threw + no REFUTED, but the LLM
+ *                                                      family did NOT independently confirm the RULE text
+ *                                                      (NOT bothSupported). The round-trip only proves the
+ *                                                      UNRELATED anchor quote, not the claim text, so the
+ *                                                      claim is not-yet-content-confirmed, NOT a
+ *                                                      contradiction; MF-1 / D-R17)
  *   DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW -> failed     (FAIL-LOUD; explicit disagreement/failure)
  *   REPORT_WRONG                        -> faithful -> pending  (student filed a correction)
  *
  * NOTE on the frozen surface: [VerificationStatus] (the 5 wire literals) is FROZEN and untouched.
  * [AuditOutcome] is an internal driver of the §2.4/§2.5 machine, NOT a wire enum — adding
- * [EQUATIONAL_LLM_UNCONFIRMED] (which maps to the existing `uncertain` status) does not widen the
- * frozen status surface.
+ * [EQUATIONAL_LLM_UNCONFIRMED] / [PROSE_LLM_UNCONFIRMED] (both of which map to the existing
+ * `uncertain` status) does not widen the frozen status surface.
  */
 enum class AuditOutcome {
     ALL_AGREE_ROUNDTRIP_NONLLM_PASS,
@@ -43,6 +51,12 @@ enum class AuditOutcome {
     /** B5r-3 (D-R9): equational claim, SymPy ran+passed, round-trip passed, nothing threw, NOT
      *  agreed-REFUTED — but the LLM family was merely UNCLEAR (not bothSupported). Maps to `uncertain`. */
     EQUATIONAL_LLM_UNCONFIRMED,
+    /** MF-1 (D-R17): a content≠quote PROSE claim (GRADER_RULE with invariant==null, MISCONCEPTION,
+     *  STEM) whose anchor round-tripped + nothing threw + NO family REFUTED, but the LLM family did NOT
+     *  independently confirm the RULE text (NOT bothSupported). The round-trip only proves the UNRELATED
+     *  anchor quote exists, not the claim text — so this is a not-yet-content-confirmed state, NOT a
+     *  contradiction. Maps to `uncertain` (mirrors EQUATIONAL_LLM_UNCONFIRMED). */
+    PROSE_LLM_UNCONFIRMED,
     DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW,
     REPORT_WRONG,
 }
@@ -78,6 +92,7 @@ object VerificationStatus_ {
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
                 AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
+                AuditOutcome.PROSE_LLM_UNCONFIRMED                -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
                 // REPORT_WRONG from pending: already pending; no change meaningful — stay pending
                 AuditOutcome.REPORT_WRONG                         -> VerificationStatus.pending
@@ -90,6 +105,7 @@ object VerificationStatus_ {
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
                 AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
+                AuditOutcome.PROSE_LLM_UNCONFIRMED                -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
             }
             // UNVERIFIED: curate-tutor sets PENDING directly; an audit MUST NOT run until
@@ -105,6 +121,7 @@ object VerificationStatus_ {
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
                 AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
+                AuditOutcome.PROSE_LLM_UNCONFIRMED                -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
                 AuditOutcome.REPORT_WRONG                         -> VerificationStatus.unverified
             }
@@ -121,6 +138,7 @@ object VerificationStatus_ {
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
                 AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
+                AuditOutcome.PROSE_LLM_UNCONFIRMED                -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
                 AuditOutcome.REPORT_WRONG                         -> VerificationStatus.uncertain
             }
@@ -130,6 +148,7 @@ object VerificationStatus_ {
                 AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN            -> VerificationStatus.uncertain
                 AuditOutcome.NONLLM_LEG_NONE                      -> VerificationStatus.uncertain
                 AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED           -> VerificationStatus.uncertain
+                AuditOutcome.PROSE_LLM_UNCONFIRMED                -> VerificationStatus.uncertain
                 AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW  -> VerificationStatus.failed
                 AuditOutcome.REPORT_WRONG                         -> VerificationStatus.failed
             }

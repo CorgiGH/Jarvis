@@ -551,6 +551,14 @@ fun Route.installTrustRoutes() {
                 // 3. flip the KC via the REPORT_WRONG transition (faithful→pending). The card always
                 //    maps to a KC here (kc-less cards were already rejected 422 above); the gate now
                 //    DENYs SR-entry for it (open report_wrong + pending).
+                //
+                //    MF-2 (D-R18) — in the SAME transaction, CLEAR the lecture-grounded badge state on a
+                //    learner-disputed KC: set `lecture_grounded = false` and NULL out `content_hash` +
+                //    `last_audit_run_id`. Otherwise `servedHonestFloor` would keep serving the
+                //    "matches your lecture" badge over content a student just flagged as wrong (the audit
+                //    that wrote grounded=true + a matching content_hash is now in dispute). With
+                //    grounded=false AND a NULL content_hash, servedHonestFloor fails CLOSED to UNVERIFIED
+                //    (status is no longer faithful AND the D8 staleness gate can't prove a match).
                 val newStatus = transaction(ctx.db) {
                     val row = KcVerificationStatusTable.selectAll()
                         .where { KcVerificationStatusTable.kcId eq kcId }
@@ -563,11 +571,17 @@ fun Route.installTrustRoutes() {
                         KcVerificationStatusTable.insert {
                             it[KcVerificationStatusTable.kcId] = kcId
                             it[status] = next.name
+                            it[lectureGrounded] = false
+                            it[contentHash] = null
+                            it[lastAuditRunId] = null
                             it[updatedAt] = now
                         }
                     } else {
                         KcVerificationStatusTable.update({ KcVerificationStatusTable.kcId eq kcId }) {
                             it[status] = next.name
+                            it[lectureGrounded] = false
+                            it[contentHash] = null
+                            it[lastAuditRunId] = null
                             it[updatedAt] = now
                         }
                     }

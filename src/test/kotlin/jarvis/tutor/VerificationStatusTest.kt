@@ -87,6 +87,17 @@ class VerificationStatusTest {
         )
     }
 
+    @Test
+    fun `PENDING + PROSE_LLM_UNCONFIRMED yields UNCERTAIN (MF-1 D-R17)`() {
+        // MF-1 / D-R17: a content≠quote prose claim whose anchor round-tripped + no REFUTED but whose
+        // rule text was NOT independently confirmed (NOT bothSupported) ⇒ not-yet-content-confirmed,
+        // NOT a contradiction ⇒ uncertain (never failed, never faithful).
+        assertEquals(
+            VerificationStatus.uncertain,
+            VerificationStatus_.transition(VerificationStatus.pending, AuditOutcome.PROSE_LLM_UNCONFIRMED)
+        )
+    }
+
     // ──────────────────────────────────────────────
     // Group 3 — PENDING → FAILED (disagree/roundtrip fail — FAIL-LOUD)
     // ──────────────────────────────────────────────
@@ -123,6 +134,8 @@ class VerificationStatusTest {
             AuditOutcome.FAMILY_COLLAPSE,
             AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN,
             AuditOutcome.NONLLM_LEG_NONE,
+            AuditOutcome.EQUATIONAL_LLM_UNCONFIRMED,
+            AuditOutcome.PROSE_LLM_UNCONFIRMED,
             AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW,
             AuditOutcome.REPORT_WRONG,
         )

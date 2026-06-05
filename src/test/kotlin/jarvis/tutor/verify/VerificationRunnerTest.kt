@@ -499,9 +499,17 @@ class VerificationRunnerTest {
     }
 
     @Test
-    fun `multi-claim KC - DEFINITION and prose GRADER_RULE reach faithful via the LIVE round-trip (B5-RESHAPE), equational INVARIANT is faithful too`(
+    fun `MF-1 (D-R17) - a DEFINITION is faithful via the content-relocating round-trip and a prose GRADER_RULE is faithful ONLY when bothSupported confirms the rule text`(
         @TempDir tmp: Path,
     ) = runBlocking {
+        // INVERTED from the pre-MF-1 test that claimed a prose GRADER_RULE reaches faithful "via the
+        // prose anchor" (round-trip) ALONE. Under D-R17 that is UNSAFE: a prose GRADER_RULE's
+        // content ≠ its cited quote, so the round-trip only proves the UNRELATED anchor relocates — NOT
+        // the rule text. The prose-non-DEFINITION path now REQUIRES an independent positive signal
+        // (bothSupported) on the rule text. Here BOTH families reply SUPPORTED (the runner default), so
+        // the prose grader rules ARE bothSupported ⇒ faithful — which is the CORRECT new behaviour. The
+        // FABRICATED-content regression (families NOT bothSupported ⇒ NOT faithful) is the dedicated test
+        // below: `MF-1 (D-R17) - a FABRICATED prose GRADER_RULE …`.
         val db = freshDb(tmp)
         seedStatus(db, "pa-kc-005", VerificationStatus.pending)
         val claims = multiClaimKc()
@@ -514,13 +522,20 @@ class VerificationRunnerTest {
             out.none { it.newStatus == VerificationStatus.failed },
             "no claim may auto-route to failed: ${out.map { it.claimKind() to it.newStatus }}",
         )
-        // B5-RESHAPE: a DEFINITION / prose GRADER_RULE has no equational machine check, so the LIVE
-        // round-trip IS its deterministic non-LLM leg. Every claim here round-trips against the source
-        // ⇒ faithful via the prose anchor (this is the unblock that supersedes the old uncertain floor).
-        for (c in claims.filter { it.kind == ClaimKind.DEFINITION || (it.kind == ClaimKind.GRADER_RULE && it.invariant == null) }) {
+        // A DEFINITION's content IS its cited quote, so the content-relocating round-trip is a genuine
+        // content check ⇒ faithful (case 3p; bothSupported NOT required for DEFINITION).
+        for (c in claims.filter { it.kind == ClaimKind.DEFINITION }) {
             assertEquals(
                 VerificationStatus.faithful, byId[c.claimId]!!.newStatus,
-                "a ${c.kind} claim with a passing LIVE round-trip ⇒ faithful (the prose anchor), never the old uncertain floor",
+                "a DEFINITION (content==quote) with a passing LIVE round-trip ⇒ faithful (the round-trip relocates the EXACT content)",
+            )
+        }
+        // A prose GRADER_RULE (content≠quote, invariant==null) is faithful ONLY because the families
+        // here are bothSupported on the rule text (case 3pr) — NOT on the round-trip alone.
+        for (c in claims.filter { it.kind == ClaimKind.GRADER_RULE && it.invariant == null }) {
+            assertEquals(
+                VerificationStatus.faithful, byId[c.claimId]!!.newStatus,
+                "a prose GRADER_RULE with bothSupported (independent positive signal on the rule) + round-trip ⇒ faithful (case 3pr / D-R17)",
             )
         }
         // The equational INVARIANT ⇒ faithful (SymPy ran + passed, families agree, round-trip passes).
@@ -529,6 +544,73 @@ class VerificationRunnerTest {
             VerificationStatus.faithful, byId[inv.claimId]!!.newStatus,
             "the equational INVARIANT claim ⇒ faithful",
         )
+    }
+
+    @Test
+    fun `MF-1 (D-R17) - a prose GRADER_RULE that round-trips but is NOT bothSupported floors to uncertain (PROSE_LLM_UNCONFIRMED), never faithful`(
+        @TempDir tmp: Path,
+    ) = runBlocking {
+        // The core MF-1 contract: a content≠quote prose claim whose anchor round-trips + nothing threw
+        // + NO family REFUTED, but the LLM family did NOT confirm the rule (one SUPPORTED, one UNCLEAR ⇒
+        // NOT bothSupported) ⇒ UNCERTAIN, never faithful. The round-trip alone (the unrelated anchor)
+        // must NOT certify the rule text.
+        val db = freshDb(tmp)
+        val c = VerificationClaim(
+            claimId = "pa-kc-005:GRADER_RULE:${jarvis.content.ContentReconcile.sha256_8("award full marks when the size is mentioned for every type")}",
+            kcId = "pa-kc-005", subject = "PA", kind = ClaimKind.GRADER_RULE,
+            content = "award full marks when the size is mentioned for every type",
+            invariant = null, source = goldSource(),
+        )
+        seedStatus(db, c.kcId, VerificationStatus.pending)
+
+        // one SUPPORTED + one UNCLEAR ⇒ NOT bothSupported, but NO REFUTED.
+        val out = runner(db, legAReply = "SUPPORTED", legBReply = "UNCLEAR", nonLlm = noneLeg).audit(listOf(c))
+
+        assertEquals(
+            VerificationStatus.uncertain, out[0].newStatus,
+            "a round-tripping prose GRADER_RULE NOT independently confirmed (NOT bothSupported, no REFUTED) ⇒ uncertain (PROSE_LLM_UNCONFIRMED), never faithful",
+        )
+        // …and the KC is NOT grounded (groundedKc now requires every claim faithful).
+        assertEquals(false, groundedOf(db, c.kcId), "a non-faithful claim ⇒ the KC is NOT lecture_grounded (D-R17)")
+    }
+
+    @Test
+    fun `MF-1 (D-R17) REGRESSION - a FABRICATED prose GRADER_RULE on a REAL relocating anchor is NOT faithful and the KC is NOT grounded`(
+        @TempDir tmp: Path,
+    ) = runBlocking {
+        // THE HOLE THIS CLOSES: a hallucinated prose rule (content has NO lecture basis) but whose
+        // source.quote is a REAL anchor that relocates LIVE. Pre-MF-1, case 3p promoted it to faithful
+        // because the (unrelated) anchor round-tripped + the LLM was veto-only (an unrelated NLI pairing
+        // abstains/UNCLEARs more than it both-REFUTEs). Under D-R17 the round-trip proves only the
+        // UNRELATED anchor — the rule text needs its OWN independent positive signal (bothSupported).
+        // With the family NOT bothSupported (and NOT both-REFUTED), the fabricated rule floors to
+        // uncertain, NOT faithful — and the KC is NOT lecture_grounded.
+        val db = freshDb(tmp)
+        val fabricated = VerificationClaim(
+            // content = a fabricated rule that appears NOWHERE in rawSource; source.quote = the REAL
+            // goldQuote anchor that DOES relocate against rawSource (so the round-trip passes).
+            claimId = "pa-kc-fab:GRADER_RULE:${jarvis.content.ContentReconcile.sha256_8("the grader must deduct 50 points for any answer mentioning the year 1997")}",
+            kcId = "pa-kc-fab", subject = "PA", kind = ClaimKind.GRADER_RULE,
+            content = "the grader must deduct 50 points for any answer mentioning the year 1997",
+            invariant = null,
+            source = goldSource(),  // quote == goldQuote, which relocates LIVE against rawSource
+        )
+        seedStatus(db, fabricated.kcId, VerificationStatus.pending)
+
+        // Families NOT both-REFUTED: both UNCLEAR (the unrelated pairing abstains). round-trip PASSES.
+        val out = runner(db, legAReply = "UNCLEAR", legBReply = "UNCLEAR", nonLlm = noneLeg).audit(listOf(fabricated))
+
+        assertNotEquals(
+            VerificationStatus.faithful, out[0].newStatus,
+            "a FABRICATED prose rule must NEVER be faithful just because its UNRELATED anchor relocates (MF-1 hole)",
+        )
+        assertEquals(
+            VerificationStatus.uncertain, out[0].newStatus,
+            "round-trip pass + no REFUTED + NOT bothSupported ⇒ PROSE_LLM_UNCONFIRMED ⇒ uncertain",
+        )
+        assertEquals("uncertain", statusOf(db, fabricated.kcId))
+        // The KC is NOT grounded — the badge must not light "matches your lecture" over fabricated text.
+        assertEquals(false, groundedOf(db, fabricated.kcId), "a non-faithful (uncertain) claim ⇒ KC NOT lecture_grounded (D-R17)")
     }
 
     @Test
@@ -590,20 +672,21 @@ class VerificationRunnerTest {
     }
 
     @Test
-    fun `multi-claim KC - all-agree current PA shape aggregates to faithful via the LIVE round-trip (B5-RESHAPE)`(
+    fun `multi-claim KC - all-agree-SUPPORTED current PA shape aggregates to faithful (DEFINITION via round-trip, prose GRADER_RULE via bothSupported, MF-1)`(
         @TempDir tmp: Path,
     ) = runBlocking {
-        // B5-RESHAPE supersedes the old "honest uncertain floor" for this shape: on the CURRENT PA
-        // content shape (DEFINITION + prose GRADER_RULE + 1 equational INVARIANT), every family
-        // agrees-SUPPORTED and every claim round-trips against the LIVE source. The DEFINITION/prose
-        // GRADER_RULE claims now reach faithful through the round-trip prose anchor (their deterministic
-        // non-LLM leg), and the equational INVARIANT is faithful too ⇒ the KC conjunction is faithful.
+        // On the CURRENT PA content shape (DEFINITION + prose GRADER_RULE + 1 equational INVARIANT) with
+        // every family agreeing-SUPPORTED and every claim round-tripping LIVE: the DEFINITION claims reach
+        // faithful through the content-relocating round-trip (case 3p), the prose GRADER_RULE claims reach
+        // faithful through the REQUIRED bothSupported vote on the rule text PLUS the anchor round-trip
+        // (case 3pr / MF-1 — NOT the round-trip alone), and the equational INVARIANT is faithful too ⇒
+        // the KC conjunction is faithful.
         val db = freshDb(tmp)
         seedStatus(db, "pa-kc-005", VerificationStatus.pending)
         runner(db, nonLlm = realisticNonLlm).audit(multiClaimKc())
         assertEquals(
             "faithful", statusOf(db, "pa-kc-005"),
-            "every claim round-trips LIVE ⇒ each is faithful per its kind ⇒ the KC conjunction is faithful",
+            "each claim is faithful per its kind (DEFINITION round-trip, prose bothSupported, INVARIANT SymPy) ⇒ the KC conjunction is faithful",
         )
     }
 
@@ -771,22 +854,24 @@ class VerificationRunnerTest {
     }
 
     @Test
-    fun `B5r-2 finalizeKc - a purely-uncertain-but-round-tripped KC is lecture_grounded=true (D-R6)`(@TempDir tmp: Path) = runBlocking {
-        // D-R6: an equational INVARIANT with NO machine checker (NONLLM_LEG_NONE) floors to `uncertain`,
-        // NOT faithful — yet its quote round-trips LIVE and no claim failed ⇒ the KC is still GROUNDED.
-        // This is the decoupling: grounded=true while status=uncertain (NOT faithful). The non-LLM leg
-        // is genuinely NONE (kind=NONE, ran=false) so the equational claim takes the case-4 uncertain
-        // floor (never-ran ≠ disagreed), NOT failed.
+    fun `MF-1 (D-R17) - a purely-uncertain-but-round-tripped KC is lecture_grounded=FALSE (groundedKc tightened to faithful-only)`(@TempDir tmp: Path) = runBlocking {
+        // TIGHTENED by MF-1 / D-R17 (was: grounded=true under the old roundTripPass-based groundedKc).
+        // An equational INVARIANT with NO machine checker (NONLLM_LEG_NONE) floors to `uncertain`, NOT
+        // faithful — its math was never machine-confirmed. Under the tightened groundedKc a claim
+        // contributes to grounding ONLY if it is faithful (content-validated per its kind), so an
+        // uncertain claim ⇒ the KC is NOT grounded. The badge no longer lights "matches your lecture"
+        // over content whose own check never ran — even though the (unrelated, for an equational claim)
+        // anchor quote relocates.
         val db = freshDb(tmp)
-        val c = claim()  // equational INVARIANT, bothSupported + round-trip passes
+        val c = claim()  // equational INVARIANT, bothSupported + round-trip passes, but NONE leg ⇒ uncertain
         seedStatus(db, c.kcId, VerificationStatus.pending)
 
         val out = runner(db, nonLlm = noneLeg).audit(listOf(c))
 
         assertEquals(VerificationStatus.uncertain, out[0].newStatus, "an equational claim with NO machine check ⇒ uncertain floor")
         assertEquals("uncertain", statusOf(db, c.kcId), "the KC is NOT faithful")
-        // …but its quote relocated LIVE and nothing failed ⇒ grounded.
-        assertEquals(true, groundedOf(db, c.kcId), "round-tripped + no-failed but uncertain ⇒ lecture_grounded=true (D-R6)")
+        // …and under the tightened groundedKc, an uncertain claim does NOT ground the KC.
+        assertEquals(false, groundedOf(db, c.kcId), "uncertain claim ⇒ lecture_grounded=false (D-R17 tightened groundedKc to faithful-only)")
     }
 
     @Test

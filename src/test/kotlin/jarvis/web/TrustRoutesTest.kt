@@ -794,7 +794,16 @@ class TrustRoutesTest {
 
     // ── POST /fsrs/{id}/report-wrong ───────────────────────────────────────────────────────────
 
-    private fun seedFaithfulCard(db: org.jetbrains.exposed.sql.Database, userId: String, kcId: String): String {
+    private fun seedFaithfulCard(
+        db: org.jetbrains.exposed.sql.Database,
+        userId: String,
+        kcId: String,
+        // MF-2 (D-R18): a faithful KC in PRODUCTION also carries lecture_grounded=true and a content_hash
+        // (written together by finalizeKc), so servedHonestFloor serves "matches your lecture" before any
+        // report. Seed that reality so the report-wrong test proves the badge is CLEARED, not that it was
+        // already absent. Default null hash for the legacy test that doesn't seed live content.
+        contentHash: String? = null,
+    ): String {
         val cardId = TutorTypes.ulid()
         val now = Instant.now()
         FsrsCardRepo(db).insert(
@@ -810,6 +819,8 @@ class TrustRoutesTest {
             KcVerificationStatusTable.insert {
                 it[KcVerificationStatusTable.kcId] = kcId
                 it[status] = VerificationStatus.faithful.name
+                it[KcVerificationStatusTable.contentHash] = contentHash
+                it[lectureGrounded] = true
                 it[updatedAt] = now
             }
         }
@@ -848,12 +859,60 @@ class TrustRoutesTest {
         }
         assertEquals(CardStatus.PAUSED.name, cardStatus)
 
-        // KC flipped faithful -> pending
-        val kcStatus = transaction(db) {
+        // KC flipped faithful -> pending, AND (MF-2 / D-R18) the lecture-grounded badge state is CLEARED
+        // in the same txn: lecture_grounded=false + content_hash NULL + last_audit_run_id NULL.
+        val row = transaction(db) {
             KcVerificationStatusTable.selectAll().where { KcVerificationStatusTable.kcId eq "pa-kc-005" }
-                .single()[KcVerificationStatusTable.status]
+                .single()
         }
-        assertEquals(VerificationStatus.pending.name, kcStatus)
+        assertEquals(VerificationStatus.pending.name, row[KcVerificationStatusTable.status])
+        assertEquals(false, row[KcVerificationStatusTable.lectureGrounded], "report-wrong must clear lecture_grounded (MF-2)")
+        assertEquals(null, row[KcVerificationStatusTable.contentHash], "report-wrong must null content_hash (MF-2)")
+        assertEquals(null, row[KcVerificationStatusTable.lastAuditRunId], "report-wrong must null last_audit_run_id (MF-2)")
+    }
+
+    @Test
+    fun `MF-2 (D-R18) - report-wrong drops the servedHonestFloor from FAITHFUL_TO_SOURCE to UNVERIFIED on the disputed KC`() = testApplication {
+        // The full MF-2 contract through the SERVE surface: a faithful + lecture_grounded KC over LIVE
+        // content (matching content_hash) serves the "matches your lecture" badge (FAITHFUL_TO_SOURCE).
+        // After a learner files report-wrong, the SAME serve path must fall to UNVERIFIED — the badge
+        // can no longer claim the disputed content matches the lecture.
+        val dir = Files.createTempDirectory("trust-mf2-floor")
+        val content = dir.resolve("content"); seedContent(content, status = "faithful")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (uid, sid) = seedUser(db, UserScope.FRIEND)
+        val kc = jarvis.content.ContentRepo(content).loadSubject("PA").kcs.single { it.id == "pa-kc-005" }
+        // Production reality: faithful + grounded=true + a MATCHING content hash (survives the D8 gate).
+        val cardId = seedFaithfulCard(db, uid, "pa-kc-005", contentHash = seededKcHash(content))
+        application { installTrust(db, dir) }
+
+        // BEFORE the report: the serve floor is FAITHFUL_TO_SOURCE (badge "matches your lecture").
+        assertEquals(
+            jarvis.tutor.verify.HonestFloor.FAITHFUL_TO_SOURCE,
+            VerifyAdmin.servedHonestFloor(db, "pa-kc-005", kc),
+            "a faithful + grounded KC over matching live content serves FAITHFUL_TO_SOURCE before any report",
+        )
+
+        val r = client.post("/api/v1/fsrs/$cardId/report-wrong") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("""{"gradeAttemptRaw":"the grader marked me wrong but my answer is right"}""")
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+
+        // AFTER the report: grounded cleared + hash nulled ⇒ the serve floor fails CLOSED to UNVERIFIED.
+        assertEquals(
+            jarvis.tutor.verify.HonestFloor.UNVERIFIED,
+            VerifyAdmin.servedHonestFloor(db, "pa-kc-005", kc),
+            "after report-wrong the disputed KC must NOT serve the lecture badge (MF-2 / D-R18)",
+        )
+        // And the public status reply pins to unverified, not the lecture badge.
+        val body = client.get("/api/v1/verify/pa-kc-005/status") {
+            header("Cookie", "jarvis_session=$sid")
+        }.bodyAsText()
+        assertTrue(body.contains("\"honest_floor\":\"UNVERIFIED\""), body)
+        assertFalse(body.contains("matches your lecture"), body)
     }
 
     /** A GAP_PROMOTION-style card with NO kc_id (the orphan-row case F6 must reject). */
