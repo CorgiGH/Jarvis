@@ -101,10 +101,30 @@ object TutorMigration {
         db: Database,
         backupHook: (failingColumn: String?) -> Unit = ::defaultBackupHook,
         failAfter: String? = null,
+        /**
+         * DELTA-4 / Step-0 — the v2 content-hash FLIP gate. When this resolves true (the operator's
+         * one-time flip boot, opting in via `JARVIS_V2_HASH_FLIP`), the migration runs the HARD
+         * pre-flip assertion `assertNoLiveContentHashRowsBeforeV2Flip` immediately after the schema
+         * create + BEFORE any other work — aborting the whole migration if ANY live `content_hash`
+         * row exists. The ~0-blast-radius "trust tables are empty" premise is point-in-time; this is
+         * the fence between "verified empty today" and "the flip lands". Defaulted to the real env so
+         * tests drive it without touching the process env. A normal (non-flip) boot leaves it false
+         * and the assertion is skipped (the re-key is a one-time event).
+         */
+        v2HashFlipEnabled: () -> Boolean = ::defaultV2HashFlipEnabled,
     ): MigrationResult {
         return try {
             transaction(db) {
                 SchemaUtils.createMissingTablesAndColumns(*ALL_TABLES)
+
+                // DELTA-4 (Step-0): HARD pre-flip ABORT. On the operator's one-time v2-hash flip boot,
+                // assert there are 0 live `content_hash` rows BEFORE the v2 re-key lands — a stray v1
+                // row re-keyed under the v2 formula would silently orphan-match ZERO VPS rows once D9
+                // ships (the worst trust-sync failure: looks healthy, syncs nothing). Runs right after
+                // the schema create so the column exists, and before any backfill.
+                if (v2HashFlipEnabled()) {
+                    assertNoLiveContentHashRowsBeforeV2Flip()
+                }
 
                 // TEST SEAM (M-PARTIAL): simulate a failed ALTER/backfill. Throws AFTER the table
                 // create so the abort+backup path runs over a partially-migrated shape, mirroring
@@ -190,6 +210,27 @@ object TutorMigration {
         }
     }
 
+    /**
+     * DELTA-4 — the HARD pre-flip assertion: there must be 0 live `content_hash` rows in
+     * `kc_verification_status` before the v2 hash formula flip re-keys the keyspace. Throws
+     * [V2HashFlipAbort] (which the surrounding try/catch turns into a [MigrationException] after the
+     * M-PARTIAL backup hook) when any non-null `content_hash` row exists. Runs INSIDE the migration
+     * txn (the `source_span_hash`/`content_hash` columns already exist by this point).
+     */
+    private fun org.jetbrains.exposed.sql.Transaction.assertNoLiveContentHashRowsBeforeV2Flip() {
+        var live = 0L
+        exec("SELECT COUNT(*) FROM kc_verification_status WHERE content_hash IS NOT NULL") { rs ->
+            if (rs.next()) live = rs.getLong(1)
+        }
+        if (live > 0L) {
+            throw V2HashFlipAbort(live)
+        }
+    }
+
+    /** DELTA-4 default flip gate: opt in via `JARVIS_V2_HASH_FLIP` ∈ {1,true,yes,on}. */
+    private fun defaultV2HashFlipEnabled(): Boolean =
+        System.getenv("JARVIS_V2_HASH_FLIP")?.trim()?.lowercase() in setOf("1", "true", "yes", "on")
+
     /** Best-effort failing-column extraction from an exception message / our test seam. */
     private fun extractFailingColumn(e: Throwable): String? {
         if (e is MigrationColumnFailure) return e.column
@@ -244,3 +285,15 @@ object TutorMigration {
 /** Internal test-seam / forced-failure carrier (named so the column surfaces in the abort log). */
 internal class MigrationColumnFailure(val column: String) :
     RuntimeException("forced migration failure at column '$column'")
+
+/**
+ * DELTA-4 — thrown when the v2 hash-flip pre-flight finds live `content_hash` rows that the flip
+ * would orphan-re-key. Carries the offending row count so the operator knows the empty-table premise
+ * was violated and must re-audit/clear before flipping.
+ */
+internal class V2HashFlipAbort(val liveRows: Long) :
+    RuntimeException(
+        "v2 hash flip ABORTED (DELTA-4): found $liveRows live content_hash row(s) in " +
+            "kc_verification_status. The v2 re-key requires 0 live content_hash rows (empty-table " +
+            "premise) so no row is silently orphaned. Clear/re-audit the trust store before flipping.",
+    )

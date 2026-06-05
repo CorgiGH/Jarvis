@@ -161,6 +161,7 @@ object ContentValidator {
             issues += checkVizReferences(sub, validVizIds)
             issues += checkStrictGrounding(sub)
             issues += checkVerificationStatusEnum(sub)
+            issues += checkTautologicalInvariants(sub)
         }
         val ok = issues.none { it.severity == "error" }
         return ValidationReport(ok = ok, disclaimer = DISCLAIMER, issues = issues)
@@ -246,6 +247,50 @@ object ContentValidator {
      * (earned only at runtime by an audit) and `failed` is runtime-only — both are rejected in YAML.
      */
     val AUTHORED_VERIFICATION_STATUSES: Set<String> = setOf("unverified", "pending", "uncertain")
+
+    /**
+     * D4 — reject TAUTOLOGICAL (vacuously-true) invariants at AUTHOR/AUDIT time (PC-side).
+     *
+     * The hole: a trivially-true authored equation (`t = t`, `0 = 0`) passes the SymPy leg's
+     * `splitEquation` (which rejects `<=,>=,!=,==` but NOT an `lhs == rhs` identity) ⇒
+     * `simplify(t - t) == 0` ⇒ `ran=true, pass=true`. "SymPy ran && passed" is satisfied VACUOUSLY —
+     * a check that cannot fail certifies nothing. Reject it before it can certify, exactly like a
+     * tautology guard in a theorem prover.
+     *
+     * PRIMARY guard (HARD ERROR) = the conservative SYNTACTIC-identity reject: the invariant is a
+     * plain `lhs = rhs` equation AND `lhs.trim() == rhs.trim()`. This never false-rejects a meaningful
+     * identity (`|n|_unif = 1` is NOT `lhs==rhs`-identical; `2x = x + x` is not either) — only the
+     * literally-vacuous `t = t` / `0 = 0` shape. The broader `simplify`-trivial reject (`2x = x + x`)
+     * is deliberately NOT a hard fail here (it would false-reject authored content); it stays a
+     * runtime SymPy concern + the `bothSupported` requirement already blunts weaponization (LOW sev).
+     *
+     * Localized entirely to author/audit — ZERO serve/sync/hash ripple, no frozen signature moves.
+     */
+    fun checkTautologicalInvariants(sub: LoadedSubject): List<ValidationIssue> {
+        val issues = mutableListOf<ValidationIssue>()
+        fun checkOne(owner: String, id: String, invariant: String?) {
+            val inv = invariant?.trim() ?: return
+            if (inv.isEmpty()) return
+            // Mirror SymPyLeg.splitEquation: exactly one top-level '=', no relational operators.
+            if (inv.contains("<=") || inv.contains(">=") || inv.contains("!=") || inv.contains("==")) return
+            val idx = inv.indexOf('=')
+            if (idx < 0 || idx != inv.lastIndexOf('=')) return
+            val lhs = inv.substring(0, idx).trim()
+            val rhs = inv.substring(idx + 1).trim()
+            if (lhs.isEmpty() || rhs.isEmpty()) return
+            if (lhs == rhs) {
+                issues += ValidationIssue(
+                    severity = "error",
+                    rule = "tautological_invariant",
+                    subject = sub.subject,
+                    detail = "$owner '$id': invariant '$invariant' is tautological (lhs == rhs after trim) — " +
+                        "a vacuously-true equation certifies nothing; author a non-trivial invariant",
+                )
+            }
+        }
+        for (kc in sub.kcs) checkOne("KC", kc.id, kc.invariant)
+        return issues
+    }
 
     private fun normalizeWs(s: String): String = s.replace(WS_RE, " ").trim()
 

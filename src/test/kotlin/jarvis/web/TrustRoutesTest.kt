@@ -125,6 +125,7 @@ class TrustRoutesTest {
                 it[kcId] = "pa-kc-005"
                 it[status] = VerificationStatus.faithful.name
                 it[contentHash] = seededKcHash(content)
+                it[sourceSpanHash] = seededKcSourceSpanHash(content)
                 it[updatedAt] = Instant.now()
             }
         }
@@ -222,6 +223,7 @@ class TrustRoutesTest {
                 it[kcId] = "pa-kc-005"
                 it[status] = VerificationStatus.faithful.name
                 it[contentHash] = seededKcHash(content)
+                it[sourceSpanHash] = seededKcSourceSpanHash(content)
                 it[updatedAt] = Instant.now()
             }
         }
@@ -241,18 +243,34 @@ class TrustRoutesTest {
         return jarvis.content.ContentReconcile.kcContentHash(kc)
     }
 
+    /** D1: the source-span hash of the seeded pa-kc-005 over its live `_sources/pa-lecture-01.md`.
+     *  A faithful B8 row must carry this (non-null) or the serve gate fails CLOSED on the NULL. */
+    private fun seededKcSourceSpanHash(content: Path): String {
+        val repo = jarvis.content.ContentRepo(content)
+        val kc = repo.loadSubject("PA").kcs.single { it.id == "pa-kc-005" }
+        return jarvis.content.ContentReconcile.sourceSpanHashOf(
+            jarvis.content.ContentReconcile.claimsFor(kc),
+        ) { subject, doc -> repo.sourceText(subject, doc) }
+            ?: error("seeded pa-kc-005 quote must relocate so a source_span_hash exists")
+    }
+
     private fun seedB8(
         db: org.jetbrains.exposed.sql.Database,
         kcId: String,
         status: VerificationStatus,
         contentHash: String?,
         lectureGrounded: Boolean? = null,
+        // D1: a faithful/grounded row needs a present source_span_hash to survive the serve gate.
+        // Default to a non-blank sentinel so the existing seeds keep serving faithful; tests that
+        // assert the NULL-source-span fail-closed pass null explicitly.
+        sourceSpanHash: String? = "seedspanhash",
     ) = transaction(db) {
         KcVerificationStatusTable.insert {
             it[KcVerificationStatusTable.kcId] = kcId
             it[KcVerificationStatusTable.status] = status.name
             it[KcVerificationStatusTable.contentHash] = contentHash
             it[KcVerificationStatusTable.lectureGrounded] = lectureGrounded
+            it[KcVerificationStatusTable.sourceSpanHash] = sourceSpanHash
             it[updatedAt] = Instant.now()
         }
     }
@@ -803,6 +821,9 @@ class TrustRoutesTest {
         // report. Seed that reality so the report-wrong test proves the badge is CLEARED, not that it was
         // already absent. Default null hash for the legacy test that doesn't seed live content.
         contentHash: String? = null,
+        // D1: a faithful + grounded row needs a present source_span_hash to survive the serve gate.
+        // A non-blank sentinel is enough (the serve gate only PRESENCE-checks it); report-wrong NULLs it.
+        sourceSpanHash: String? = "seedspanhash",
     ): String {
         val cardId = TutorTypes.ulid()
         val now = Instant.now()
@@ -820,6 +841,7 @@ class TrustRoutesTest {
                 it[KcVerificationStatusTable.kcId] = kcId
                 it[status] = VerificationStatus.faithful.name
                 it[KcVerificationStatusTable.contentHash] = contentHash
+                it[KcVerificationStatusTable.sourceSpanHash] = sourceSpanHash
                 it[lectureGrounded] = true
                 it[updatedAt] = now
             }
@@ -913,6 +935,100 @@ class TrustRoutesTest {
         }.bodyAsText()
         assertTrue(body.contains("\"honest_floor\":\"UNVERIFIED\""), body)
         assertFalse(body.contains("matches your lecture"), body)
+    }
+
+    @Test
+    fun `D3 - an OPEN report_wrong forces servedHonestFloor to UNVERIFIED even on a faithful + matching-hash row (serve refusal)`() = testApplication {
+        // The D3 SERVE-SIDE refusal independent of MF-2's row clearing: a faithful + grounded row whose
+        // content_hash AND source_span_hash are PRESENT + matching (would normally serve the badge) must
+        // STILL fail closed while an OPEN report_wrong exists for the KC. (Belt-and-braces: even if some
+        // path left the row grounded, the serve gate consults the OPEN dispute and refuses.)
+        val dir = Files.createTempDirectory("trust-d3-serve")
+        val content = dir.resolve("content"); seedContent(content, status = "faithful")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (uid, sid) = seedUser(db, UserScope.FRIEND)
+        val kc = jarvis.content.ContentRepo(content).loadSubject("PA").kcs.single { it.id == "pa-kc-005" }
+        // Faithful + grounded + MATCHING content + a PRESENT source_span_hash ⇒ would serve the badge.
+        seedB8(db, "pa-kc-005", VerificationStatus.faithful, seededKcHash(content), lectureGrounded = true)
+
+        assertEquals(
+            jarvis.tutor.verify.HonestFloor.FAITHFUL_TO_SOURCE,
+            VerifyAdmin.servedHonestFloor(db, "pa-kc-005", kc),
+            "no dispute yet ⇒ the faithful + matching-hash row serves the lecture badge",
+        )
+
+        // Insert an OPEN report_wrong directly (without going through MF-2's row-clearing path).
+        transaction(db) {
+            ReportWrongTable.insert {
+                it[id] = TutorTypes.ulid()
+                it[ReportWrongTable.userId] = uid
+                it[ReportWrongTable.kcId] = "pa-kc-005"
+                it[cardId] = null
+                it[gradeAttemptRaw] = "disputed"
+                it[reportedAt] = Instant.now()
+                it[resolution] = "OPEN"
+            }
+        }
+
+        assertEquals(
+            jarvis.tutor.verify.HonestFloor.UNVERIFIED,
+            VerifyAdmin.servedHonestFloor(db, "pa-kc-005", kc),
+            "an OPEN report_wrong forces the serve floor to UNVERIFIED regardless of the hash match (D3)",
+        )
+        assertEquals(
+            VerificationStatus.unverified,
+            VerifyAdmin.resolveStatus(db, "pa-kc-005", kc),
+            "resolveStatus also refuses faithful while a report is OPEN (D3)",
+        )
+    }
+
+    @Test
+    fun `D3 - the owner RETRACT route closes OPEN reports as RETRACTED and stamps resolved_by + resolved_at`() = testApplication {
+        // The SECOND terminal exit edge: the owner accepts the report (content genuinely wrong). The KC
+        // stays dark; the OPEN dispute is closed RETRACTED with the single-owner provenance stamped.
+        val dir = Files.createTempDirectory("trust-d3-retract")
+        val db = freshDb(dir)
+        val (ownerId, sid) = seedUser(db, UserScope.OWNER)
+        val (reporterId, _) = seedUser(db, UserScope.FRIEND)
+        val reportId = TutorTypes.ulid()
+        transaction(db) {
+            ReportWrongTable.insert {
+                it[id] = reportId
+                it[ReportWrongTable.userId] = reporterId
+                it[ReportWrongTable.kcId] = "pa-kc-005"
+                it[cardId] = null
+                it[gradeAttemptRaw] = "disputed"
+                it[reportedAt] = Instant.now()
+                it[resolution] = "OPEN"
+            }
+        }
+        application { installTrust(db, dir) }
+
+        val r = client.post("/api/v1/admin/report-wrong/pa-kc-005/retract") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"resolution\":\"RETRACTED\""), r.bodyAsText())
+
+        val row = transaction(db) {
+            ReportWrongTable.selectAll().where { ReportWrongTable.id eq reportId }.single()
+        }
+        assertEquals("RETRACTED", row[ReportWrongTable.resolution], "the OPEN report is closed RETRACTED")
+        assertEquals(ownerId, row[ReportWrongTable.resolvedBy], "the single-owner resolver id is stamped (DELTA-3)")
+        assertTrue(row[ReportWrongTable.resolvedAt] != null, "the resolution timestamp is stamped (DELTA-3)")
+    }
+
+    @Test
+    fun `D3 - the RETRACT route requires OWNER scope (403 for a non-owner)`() = testApplication {
+        val dir = Files.createTempDirectory("trust-d3-retract-403")
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db, UserScope.FRIEND)
+        application { installTrust(db, dir) }
+        val r = client.post("/api/v1/admin/report-wrong/pa-kc-005/retract") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+        }
+        assertEquals(HttpStatusCode.Forbidden, r.status)
     }
 
     /** A GAP_PROMOTION-style card with NO kc_id (the orphan-row case F6 must reject). */

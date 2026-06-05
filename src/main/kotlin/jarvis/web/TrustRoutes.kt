@@ -31,6 +31,8 @@ import jarvis.tutor.csrfProtect
 import jarvis.tutor.verify.CitationGuard
 import jarvis.tutor.verify.CitedClaim
 import jarvis.tutor.verify.HonestFloor
+import jarvis.tutor.verify.ReportResolution
+import jarvis.tutor.verify.ReportWrongQuery
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -216,10 +218,20 @@ object VerifyAdmin {
         // D8: only `faithful` may be staled out; every other status is honest as-is.
         if (status != VerificationStatus.faithful) return@transaction status
 
+        // D3: an OPEN report_wrong dispute outranks a faithful row — refuse the faithful badge while a
+        // learner-filed dispute is unresolved. FAIL-CLOSED on a query throw (assume OPEN ⇒ unverified).
+        if (ReportWrongQuery.hasOpenReportWrong(this, kcId)) return@transaction VerificationStatus.unverified
+
         val rowHash = row?.get(KcVerificationStatusTable.contentHash)
         val currentHash = kc?.let { ContentReconcile.kcContentHash(it) }
-        // Fail CLOSED unless the audited hash and the live-content hash both exist AND match.
-        if (rowHash != null && currentHash != null && rowHash == currentHash) {
+        // D1: the SECONDARY source-span fingerprint must be PRESENT to serve faithful. The VPS cannot
+        // recompute it (no `_sources` bytes, D7) — it presence/version-checks it: a NULL source_span_hash
+        // (never source-audited, or NULLed by the PC-side source-edit watcher) fails CLOSED exactly like a
+        // NULL content_hash. (DETECTION of a source EDIT is PC-side, ContentReconcile.reconcileSourceSpans.)
+        val sourceSpanHash = row?.get(KcVerificationStatusTable.sourceSpanHash)
+        // Fail CLOSED unless the audited hash and the live-content hash both exist AND match,
+        // AND the source-span fingerprint is present.
+        if (rowHash != null && currentHash != null && rowHash == currentHash && sourceSpanHash != null) {
             VerificationStatus.faithful
         } else {
             VerificationStatus.unverified
@@ -261,11 +273,21 @@ object VerifyAdmin {
         // The lecture badge is gated on faithful OR grounded — but NOTHING shows without fresh content.
         if (status != VerificationStatus.faithful && !grounded) return@transaction HonestFloor.UNVERIFIED
 
+        // D3: an OPEN report_wrong dispute outranks the lecture badge too — refuse it (fail-closed to
+        // UNVERIFIED) while a learner-filed dispute is unresolved, regardless of the hash match. The
+        // shared helper fails CLOSED on a query throw (assume OPEN). (MF-2 already clears grounded +
+        // NULLs the hashes on report-wrong; this is the belt-and-braces serve-side refusal D3 mandates.)
+        if (ReportWrongQuery.hasOpenReportWrong(this, kcId)) return@transaction HonestFloor.UNVERIFIED
+
         // D8 staleness gate — wraps `lecture_grounded` EXACTLY as it wraps `faithful`. Fail CLOSED
         // unless the audited content_hash and the live-content hash both exist AND match.
         val rowHash = row[KcVerificationStatusTable.contentHash]
         val currentHash = kc?.let { ContentReconcile.kcContentHash(it) }
-        if (rowHash != null && currentHash != null && rowHash == currentHash) {
+        // D1: the source-span fingerprint must ALSO be present (the VPS can only presence-check it; a
+        // NULL fails CLOSED like a NULL content_hash — see resolveStatus). Source-EDIT detection is
+        // PC-side (ContentReconcile.reconcileSourceSpans), which NULLs this column + re-pends on a change.
+        val sourceSpanHash = row[KcVerificationStatusTable.sourceSpanHash]
+        if (rowHash != null && currentHash != null && rowHash == currentHash && sourceSpanHash != null) {
             HonestFloor.FAITHFUL_TO_SOURCE
         } else {
             HonestFloor.UNVERIFIED
@@ -573,6 +595,9 @@ fun Route.installTrustRoutes() {
                             it[status] = next.name
                             it[lectureGrounded] = false
                             it[contentHash] = null
+                            // D1 (MF-2): also NULL the source-span fingerprint on a dispute — the audit
+                            // that wrote it is now in dispute; the badge must fail closed on BOTH hashes.
+                            it[sourceSpanHash] = null
                             it[lastAuditRunId] = null
                             it[updatedAt] = now
                         }
@@ -581,6 +606,7 @@ fun Route.installTrustRoutes() {
                             it[status] = next.name
                             it[lectureGrounded] = false
                             it[contentHash] = null
+                            it[sourceSpanHash] = null
                             it[lastAuditRunId] = null
                             it[updatedAt] = now
                         }
@@ -597,6 +623,34 @@ fun Route.installTrustRoutes() {
                         cardPaused = true,
                         newStatus = newStatus,
                     ),
+                )
+            }
+        }
+    }
+
+    // ── POST /api/v1/admin/report-wrong/{kcId}/retract ───────────────────────────────────────────
+    // D3 closing edge (the OWNER accept-the-report terminal). OWNER-ONLY. Writes resolution=RETRACTED
+    // + stamps resolved_by (owner) + resolved_at on every OPEN report_wrong for the KC, leaving the KC
+    // DARK (the content was genuinely wrong; the badge does NOT relight). This is the SECOND escape
+    // from OPEN (the FIRST is an owner re-audit that re-grounds ⇒ REVERIFIED_FAITHFUL in finalizeKc) —
+    // so a dispute is never a permanent DoS-on-truth trap. The full multi-actor moderation UI stays
+    // deferred; this exit edge does not.
+    post("/api/v1/admin/report-wrong/{kcId}/retract") {
+        requireOwnerTrust { ownerId ->
+            val ctx = call.application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@requireOwnerTrust }
+            call.csrfProtect {
+                val kcId = call.parameters["kcId"]?.takeIf { it.isNotBlank() }
+                    ?: run { call.respond(HttpStatusCode.BadRequest, """{"error":"kcId required"}"""); return@csrfProtect }
+                val now = Instant.now()
+                val closed = transaction(ctx.db) {
+                    ReportWrongQuery.closeOpenReports(
+                        this, kcId, ReportResolution.RETRACTED, resolvedBy = ownerId, resolvedAt = now,
+                    )
+                }
+                call.respondText(
+                    """{"kcId":"$kcId","resolution":"RETRACTED","closed":$closed}""",
+                    ContentType.Application.Json, HttpStatusCode.OK,
                 )
             }
         }

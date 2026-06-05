@@ -261,4 +261,76 @@ class ContentValidatorTest {
         val report = ContentCli.runValidation(tmp)
         assertTrue(report.ok, report.issues.toString())
     }
+
+    // --- D4: reject tautological (vacuously-true) invariants at author/audit time ----------------
+
+    @Test
+    fun `D4 a tautological invariant t = t is REJECTED`() {
+        val sub = LoadedSubject(
+            "PA",
+            kcs = listOf(kc("a", tier = 1, weight = 1.0).copy(invariant = "t = t")),
+            edges = emptyList(), misconceptions = emptyList(),
+        )
+        val issues = ContentValidator.checkTautologicalInvariants(sub)
+        assertEquals(1, issues.size, "a tautological invariant must be rejected")
+        assertEquals("tautological_invariant", issues.single().rule)
+        assertEquals("error", issues.single().severity)
+        assertTrue(issues.single().detail.contains("'a'"))
+    }
+
+    @Test
+    fun `D4 a zero equals zero invariant is REJECTED`() {
+        val sub = LoadedSubject(
+            "PA",
+            kcs = listOf(kc("z", tier = 1, weight = 1.0).copy(invariant = "0 = 0")),
+            edges = emptyList(), misconceptions = emptyList(),
+        )
+        assertEquals(1, ContentValidator.checkTautologicalInvariants(sub).size, "`0 = 0` is vacuously true ⇒ rejected")
+    }
+
+    @Test
+    fun `D4 a MEANINGFUL invariant is ACCEPTED (no over-rejection)`() {
+        // |n|_unif = 1 is NOT lhs==rhs-identical ⇒ accepted (the syntactic-identity guard is safe).
+        val meaningful = LoadedSubject(
+            "PA",
+            kcs = listOf(kc("m", tier = 1, weight = 1.0).copy(invariant = "|n|_unif = 1")),
+            edges = emptyList(), misconceptions = emptyList(),
+        )
+        assertTrue(ContentValidator.checkTautologicalInvariants(meaningful).isEmpty(), "`|n|_unif = 1` is meaningful ⇒ accepted")
+
+        // 2x = x + x is meaningful (simplify-trivial but NOT syntactically identical) ⇒ accepted.
+        val twoX = LoadedSubject(
+            "PA",
+            kcs = listOf(kc("x", tier = 1, weight = 1.0).copy(invariant = "2x = x + x")),
+            edges = emptyList(), misconceptions = emptyList(),
+        )
+        assertTrue(ContentValidator.checkTautologicalInvariants(twoX).isEmpty(), "`2x = x + x` must NOT be over-rejected")
+
+        // a normal authored invariant is accepted.
+        val normal = LoadedSubject(
+            "PA",
+            kcs = listOf(kc("n", tier = 1, weight = 1.0).copy(invariant = "1 + 1 + 1 = 3")),
+            edges = emptyList(), misconceptions = emptyList(),
+        )
+        assertTrue(ContentValidator.checkTautologicalInvariants(normal).isEmpty(), "`1 + 1 + 1 = 3` is non-trivial ⇒ accepted")
+
+        // a null invariant is a no-op (no error).
+        val noInv = LoadedSubject(
+            "PA", kcs = listOf(kc("p", tier = 1, weight = 1.0)),
+            edges = emptyList(), misconceptions = emptyList(),
+        )
+        assertTrue(ContentValidator.checkTautologicalInvariants(noInv).isEmpty(), "no invariant ⇒ no tautology error")
+    }
+
+    @Test
+    fun `D4 validate() FAILS a corpus carrying a tautological invariant`() {
+        val sub = LoadedSubject(
+            "PA",
+            kcs = listOf(kc("a", tier = 1, weight = 1.0).copy(invariant = "x = x")),
+            edges = emptyList(), misconceptions = emptyList(),
+        )
+        val report = ContentValidator.validate(listOf(sub)) { null }
+        assertFalse(report.ok, "a tautological invariant must fail validateContent (D4 hard error)")
+        assertTrue(report.issues.any { it.rule == "tautological_invariant" })
+    }
 }

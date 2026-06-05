@@ -79,7 +79,12 @@ object VerificationAuditTable : Table("verification_audit") {
     override val primaryKey = PrimaryKey(id)
 }
 
-/** CHANGE 7 — grading fail-safe trail. `resolution` ∈ OPEN|REVERIFIED_FAITHFUL|RETRACTED. */
+/** CHANGE 7 — grading fail-safe trail. `resolution` ∈ OPEN|REVERIFIED_FAITHFUL|RETRACTED.
+ *  D3 / DELTA-3: `resolved_by` + `resolved_at` capture WHO closed the dispute and WHEN. `user_id`
+ *  is the REPORTER; the resolver is the single-user OWNER (admin/verify caller) today — the columns
+ *  are added NOW (empty table) so the future multi-user owner→roles generalization is a pure
+ *  read-model change, NOT an un-backfillable "we have no provenance" archaeology problem. Both
+ *  NULL-defaulted + additive (any pre-existing OPEN row reads NULL = not-yet-resolved). */
 object ReportWrongTable : Table("report_wrong") {
     val id = varchar("id", 26)
     val userId = varchar("user_id", 26).references(UsersTable.id)
@@ -88,6 +93,10 @@ object ReportWrongTable : Table("report_wrong") {
     val gradeAttemptRaw = text("grade_attempt_raw")
     val reportedAt = timestamp("reported_at")
     val resolution = varchar("resolution", 24).nullable() // OPEN|REVERIFIED_FAITHFUL|RETRACTED
+    /** D3 / DELTA-3 — the resolver's user id (single-user owner today); NULL while OPEN. */
+    val resolvedBy = varchar("resolved_by", 26).nullable()
+    /** D3 / DELTA-3 — when the dispute was closed; NULL while OPEN. */
+    val resolvedAt = timestamp("resolved_at").nullable()
     override val primaryKey = PrimaryKey(id)
 }
 
@@ -145,6 +154,31 @@ object KcVerificationStatusTable : Table("kc_verification_status") {
      * [contentHash] column directly above.
      */
     val lectureGrounded = bool("lecture_grounded").nullable()
+    /**
+     * D1 (v2) — the SOURCE-SPAN fingerprint: `sha256_8` over the round-trip's OWN
+     * `fold('\s+'->' ').trim()`-normalized located slice of `content/{subject}/_sources/{doc}.md`,
+     * aggregated per-KC (claimId-sorted) at audit time. It fingerprints the SOURCE BYTES the audit
+     * actually read, which `content_hash` is BLIND to (the YAML quote+span+doc-name can be unchanged
+     * while the underlying source file is re-OCR'd / edited).
+     *
+     * Width = `varchar(16)` = sha256_8, MIRRORING `content_hash` (council D-RF1 / DELTA-1): the
+     * secondary trust co-factor sits at the SAME 64-bit tier as the primary fingerprint + D9 key.
+     * The threat is self-inflicted source churn (re-OCR/whitespace), NOT adversarial preimage forgery.
+     *
+     * SERVE side (D7): the VPS has NO `_sources` bytes, so it can ONLY presence/version-check this
+     * column — a NULL `source_span_hash` fails CLOSED to UNVERIFIED exactly like a NULL `content_hash`.
+     * The actual source-edit DETECTION is a PC-side reconcile leg
+     * ([jarvis.content.ContentReconcile.reconcileSourceSpans]) that NULLs `content_hash` +
+     * `source_span_hash` and re-pends the KC when the live source no longer folds-equal to the stored
+     * value. Hashing the round-trip's FOLDED located slice (not raw bytes, not the whole file) makes
+     * it tolerate exactly the whitespace/CRLF/re-OCR churn the round-trip tolerates — so pa-kc-001..004
+     * never false-negative on a no-op re-run.
+     *
+     * Nullable + additive: the live table has 0 rows, so `createMissingTablesAndColumns` ALTER-ADDs
+     * the bare column with no backfill (any pre-existing row reads NULL = fail-closed). Mirrors the
+     * Phase-1 additive-column pattern + the D8 `content_hash` / `lecture_grounded` columns above.
+     */
+    val sourceSpanHash = varchar("source_span_hash", 16).nullable()
     val updatedAt = timestamp("updated_at")
     override val primaryKey = PrimaryKey(kcId)
 }

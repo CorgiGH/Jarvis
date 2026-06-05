@@ -52,6 +52,14 @@ class VerificationRunner(
     private val nonLlmLegFor: (subject: String) -> NonLlmLeg,
     private val rawSourceFor: (claim: VerificationClaim) -> String,
     private val clock: () -> Instant = Instant::now,
+    /**
+     * D3 / D-RF3 — the SINGLE-USER OWNER id stamped onto `report_wrong.resolved_by` when this
+     * re-audit closes an OPEN dispute as REVERIFIED_FAITHFUL. The owner is the admin/verify caller (a
+     * PC-side, owner-triggered re-audit, D7-legal) — NOT a new moderation actor (multi-user DEFERRED).
+     * Defaulted so the hermetic test suite + the existing constructors need no change; production
+     * passes the actual owner id.
+     */
+    private val ownerId: String = "owner",
 ) {
 
     /**
@@ -88,6 +96,14 @@ class VerificationRunner(
     suspend fun audit(
         claims: List<VerificationClaim>,
         auditRunId: String = TutorTypes.ulid(),
+        /**
+         * D3 — when true, THIS audit is the OWNER's explicit RE-VERIFY of a disputed KC: a re-grounding
+         * audit closes the OPEN `report_wrong` as REVERIFIED_FAITHFUL (the resolution event) and then
+         * relights. A routine batch re-audit (the default, false) NEVER closes a dispute and is held
+         * DARK while any dispute is OPEN — the dispute strictly outranks. Owner-triggered, PC-side,
+         * D7-legal (single-user owner, D-RF3).
+         */
+        ownerReverify: Boolean = false,
     ): List<AuditResult> {
         // D8: the per-KC content fingerprint over the AUDITED claim set for that KC. Computed ONCE up
         // front over the whole batch (a KC's hash folds in every claim being audited for it), then
@@ -96,6 +112,20 @@ class VerificationRunner(
         val hashByKc: Map<String, String> = claims
             .groupBy { it.kcId }
             .mapValues { (_, kcClaims) -> jarvis.content.ContentReconcile.kcContentHashOf(kcClaims) }
+
+        // D1: the per-KC SOURCE-SPAN fingerprint over the round-trip's FOLDED located slice of the LIVE
+        // `_sources` bytes (PC-side; the VPS never recomputes this). Computed up front over the whole
+        // batch and stamped on each KC's B8 row alongside content_hash. The injected [rawSourceFor] is
+        // claim-shaped; adapt it to the (subject, doc) resolver sourceSpanHashOf expects, mapping any
+        // resolver throw (absent source) to null so the KC stores a NULL hash and fails CLOSED at serve.
+        val sourceSpanByKc: Map<String, String?> = claims
+            .groupBy { it.kcId }
+            .mapValues { (_, kcClaims) ->
+                jarvis.content.ContentReconcile.sourceSpanHashOf(kcClaims) { _, doc ->
+                    val byDoc = kcClaims.firstOrNull { it.source?.doc == doc }
+                    if (byDoc == null) null else runCatching { rawSourceFor(byDoc) }.getOrNull()
+                }
+            }
 
         // Per-claim audit (FIX-A): each claim's OWN verdict is computed from a FRESH `pending` prior —
         // NOT the rolling shared kc_verification_status row — so it is ORDER-INDEPENDENT. The audit row
@@ -109,7 +139,7 @@ class VerificationRunner(
         // in THIS run, written ONCE per KC (order-independent). faithful iff EVERY claim faithful; any
         // failed ⇒ failed; otherwise uncertain. Carries the D8 content_hash (B3).
         for ((kcId, kcResults) in results.groupBy { it.kcId }) {
-            finalizeKc(kcId, kcResults, auditRunId, hashByKc[kcId])
+            finalizeKc(kcId, kcResults, auditRunId, hashByKc[kcId], sourceSpanByKc[kcId], ownerReverify)
         }
         return results
     }
@@ -159,12 +189,38 @@ class VerificationRunner(
         kcResults: List<AuditResult>,
         auditRunId: String,
         contentHash: String?,
+        sourceSpanHash: String?,
+        ownerReverify: Boolean,
     ) {
         val aggregate = aggregateKc(kcResults.map { it.newStatus })
         // B5r-2 — written ALONGSIDE [status], in the SAME transaction, from THIS run's per-claim results.
         val grounded = groundedKc(kcResults)
         val now = clock()
         transaction(db) {
+            // D3 CLOSING EDGE (REVERIFIED_FAITHFUL) — when THIS audit is the OWNER's explicit re-verify
+            // of the disputed KC ([ownerReverify]) AND it re-grounds at the current content, the owner's
+            // re-verification IS the resolution event: CLOSE the OPEN dispute(s) FIRST (stamping the
+            // single-owner resolver + timestamp, DELTA-3 provenance), so the relight-guard below then
+            // sees NO open dispute and is permitted to relight — atomically, in THIS txn. A routine
+            // (non-owner-reverify) re-audit NEVER auto-closes a dispute: the dispute strictly outranks.
+            if (ownerReverify && aggregate == VerificationStatus.faithful && grounded) {
+                ReportWrongQuery.closeOpenReports(
+                    this, kcId, ReportResolution.REVERIFIED_FAITHFUL,
+                    resolvedBy = ownerId, resolvedAt = now,
+                )
+            }
+
+            // D3 RELIGHT-GUARD — re-read AFTER any owner close above (so the close is honored in-txn):
+            // does an OPEN report_wrong dispute STILL exist? (fail-closed on throw ⇒ assume OPEN). While
+            // a dispute is OPEN the dispute OUTRANKS the re-audit: hold the badge DARK (grounded=false +
+            // NULL both staleness hashes) so servedHonestFloor stays UNVERIFIED. The status aggregate
+            // still records what the re-audit found (honest), but the badge state is held dark. Reading
+            // + writing in ONE txn means a crash can never re-open the relight hole.
+            val stillDisputed = ReportWrongQuery.hasOpenReportWrong(this, kcId)
+            val writeGrounded = if (stillDisputed) false else grounded
+            val writeContentHash = if (stillDisputed) null else contentHash
+            val writeSourceSpanHash = if (stillDisputed) null else sourceSpanHash
+
             val existing = KcVerificationStatusTable.selectAll()
                 .where { KcVerificationStatusTable.kcId eq kcId }
                 .singleOrNull()
@@ -173,16 +229,18 @@ class VerificationRunner(
                     it[KcVerificationStatusTable.kcId] = kcId
                     it[status] = aggregate.name
                     it[lastAuditRunId] = auditRunId
-                    it[KcVerificationStatusTable.contentHash] = contentHash
-                    it[lectureGrounded] = grounded
+                    it[KcVerificationStatusTable.contentHash] = writeContentHash
+                    it[KcVerificationStatusTable.sourceSpanHash] = writeSourceSpanHash
+                    it[lectureGrounded] = writeGrounded
                     it[updatedAt] = now
                 }
             } else {
                 KcVerificationStatusTable.update({ KcVerificationStatusTable.kcId eq kcId }) {
                     it[status] = aggregate.name
                     it[lastAuditRunId] = auditRunId
-                    it[KcVerificationStatusTable.contentHash] = contentHash
-                    it[lectureGrounded] = grounded
+                    it[KcVerificationStatusTable.contentHash] = writeContentHash
+                    it[KcVerificationStatusTable.sourceSpanHash] = writeSourceSpanHash
+                    it[lectureGrounded] = writeGrounded
                     it[updatedAt] = now
                 }
             }

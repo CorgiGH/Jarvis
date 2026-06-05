@@ -262,6 +262,60 @@ class ContentReconcileTest {
         )
     }
 
+    // --- D2: the raw SymPy `invariant` field is part of the fingerprint -------------------------
+
+    @Test
+    fun `D2 kcContentHash CHANGES when only the raw SymPy invariant changes (content held constant)`() {
+        // The HOLE: when invariant_statement is authored, claimsFor puts the NL restatement in
+        // `content` (what the hash saw before D2) and the RAW equation lives ONLY in the unhashed
+        // `invariant` field. Editing `1+1+1=3 -> 1+1+1=4` changed nothing the hash saw ⇒ no stale ⇒
+        // a badge served over an equation SymPy would now REFUTE. The grader_rules are dropped here
+        // so the ONLY moving part is the INVARIANT claim's raw `invariant` field; `content` (=
+        // invariant_statement) is byte-identical across H1/H2.
+        val base = strictKc(invariant = "1 + 1 + 1 = 3", graderRules = emptyList())
+            .copy(invariant_statement = "three unit-size elements sum to size three")
+        val edited = strictKc(invariant = "1 + 1 + 1 = 4", graderRules = emptyList())
+            .copy(invariant_statement = "three unit-size elements sum to size three")
+
+        // Sanity: the INVARIANT claim's CONTENT is identical (only its raw `invariant` differs).
+        val baseInv = ContentReconcile.claimsFor(base).single { it.kind == ClaimKind.INVARIANT }
+        val editedInv = ContentReconcile.claimsFor(edited).single { it.kind == ClaimKind.INVARIANT }
+        assertEquals(baseInv.content, editedInv.content, "content (= invariant_statement) is held constant")
+        assertNotEquals(baseInv.invariant, editedInv.invariant, "only the raw SymPy invariant differs")
+
+        assertNotEquals(
+            ContentReconcile.kcContentHash(base),
+            ContentReconcile.kcContentHash(edited),
+            "editing ONLY the raw SymPy invariant (the equation SymPy checks) must change the content hash (D2)",
+        )
+    }
+
+    @Test
+    fun `D2 v2 prefix - the canonical string carries the v2 schema-version prefix (legacy rows fail closed)`() {
+        // Step-0: a hash schema-version prefix so every legacy (v1) row deterministically MISMATCHES
+        // and fails CLOSED. The prefix lives in the canonical string, so two DIFFERENT KCs still hash
+        // differently, but EVERY hash is bound to the v2 keyspace.
+        assertEquals(
+            "v2:",
+            ContentReconcile.HASH_SCHEMA_VERSION_PREFIX,
+            "the content-hash schema version prefix is pinned to v2 at the re-freeze",
+        )
+    }
+
+    @Test
+    fun `D2 the raw invariant is NOT redundant double-counting when invariant_statement is authored`() {
+        // Council D-RF1 point 4: confirm the raw `invariant` term carries signal `content` does not
+        // already hold. With invariant_statement authored, content = the NL restatement and the raw
+        // equation differs ⇒ the D2 term is NOT pure double-hashing (the guard returns no offenders).
+        val kc = strictKc(invariant = "1 + 1 + 1 = 3", graderRules = emptyList())
+            .copy(invariant_statement = "three unit-size elements sum to size three")
+        val offenders = ContentReconcile.claimsWhereInvariantDoublesContent(ContentReconcile.claimsFor(kc))
+        assertTrue(
+            offenders.isEmpty(),
+            "with an authored invariant_statement the raw invariant differs from content ⇒ no double-hash",
+        )
+    }
+
     @Test
     fun `kcContentHash CHANGES when a cited span changes`() {
         val kcA = strictKc()

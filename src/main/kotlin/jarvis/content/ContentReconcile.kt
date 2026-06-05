@@ -290,13 +290,90 @@ object ContentReconcile {
                 listOf(
                     c.kind.name,
                     c.content,
+                    // D2 (v2): the RAW SymPy equation, a separate read-dependency from `content`.
+                    // (When invariant_statement is authored, `content` is the NL restatement and the
+                    // raw equation lives ONLY here.) Hashed AS AUTHORED (no fold) so audit==serve.
+                    c.invariant ?: "",
                     s?.doc ?: "",
                     (s?.page ?: 0).toString(),
                     (s?.span?.start ?: -1).toString(),
                     (s?.span?.end ?: -1).toString(),
                 ).joinToString("")
             }
-        return sha256_8(canonical)
+        // Step-0 (v2): prepend the schema-version prefix so every legacy (v1) hash fails CLOSED.
+        return sha256_8(HASH_SCHEMA_VERSION_PREFIX + canonical)
+    }
+
+    /**
+     * D8/D2 v2: the content-hash SCHEMA-VERSION prefix. Prepended to the canonical string of
+     * [kcContentHashOf] so the v2 keyspace is disjoint from every legacy (v1) hash: a row stamped
+     * under the OLD formula deterministically MISMATCHES at serve and fails CLOSED. Bump this string
+     * whenever the canonicalization (the set of folded fields) changes, so old rows never silently
+     * pass a staleness gate they were never re-audited against. Pre-flip the migration ASSERTS there
+     * are 0 live content_hash rows ([jarvis.tutor.TutorMigration]) so the re-key is free.
+     */
+    const val HASH_SCHEMA_VERSION_PREFIX: String = "v2:"
+
+    /**
+     * D2 build-time double-hash guard (council D-RF1 point 4). The D2 fold adds the RAW `invariant`
+     * field to the fingerprint. That is NOT pure double-counting of `invariant_statement` (which is
+     * folded transitively via `content`) ONLY while the raw equation carries signal `content` does
+     * not already hold. This pure check proves it for a [claim] set: it returns the claims whose raw
+     * `invariant` is byte-identical to their `content` (so the new term adds NOTHING for them and is
+     * redundant double-hashing). The healthy case is an empty list — `content` is the NL restatement
+     * (or the equation only when no restatement was authored, in which case the redundancy is
+     * harmless and expected). A caller (a build-time/test assertion) can use this to flag accidental
+     * future authoring where `content == invariant` would make the D2 term dead.
+     *
+     * It is PC-side/build-time only (no DB, no serve ripple) — used by the ContentReconcile test
+     * suite as a structural assertion over the real corpus's emitted claims.
+     */
+    fun claimsWhereInvariantDoublesContent(claims: List<VerificationClaim>): List<VerificationClaim> =
+        claims.filter { it.invariant != null && it.invariant == it.content }
+
+    /**
+     * D1 — the round-trip's OWN whitespace fold, lifted to the reconcile so the source-span hash is
+     * computed over EXACTLY the bytes the round-trip leg compares (`SpanClaimRoundTrip.fold` /
+     * `LiveSourceLocator.foldQuote`: collapse every whitespace run to one space, trim). Hashing the
+     * FOLDED slice (never raw bytes) is the single most important D1 constraint: it tolerates the
+     * `\s+`/CRLF/`\n`-indent + re-OCR churn that pa-kc-002/004 were hand-corrected for, so a no-op
+     * re-run never flips the hash and never false-negatives a faithful KC.
+     */
+    fun foldSlice(s: String): String = s.replace(Regex("\\s+"), " ").trim()
+
+    /**
+     * D1 — the KC-level SOURCE-SPAN fingerprint: `sha256_8` over each span-bearing claim's
+     * round-tripped, FOLDED located slice of the LIVE source, aggregated over a `claimId`-sorted set
+     * (mirroring [kcContentHashOf]'s order-stability). [rawSourceFor] resolves a claim's live
+     * `_sources/{doc}.md` text; the same `LiveSourceLocator` + `SourceOfRecord.slice` + `foldSlice`
+     * the audit's round-trip leg uses re-locates the cited quote and folds the relocated slice.
+     *
+     * PC-SIDE ONLY (D7): this reads `_sources` bytes, which exist ONLY on the authoring PC — it is
+     * NEVER called on the VPS serve path. Returns null when NO span-bearing claim relocates (the KC
+     * has nothing to source-fingerprint) — the runner stores null ⇒ the serve gate fails CLOSED.
+     *
+     * @param rawSourceFor (subject, doc) -> the live source text, or null when the file is absent.
+     */
+    fun sourceSpanHashOf(
+        claims: List<VerificationClaim>,
+        rawSourceFor: (subject: String, doc: String) -> String?,
+    ): String? {
+        val parts = claims
+            .filter { it.source?.span != null && !it.source?.quote.isNullOrBlank() }
+            .sortedBy { it.claimId }
+            .mapNotNull { c ->
+                val src = c.source ?: return@mapNotNull null
+                val raw = rawSourceFor(c.subject, src.doc) ?: return@mapNotNull null
+                // Re-locate the quote in the LIVE source (the round-trip's own locate), then fold the
+                // relocated RAW slice. A quote that no longer relocates contributes nothing (its
+                // absence changes the aggregate ⇒ a real source edit is detected).
+                val located = jarvis.tutor.verify.LiveSourceLocator.locate(raw, src.quote).span
+                    ?: return@mapNotNull null
+                val slice = SourceOfRecord.slice(raw, located) ?: return@mapNotNull null
+                "${c.claimId}${foldSlice(slice)}"
+            }
+        if (parts.isEmpty()) return null
+        return sha256_8(HASH_SCHEMA_VERSION_PREFIX + parts.joinToString(""))
     }
 
     /** First 8 lowercase-hex chars of `SHA-256(content)`. Reorder-stable content hash (M-CLAIM). */
@@ -367,5 +444,73 @@ object ContentReconcile {
             return@transaction true
         }
         false
+    }
+
+    /** One KC whose source bytes changed since the audit (the D1 watcher fired on it). */
+    data class SourceSpanReconcileResult(
+        /** kcIds whose live source no longer folds-equal to the stored `source_span_hash` ⇒ NULLed +
+         *  re-pended (the narrowed H10 exception: regress faithful->pending ONLY on a REAL source edit). */
+        val invalidated: Set<String>,
+    )
+
+    /**
+     * D1 step-4 — the PC-side SOURCE-EDIT WATCHER (curate-tutor Stage-9 reconcile leg). For every KC
+     * that carries a stored `source_span_hash`, recompute the hash from the LIVE `_sources` bytes; if
+     * it no longer matches (the source file was edited / re-OCR'd after the audit, even though the
+     * YAML quote+span is unchanged so `content_hash` would still match), the row is invalidated:
+     * `content_hash` AND `source_span_hash` are NULLed and the KC is re-pended for audit. The serve
+     * gate then fails CLOSED (NULL `content_hash`) until a fresh audit re-grounds it.
+     *
+     * This is the leg the serve side CANNOT run (the VPS has no `_sources` bytes, D7) — a passive
+     * serve-time hash column alone can never fire, so detection MUST live PC-side here.
+     *
+     * NARROWED H10 (never-regress-faithful) EXCEPTION — deliberately scoped, council-approved:
+     *  - regress ONLY when the stored hash is present AND the recomputed live hash DIFFERS (a real
+     *    source-byte change). A no-op re-run (bytes unchanged ⇒ folds-equal) leaves the row untouched,
+     *    so the reconcile is IDEMPOTENT and never flaps pa-kc-001..004 on whitespace/re-OCR churn
+     *    (the hash is over the round-trip's FOLDED slice, which absorbs that churn).
+     *  - a row with a NULL stored `source_span_hash` is SKIPPED (nothing to compare; a legacy/partial
+     *    row already fails closed at serve on its NULL content_hash).
+     *
+     * PURE-ish: no LLM, no network — only DB + the injected [rawSourceFor] (the live `_sources` read).
+     *
+     * @param rawSourceFor (subject, doc) -> live source text (or null when absent — an absent source
+     *                     makes the recomputed hash differ ⇒ invalidate, the correct fail-closed move).
+     */
+    fun reconcileSourceSpans(
+        subjects: List<LoadedSubject>,
+        db: Database,
+        rawSourceFor: (subject: String, doc: String) -> String?,
+        clock: () -> Instant = Instant::now,
+    ): SourceSpanReconcileResult {
+        val invalidated = LinkedHashSet<String>()
+        for (sub in subjects) {
+            for (kc in sub.kcs) {
+                val storedHash = transaction(db) {
+                    KcVerificationStatusTable.selectAll()
+                        .where { KcVerificationStatusTable.kcId eq kc.id }
+                        .singleOrNull()
+                        ?.get(KcVerificationStatusTable.sourceSpanHash)
+                } ?: continue   // no stored source-span hash to compare against ⇒ skip (already fail-closed)
+
+                val liveHash = sourceSpanHashOf(claimsFor(kc), rawSourceFor)
+                if (liveHash == storedHash) continue   // bytes unchanged ⇒ idempotent no-op (H10 safe)
+
+                // A REAL source-byte change: fail CLOSED. NULL both hashes + re-pend for re-audit.
+                val now = clock()
+                transaction(db) {
+                    KcVerificationStatusTable.update({ KcVerificationStatusTable.kcId eq kc.id }) {
+                        it[status] = VerificationStatus.pending.name
+                        it[contentHash] = null
+                        it[sourceSpanHash] = null
+                        it[lectureGrounded] = false
+                        it[lastAuditRunId] = null
+                        it[updatedAt] = now
+                    }
+                }
+                invalidated += kc.id
+            }
+        }
+        return SourceSpanReconcileResult(invalidated)
     }
 }

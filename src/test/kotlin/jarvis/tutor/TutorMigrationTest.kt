@@ -92,6 +92,60 @@ class TutorMigrationTest {
         assertTrue(columnExists(db, "fsrs_cards", "status"))
     }
 
+    // --- DELTA-4: the v2 hash-flip pre-flight HARD abort ----------------------------------------
+
+    @Test
+    fun `DELTA-4 the v2 flip ABORTS when a live content_hash row exists`(@TempDir tmp: Path) {
+        val db = tempDb(tmp)
+        // First boot (no flip) creates the schema incl. kc_verification_status.content_hash.
+        assertEquals(MigrationResult.Success, TutorMigration.migrate(db, v2HashFlipEnabled = { false }))
+        // Seed a STRAY live content_hash row (the empty-table premise violated).
+        transaction(db) {
+            exec(
+                "INSERT INTO kc_verification_status (kc_id, status, content_hash, updated_at) " +
+                    "VALUES ('pa-kc-001', 'faithful', 'deadbeef', '2026-06-04T00:00:00Z')",
+            )
+        }
+        // Now the operator opts into the v2 flip ⇒ HARD abort (a stray v1 row must not be re-keyed).
+        val ex = assertFails {
+            TutorMigration.migrate(db, backupHook = {}, v2HashFlipEnabled = { true })
+        }
+        assertTrue(ex is MigrationException, "the v2 flip must abort loudly via MigrationException, got ${ex::class.simpleName}")
+        assertTrue(
+            ex.message?.contains("DELTA-4") == true || ex.cause is V2HashFlipAbort,
+            "the abort must name the DELTA-4 v2-flip pre-flight: ${ex.message}",
+        )
+    }
+
+    @Test
+    fun `DELTA-4 the v2 flip SUCCEEDS on an empty content_hash table`(@TempDir tmp: Path) {
+        val db = tempDb(tmp)
+        // Flip enabled, but 0 content_hash rows (the live reality) ⇒ the assertion passes, migrate ok.
+        assertEquals(
+            MigrationResult.Success,
+            TutorMigration.migrate(db, v2HashFlipEnabled = { true }),
+            "the v2 flip is a no-op + succeeds when there are 0 live content_hash rows",
+        )
+    }
+
+    @Test
+    fun `DELTA-4 a non-flip boot does NOT abort even when a content_hash row exists`(@TempDir tmp: Path) {
+        val db = tempDb(tmp)
+        assertEquals(MigrationResult.Success, TutorMigration.migrate(db, v2HashFlipEnabled = { false }))
+        transaction(db) {
+            exec(
+                "INSERT INTO kc_verification_status (kc_id, status, content_hash, updated_at) " +
+                    "VALUES ('pa-kc-001', 'faithful', 'deadbeef', '2026-06-04T00:00:00Z')",
+            )
+        }
+        // A normal boot (flip OFF) must NOT run the pre-flight ⇒ no abort, success.
+        assertEquals(
+            MigrationResult.Success,
+            TutorMigration.migrate(db, v2HashFlipEnabled = { false }),
+            "a normal (non-flip) boot skips the pre-flight assertion entirely",
+        )
+    }
+
     companion object {
         /** True iff [table] has a column named [column] (PRAGMA table_info). */
         fun columnExists(db: Database, table: String, column: String): Boolean = transaction(db) {
