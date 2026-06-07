@@ -18,8 +18,8 @@ Owner (Alex) authorized autonomous Phase-3 build 2026-06-07 ("just go do them, g
 | G2 | atomic grade (B1/B2/B3, faithful-gated, 409) | DONE (suite 1195✓, review SHIP) | 2318d71 |
 | G3 | queue/today + mastery + calibration | DONE (suite ✓, review SHIP) | 06ca1a5 |
 | G4 | session/close + placement + entry_phase + exam_dates | DONE (suite 1219✓, review SHIP) | 5dcfdd4 |
-| G5 | mock-exam SYNC-200 (+ B6 cascade fix) | DONE (suite 1228✓, review SHIP, +PM cascade fix) | (this commit) |
-| G6 | P3-GEN generator + P3-HONESTY spot-check | pending | — |
+| G5 | mock-exam SYNC-200 (+ B6 cascade fix) | DONE (suite 1228✓, review SHIP, +PM cascade fix) | 8a182c2 |
+| G6 | P3-GEN generator + P3-HONESTY spot-check | DONE (suite 1231✓, review SHIP) | (this commit) |
 | G7 | P3-MISC-SERVE + P3-LADDER-SERVE + P3-GHOST-FIELDS | pending | — |
 
 ## Decision/event detail (appended as the run proceeds)
@@ -83,3 +83,13 @@ Decisions:
 - **D-G5-2:** Question kind = `deterministic` iff the KC has a non-blank `invariant` (checkable), else `open` (LLM-graded, resolve-outside-txn via the G2 seam). Degrade-to-UNCERTAIN: a degraded open question → `verification_status=uncertain`, correct=false, score=0 (NO second enum). A confident grade carries the KC's REAL resolved trust status.
 - **D-G5-3:** ids `meq-<kcId>`; aggregate score = mean of per-question scores; empty exam → 200 empty. mock-exam attempts are graded but NOT fed into attempts/kc_mastery (scoped to assemble→grade→return; §2.2 reply is score/kc_results/narrative only) — flagged as a possible follow-up.
 - **D-G5-4 (PM-caught B6 bug — fix-claim):** `MockExamsTable` has a `userId` FK but the builder did NOT add it to the me/delete cascade (its KDoc claimed it did) — a real GDPR-erasure FK-throw (the B6 risk class). The green suite missed it (MeDeleteCascadeTest didn't seed a mock_exams row; the adversarial review didn't check the cascade). **Fix (TDD, RED-proven):** seeded a mock_exams row in MeDeleteCascadeTest (now fails without the fix), added `MockExamsTable.deleteWhere` to the cascade (child-first, before Users), and added the table to MeRoutesTest's schema. Lesson folded forward: future groups that add a user-FK table MUST wire the me/delete cascade + seed the cascade test.
+
+### G6 — P3-GEN + P3-HONESTY (DONE, SHIP, suite 1231/0)
+
+Files: DrillGenerator.kt (modelTag wiring), DrillGeneratorTest.kt (modelTag class-killer), P3GenServeNoRelayTest.kt (NEW), P3HonestyGraderSpotCheckTest.kt (NEW). One main file changed.
+
+Decisions:
+- **D-G6-1 (P3-GEN):** `Problem.modelTag` now set from the GENERATOR LLM's returned model id (the WRITER per D1, DrillGenerator's first `complete()`), NOT the self-solve/critic calls, NEVER null, NEVER the `criticUsed="relay/claude"` reply-envelope literal at TutorRoutes:1546 (that field is the reply envelope, not the Problem — left untouched per data-model-lock:485).
+- **D-G6-2 (serve zero-relay):** P3GenServeNoRelayTest proves it with a TRIPWIRE — after generate, both LLM factories are swapped for throw-on-construct + call-counters; serve GET returns 200 with the persisted modelTag and ZERO new relay calls. Tests inject a FAKE relay (no network, no-paid); the live relay test (E3RealRelayProofTest) stays the only relay-guarded/skipped one.
+- **D-G6-3 (P3-HONESTY scoped honestly):** the spot-check checks the grader's LLM-INDEPENDENT leg (GradeScoring) against keys SYSTEM-DERIVED from a real on-disk PDF (operands extracted verbatim from `ALO/labs/alo_sem1.pdf` → p-norms computed by forced math; never via Alex). RED-proven by mutating `answerMatches→true`. 5 deterministic items checked (not skipped); irrational L2 + open proof items excluded. Trust badge UNCHANGED (matches-your-lecture); gold-set GATE stays §7-deferred.
+- **⚠️ FINDING-G6 (plan inaccuracy — flag for Alex):** master-plan:205 claims prof-authored SOLVED-exercise/exam-solution PDFs exist on disk (the PA/local_extras + ALO/hw + ALO/labs paths). **They do NOT** — independently confirmed: those are course-evaluation policy, a grade-results table, and UNSOLVED problem statements. NO worked answer keys exist offline. P3-HONESTY did the strongest offline-checkable thing (system-derived deterministic keys). The §7 full gold-set honesty GATE will need real keys sourced when it is built; the plan text at :205 should be corrected.

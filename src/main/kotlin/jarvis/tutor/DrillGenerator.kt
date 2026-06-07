@@ -50,7 +50,11 @@ object DrillGenerator {
         val bundles = mutableListOf<Bundle>()
         val rejects = mutableListOf<String>()
         for (i in 0 until count) {
-            val (raw, _) = generator.complete(listOf(ChatMessage("user", shapePrompt(shape, kc, sources))), maxTokens = 1200, responseFormat = "json_object")
+            // P3-GEN (D1, CONTRADICTION F2): the generator runs Claude via the relay; its
+            // complete() returns (text, modelId). modelId is the WRITER the relay named — it is
+            // what stamps Problem.modelTag below. NEVER the criticUsed="relay/claude" literal,
+            // NEVER left null. The live serve path reads the persisted Problem and never re-derives.
+            val (raw, genModelId) = generator.complete(listOf(ChatMessage("user", shapePrompt(shape, kc, sources))), maxTokens = 1200, responseFormat = "json_object")
             val d = DrillGenParser.parse(raw)
             if (d == null) { rejects += "parse failure"; continue }
             // (1) answer-leak: the stem must not contain its own canonical answer.
@@ -71,7 +75,9 @@ object DrillGenerator {
             bundles += Bundle(
                 problem = Problem(problemId = pid, page = 0, statement = d.statement,
                     kcIds = listOf(kc.id), rubricItems = d.rubricItems, referenceSolution = d.referenceSolution,
-                    canonicalAnswer = d.canonicalAnswer, shape = shape),
+                    canonicalAnswer = d.canonicalAnswer, shape = shape,
+                    // P3-GEN: stamp the relay-RETURNED model id (the WRITER), set at generate+persist time.
+                    modelTag = genModelId),
                 content = DrillContentDto(drill = d.statement, worked = d.worked, definition = d.definition,
                     check = d.check, expectedAnswerHint = d.expectedAnswerHint,
                     referenceSolution = d.referenceSolution,
