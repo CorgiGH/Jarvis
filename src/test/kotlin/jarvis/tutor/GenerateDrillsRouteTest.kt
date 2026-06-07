@@ -3,6 +3,7 @@ package jarvis.tutor
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
 import io.ktor.client.plugins.cookies.HttpCookies
 import io.ktor.client.request.cookie
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -140,4 +141,132 @@ class GenerateDrillsRouteTest {
         assertEquals("recursion-tree", drills["gen-pa-kc-001-0"]!!.vizId,
             "drillsJson must map gen-pa-kc-001-0 to vizId=recursion-tree; got: ${prep.drillsJson}")
     }
+
+    // ── TASK P3-GHOST-FIELDS(b) — far-transfer WIRED into the production /generate-drills path ──
+    // Class-killer (H16): a KC WITH an authored far_transfer_stem, driven through the PRODUCTION
+    // /generate-drills route, yields a PERSISTED far-transfer Problem (shape=="far-transfer") that
+    // reaches problems_json AND is returned by the serve route GET /tasks/{id}/prep. A KC with NO
+    // stem produces no far-transfer Problem (no ghost, no throw). This closes the half-ghost: the
+    // orphan DrillGenerator.farTransfer branch is now reachable + served from production.
+
+    /** Generator that is content-aware: drill-shaped prompts → [goodDrill]; the computational
+     *  self-solve prompt ("Solve and reply") → "42". One instance serves BOTH generate() and
+     *  farTransfer() calls the route makes for one KC. */
+    private fun contentAwareGen() = object : Llm {
+        override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?): Pair<String, String> {
+            val isSelfSolve = m.any { it.content.contains("Solve and reply") }
+            return (if (isSelfSolve) "42" else goodDrill) to "g"
+        }
+    }
+
+    @Test fun `generate-drills wires far-transfer — an authored far_transfer_stem yields a persisted+served far-transfer Problem`(
+        @org.junit.jupiter.api.io.TempDir tmp: Path
+    ) = testApplication {
+        var ctx: TutorContext? = null
+        application {
+            installFreshTutor(tmp)
+            ctx = attributes[TutorContextKey]
+        }
+        startApplication()
+
+        val (userId, sid) = seedSession(ctx!!)
+        seedTask(ctx!!, userId, "task-ft")
+
+        // KC authors a far_transfer_stem ⇒ the route must ALSO emit a far-transfer drill.
+        drillKcLookup = { _, _ -> KnowledgeConcept(
+            "pa-kc-ft", "PA", "a", "a", "c", "understand", 1, 1, 0.0, 1,
+            viz_id = "recursion-tree",
+            far_transfer_stem = "A bakery doubles its recipe each hour; model the growth.",
+        ) }
+        drillGeneratorLlmFactory = { contentAwareGen() }
+        drillCriticLlmFactory = { object : Llm { override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = goodCritic to "claude" } }
+
+        val csrf = "test-csrf-ft"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+
+        val resp = client.post("/api/v1/task/task-ft/generate-drills") {
+            cookie("jarvis_session", sid)
+            cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"kcId":"pa-kc-ft","shape":"computational","count":1}""")
+        }
+        assertEquals(HttpStatusCode.OK, resp.status, resp.bodyAsText())
+
+        // (1) persisted to problems_json (read directly from the prep store).
+        val prep = TaskPrepRepo(ctx!!.db).findByTaskId("task-ft")!!
+        val problems = Json.decodeFromString(ListSerializer(Problem.serializer()), prep.problemsJson)
+        val ft = problems.firstOrNull { it.shape == "far-transfer" }
+        assertTrue(ft != null, "a KC with an authored far_transfer_stem must persist a far-transfer Problem; got: ${prep.problemsJson}")
+        assertEquals("ft-pa-kc-ft", ft!!.problemId)
+        assertEquals(listOf("pa-kc-ft"), ft.kcIds)
+        // P3-GEN invariant: modelTag = the relay-returned generator id, never the criticUsed literal.
+        assertEquals("g", ft.modelTag, "far-transfer Problem.modelTag must be the generator's returned model id")
+        // the regular computational drill still rides alongside (additive, not replaced).
+        assertTrue(problems.any { it.shape == "computational" }, "the regular drill must still be persisted alongside: ${prep.problemsJson}")
+
+        // (2) returned by the SERVE route GET /tasks/{id}/prep — surfaced to DrillStack like any persisted Problem.
+        val served = client.get("/api/v1/tasks/task-ft/prep") {
+            cookie("jarvis_session", sid)
+        }
+        assertEquals(HttpStatusCode.OK, served.status, served.bodyAsText())
+        val servedReply = Json { ignoreUnknownKeys = true }
+            .decodeFromString(ApiTaskPrepView.serializer(), served.bodyAsText())
+        val servedProblems = Json.decodeFromString(ListSerializer(Problem.serializer()), servedReply.problemsJson)
+        assertTrue(servedProblems.any { it.shape == "far-transfer" && it.problemId == "ft-pa-kc-ft" },
+            "the far-transfer Problem must be SERVED by GET /tasks/{id}/prep: ${servedReply.problemsJson}")
+    }
+
+    @Test fun `generate-drills does NOT persist a far-transfer Problem for a KC with no far_transfer_stem (no ghost, no throw)`(
+        @org.junit.jupiter.api.io.TempDir tmp: Path
+    ) = testApplication {
+        var ctx: TutorContext? = null
+        application {
+            installFreshTutor(tmp)
+            ctx = attributes[TutorContextKey]
+        }
+        startApplication()
+
+        val (userId, sid) = seedSession(ctx!!)
+        seedTask(ctx!!, userId, "task-noft")
+
+        // KC has NO far_transfer_stem ⇒ zero far-transfer Problems, no throw.
+        drillKcLookup = { _, _ -> KnowledgeConcept("pa-kc-noft", "PA", "a", "a", "c", "understand", 1, 1, 0.0, 1, viz_id = "recursion-tree") }
+        drillGeneratorLlmFactory = { contentAwareGen() }
+        drillCriticLlmFactory = { object : Llm { override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = goodCritic to "claude" } }
+
+        val csrf = "test-csrf-noft"
+        val client = createClient {
+            install(HttpCookies)
+            install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+
+        val resp = client.post("/api/v1/task/task-noft/generate-drills") {
+            cookie("jarvis_session", sid)
+            cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"kcId":"pa-kc-noft","shape":"computational","count":1}""")
+        }
+        assertEquals(HttpStatusCode.OK, resp.status, resp.bodyAsText())
+
+        val prep = TaskPrepRepo(ctx!!.db).findByTaskId("task-noft")!!
+        val problems = Json.decodeFromString(ListSerializer(Problem.serializer()), prep.problemsJson)
+        assertTrue(problems.none { it.shape == "far-transfer" },
+            "a KC with no far_transfer_stem must NOT persist a far-transfer Problem: ${prep.problemsJson}")
+        // the regular drill still works.
+        assertTrue(problems.any { it.shape == "computational" }, "the regular drill must still be persisted: ${prep.problemsJson}")
+    }
 }
+
+/** Local mirror of the route's private ApiTaskPrepReply DTO so the test can decode the serve reply. */
+@kotlinx.serialization.Serializable
+private data class ApiTaskPrepView(
+    val taskId: String,
+    val generatedAt: String,
+    val version: Int,
+    val problemsJson: String,
+    val drillsJson: String,
+    val railJson: String,
+)

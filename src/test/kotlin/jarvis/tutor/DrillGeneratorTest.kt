@@ -95,6 +95,25 @@ class DrillGeneratorTest {
     // literal. The fake generator's complete() returns its model id as the Pair's second
     // element — that id is what must land on Problem.modelTag.
 
+    // ── TASK P3-GHOST-FIELDS(b): the far-transfer generator branch reads far_transfer_stem ───────
+    // H16: far_transfer_stem is WIRED to a generator branch (not a silent ghost). A KC WITH a stem
+    // emits a far-transfer Bundle (shape="far-transfer"); a KC WITHOUT one emits zero bundles + an
+    // explicit reject reason (never a throw, never a hallucinated stem).
+
+    @Test fun `farTransfer emits a far-transfer drill from the authored far_transfer_stem`() = runBlocking {
+        val ftKc = kc.copy(far_transfer_stem = "A bakery doubles its recipe each hour; model the growth.")
+        val res = DrillGenerator.farTransfer(ftKc, listOf("growth quote"), Fake(goodDrill), Fake(goodCritic))
+        assertEquals(1, res.bundles.size, "a KC with a far_transfer_stem yields one far-transfer bundle")
+        assertEquals("far-transfer", res.bundles[0].problem.shape, "the emitted Problem is tagged far-transfer")
+        assertEquals(listOf("pa-kc-x"), res.bundles[0].problem.kcIds)
+    }
+
+    @Test fun `farTransfer over a KC with no far_transfer_stem yields zero bundles and an explicit reason (no ghost)`() = runBlocking {
+        val res = DrillGenerator.farTransfer(kc, listOf("q"), Fake(goodDrill), Fake(goodCritic))
+        assertEquals(0, res.bundles.size, "no authored stem ⇒ no far-transfer drill, no throw")
+        assertTrue(res.rejectReasons.any { it.contains("far-transfer stem") }, res.rejectReasons.toString())
+    }
+
     @Test fun `generated Problem carries modelTag from the relay-returned model id (P3-GEN class-killer)`() = runBlocking {
         val relayModelId = "anthropic/claude-sonnet-4-5"   // the model string the (fake) relay/generator returns
         val gen = object : Llm {

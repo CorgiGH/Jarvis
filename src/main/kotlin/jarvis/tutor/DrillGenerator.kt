@@ -38,6 +38,75 @@ object DrillGenerator {
         return CriticVerdict(conf, b("grounded", false), b("leak", true), b("solvable", false))
     }
 
+    private fun farTransferPrompt(kc: KnowledgeConcept, stem: String, sources: List<String>): String = """
+        You are authoring ONE Gick-Holyoak FAR-TRANSFER drill for the concept "${kc.name_en}" (${kc.name_ro}), bloom level ${kc.bloom_level}, difficulty ${kc.difficulty}.
+        A far-transfer drill applies the SAME underlying principle in a SUPERFICIALLY DIFFERENT surface context, to test transfer rather than recall.
+        Anchor it to this authored far-transfer stem (keep its surface domain): "$stem".
+        Ground the underlying principle ONLY in this source material (do not invent facts beyond it):
+        ${sources.joinToString("\n") { "- $it" }}
+        Output ONE JSON object, no prose, with keys:
+        statement (the far-transfer problem in the stem's domain; do NOT state the answer in it),
+        rubric_items (array of point-split grading criteria),
+        reference_solution (or null), worked (a worked solution), definition (a one-sentence concept definition),
+        check (a short transfer question), expected_answer_hint (a brief hint).
+    """.trimIndent()
+
+    /**
+     * Phase-3 GROUP 7 (TASK P3-GHOST-FIELDS(b)) — the FAR-TRANSFER generator branch. Reads the KC's
+     * authored `far_transfer_stem` (CHANGE 3) and emits a far-transfer drill (Bundle with
+     * `shape = "far-transfer"`) so the field is WIRED to a generator branch + surfaced in `DrillStack`
+     * (served exactly like any other persisted Problem; its `is_far_transfer` attempt flag is the
+     * existing `ApiDrillGradeRequest.is_far_transfer` path).
+     *
+     * H16 (no ghost): a KC with NO `far_transfer_stem` yields ZERO far-transfer bundles (a single
+     * "no far-transfer stem authored" reject reason) — never a throw, never a hallucinated stem.
+     * The same leak + cross-family-critic guards as [generate] apply (no self-solve: far-transfer
+     * drills are rubric-graded, not single-canonical-answer).
+     */
+    suspend fun farTransfer(
+        kc: KnowledgeConcept,
+        sources: List<String>,
+        generator: Llm,
+        critic: Llm,
+    ): GenerateResult {
+        val stem = kc.far_transfer_stem?.takeIf { it.isNotBlank() }
+            ?: return GenerateResult(emptyList(), listOf("no far-transfer stem authored for ${kc.id}"))
+        val bundles = mutableListOf<Bundle>()
+        val rejects = mutableListOf<String>()
+        val (raw, genModelId) = generator.complete(
+            listOf(ChatMessage("user", farTransferPrompt(kc, stem, sources))),
+            maxTokens = 1200, responseFormat = "json_object",
+        )
+        val d = DrillGenParser.parse(raw)
+        if (d == null) { rejects += "parse failure"; return GenerateResult(bundles, rejects) }
+        // leak guard (rubric-graded ⇒ no self-solve reconcile).
+        if (d.canonicalAnswer != null && d.statement.contains(d.canonicalAnswer, ignoreCase = true)) {
+            rejects += "leak: stem contains canonical answer"; return GenerateResult(bundles, rejects)
+        }
+        val (criticRaw, criticModel) = critic.complete(
+            listOf(ChatMessage("user",
+                "Review this far-transfer drill. Reply ONLY JSON {confidence:0..1, grounded:bool, leak:bool, solvable:bool}.\nSOURCES:\n${sources.joinToString("\n")}\nDRILL:\n${d.statement}\nANSWER: ${d.canonicalAnswer ?: d.rubricItems.joinToString("; ")}")),
+            maxTokens = 200,
+        )
+        val v = parseCritic(criticRaw)
+        if (v == null) { rejects += "critic parse failure ($criticModel)"; return GenerateResult(bundles, rejects) }
+        if (v.confidence < CONFIDENCE_THRESHOLD || !v.grounded || v.leak || !v.solvable) {
+            rejects += "critic rejected (conf=${v.confidence}, grounded=${v.grounded}, leak=${v.leak}, solvable=${v.solvable})"
+            return GenerateResult(bundles, rejects)
+        }
+        val pid = "ft-${kc.id}"
+        bundles += Bundle(
+            problem = Problem(problemId = pid, page = 0, statement = d.statement,
+                kcIds = listOf(kc.id), rubricItems = d.rubricItems, referenceSolution = d.referenceSolution,
+                canonicalAnswer = d.canonicalAnswer, shape = "far-transfer", modelTag = genModelId),
+            content = DrillContentDto(drill = d.statement, worked = d.worked, definition = d.definition,
+                check = d.check, expectedAnswerHint = d.expectedAnswerHint,
+                referenceSolution = d.referenceSolution,
+                rubricItems = d.rubricItems.ifEmpty { null }, vizId = kc.viz_id),
+        )
+        return GenerateResult(bundles, rejects)
+    }
+
     /** Generate up to [count] drills for [kc] of [shape]; each must pass leak + self-solve + cross-family critic. */
     suspend fun generate(
         kc: KnowledgeConcept,

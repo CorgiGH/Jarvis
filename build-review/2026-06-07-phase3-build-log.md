@@ -19,8 +19,10 @@ Owner (Alex) authorized autonomous Phase-3 build 2026-06-07 ("just go do them, g
 | G3 | queue/today + mastery + calibration | DONE (suite ✓, review SHIP) | 06ca1a5 |
 | G4 | session/close + placement + entry_phase + exam_dates | DONE (suite 1219✓, review SHIP) | 5dcfdd4 |
 | G5 | mock-exam SYNC-200 (+ B6 cascade fix) | DONE (suite 1228✓, review SHIP, +PM cascade fix) | 8a182c2 |
-| G6 | P3-GEN generator + P3-HONESTY spot-check | DONE (suite 1231✓, review SHIP) | (this commit) |
-| G7 | P3-MISC-SERVE + P3-LADDER-SERVE + P3-GHOST-FIELDS | pending | — |
+| G6 | P3-GEN generator + P3-HONESTY spot-check | DONE (suite 1231✓, review SHIP) | d00d43a |
+| G7 | P3-MISC-SERVE + P3-LADDER-SERVE + P3-GHOST-FIELDS (+ far-transfer wire fix) | DONE (suite ✓, review SHIP after 1 fix) | (this commit) |
+
+**PHASE 3 (Area C — Teaching Engine) COMPLETE — all 7 groups built + reviewed + committed.**
 
 ## Decision/event detail (appended as the run proceeds)
 
@@ -93,3 +95,15 @@ Decisions:
 - **D-G6-2 (serve zero-relay):** P3GenServeNoRelayTest proves it with a TRIPWIRE — after generate, both LLM factories are swapped for throw-on-construct + call-counters; serve GET returns 200 with the persisted modelTag and ZERO new relay calls. Tests inject a FAKE relay (no network, no-paid); the live relay test (E3RealRelayProofTest) stays the only relay-guarded/skipped one.
 - **D-G6-3 (P3-HONESTY scoped honestly):** the spot-check checks the grader's LLM-INDEPENDENT leg (GradeScoring) against keys SYSTEM-DERIVED from a real on-disk PDF (operands extracted verbatim from `ALO/labs/alo_sem1.pdf` → p-norms computed by forced math; never via Alex). RED-proven by mutating `answerMatches→true`. 5 deterministic items checked (not skipped); irrational L2 + open proof items excluded. Trust badge UNCHANGED (matches-your-lecture); gold-set GATE stays §7-deferred.
 - **⚠️ FINDING-G6 (plan inaccuracy — flag for Alex):** master-plan:205 claims prof-authored SOLVED-exercise/exam-solution PDFs exist on disk (the PA/local_extras + ALO/hw + ALO/labs paths). **They do NOT** — independently confirmed: those are course-evaluation policy, a grade-results table, and UNSOLVED problem statements. NO worked answer keys exist offline. P3-HONESTY did the strongest offline-checkable thing (system-derived deterministic keys). The §7 full gold-set honesty GATE will need real keys sourced when it is built; the plan text at :205 should be corrected.
+
+### G7 — serve wiring (DONE, SHIP after 1 fix, suite ✓)
+
+Files: GradeTeachingPayload.kt (NEW — MisconceptionPayload + LadderRung + NextPhaseAction enum), FeedbackLadderBuilder.kt (NEW — pure L0-L4 renderer), NextPhaseResolver.kt (NEW — advance/hold/remediate), DrillGenerator.kt (far-transfer branch), TutorRoutes.kt (7 additive served fields + far-transfer route wiring), DrillGeneratorTest/GradeTeachingPayloadTest/DrillGradeServeWiringTest/GenerateDrillsRouteTest.
+
+7 served fields on /drill/grade, each populated from stored content + named Phase-5 consumer (H16 no-ghost, RED-proven by neutralizing population): misconception_payload (refutation+figure_spec → MisconceptionRibbon), ladder_rungs (L0-L4 → FeedbackLadder), self_explanation_prompt (→ DrillStack rung), verification_status (honest B8 → TrustBadge), phase, next_phase_action, cross_checked.
+
+Decisions:
+- **D-G7-1 (field-name deviation, justified):** lock §O froze the inline misconception field as `misconception` (object), but the LIVE frontend already binds `misconception: String?` (grader code) at DrillStack.tsx:248. Serving an object there would break the live frontend. Resolution: keep `misconception:String?`, add the structured payload as **`misconception_payload`** (additive). Lock canonical on SHAPE; the live wire field is a real additive constraint — preserves both.
+- **D-G7-2 (NextPhaseAction created):** the enum didn't exist (only a comment ref) — created it (advance/hold/remediate) per §B, resolved by NextPhaseResolver from phase-before/after + deterministic-correct.
+- **D-G7-3 (ladder source):** no L0-L4 text is STORED (schema stores teaching FIELDS, ladder is RENDERED) → FeedbackLadderBuilder composes rungs from stored content (L0 nudge / L1 self_explanation_prompt / L2 misconception.trigger / L3 refutation / L4 grader feedback); rungs with absent backing are omitted (no ghost).
+- **D-G7-4 (far_transfer WIRED, not demoted — PM-caught half-ghost fix):** the G7 build added `DrillGenerator.farTransfer` but left it with ZERO production callers (a silent half-ghost — the Slice-1 anti-pattern; review caught it, blocked SHIP). **Fix:** the /generate-drills route now AUTO-fires farTransfer for any resolved KC whose far_transfer_stem is non-blank, persists the far-transfer Bundle (shape="far-transfer", modelTag=relay id) into problems_json, served by the prep route. Route-level test (RED-proven) asserts a persisted+served far-transfer Problem; a no-stem KC persists none (no ghost). Auto-fires off the authored field (no new request flag). Then review = SHIP.

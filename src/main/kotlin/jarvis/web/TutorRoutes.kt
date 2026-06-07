@@ -1488,7 +1488,18 @@ fun Application.installTutorRoutes() {
                     drillGeneratorLlmFactory().use { gen ->
                         drillCriticLlmFactory().use { critic ->
                             kotlinx.coroutines.runBlocking {
-                                jarvis.tutor.DrillGenerator.generate(kc, sources, shape, body.count, gen, critic)
+                                val regular = jarvis.tutor.DrillGenerator.generate(kc, sources, shape, body.count, gen, critic)
+                                // TASK P3-GHOST-FIELDS(b): ALSO run the far-transfer branch for any KC that authors a
+                                // far_transfer_stem, so the CHANGE-3 field is WIRED into the production generate path
+                                // (no silent half-ghost). A KC with no stem returns zero bundles + an explicit reject
+                                // reason (no throw, no hallucinated stem) — the regular result is then returned as-is.
+                                if (kc.far_transfer_stem?.isNotBlank() == true) {
+                                    val ft = jarvis.tutor.DrillGenerator.farTransfer(kc, sources, gen, critic)
+                                    jarvis.tutor.DrillGenerator.GenerateResult(
+                                        bundles = regular.bundles + ft.bundles,
+                                        rejectReasons = regular.rejectReasons + ft.rejectReasons,
+                                    )
+                                } else regular
                             }
                         }
                     }
@@ -2062,6 +2073,14 @@ fun Application.installTutorRoutes() {
                         val confident = coherent && answerAgrees
                         val allKcs = serverProblem?.kcIds ?: emptyList()
 
+                        // Phase-3 GROUP 7 (H15) — snapshot the PRIMARY graded KC's phase BEFORE recording,
+                        // so next_phase_action can compare before→after (the recorded phase is read back
+                        // after the txn). Primary = first server-resolved KC (the one the surfaces show).
+                        val primaryKcId = allKcs.firstOrNull()
+                        val phaseBefore: jarvis.tutor.Phase? = primaryKcId?.let { kcId ->
+                            runCatching { jarvis.tutor.KcMasteryRepo(ctx.db).get(userId, kcId)?.phase }.getOrNull()
+                        }
+
                         var recorded = false
                         var kcQuarantined = false
                         var replyStatus = "ok"
@@ -2166,6 +2185,48 @@ fun Application.installTutorRoutes() {
                                 }
                             }
                         }
+                        // ── Phase-3 GROUP 7 (SERVE WIRING) — assemble the served teaching + H15 payload.
+                        //    All reads are off the STORED corpus + the recorded mastery (H16: populated
+                        //    from stored content; absent ⇒ null/empty). Wrapped in runCatching so a serve
+                        //    assembly hiccup never breaks the already-decided grade verdict.
+                        val served = runCatching {
+                            val repo = jarvis.content.ContentRepo(drillContentDir())
+                            val primaryKc = primaryKcId?.let {
+                                runCatching { jarvis.web.VerifyAdmin.findKc(repo, it) }.getOrNull()
+                            }
+                            // Misconceptions stored for the primary KC's subject, narrowed to this KC.
+                            val kcMiscs = primaryKc?.let { kc ->
+                                runCatching { repo.loadSubject(kc.subject).misconceptions.filter { it.kc_id == kc.id } }
+                                    .getOrNull().orEmpty()
+                            }.orEmpty()
+                            // TASK P3-MISC-SERVE — match the grader's code to a stored misconception, inline it.
+                            val matched = jarvis.tutor.MisconceptionPayload.matchByGraderCode(g.misconception, kcMiscs)
+                            val miscPayload = jarvis.tutor.MisconceptionPayload.from(matched)
+                            // TASK P3-LADDER-SERVE — render L0–L4 from stored content (+ this attempt's feedback).
+                            val ladder = jarvis.tutor.FeedbackLadderBuilder.build(
+                                kc = primaryKc, misconception = matched, elaboratedFeedback = g.elaboratedFeedback,
+                            )
+                            // TASK P3-GHOST-FIELDS(a) — the drill-level self-explanation prompt (DrillStack rung).
+                            val selfExplainPrompt = primaryKc?.self_explanation_prompt
+                            // H15 — verification_status served per primary KC (honest B8 value; badge unchanged).
+                            val vStatus = primaryKc?.let { jarvis.web.VerifyAdmin.resolveStatus(ctx.db, it.id, it) }
+                            // H15 — phase from the recorded mastery (after the grade); next_phase_action from before→after.
+                            val phaseAfter = primaryKcId?.let { kcId ->
+                                runCatching { jarvis.tutor.KcMasteryRepo(ctx.db).get(userId, kcId)?.phase }.getOrNull()
+                            }
+                            val nextAction = phaseAfter?.let {
+                                jarvis.tutor.NextPhaseResolver.resolve(phaseBefore, it, deterministicCorrect)
+                            }
+                            ServedTeaching(
+                                misconception = miscPayload, ladder = ladder, selfExplain = selfExplainPrompt,
+                                verificationStatus = vStatus, phase = phaseAfter, nextAction = nextAction,
+                            )
+                        }.getOrDefault(ServedTeaching())
+                        // cross_checked: this grade went through the deterministic answer↔rubric cross-check
+                        // (a canonical answer was present AND it agreed with the rubric) on a confident grade.
+                        // NOT a trust upgrade — purely "the two grading signals agreed" (H15 cross_checked).
+                        val crossChecked = confident && answerMatch != null && answerAgrees
+
                         ApiDrillGradeReply(
                             correct = deterministicCorrect,
                             score = deterministicScore,
@@ -2176,6 +2237,13 @@ fun Application.installTutorRoutes() {
                             recorded = recorded,
                             answerMatch = answerMatch,
                             kc_quarantined = kcQuarantined,
+                            misconception_payload = served.misconception,
+                            ladder_rungs = served.ladder,
+                            self_explanation_prompt = served.selfExplain,
+                            verification_status = served.verificationStatus,
+                            phase = served.phase,
+                            next_phase_action = served.nextAction,
+                            cross_checked = crossChecked,
                         ) to replyStatus
                     }
                 }
@@ -2720,6 +2788,41 @@ private data class ApiDrillGradeReply(
     // is true iff at least one server-resolved KC was DENY-gated (non-faithful) so its mastery was
     // NOT recorded; the displayed verdict still ships, only the mastery write is withheld.
     val kc_quarantined: Boolean = false,
+    // ── Phase-3 GROUP 7 (SERVE WIRING) — ADDITIVE served teaching + H15 fields. All default so the
+    //    G2 grade shape is untouched. Frozen in interface-signatures-lock §O (teaching) + §B/§N (H15).
+    //    H16: each is POPULATED from stored content with a NAMED Phase-5 consumer; absent ⇒ null/empty.
+    //
+    //    TASK P3-MISC-SERVE — the INLINE misconception payload (gap C, surface 0f MisconceptionRibbon).
+    //    Named `misconception_payload` (NOT `misconception`) because the frozen G2 reply already carries
+    //    `misconception: String?` (the grader's misconception CODE — a different thing). Renaming that
+    //    would break G2; the structured §O payload rides under a distinct field. DECISION (owner away).
+    val misconception_payload: jarvis.tutor.MisconceptionPayload? = null,
+    // TASK P3-LADDER-SERVE — the rendered L0–L4 ladder + the drill-level self-explanation prompt.
+    val ladder_rungs: List<jarvis.tutor.LadderRung> = emptyList(),
+    val self_explanation_prompt: String? = null,
+    // H15 grade-reply fields G2 deferred to GROUP 7. verification_status carries the honest B8 value
+    // (VerifyAdmin.resolveStatus per primary graded KC); badge language is unchanged (always "matches
+    // your lecture", never "verified correct"). phase/next_phase_action from the recorded mastery.
+    val verification_status: jarvis.tutor.VerificationStatus? = null,
+    val phase: jarvis.tutor.Phase? = null,
+    val next_phase_action: jarvis.tutor.NextPhaseAction? = null,
+    // cross_checked = the grade went through the deterministic cross-check layer (answerMatch agreed
+    // with the rubric) — true only on a confident, recorded, agreement grade. NOT a trust upgrade.
+    val cross_checked: Boolean = false,
+)
+
+/**
+ * Phase-3 GROUP 7 — internal (NOT a wire type) holder for the served teaching + H15 fields assembled
+ * off the stored corpus in the grade handler, then spread onto [ApiDrillGradeReply]. Defaults = the
+ * fully-degraded payload (no KC / serve hiccup) so the grade verdict always ships.
+ */
+private data class ServedTeaching(
+    val misconception: jarvis.tutor.MisconceptionPayload? = null,
+    val ladder: List<jarvis.tutor.LadderRung> = emptyList(),
+    val selfExplain: String? = null,
+    val verificationStatus: jarvis.tutor.VerificationStatus? = null,
+    val phase: jarvis.tutor.Phase? = null,
+    val nextAction: jarvis.tutor.NextPhaseAction? = null,
 )
 
 @Serializable
