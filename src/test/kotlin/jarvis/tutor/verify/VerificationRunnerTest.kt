@@ -798,6 +798,65 @@ class VerificationRunnerTest {
     }
 
     @Test
+    fun `B5r-1 (c3) - CLASS-KILLER - a DEFINITION with a SINGLE (disagreeing) REFUTED is never faithful`(@TempDir tmp: Path) = runBlocking {
+        // SIBLING of (c2): the anyRefuted veto (ResolvedLegs.anyRefuted, ratified B5r-3/D-R9) holds for a
+        // DISAGREEING REFUTED too, not only an AGREED one — a REFUTED from EITHER family is an explicit
+        // contradiction ⇒ never faithful for ANY kind. Class-killer: loops every single-REFUTED combo
+        // (both orderings, vs SUPPORTED and vs UNCLEAR), each with a passing round-trip. Before the
+        // structural anyRefuted guard, the DEFINITION path (case 3p) vetoed only agreedNonSupported, so
+        // a one-family REFUTED slipped to faithful.
+        val combos = listOf(
+            "SUPPORTED" to "REFUTED", "REFUTED" to "SUPPORTED",
+            "UNCLEAR" to "REFUTED", "REFUTED" to "UNCLEAR",
+        )
+        for ((i, combo) in combos.withIndex()) {
+            val (a, b) = combo
+            val sub = tmp.resolve("c3-$i").also { java.nio.file.Files.createDirectories(it) }
+            val db = freshDb(sub)
+            val c = definitionClaim()
+            seedStatus(db, c.kcId, VerificationStatus.pending)
+
+            val out = runner(db, legAReply = a, legBReply = b, nonLlm = noneLeg).audit(listOf(c))
+
+            assertNotEquals(
+                VerificationStatus.faithful, out[0].newStatus,
+                "a DEFINITION with a single REFUTED ($a/$b) + passing round-trip must NEVER be faithful (anyRefuted veto)",
+            )
+        }
+    }
+
+    @Test
+    fun `SAFETY FLOOR - no claim kind reaches faithful under any poison condition`(@TempDir tmp: Path) = runBlocking {
+        // INDEPENDENT BACKSTOP (council 1780827389): the ONLY faithful-granting outcome is
+        // ALL_AGREE_ROUNDTRIP_NONLLM_PASS; it must be IMPOSSIBLE whenever any safety-floor condition holds
+        // — a leg threw, the families collapsed to one configured family, there is no gold span, or any
+        // family REFUTED. Asserted across BOTH routing branches (DEFINITION = prose, INVARIANT =
+        // equational) over each poison, so a future faithful-cell for any kind that forgets a guard is
+        // caught here, independent of the per-case routing. Each starts from a claim that WOULD be faithful
+        // without the poison.
+        var idx = 0
+        suspend fun neverFaithful(desc: String, c: VerificationClaim, makeRunner: (Database) -> VerificationRunner) {
+            val sub = tmp.resolve("floor-${idx++}").also { java.nio.file.Files.createDirectories(it) }
+            val db = freshDb(sub)
+            seedStatus(db, c.kcId, VerificationStatus.pending)
+            val out = makeRunner(db).audit(listOf(c))
+            assertNotEquals(VerificationStatus.faithful, out[0].newStatus, "FLOOR VIOLATED: $desc")
+        }
+        for (kind in listOf(ClaimKind.DEFINITION, ClaimKind.INVARIANT)) {
+            val isDef = kind == ClaimKind.DEFINITION
+            val nl = if (isDef) noneLeg else passingNonLlm
+            fun mk(span: Span?): VerificationClaim =
+                if (isDef) definitionClaim(source = goldSource(span)) else claim(kind = kind, source = goldSource(span))
+
+            neverFaithful("$kind + LLM-A threw", mk(Span(0, 1))) { runner(it, legALlm = ThrowingLlm(), nonLlm = nl) }
+            neverFaithful("$kind + non-LLM threw", mk(Span(0, 1))) { runner(it, nonLlm = throwingNonLlm) }
+            neverFaithful("$kind + family collapse", mk(Span(0, 1))) { runner(it, legAFamily = LegFamily.RELAY, legBFamily = LegFamily.RELAY, nonLlm = nl) }
+            neverFaithful("$kind + no gold span", mk(null)) { runner(it, nonLlm = nl) }
+            neverFaithful("$kind + one REFUTED", mk(Span(0, 1))) { runner(it, legAReply = "REFUTED", legBReply = "SUPPORTED", nonLlm = nl) }
+        }
+    }
+
+    @Test
     fun `B5r-1 (d) - REGRESSION - an INVARIANT whose equational non-LLM leg did NOT run is never faithful`(@TempDir tmp: Path) = runBlocking {
         // The equational path is UNCHANGED: an INVARIANT keeps the strong requirement
         // (bothSupported && sympy.ran && sympy.pass && roundTrip.pass && !threw). A SYMPY leg that

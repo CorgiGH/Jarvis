@@ -446,6 +446,14 @@ class VerificationRunner(
     private fun decideOutcome(claim: VerificationClaim, legs: ResolvedLegs): AuditOutcome = when {
         claim.source?.span == null -> AuditOutcome.DEFINITIONAL_NO_GOLD_SPAN
         legs.collapsed -> AuditOutcome.FAMILY_COLLAPSE
+        // CLASS-KILLER (anyRefuted veto) — a REFUTED from EITHER family (agreed OR disagreeing) is an
+        // explicit contradiction ⇒ NEVER faithful, for ANY claim kind. The [ResolvedLegs.anyRefuted]
+        // rule (B5r-3 / D-R9) is enforced HERE, structurally, ABOVE every faithful-granting case so no
+        // present-or-future branch can re-forget it (cases 3 / 3pr already exclude it via bothSupported;
+        // this closes the DEFINITION case 3p, which previously vetoed only agreedNonSupported — the
+        // disagreeing-REFUTED sibling of B5r-1(c2), test B5r-1(c3)). Routes to `failed` (the contradiction
+        // signal), consistent with how the prose/equational floors treat anyRefuted.
+        legs.anyRefuted -> AuditOutcome.DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW
         // case 3 — EQUATIONAL claim, SymPy ran+passed: UNCHANGED strong path.
         isEquationalKind(claim) &&
             legs.bothSupported && legs.nonLlm.ran && legs.nonLlm.pass && legs.roundTrip.pass && !legs.anyThrew ->
