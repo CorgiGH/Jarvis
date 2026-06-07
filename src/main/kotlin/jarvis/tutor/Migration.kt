@@ -31,8 +31,15 @@ import org.jetbrains.exposed.sql.update
  * backfill is `WHERE col IS NULL`-guarded, so a second run is a no-op (M-IDEMP).
  */
 
-/** Every table the migration registers — existing schema + Phase-1 new tables (CHANGE 4–10). */
-private val ALL_TABLES = arrayOf(
+/**
+ * Every table the migration registers — existing schema + Phase-1 new tables (CHANGE 4–10).
+ *
+ * `internal` (was private) so the CI invariant [MeDeleteCascadeTest] can reflect over the
+ * PRODUCTION table set — finding every table with a UsersTable.id foreign key and asserting the
+ * /me/delete erasure cascade covers it (class-killer for the P0-1 GDPR-erasure gap; the next
+ * user-FK table cannot be silently missed).
+ */
+internal val ALL_TABLES = arrayOf(
     UsersTable,
     TokensTable,
     SessionsTable,

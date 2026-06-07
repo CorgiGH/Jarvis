@@ -112,6 +112,9 @@ class DrillGradeServeWiringTest {
                 "label_ro: \"Off by one\"\nlabel_en: \"Off by one\"\n" +
                 "trigger: \"Crezi că array-ul începe de la 1.\"\n" +
                 "refutation: \"Nu — în C indexarea începe de la 0.\"\n" +
+                // P0-2 — a SourceRef so the served refutation crosses the CitationGuard chokepoint (ships CITED).
+                "source:\n  - doc: pa-lecture-01\n    quote: \"Algorithm\"\n    page: 1\n" +
+                "    span:\n      start: 0\n      end: 9\n" +
                 "figure_spec: \"diagram:array-index\"\n" +
                 "self_explanation_prompt: \"De ce primul element are indicele 0?\"\n")
         pa.resolve("_sources/pa-lecture-01.md").writeText("Algorithm is a finite sequence.\n")
@@ -181,6 +184,10 @@ class DrillGradeServeWiringTest {
         assertTrue(body.contains("pa-misc-off-by-one"), "matched misconception id served: $body")
         assertTrue(body.contains("în C indexarea începe de la 0"), "refutation served (P3-MISC-SERVE): $body")
         assertTrue(body.contains("diagram:array-index"), "figure_spec served for the ribbon (P3-GHOST-FIELDS c): $body")
+        // P0-2 (re-open fix) — the served misconception crossed the CitationGuard chokepoint and SHIPS CITED:
+        // its SourceRef rides the payload (§Q write-site 2 / P2-RULE8 — never emitted un-cited).
+        assertTrue(body.contains("\"doc\":\"pa-lecture-01\""), "served misconception carries its SourceRef doc (P2-RULE8): $body")
+        assertTrue(body.contains("\"quote\":\"Algorithm\""), "served misconception carries its citation quote (P2-RULE8): $body")
         // TASK P3-LADDER-SERVE: the L0–L4 rung array + drill-level self_explanation_prompt.
         assertTrue(body.contains("\"ladder_rungs\""), "ladder rung array served (P3-LADDER-SERVE): $body")
         assertTrue(body.contains("\"level\":3"), "refutation rung (L3) present in the ladder: $body")
@@ -232,5 +239,50 @@ class DrillGradeServeWiringTest {
         assertTrue(!body.contains("\"level\":3"), "no misconception ⇒ no L3 refutation rung: $body")
         // The G2 verdict still ships unchanged.
         assertTrue(body.contains("\"recorded\":true"), "the G2 grade verdict still ships: $body")
+    }
+
+    // ── P0-2 (re-open fix): a matched misconception with NO SourceRef FAILS LOUD (never ships un-cited) ──
+    @Test
+    fun `a matched misconception with NO source fails loud — 500, never serves an un-cited refutation`(@TempDir tmp: Path) = testApplication {
+        // Same KC + a matching OFF_BY_ONE misconception, but the misconception YAML carries NO `source`.
+        // The CitationGuard chokepoint (§Q write-site 2 / P2-RULE8) must THROW rather than silently drop
+        // (the re-opened hole) or ship the refutation un-cited.
+        val content = tmp.resolve("content")
+        content.createDirectories()
+        content.resolve("subjects.yaml").writeText(
+            "version: 1\nsubjects:\n  - id: PA\n    name_ro: \"P\"\n    name_en: \"Algorithm Design\"\n")
+        val pa = content.resolve("PA")
+        pa.resolve("kcs").createDirectories(); pa.resolve("misconceptions").createDirectories(); pa.resolve("_sources").createDirectories()
+        pa.resolve("kcs/pa-kc-005.yaml").writeText(
+            "id: pa-kc-005\nsubject: PA\nname_ro: \"A\"\nname_en: \"Algorithm\"\n" +
+                "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
+                "exam_weight: 1.0\ntier: 1\nversion: 1\nverification_status: \"faithful\"\n" +
+                "source:\n  - doc: pa-lecture-01\n    quote: \"Algorithm\"\n    page: 1\n" +
+                "    span:\n      start: 0\n      end: 9\n")
+        // The matching misconception with NO source field ⇒ fromCited must FAIL-LOUD.
+        pa.resolve("misconceptions/pa-misc-off-by-one.yaml").writeText(
+            "id: pa-misc-off-by-one\nkc_id: pa-kc-005\n" +
+                "label_ro: \"Off by one\"\nlabel_en: \"Off by one\"\n" +
+                "trigger: \"t\"\nrefutation: \"Nu — în C indexarea începe de la 0.\"\n" +
+                "figure_spec: \"diagram:array-index\"\n")
+        pa.resolve("_sources/pa-lecture-01.md").writeText("Algorithm is a finite sequence.\n")
+        pa.resolve("edges.yaml").writeText("subject: PA\nedges: []\n")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        drillGraderLlmFactory = { FakeGraderLlm(COHERENT_WITH_MISC) }
+        var ctx: TutorContext? = null
+        application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        seedFaithful(ctx!!, content, "pa-kc-005")
+        seedProblem(ctx!!, listOf("pa-kc-005"))
+        val csrf = "test-csrf-12345"
+        val client = newClient(this)
+        val resp = client.post("/api/v1/drill/grade") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json); setBody(gradeBody())
+        }
+        // FAIL-LOUD: an un-cited learner-facing refutation must never ship — the serve 500s.
+        assertEquals(HttpStatusCode.InternalServerError, resp.status,
+            "a matched misconception with no SourceRef must FAIL LOUD (P2-RULE8), not serve un-cited: ${resp.bodyAsText()}")
     }
 }

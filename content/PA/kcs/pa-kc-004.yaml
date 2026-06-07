@@ -31,3 +31,19 @@ source:
       end: 5911
     provenance: located
 version: 1
+# ── Phase-3 teaching scaffolding (P1-3(c)) — DERIVED from this KC's own source quotes (pa-lecture-01,
+#    p.10-11): "To prove that there is no algorithm that solve this problem, we need a formal definition
+#    for algorithm!", "The formal definition for an algorithm was introduced using various computational
+#    models", "All these models are computationally equivalent." No subject fact is invented.
+phase_plan:
+  - intro
+  - practice
+  - retrieval
+worked_example_first: true
+self_explanation_prompt: >-
+  Explică, folosind argumentul din curs, de ce ai nevoie de o definiție formală a algoritmului
+  pentru a putea demonstra că NU există un algoritm care să rezolve o anumită problemă.
+far_transfer_stem: >-
+  Cursul afirmă că diferitele modele de calcul introduse pentru definiția formală a algoritmului sunt
+  echivalente din punct de vedere computațional. Pornind de la această afirmație, argumentează de ce
+  alegerea unui anumit model de calcul nu schimbă mulțimea problemelor care pot fi rezolvate algoritmic.

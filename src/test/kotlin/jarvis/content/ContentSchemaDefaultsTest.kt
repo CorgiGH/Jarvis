@@ -77,6 +77,13 @@ class ContentSchemaDefaultsTest {
      *  their authored shape is pinned by AuthoredStrictKcsTest instead. */
     private val authoredStrictKcs = setOf("pa-kc-005", "pa-kc-006")
 
+    /** P1-3(c) — the four KCs that intentionally author the Phase-3 teaching scaffolding fields
+     *  (phase_plan + far_transfer_stem + self_explanation_prompt + worked_example_first), each DERIVED
+     *  from that KC's own source quotes. They are EXEMPT from the "teaching fields default to null/false"
+     *  assertions; their authored shape is pinned by AuthoredTeachingKcsTest. This closes the council's
+     *  P1-3(c) gap (no KC authored the teaching fields, so the loop never had teaching content to serve). */
+    private val authoredTeachingKcs = setOf("pa-kc-001", "pa-kc-002", "pa-kc-003", "pa-kc-004")
+
     @Test
     fun `all 8 real KC yamls deserialize and the non-authored ones take defaults`() {
         val paths = realKcYamls()
@@ -95,13 +102,21 @@ class ContentSchemaDefaultsTest {
                 assertNotNull(kc.invariant, "authored strict KC ${kc.id}: invariant must be set")
                 assertTrue(kc.grader_rules.isNotEmpty(), "authored strict KC ${kc.id}: grader_rules must be non-empty")
             }
-            // The remaining new fields still default across ALL real KCs (none author them yet).
+            // stem_template still defaults across ALL real KCs (none author it).
             assertNull(kc.stem_template, "KC ${kc.id}: stem_template should default to null")
-            assertNull(kc.phase_plan, "KC ${kc.id}: phase_plan should default to null")
-            assertNull(kc.far_transfer_stem, "KC ${kc.id}: far_transfer_stem should default to null")
-            assertNull(kc.self_explanation_prompt, "KC ${kc.id}: self_explanation_prompt should default to null")
-            assertEquals(false, kc.worked_example_first,
-                "KC ${kc.id}: worked_example_first should default to false")
+            // The Phase-3 teaching fields: the authored-teaching KCs SET them (P1-3(c)); the rest default.
+            if (kc.id !in authoredTeachingKcs) {
+                assertNull(kc.phase_plan, "KC ${kc.id}: phase_plan should default to null")
+                assertNull(kc.far_transfer_stem, "KC ${kc.id}: far_transfer_stem should default to null")
+                assertNull(kc.self_explanation_prompt, "KC ${kc.id}: self_explanation_prompt should default to null")
+                assertEquals(false, kc.worked_example_first,
+                    "KC ${kc.id}: worked_example_first should default to false")
+            } else {
+                assertNotNull(kc.phase_plan, "authored teaching KC ${kc.id}: phase_plan must be set")
+                assertNotNull(kc.far_transfer_stem, "authored teaching KC ${kc.id}: far_transfer_stem must be set")
+                assertNotNull(kc.self_explanation_prompt,
+                    "authored teaching KC ${kc.id}: self_explanation_prompt must be set")
+            }
         }
     }
 

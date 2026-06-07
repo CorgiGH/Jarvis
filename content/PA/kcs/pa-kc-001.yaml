@@ -31,3 +31,20 @@ source:
       end: 1532
     provenance: located
 version: 1
+# ── Phase-3 teaching scaffolding (P1-3(c)) — DERIVED from this KC's own source quotes (pa-lecture-01,
+#    p.4): the definitional clauses "unambiguous and effectively computable operations", "produces a
+#    result and halts in a finite amount of time", "guaranteed to solve a specific problem". No subject
+#    fact is invented; each field restates/uses ONLY what the source above states.
+phase_plan:
+  - intro
+  - practice
+  - retrieval
+worked_example_first: true
+self_explanation_prompt: >-
+  De ce trebuie ca operațiile unui algoritm să fie neambigue și efectiv calculabile, iar execuția
+  să se termine într-un timp finit? Explică cu propriile cuvinte ce s-ar strica dacă una dintre
+  aceste condiții din definiția din curs ar lipsi.
+far_transfer_stem: >-
+  Ai o rețetă de bucătărie scrisă pas cu pas. Verifică, folosind definiția algoritmului din curs
+  (operații neambigue, efectiv calculabile, care produc un rezultat și se opresc în timp finit),
+  care condiții sunt îndeplinite și care nu, și argumentează dacă rețeta este sau nu un algoritm.

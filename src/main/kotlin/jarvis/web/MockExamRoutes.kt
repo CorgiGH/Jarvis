@@ -50,12 +50,19 @@ import java.time.Instant
  *      resp { exam_id, score, kc_results, narrative }
  *
  * Reuses (does NOT rebuild): requireUser auth, csrfProtect for writes, ContentRepo for the corpus,
- * VerifyAdmin.resolveStatus for the per-KC trust badge, GradeScoring for deterministic closed-form
- * scoring, and the G2 DrillGrader + drillGraderLlmFactory seam for open-ended grading. The LLM resolve
- * for any open question happens OUTSIDE any txn and DEGRADES to UNCERTAIN on failure/ambiguity.
+ * VerifyAdmin.resolveStatus for the per-KC trust badge, GradeScoring for the deterministic correctness/
+ * score layer over a grader's rubric, and the G2 DrillGrader + drillGraderLlmFactory seam for open-ended
+ * grading. The LLM resolve for any question happens OUTSIDE any txn and DEGRADES to UNCERTAIN on
+ * failure/ambiguity.
  *
- * Question classification: a KC question is `deterministic` iff the KC carries a checkable canonical
- * answer (a non-blank `invariant`); otherwise it is `open` (LLM-graded → degrade-to-UNCERTAIN).
+ * Question classification (P2-5, council fix): EVERY question is `open` (LLM-graded →
+ * degrade-to-UNCERTAIN). A KC's `invariant` is the verification re-derivation SEED (a math statement the
+ * two-family audit checks), NOT a student answer key — equating an invariant-match with answer
+ * correctness scored every "deterministic" question against the wrong oracle. There is NO
+ * `canonical_answer` field in the KC schema, so nothing can be scored closed-form. The wire `kind` field
+ * is retained ("deterministic"|"open" per §2.2) but `deterministic` is NEVER emitted. PROPER FUTURE FIX:
+ * add a `KnowledgeConcept.canonical_answer` field, then classify `deterministic` off THAT (never the
+ * `invariant`) — recorded in master-impl-plan-v2 §"Deferred" + interface-signatures-lock.
  */
 
 /** Resolve the content/ directory (matches CuratorRoutes / TrustRoutes / Group-3/4 resolution). */
@@ -90,7 +97,8 @@ data class ApiMockExamQuestion(
     val question_id: String,
     val kc_id: String,
     val stem: String,
-    /** "deterministic" (closed-form, GradeScoring) | "open" (LLM-graded, degrade-to-UNCERTAIN). */
+    /** "deterministic" | "open" (wire shape, §2.2). P2-5: only "open" is ever emitted — see [toQuestion]
+     *  (no canonical-answer field exists, so nothing can be scored closed-form). */
     val kind: String,
 )
 
@@ -136,8 +144,9 @@ fun Route.installMockExamRoutes() {
 
     // ── POST /api/v1/mock-exam/start ───────────────────────────────────────────────────────────────
     // Assemble a mock exam: pick up to `n` KCs across the (optionally subject-filtered) corpus, one
-    // question per KC. Classify each as deterministic (KC has a non-blank `invariant`) or open. Persist
-    // the assembled set (SYNC result-of-record) so submit grades the SAME questions and result re-reads.
+    // question per KC. P2-5: every question is `open` (no canonical-answer field exists; an `invariant`
+    // is the audit seed, NOT an answer key — see [toQuestion]). Persist the assembled set (SYNC
+    // result-of-record) so submit grades the SAME questions and result re-reads.
     // An unknown/empty subject ⇒ zero-question exam (degrade cleanly, still 200).
     post("/api/v1/mock-exam/start") {
         requireUser { userId ->
@@ -184,9 +193,10 @@ fun Route.installMockExamRoutes() {
 
     // ── POST /api/v1/mock-exam/{id}/submit ─────────────────────────────────────────────────────────
     // Grade the submitted answers SYNCHRONOUSLY and return the results inline with HTTP 200 — ALWAYS.
-    // Deterministic questions score via GradeScoring (closed form, never an LLM). Open questions resolve
-    // via the G2 DrillGrader OUTSIDE any txn; an unavailable/ambiguous grader DEGRADES that question to
-    // UNCERTAIN (verification_status=uncertain, correct=false) — NEVER a 202/4xx/5xx, never a block.
+    // P2-5: EVERY question is graded OPEN (no canonical-answer field exists; the `invariant` is the audit
+    // seed, NOT an answer key). Each question resolves via the G2 DrillGrader OUTSIDE any txn; an
+    // unavailable/ambiguous grader DEGRADES that question to UNCERTAIN (verification_status=uncertain,
+    // correct=false) — NEVER a 202/4xx/5xx, never a block.
     // The aggregate score = mean of per-question scores. An empty exam ⇒ empty results, score 0.
     post("/api/v1/mock-exam/{id}/submit") {
         requireUser { userId ->
@@ -237,27 +247,20 @@ fun Route.installMockExamRoutes() {
 
                 // Grade each question. ALL LLM work happens HERE, OUTSIDE any txn (H4), and degrades to
                 // UNCERTAIN on failure/ambiguity — never throwing past this point, never going async.
+                //
+                // P2-5 (council fix): EVERY question is graded OPEN. There is NO canonical-answer field in
+                // the KC schema, and a KC's `invariant` is the verification re-derivation SEED, NOT a
+                // student answer key — so there is no closed-form oracle to score against. Treating
+                // invariant-match as correctness scored every "deterministic" question against the wrong
+                // oracle (always 0/false). Until a real `canonical_answer` field exists, the honest path
+                // is: grade open via the G2 grader, degrade-to-UNCERTAIN on unavailable/ambiguous —
+                // STILL 200, NEVER async (H13 / CONTRADICTION F1).
                 val results = questions.map { q ->
                     val response = answerByQ[q.question_id]?.response.orEmpty()
                     val kc = kcById[q.kc_id]
                     // The honest per-KC trust badge from the B8 store (faithful/unverified/...).
                     val kcStatus = VerifyAdmin.resolveStatus(db, q.kc_id, kc)
-                    if (q.kind == "deterministic") {
-                        // Closed-form: deterministic match against the KC's canonical invariant. No LLM.
-                        val canonical = kc?.invariant
-                        val correct = canonical != null && GradeScoring.answerMatches(canonical, response)
-                        ApiMockExamKcResult(
-                            question_id = q.question_id,
-                            kc_id = q.kc_id,
-                            correct = correct,
-                            score = if (correct) 1.0 else 0.0,
-                            verification_status = kcStatus,
-                        )
-                    } else {
-                        // Open-ended: G2 grader resolve OUTSIDE the txn. Degrade-to-UNCERTAIN on
-                        // unavailable/ambiguous — STILL 200, NEVER async (H13 / CONTRADICTION F1).
-                        gradeOpenQuestion(q, response, kc, kcStatus)
-                    }
+                    gradeOpenQuestion(q, response, kc, kcStatus)
                 }
 
                 val score = if (results.isEmpty()) 0.0 else results.sumOf { it.score } / results.size
@@ -324,14 +327,29 @@ fun Route.installMockExamRoutes() {
 
 // ── helpers ────────────────────────────────────────────────────────────────────────────────────────
 
-/** Build a question for a KC. deterministic iff the KC carries a non-blank canonical `invariant`. */
+/**
+ * Build a question for a KC.
+ *
+ * P2-5 (council fix): EVERY mock question is `open` (LLM-graded → degrade-to-UNCERTAIN). A KC's
+ * `invariant` is the verification re-derivation SEED (a math statement the two-family audit checks),
+ * NOT a student answer key — equating an invariant-match with answer correctness scored every
+ * "deterministic" question against the wrong oracle. There is NO `canonical_answer` field in the KC
+ * schema, so there is nothing to score a closed-form question against; until one exists, the honest
+ * classification is `open`. The wire `kind` field is retained ("deterministic"|"open" per the §2.2
+ * lock) but `deterministic` is never emitted.
+ *
+ * FUTURE FIX (proper, recorded in master-impl-plan-v2 §"Deferred" + interface-signatures-lock):
+ * add a `KnowledgeConcept.canonical_answer: String?` field (authored, distinct from `invariant`);
+ * then a question MAY be `deterministic` iff `canonical_answer` is non-blank, scored via
+ * GradeScoring.answerMatches(canonical_answer, response). DO NOT reuse `invariant` for this.
+ */
 private fun toQuestion(kc: KnowledgeConcept): ApiMockExamQuestion {
-    val deterministic = !kc.invariant.isNullOrBlank()
     return ApiMockExamQuestion(
         question_id = "meq-${kc.id}",
         kc_id = kc.id,
         stem = kc.stem_template ?: kc.name_en,
-        kind = if (deterministic) "deterministic" else "open",
+        // Always `open`: no canonical-answer field exists, so nothing can be scored closed-form.
+        kind = "open",
     )
 }
 

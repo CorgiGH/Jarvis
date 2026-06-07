@@ -59,7 +59,17 @@ class MeRoutesTest {
     @Test fun `delete removes the user and revokes the session`() = testApplication {
         val dbDir = Files.createTempDirectory("medelete")
         val db = TutorDb.connect(dbDir.resolve("t.db").toString())
-        transaction(db) { SchemaUtils.create(UsersTable, SessionsTable, ConsentLogTable, UserPreferencesTable, AiLiteracyConfirmationTable, TrustGrantsTable, SensorEventsTable, EffectorAttemptsTable, CardActionLogTable, DetectedTaskMappingTable, TasksTable, FsrsCardsTable, KnowledgeGapsTable, TokensTable, SessionSummariesTable, AttemptsTable, ReportWrongTable, ExamDatesTable, MockExamsTable) }
+        // Build the test schema from the SAME source of truth the /me/delete cascade purges
+        // (ME_DELETE_CASCADE_TABLES) + UsersTable + the retained allowlist, so the test schema can
+        // never drift from the production cascade set again (the gap that 500'd when a new user-FK
+        // table was added to the cascade but not created here). Class-killer, not a hand-kept list.
+        transaction(db) {
+            SchemaUtils.create(
+                UsersTable,
+                *ME_DELETE_CASCADE_TABLES.toTypedArray(),
+                *ME_DELETE_RETAINED_USER_FK_TABLES.toTypedArray(),
+            )
+        }
         val uid = TutorTypes.ulid()
         UserRepo(db).insert(User(uid, "u", UserScope.FRIEND, Instant.now(), Instant.now()))
         val sid = SessionRepo(db).create(uid, 3600)

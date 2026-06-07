@@ -135,7 +135,7 @@ Grouped by loop. Each block: focal claim · layout gist · reused/new components
 - **Focal claim:** your wrong intuition has a name — here is the refutation.
 - **Layout:** LIGHT, inline below `DrillCard` at L4 (not modal). DARK kicker stripe (`MISCONCEPTION · {id}`) → refutation (one accent-highlighted wrong-intuition phrase) → worked example. Right: `GOT IT →` (accent, 8px shadow) · `ADD TO FSRS` · `REPORT WRONG`.
 - **Reuse:** `DrillCard`, `KnowledgeGapCard`, `FsrsReview`. **New:** `MisconceptionRibbon`.
-- **Open:** does the misconception YAML carry `figure_spec` (snake_case on the wire — `ContentSchema.kt` field + the inline `/drill/grade` misconception payload; `MisconceptionRibbon` reads it as the camelCase `figureSpec` prop) · kicker height for long ids · LIGHT black-shadow confirm.
+- **Open:** does the misconception YAML carry `figure_spec` (snake_case on the wire — `ContentSchema.kt` field + the inline `/drill/grade` **`misconception_payload`** object; `MisconceptionRibbon` reads it as the camelCase `figureSpec` prop) · kicker height for long ids · LIGHT black-shadow confirm. _(2026-06-08 P1-4 reconciliation: the inline serve field is named `misconception_payload` (object), distinct from the scalar `misconception:String?` grader code — see `interface-signatures-lock.md` §O.)_
 
 #### 8 — Scratchpad (Type / Draw / Cornell / Photo) · **self-see: YES**
 - **Focal claim:** always one keypress away, remembers the mode you left it in.

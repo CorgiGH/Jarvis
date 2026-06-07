@@ -66,7 +66,9 @@ import kotlin.test.assertTrue
  *  - kc_results carry verification_status (per-KC trust badge, resolved from the B8 store).
  *  - per-user scoped (one user cannot read another's exam result).
  *  - empty/zero-question exam degrades cleanly (200, empty kc_results, score 0).
- *  - deterministic (closed-form) questions score correctly; the exam total aggregates per the lock.
+ *  - P2-5: an `invariant` is the audit seed, NOT an answer key — NO question is ever classified
+ *    `deterministic`, and matching the invariant text does NOT auto-score correct. Every question is
+ *    OPEN; a confident open grade scores via the grader rubric, a degraded one → UNCERTAIN/score 0.
  */
 class MockExamRoutesTest {
 
@@ -99,6 +101,17 @@ class MockExamRoutesTest {
         ): Pair<String, String> = "not json at all, just chatter" to "fake-ambiguous-model"
     }
 
+    /** A confident, coherent grader (all rubric items pass) — exercises a NON-degraded open grade. */
+    private class CoherentGraderLlm : Llm {
+        override suspend fun complete(
+            messages: List<ChatMessage>,
+            maxTokens: Int,
+            responseFormat: String?,
+        ): Pair<String, String> =
+            """{"correct":true,"rubric":{"numeric":true,"mechanism":true},""" +
+                """"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake-coherent-model"
+    }
+
     @AfterEach
     fun resetSeam() {
         drillGraderLlmFactory = { jarvis.OpenRouterChatLlm() }
@@ -123,8 +136,11 @@ class MockExamRoutesTest {
 
     /**
      * Seed a PA corpus.
-     *  - pa-kc-001 carries an `invariant` (= a checkable canonical answer) ⇒ DETERMINISTIC question.
-     *  - pa-kc-009 carries NO invariant ⇒ OPEN (LLM-graded) question.
+     *  - pa-kc-001 carries an `invariant` (the verification re-derivation seed — NOT an answer key).
+     *  - pa-kc-009 carries NO invariant.
+     * P2-5: BOTH are OPEN questions (LLM-graded → degrade-to-UNCERTAIN). The presence of an `invariant`
+     * does NOT make a question deterministic — there is no canonical-answer field to score against, so
+     * pa-kc-001 must NOT be classified deterministic and its invariant must NOT be used as an answer key.
      * Both are span-bearing + authored faithful so the B8 faithful seed below resolves.
      */
     private fun seedContent(content: Path) {
@@ -135,7 +151,7 @@ class MockExamRoutesTest {
         val pa = content.resolve("PA")
         pa.resolve("kcs").createDirectories()
         pa.resolve("_sources").createDirectories()
-        // Deterministic KC: invariant "6*7=42" → canonical answer "42".
+        // Invariant-bearing KC: invariant "42" is the AUDIT SEED (NOT an answer key). P2-5: still OPEN.
         pa.resolve("kcs/pa-kc-001.yaml").writeText(
             "id: pa-kc-001\nsubject: PA\nname_ro: \"Inmultire\"\nname_en: \"Multiply\"\n" +
                 "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
@@ -204,15 +220,79 @@ class MockExamRoutesTest {
         assertEquals(HttpStatusCode.Unauthorized, r.status)
     }
 
-    // ══════════════════════════ ALWAYS-200 + deterministic scoring ══════════════════════════
+    // ══════════════════════════ P2-5: invariant is NOT an answer key (class-killer) ══════════════════════════
 
+    /**
+     * CLASS-KILLER (P2-5): a KC's `invariant` is the verification re-derivation seed (a math
+     * statement), NOT a student answer key. There is NO `canonical_answer` field in the KC schema yet,
+     * so NO mock question may be classified `deterministic`, and a student "answer" that happens to equal
+     * the invariant text must NOT be auto-scored correct. ALL questions degrade to OPEN → UNCERTAIN.
+     *
+     * This single test kills the whole class of "invariant-match == correctness" bugs: it proves
+     *   (a) classification never emits "deterministic" even for an invariant-bearing KC, and
+     *   (b) answering with the literal invariant value does NOT yield correct=true (no false-positive).
+     */
     @Test
-    fun `normal submit returns 200 with kc_results and deterministic scoring is correct`(@TempDir tmp: Path) = testApplication {
+    fun `invariant-bearing KC is OPEN never deterministic and invariant-match is not auto-correct`(@TempDir tmp: Path) = testApplication {
         val content = tmp.resolve("content"); seedContent(content)
         System.setProperty("JARVIS_CONTENT_DIR", content.toString())
-        // A grader that throws would NOT matter for the deterministic KC; pin it anyway to prove the
-        // deterministic path never touches the LLM.
+        // Grader unavailable ⇒ every open question degrades to UNCERTAIN. If the OLD deterministic path
+        // were still live, pa-kc-001 ("6*7?", invariant "42") answered "42" would score correct=true.
         drillGraderLlmFactory = { ThrowingGraderLlm() }
+        var ctx: TutorContext? = null
+        application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        seedFaithful(ctx!!, content, "pa-kc-001")
+        val client = newClient(this)
+        val csrf = "csrf-p25"
+
+        val startBody = client.post("/api/v1/mock-exam/start") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json); setBody("""{"subject":"PA"}""")
+        }.bodyAsText()
+        // (a) NO question may be classified deterministic — there is no canonical-answer field.
+        assertFalse(
+            startBody.contains("\"kind\":\"deterministic\""),
+            "an invariant is NOT a canonical answer; no mock question may be kind=deterministic: $startBody",
+        )
+        // the invariant-bearing KC pa-kc-001 must be present and classified open.
+        assertTrue(startBody.contains("pa-kc-001"), startBody)
+        assertTrue(startBody.contains("\"kind\":\"open\""), startBody)
+        val examId = examIdOf(startBody)
+
+        // (b) answer pa-kc-001 with the LITERAL invariant value "42" — must NOT be auto-scored correct,
+        //     and (grader down) must degrade to UNCERTAIN.
+        val submitResp = client.post("/api/v1/mock-exam/$examId/submit") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"exam_id":"$examId","answers":[{"question_id":"meq-pa-kc-001","response":"42"}]}""")
+        }
+        assertEquals(HttpStatusCode.OK, submitResp.status)
+        val sb = submitResp.bodyAsText()
+        assertTrue(sb.contains("pa-kc-001"), sb)
+        // invariant-match must NOT yield correct=true (the core P2-5 bug — false positive killed).
+        assertFalse(
+            sb.contains("\"correct\":true"),
+            "matching the invariant text must NOT auto-score correct (invariant != answer key): $sb",
+        )
+        // grader down ⇒ degrade-to-UNCERTAIN, score 0.
+        assertTrue(
+            sb.contains("\"verification_status\":\"uncertain\""),
+            "an invariant-bearing question with grader down must degrade to uncertain: $sb",
+        )
+        assertTrue(sb.contains("\"score\":0.0"), sb)
+    }
+
+    // ══════════════════════════ ALWAYS-200 + open-ended scoring ══════════════════════════
+
+    @Test
+    fun `normal submit returns 200 with kc_results and a confident open grade scores correct`(@TempDir tmp: Path) = testApplication {
+        val content = tmp.resolve("content"); seedContent(content)
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        // P2-5: every question is OPEN (LLM-graded). A confident, coherent grader yields correct=true —
+        // and the kc_result then carries the KC's REAL resolved trust badge (faithful), not `uncertain`.
+        drillGraderLlmFactory = { CoherentGraderLlm() }
         var ctx: TutorContext? = null
         application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }
         startApplication()
@@ -230,11 +310,12 @@ class MockExamRoutesTest {
         val startBody = startResp.bodyAsText()
         assertTrue(startBody.contains("\"exam_id\""), startBody)
         assertTrue(startBody.contains("\"questions\""), startBody)
-        // the deterministic KC must be classified kind=deterministic.
-        assertTrue(startBody.contains("\"kind\":\"deterministic\""), startBody)
+        // P2-5: even the invariant-bearing KC is classified open (never deterministic).
+        assertFalse(startBody.contains("\"kind\":\"deterministic\""), startBody)
+        assertTrue(startBody.contains("\"kind\":\"open\""), startBody)
         val examId = examIdOf(startBody)
 
-        // answer the deterministic question "6*7?" correctly with "42".
+        // answer the open question for pa-kc-001 — the coherent grader marks it correct.
         val submitResp = client.post("/api/v1/mock-exam/$examId/submit") {
             cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
             contentType(ContentType.Application.Json)
@@ -245,17 +326,18 @@ class MockExamRoutesTest {
         assertTrue(sb.contains("\"kc_results\""), sb)
         assertTrue(sb.contains("\"score\""), sb)
         assertTrue(sb.contains("\"narrative\""), sb)
-        // deterministic: 42 matches the invariant ⇒ correct=true, this kc scored 1.0 ⇒ exam score 1.0.
+        // confident open grade: all rubric items pass ⇒ correct=true, score 1.0.
         assertTrue(sb.contains("\"correct\":true"), sb)
         assertTrue(sb.contains("pa-kc-001"), sb)
-        // kc_results carry verification_status (resolved faithful from the B8 store).
+        // a confident (non-degraded) open grade carries the KC's REAL trust badge (faithful from B8).
         assertTrue(sb.contains("\"verification_status\":\"faithful\""), sb)
     }
 
     @Test
-    fun `deterministic wrong answer scores correct=false`(@TempDir tmp: Path) = testApplication {
+    fun `open question with unavailable grader scores correct=false (degraded)`(@TempDir tmp: Path) = testApplication {
         val content = tmp.resolve("content"); seedContent(content)
         System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        // P2-5: pa-kc-001 is OPEN. Grader down ⇒ degrade-to-UNCERTAIN ⇒ NEVER auto-correct.
         drillGraderLlmFactory = { ThrowingGraderLlm() }
         var ctx: TutorContext? = null
         application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }

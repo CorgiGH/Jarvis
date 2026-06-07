@@ -15,7 +15,6 @@ import jarvis.tutor.AttemptsTable
 import jarvis.tutor.KcMastery
 import jarvis.tutor.KcMasteryTable
 import jarvis.tutor.Phase
-import jarvis.tutor.PhaseModel
 import jarvis.tutor.SessionSummariesTable
 import jarvis.tutor.ExamDatesTable
 import jarvis.tutor.TutorContextKey
@@ -46,12 +45,12 @@ import java.time.Instant
  *      one question per distinct cluster in the (optionally subject-filtered) corpus.
  *  - POST /api/v1/placement/submit { answers:[{question_id, response}] }
  *      → { placed:[{kc_id, entry_phase}], started_subject }. WRITES kc_mastery.entry_phase per placed KC,
- *      per-user, NEVER regressing an already-higher entry_phase (PhaseModel monotonicity).
+ *      per-user, NEVER regressing an already-higher entry_phase (monotonic max — see [placementEntryPhase]).
  *  - GET/PUT /api/v1/me/exam-dates (CHANGE 9, H14) — per-user CRUD over `exam_dates`.
  *
- * Reuses: requireUser auth, csrfProtect for writes, ContentRepo for the corpus, PhaseModel for the
- * placement entry-phase derivation, the §2.2 wire DTOs verbatim. NO schema writes (tables registered in
- * Phase 1). All writes are per-user scoped + transactional.
+ * Reuses: requireUser auth, csrfProtect for writes, ContentRepo for the corpus, the RECORDED
+ * answer-strength→entry-phase mapping ([placementEntryPhase], P1-3(a)), the §2.2 wire DTOs verbatim.
+ * NO schema writes (tables registered in Phase 1). All writes are per-user scoped + transactional.
  */
 
 /** Resolve the content/ directory (matches CuratorRoutes / TrustRoutes / Group-3 resolution). */
@@ -273,8 +272,9 @@ fun Route.installSessionPlacementExamRoutes() {
     // ── POST /api/v1/placement/submit ───────────────────────────────────────────────────────────────
     // Grades the placement answers deterministically (non-blank response ⇒ correct=1.0, else 0.0 — the
     // serve path NEVER calls the LLM, council/no-paid-apis), derives an entry_phase per placed KC via
-    // PhaseModel.transition, and WRITES kc_mastery.entry_phase per-user. The write NEVER regresses an
-    // already-higher entry_phase (PhaseModel monotonicity — placement only ever raises the floor).
+    // the RECORDED answer-strength mapping [placementEntryPhase] (correct ⇒ practice, blank ⇒ intro;
+    // P1-3(a)), and WRITES kc_mastery.entry_phase per-user. The write NEVER regresses an already-higher
+    // entry_phase (monotonic max — placement only ever raises the floor).
     // Unknown question_ids are dropped (placed stays empty). started_subject = the subject of the placed
     // KCs (the first; placement is single-subject in practice).
     post("/api/v1/placement/submit") {
@@ -307,13 +307,15 @@ fun Route.installSessionPlacementExamRoutes() {
                         val kc = allKcs[ans.question_id] ?: continue   // unknown ⇒ drop
                         // Deterministic placement score: a substantive response counts as correct.
                         val score = if (ans.response.isNotBlank()) 1.0 else 0.0
-                        // Derive a candidate entry_phase from a single placement observation.
-                        // mastered needs MIN_OBSERVATIONS(3) so a single correct answer can reach at most
-                        // `practice`/`retrieval` per PhaseModel thresholds — placement raises the floor,
-                        // never claims mastery off one item.
-                        val candidate = PhaseModel.transition(
-                            ewma = score, observations = 1, mastered = false, current = null,
-                        )
+                        // P1-3(a) — derive a candidate entry_phase DIRECTLY from the placement answer
+                        // strength. PhaseModel.transition is observation-gated (it returns `intro` for
+                        // observations < PRACTICE_OBS_MIN, and placement supplies exactly one), so routing
+                        // the placement score through it always yielded `intro` — a no-op. Placement is NOT
+                        // an FSRS observation; it is a one-shot floor seed, so it maps answer-strength to a
+                        // floor phase directly via [placementEntryPhase]. A single answer NEVER claims
+                        // `mastered` (that requires the audited MIN_OBSERVATIONS=3 EWMA history); placement
+                        // only ever RAISES the floor (via maxPhase below — monotonic no-regress).
+                        val candidate = placementEntryPhase(score)
                         // Read the existing entry_phase (per-user) and NEVER regress (monotonicity).
                         val existing = readMasteryRow(userId, kc.id)
                         val existingEntry = existing?.entryPhase
@@ -436,6 +438,23 @@ private fun maxPhase(a: Phase?, b: Phase): Phase {
     if (a == null) return b
     return if (a.ordinal >= b.ordinal) a else b
 }
+
+/**
+ * P1-3(a) — RECORDED placement mapping (answer-strength → entry-phase floor).
+ *
+ * Placement is a one-shot floor seed, NOT an FSRS observation, so it maps the deterministic placement
+ * score directly to a floor phase (routing through [PhaseModel.transition] with observations=1 is
+ * observation-gated and always collapses to `intro` — the no-op this fixes).
+ *
+ *   blank / incorrect (score < 1.0) ⇒ `intro`     — no evidence of prior knowledge; start cold.
+ *   correct           (score >= 1.0) ⇒ `practice`  — demonstrated familiarity; skip the intro acquisition.
+ *
+ * A single placement answer NEVER seeds `retrieval` or `mastered`: those require the audited EWMA/
+ * observation history (MIN_OBSERVATIONS=3), which placement does not produce. The caller takes
+ * `maxPhase(existing, candidate)` so placement only ever RAISES the floor (monotonic no-regress).
+ */
+private fun placementEntryPhase(score: Double): Phase =
+    if (score >= 1.0) Phase.practice else Phase.intro
 
 /** A short server-authored narrative for the session-wrap pane. */
 private fun sessionNarrative(cardsReviewed: Int, kcsTouched: Int, mastered: Int): String =

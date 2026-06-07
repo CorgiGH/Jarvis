@@ -24,3 +24,19 @@ source:
       end: 3796
     provenance: located
 version: 1
+# ── Phase-3 teaching scaffolding (P1-3(c)) — DERIVED from this KC's own source quotes (pa-lecture-01,
+#    p.7): "computation model" and "An algorithm must solve a problem given by a pair (input,output),
+#    where the input is represented in the start configuration and the output in the final
+#    configuration." No subject fact is invented; the prompts use ONLY these stated relationships.
+phase_plan:
+  - intro
+  - practice
+  - retrieval
+worked_example_first: true
+self_explanation_prompt: >-
+  Explică cu propriile cuvinte legătura, așa cum apare în curs, dintre perechea (intrare, ieșire)
+  a unei probleme și configurația de start, respectiv configurația finală din modelul de calcul.
+far_transfer_stem: >-
+  Pentru o problemă concretă (de exemplu sortarea unei liste de numere), descrie-o ca perechea
+  (intrare, ieșire) și arată ce reprezintă, conform cursului, configurația de start și configurația
+  finală în modelul de calcul.

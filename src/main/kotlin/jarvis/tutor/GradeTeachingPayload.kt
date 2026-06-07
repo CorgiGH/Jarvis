@@ -1,6 +1,10 @@
 package jarvis.tutor
 
 import jarvis.content.Misconception
+import jarvis.content.SourceRef
+import jarvis.tutor.verify.CitationGuard
+import jarvis.tutor.verify.ClaimKind
+import jarvis.tutor.verify.VerificationClaim
 import kotlinx.serialization.Serializable
 
 /**
@@ -39,15 +43,62 @@ data class MisconceptionPayload(
     val figure_spec: String?,
     /** CHANGE-3 Misconception.self_explanation_prompt (per-misconception Chi/Renkl prompt); null ⇒ none. */
     val self_explanation_prompt: String?,
+    /**
+     * P0-2 (re-open fix) — the verbatim citation backing this served refutation, attached by the
+     * `CitationGuard.attach` chokepoint (§Q write-site 2 / P2-RULE8). NON-NULL on the cited serve path
+     * ([fromCited]): a misconception with no resolved [SourceRef] never becomes a payload (attach throws
+     * first — FAIL-LOUD, never ships un-cited). ADDITIVE to the frozen §O shape (lock amended in the same
+     * change); defaults null so the legacy [from] builder and existing wire-shape callers are untouched.
+     */
+    val source: SourceRef? = null,
 ) {
     companion object {
-        /** Build the inline payload from a stored [Misconception], or null when none matched. */
+        /**
+         * LEGACY un-cited builder — build the inline payload from a stored [Misconception], or null when
+         * none matched. RETAINED for non-learner-facing / test call-sites only; the SERVE path MUST use
+         * [fromCited] so the refutation crosses the citation chokepoint (P2-RULE8). `source` is left null.
+         */
         fun from(m: Misconception?): MisconceptionPayload? = m?.let {
             MisconceptionPayload(
                 id = it.id,
                 refutation = it.refutation,
                 figure_spec = it.figure_spec,
                 self_explanation_prompt = it.self_explanation_prompt,
+            )
+        }
+
+        /**
+         * P0-2 (re-open fix) — the CITED serve builder. Routes the matched misconception's refutation
+         * through the [CitationGuard.attach] chokepoint (interface-signatures-lock §Q write-site 2 /
+         * P2-RULE8) carrying the misconception's [SourceRef], so the served refutation ships CITED and
+         * FAIL-LOUD if it has no resolved source (attach THROWS — a learner-facing refutation must NEVER
+         * reach the surface un-cited). Returns null when [m] is null (no match ⇒ no payload, no throw).
+         *
+         * The 1-arg `attach` form is used deliberately: a misconception refutation is NOT routed through
+         * the `VerificationRunner` (it is never in `claimsFor`), so there is no audited status in hand —
+         * the chokepoint pins `uncertain` (F3: span-presence must not launder trust into `faithful`). The
+         * payload's §O wire shape carries the citation but no status (the trust badge rides the KC-level
+         * `verification_status` on the grade reply, not the per-claim emit).
+         */
+        fun fromCited(m: Misconception?): MisconceptionPayload? = m?.let { misc ->
+            // Build the MISCONCEPTION_REFUTATION claim, anchored on the misconception's first source ref.
+            // A null source ⇒ attach() throws (FAIL-LOUD, never ships un-cited) — the locked behavior.
+            val claim = VerificationClaim(
+                claimId = "${misc.kc_id}:${ClaimKind.MISCONCEPTION_REFUTATION.name}:${misc.id}",
+                kcId = misc.kc_id,
+                subject = "", // not on the wire payload; the claim is built only to cross the chokepoint.
+                kind = ClaimKind.MISCONCEPTION_REFUTATION,
+                content = misc.refutation,
+                invariant = null,
+                source = misc.source.firstOrNull(),
+            )
+            val cited = CitationGuard.attach(claim) // FAIL-LOUD on a null/unresolved source (§Q / P2-RULE8).
+            MisconceptionPayload(
+                id = misc.id,
+                refutation = misc.refutation,
+                figure_spec = misc.figure_spec,
+                self_explanation_prompt = misc.self_explanation_prompt,
+                source = cited.source, // NON-NULL by construction (attach narrowed null→non-null).
             )
         }
 

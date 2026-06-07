@@ -33,6 +33,7 @@ import jarvis.tutor.TextEdit
 import jarvis.tutor.TrustGrant
 import jarvis.tutor.TrustGrantRepo
 import jarvis.tutor.ApplyEditRequest
+import jarvis.tutor.KcMasteryTable
 import jarvis.tutor.KnowledgeGapsTable
 import jarvis.tutor.ProviderConfigTable
 import jarvis.tutor.ScreenshotExtractor
@@ -87,6 +88,59 @@ import java.security.SecureRandom
 import java.time.Instant
 
 private val rng = SecureRandom()
+
+/**
+ * GDPR Art. 17 erasure cascade — the SINGLE source of truth for which user-scoped CHILD tables
+ * /me/delete purges, in dependency order (child-first; every table here FKs UsersTable.id only,
+ * with no cross-FKs between them, so this flat order is FK-safe under PRAGMA foreign_keys=ON).
+ * UsersTable itself (the parent root) is deleted LAST by the route, AFTER every entry here.
+ *
+ * P0-1 fix: a missing user-FK table here makes the final UsersTable.deleteWhere FK-throw and roll
+ * the whole erasure back → /me/delete 500s for any affected user. The CI invariant
+ * [jarvis.tutor.MeDeleteCascadeTest] reflects over [jarvis.tutor.ALL_TABLES], finds EVERY table
+ * whose column foreign-keys UsersTable.id, and asserts each is either in THIS list or in
+ * [ME_DELETE_RETAINED_USER_FK_TABLES] — so the next user-FK table can never be silently missed
+ * (class-killer, not enumerate-the-siblings).
+ *
+ * Each "add a new user-FK table" change MUST add it here (or, with a written GDPR 17(3) basis, to
+ * the retained allowlist) or the invariant test fails loud.
+ */
+internal val ME_DELETE_CASCADE_TABLES: List<org.jetbrains.exposed.sql.Table> = listOf(
+    ConsentLogTable,
+    UserPreferencesTable,
+    AiLiteracyConfirmationTable,
+    TrustGrantsTable,
+    SensorEventsTable,
+    EffectorAttemptsTable,
+    CardActionLogTable,
+    DetectedTaskMappingTable,
+    TasksTable,
+    FsrsCardsTable,
+    KnowledgeGapsTable,
+    KcMasteryTable,         // P0-1 — user-FK (KcMastery.kt:16); was missing ⇒ erasure 500 for any grader.
+    ProviderConfigTable,    // P0-1 — user-FK (ProviderConfig.kt:25); was missing ⇒ erasure 500.
+    TokensTable,
+    // B6 (Task 13) — Phase-1 user-scoped tables.
+    SessionSummariesTable,
+    AttemptsTable,
+    ReportWrongTable,
+    ExamDatesTable,
+    MockExamsTable,
+    // SessionsTable is itself a user-FK child; deleted just before the parent UsersTable.
+    SessionsTable,
+)
+
+/**
+ * User-FK tables INTENTIONALLY retained across an Art. 17 erasure, with a documented legal basis.
+ * The CI invariant treats membership here as "covered" so it does not false-fail — but adding a
+ * table here is a deliberate, basis-bearing decision, never a way to silence the check.
+ *
+ * - AuditLinesTable — append-only hash-chained audit log retained under GDPR Art. 17(3)(b)
+ *   (legal obligation / public-interest accountability). Erasing it would break the hash chain.
+ */
+internal val ME_DELETE_RETAINED_USER_FK_TABLES: List<org.jetbrains.exposed.sql.Table> = listOf(
+    AuditLinesTable,
+)
 
 /**
  * Tutor Layer A surface:
@@ -2026,7 +2080,8 @@ fun Application.installTutorRoutes() {
                 // 409 (a targeted card is not ACTIVE — M-GATE-PATHS) or 500 (fail-loud on an in-txn
                 // throw — the whole txn rolled back, B1). All other paths stay 200.
                 var httpStatus = HttpStatusCode.OK
-                val (reply, status) = when {
+                val (reply, status) = try {
+                when {
                     attempt == null -> {
                         ApiDrillGradeReply(
                             correct = false, score = 0.0, rubric = emptyMap(),
@@ -2188,7 +2243,10 @@ fun Application.installTutorRoutes() {
                         // ── Phase-3 GROUP 7 (SERVE WIRING) — assemble the served teaching + H15 payload.
                         //    All reads are off the STORED corpus + the recorded mastery (H16: populated
                         //    from stored content; absent ⇒ null/empty). Wrapped in runCatching so a serve
-                        //    assembly hiccup never breaks the already-decided grade verdict.
+                        //    assembly hiccup never breaks the already-decided grade verdict — EXCEPT the
+                        //    citation chokepoint (P0-2 / P2-RULE8): a matched misconception with no resolved
+                        //    SourceRef must FAIL-LOUD (CitationGuard.attach throws), NOT be swallowed into a
+                        //    silently-dropped refutation. That throw is re-raised below ⇒ 500, never un-cited.
                         val served = runCatching {
                             val repo = jarvis.content.ContentRepo(drillContentDir())
                             val primaryKc = primaryKcId?.let {
@@ -2201,7 +2259,11 @@ fun Application.installTutorRoutes() {
                             }.orEmpty()
                             // TASK P3-MISC-SERVE — match the grader's code to a stored misconception, inline it.
                             val matched = jarvis.tutor.MisconceptionPayload.matchByGraderCode(g.misconception, kcMiscs)
-                            val miscPayload = jarvis.tutor.MisconceptionPayload.from(matched)
+                            // P0-2 (re-open fix) — route the served refutation through the CitationGuard
+                            // chokepoint (§Q write-site 2 / P2-RULE8): it ships CITED (carrying the
+                            // misconception's SourceRef) and FAIL-LOUD if the matched misconception has no
+                            // resolved source. fromCited THROWS in that case — handled in getOrElse below.
+                            val miscPayload = jarvis.tutor.MisconceptionPayload.fromCited(matched)
                             // TASK P3-LADDER-SERVE — render L0–L4 from stored content (+ this attempt's feedback).
                             val ladder = jarvis.tutor.FeedbackLadderBuilder.build(
                                 kc = primaryKc, misconception = matched, elaboratedFeedback = g.elaboratedFeedback,
@@ -2221,7 +2283,15 @@ fun Application.installTutorRoutes() {
                                 misconception = miscPayload, ladder = ladder, selfExplain = selfExplainPrompt,
                                 verificationStatus = vStatus, phase = phaseAfter, nextAction = nextAction,
                             )
-                        }.getOrDefault(ServedTeaching())
+                        }.getOrElse { e ->
+                            // P0-2 / P2-RULE8 — the citation chokepoint is FAIL-LOUD: an IllegalStateException
+                            // from CitationGuard.attach means a matched refutation has no resolved SourceRef,
+                            // which must NEVER be silently dropped (the re-opened hole). Re-raise it so the
+                            // handler's outer catch turns it into a 500 — un-cited learner-facing text never
+                            // ships. Any OTHER assembly hiccup degrades the served teaching (the grade still ships).
+                            if (e is IllegalStateException) throw e
+                            ServedTeaching()
+                        }
                         // cross_checked: this grade went through the deterministic answer↔rubric cross-check
                         // (a canonical answer was present AND it agreed with the rubric) on a confident grade.
                         // NOT a trust upgrade — purely "the two grading signals agreed" (H15 cross_checked).
@@ -2246,6 +2316,24 @@ fun Application.installTutorRoutes() {
                             cross_checked = crossChecked,
                         ) to replyStatus
                     }
+                }
+                } catch (e: IllegalStateException) {
+                    // P0-2 / P2-RULE8 FAIL-LOUD — the citation chokepoint (CitationGuard.attach) threw:
+                    // a matched, learner-facing misconception refutation has NO resolved SourceRef, so it
+                    // must NEVER ship (un-cited) and must NOT be silently dropped (the re-opened hole).
+                    // Respond a loud 500 (the malformed-corpus authoring bug surfaces immediately). The
+                    // grade verdict itself was already decided/recorded; only the un-citable teaching serve fails.
+                    System.err.println("[drill-grade] served-teaching citation FAIL-LOUD for task=${req.taskId}: ${e.message?.take(200)}")
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ApiDrillGradeReply(
+                            correct = false, score = 0.0, rubric = emptyMap(),
+                            misconception = "CITATION_ERROR",
+                            elaboratedFeedback = "Served teaching could not be cited to your lecture — refusing to show un-cited content.",
+                            confidence = "LOW", recorded = false, answerMatch = null,
+                        ),
+                    )
+                    return@csrfProtect
                 }
 
                 call.respond(httpStatus, reply)
@@ -2365,36 +2453,22 @@ fun Application.installTutorRoutes() {
             requireUser { uid ->
                 call.csrfProtect {
                     // GDPR Art 17 erasure — complete across all user-scoped tables.
-                    // Deletion order: child tables first (all FK to UsersTable only;
-                    // no cross-FKs between the tables below), then SessionsTable,
-                    // then the user row itself. AuditLinesTable is intentionally
-                    // EXCLUDED — it is an append-only hash-chained audit log retained
-                    // by design under GDPR Art 17(3)(b) (legal obligation / public
-                    // interest / accountability).
+                    // Deletion order: every user-FK CHILD table first (in dependency
+                    // order — all FK to UsersTable only, no cross-FKs), then the user
+                    // row itself. The child set is the SINGLE source of truth
+                    // [ME_DELETE_CASCADE_TABLES] — the CI invariant
+                    // [jarvis.tutor.MeDeleteCascadeTest] asserts it covers EVERY user-FK
+                    // table in the production schema, so the next one cannot be silently
+                    // missed (P0-1 class-killer). AuditLinesTable is intentionally
+                    // EXCLUDED (append-only hash-chained audit retained under GDPR Art
+                    // 17(3)(b) — see [ME_DELETE_RETAINED_USER_FK_TABLES]). verification_audit
+                    // + kc_verification_status are NOT user-scoped (keyed on kc_id).
                     transaction(ctx.db) {
-                        ConsentLogTable.deleteWhere { ConsentLogTable.userId eq uid }
-                        UserPreferencesTable.deleteWhere { UserPreferencesTable.userId eq uid }
-                        AiLiteracyConfirmationTable.deleteWhere { AiLiteracyConfirmationTable.userId eq uid }
-                        TrustGrantsTable.deleteWhere { TrustGrantsTable.userId eq uid }
-                        SensorEventsTable.deleteWhere { SensorEventsTable.userId eq uid }
-                        EffectorAttemptsTable.deleteWhere { EffectorAttemptsTable.userId eq uid }
-                        CardActionLogTable.deleteWhere { CardActionLogTable.userId eq uid }
-                        DetectedTaskMappingTable.deleteWhere { DetectedTaskMappingTable.userId eq uid }
-                        TasksTable.deleteWhere { TasksTable.userId eq uid }
-                        FsrsCardsTable.deleteWhere { FsrsCardsTable.userId eq uid }
-                        KnowledgeGapsTable.deleteWhere { KnowledgeGapsTable.userId eq uid }
-                        TokensTable.deleteWhere { TokensTable.userId eq uid }
-                        // B6 (Task 13) — Phase-1 user-scoped tables, child-first,
-                        // BEFORE SessionsTable/UsersTable. Under PRAGMA foreign_keys=ON
-                        // these must be deleted before the user row or the FK throws.
-                        // verification_audit + kc_verification_status are NOT user-scoped
-                        // (keyed on kc_id) and are intentionally excluded.
-                        SessionSummariesTable.deleteWhere { SessionSummariesTable.userId eq uid }
-                        AttemptsTable.deleteWhere { AttemptsTable.userId eq uid }
-                        ReportWrongTable.deleteWhere { ReportWrongTable.userId eq uid }
-                        ExamDatesTable.deleteWhere { ExamDatesTable.userId eq uid }
-                        MockExamsTable.deleteWhere { MockExamsTable.userId eq uid }
-                        SessionsTable.deleteWhere { SessionsTable.userId eq uid }
+                        for (table in ME_DELETE_CASCADE_TABLES) {
+                            val userIdCol = table.columns.single { it.name == "user_id" }
+                            @Suppress("UNCHECKED_CAST")
+                            table.deleteWhere { (userIdCol as org.jetbrains.exposed.sql.Column<String>) eq uid }
+                        }
                         UsersTable.deleteWhere { UsersTable.id eq uid }
                     }
                     call.respondText("""{"deleted":true}""", ContentType.Application.Json)

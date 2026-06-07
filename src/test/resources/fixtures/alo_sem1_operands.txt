@@ -1,0 +1,18 @@
+# P3-HONESTY checked-in fixture — system-derived operands for the grader-honesty spot-check.
+#
+# PROVENANCE (no oracle inversion, no invented subject fact): every operand line below is the
+# VERBATIM `pdftotext` extraction of the real on-disk seminar PDF
+#   tmp-secondbrain-scrape/ALO/labs/alo_sem1.pdf  (ALO = Algebra Liniara si Optimizare, Seminar 1, ex.2)
+# regenerate with:  pdftotext -q tmp-secondbrain-scrape/ALO/labs/alo_sem1.pdf - | grep -oE 'x = \([^)]*\)T'
+#
+# This file exists so P3HonestyGraderSpotCheckTest RUNS IN CI without the external untracked PDF
+# (`git ls-files tmp-secondbrain-scrape/` = 0 — the source dir is not tracked, so on clean CI the
+# old assumeTrue(pdf.isFile) skipped and proved nothing while counting green). The two clean INTEGER
+# operand vectors below are the source-of-record; the correct p-norm keys are computed by PURE
+# DETERMINISTIC MATH from these operands (vector L1/Linf/L2), never authored by hand, never via Alex.
+#
+# Lines that are NOT `x = (...)T` are ignored by the parser; comments start with '#'.
+# (Non-integer operands d/e/f and the (1 2 ... n)T symbolic vector are deliberately omitted —
+#  they are not exactly representable for the grader's deterministic string/numeric matcher.)
+x = (-2, 2, 1)T
+x = (2, -1, 3, 4)T

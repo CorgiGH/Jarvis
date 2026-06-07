@@ -24,3 +24,17 @@ source:
       end: 4279
     provenance: located
 version: 1
+# ── Phase-3 teaching scaffolding (P1-3(c)) — DERIVED from this KC's own source quotes (pa-lecture-01,
+#    p.8): "There are various ways to describe an algorithm" and "pseudo-code, combines a formal
+#    notation with a informal one". No subject fact is invented; the prompts use ONLY these statements.
+phase_plan:
+  - intro
+  - practice
+  - retrieval
+worked_example_first: false
+self_explanation_prompt: >-
+  Explică, pornind de la curs, de ce pseudo-codul combină o notație formală cu una informală și ce
+  avantaj are această combinație față de o descriere pur informală a unui algoritm.
+far_transfer_stem: >-
+  Ia un algoritm simplu pe care îl cunoști și descrie-l în pseudo-cod, evidențiind, conform cursului,
+  ce parte a descrierii este notație formală și ce parte este informală.

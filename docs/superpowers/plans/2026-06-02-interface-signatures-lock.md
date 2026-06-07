@@ -1,6 +1,7 @@
 # Interface Signatures Lock — frozen Kotlin/TS contracts (cross-phase)
 
 **Status:** FROZEN reference. NO prose, NO code-to-build — this is the shape contract the phase plans build against.
+**DURABLE RULE (P1-4, 2026-06-08):** any forced deviation from a frozen lock (renamed wire field, newly-frozen inner shape, changed server formula) MUST amend the lock doc in the SAME commit that lands the code — never leave code and lock silently contradicting. If the deviation would weaken a Phase-2 trust guarantee, STOP and escalate to the owner. See §R.
 **Date:** 2026-06-02 · **HEAD:** `b970585` (branch `door-compare`)
 **RE-FREEZE 2026-06-05 (RF1/RF2/RF3, APPROVED):** §I.1 re-frozen to a two-hash scheme (`content_hash` v2 formula + `source_span_hash`, BOTH `sha256_8`), full audit-column allowlist enumerated, and the live `lecture_grounded` drift closed (lock froze 4 cols; live = 6). §I2 records RF2 (gate stays admission-only; serve dispute-refusal via inline `hasOpenReportWrong`) + RF3 (single-owner dispute resolution). Memo: `build-review/2026-06-05-trustnet-refreeze-decisions.md`. (No live re-key here — that is a separate human-gated checkpoint.)
 **Parent:** `docs/superpowers/plans/2026-06-02-master-impl-plan-v2.md` (§2.2 wire tables, §2.3 interfaces, §2.5 state machine).
@@ -224,6 +225,7 @@ enum class AuditOutcome {
 - **Five literals** match `/verify/{kcId}/status` + CHANGE-3's four authored literals `{unverified, pending, faithful, uncertain}` PLUS `failed` (the §2.5 FAILED state; never authored in YAML, only reached at runtime).
 - **`AuditOutcome` post-lock additions (SESSION-57 sync):** `EQUATIONAL_LLM_UNCONFIRMED` (B5r-3 / D-R9) + `PROSE_LLM_UNCONFIRMED` (MF-1 / D-R17) are internal driver values, BOTH mapping to `uncertain`. They were ratified during the Phase-2 B5-RESHAPE / false-faithful work and do NOT widen the frozen `VerificationStatus` wire surface (still the 5 literals). Canonical code: `VerificationStatus.kt:46-62`.
 - **Wire consistency:** `verification_status` appears in `/queue/today`, `/mastery`, `/calibration`(no), `/drill/grade`, `/fsrs/due`, `/verify/{kcId}/status`, `mock-exam` kc_results, `QueueItem`, `KcCandidate`. ONE enum, every site serializes its lowercase `name`.
+- **Mock-exam `kind` semantics (P2-5, council fix 2026-06-08):** the §2.2 `kind:"deterministic"|"open"` field is FROZEN as a wire shape, but the runtime ONLY ever emits `"open"`. A KC's `invariant` is the verification re-derivation SEED (a math statement the two-family audit checks), **NOT** a student answer key — equating an invariant-match with answer correctness scored every "deterministic" question against the wrong oracle. There is NO `canonical_answer` field in `KnowledgeConcept`, so there is nothing to score a closed-form answer against; every mock question therefore degrades to OPEN (LLM-graded → UNCERTAIN). **Unlock (future):** add an AUTHORED `KnowledgeConcept.canonical_answer: String?` (distinct from `invariant`); a question MAY be `deterministic` iff `canonical_answer` is non-blank, scored via `GradeScoring.answerMatches(canonical_answer, response)` — never via `invariant`. See master-impl-plan-v2 §6 Deferred. Canonical code: `MockExamRoutes.toQuestion`.
 - **YAML caveat:** the four-literal subset is the authored seed (CHANGE 3 / `KnowledgeConcept.verification_status: String`); the runtime store can ALSO hold `failed`. The validator's enum check (H11) accepts the four authored literals only; `failed` is runtime-only.
 - **Invariant (§2.5, LOCKED):** no path reaches `faithful` without BOTH a non-LLM-leg pass AND families-agree.
 
@@ -429,6 +431,13 @@ data class MisconceptionPayload(
     /** CHANGE-3 `Misconception.self_explanation_prompt: String?` (Chi/Renkl). The per-misconception
      *  self-explanation prompt shown alongside the refutation; `null` ⇒ no prompt for this misconception. */
     val self_explanation_prompt: String?,
+    /** P0-2 (re-open fix, 2026-06-08) — the verbatim citation backing this served refutation, attached
+     *  by the `CitationGuard.attach` chokepoint (§Q write-site 2 / P2-RULE8). NON-NULL on the cited serve
+     *  path (`MisconceptionPayload.fromCited`): a misconception with no resolved `SourceRef` never becomes
+     *  a payload (attach THROWS first — FAIL-LOUD, never ships un-cited). ADDITIVE field, default `null` so
+     *  the legacy `from` builder + existing callers are untouched. Serializes as the §2.2 nested
+     *  `source:{doc, page|null, span:{start,end}|null, quote}` (L2). AMENDMENT below. */
+    val source: SourceRef? = null,
 )
 
 /** One rendered feedback-ladder rung (L0–L4). The grade reply carries the FULL ordered rung array
@@ -442,12 +451,13 @@ data class LadderRung(
 ```
 
 - **Grade-reply served fields (FROZEN, added to the §2.2 reply DTO):**
-  - `misconception: MisconceptionPayload?` — the inline payload above; `null` when no misconception fired for the graded answer.
+  - `misconception_payload: MisconceptionPayload?` — the inline payload above; `null` when no misconception fired for the graded answer. **WIRE-NAME RECONCILIATION (2026-06-08, P1-4 / build-log D-G7-1 — code is reality):** the field on the live `/drill/grade` reply DTO is **`misconception_payload`** (object), NOT `misconception`. The reply already carries a *distinct* scalar **`misconception: String?`** = the grader's free-text misconception CODE (`GradeResult.misconception`, e.g. `"L2_ESTIMATOR_CONFUSION"` / `"OTHER"`) frozen in the original E1/E2 G2 reply shape; renaming that to hold this object would BREAK the live frontend (`tutor-web/src/door/DrillStack.tsx:248` binds `misconception: String?`). So the structured §O payload rides under the additive **`misconception_payload`** field while `misconception:String?` is left untouched — both coexist (different types, different consumers). **Phase-5 read-site:** `MisconceptionRibbon` (Surface 0f, mounted at ladder L4) reads `misconception_payload.{refutation, figure_spec, self_explanation_prompt, source}` (TS maps wire `figure_spec → figureSpec`). Code: `MisconceptionPayload` (`src/main/kotlin/jarvis/tutor/GradeTeachingPayload.kt`); served at `TutorRoutes.kt` (`misconception_payload = served.misconception`).
   - `ladder_rungs: List<LadderRung>` — the ordered L0–L4 rung array (`[{level, text}]`); may be empty for a fully-correct answer that needs no ladder.
   - `self_explanation_prompt: String?` — the **drill-level** self-explanation prompt (CHANGE-3 `KnowledgeConcept.self_explanation_prompt` / the active drill's prompt), read by `DrillStack`'s self-explanation rung (Phase 5; H16 — WIRED, not deferred). Distinct from `MisconceptionPayload.self_explanation_prompt` (which is the per-misconception prompt); both can be present.
 - **DECIDED #1 — ONE misconception serve shape (inline only):** the misconception serves INLINE on `/drill/grade` ONLY. `GET /api/v1/misconception/{id}` (master §2.2, line 114) is **NOT a live skeleton endpoint** — it has no consumer (the ribbon already has the payload from the grade reply). It is marked **DROPPED/DEFERRED** (no orphan no-consumer endpoint built). If a read-on-demand fetch is ever needed (e.g. a standalone misconception browser), it is a purely additive endpoint returning this same `MisconceptionPayload` shape — no breaking change.
 - **Wire literal:** all field names serialize snake_case exactly as written (`misconception`, `ladder_rungs`, `self_explanation_prompt`, `figure_spec`). The TS client maps `figure_spec → figureSpec` at the fetch boundary (the only casing-bridge site; backend snake_case is the wire source of truth).
-- **Consumers (master §3 Phase 5):** `MisconceptionRibbon` (0f) reads `misconception` (incl. `figure_spec`); `FeedbackLadder` (in `DrillStack`) reads `ladder_rungs`; `DrillStack`'s self-explanation rung reads `self_explanation_prompt`. One reply DTO, three Phase-5 consumers — shapes frozen so no late codemod.
+- **Consumers (master §3 Phase 5):** `MisconceptionRibbon` (0f) reads `misconception_payload` (incl. `figure_spec`); `FeedbackLadder` (in `DrillStack`) reads `ladder_rungs`; `DrillStack`'s self-explanation rung reads `self_explanation_prompt`. One reply DTO, three Phase-5 consumers — shapes frozen so no late codemod. (The scalar `misconception: String?` grader CODE is a SEPARATE field, consumed by the existing DrillStack misconception-code binding, not by the ribbon's structured payload.)
+- **AMENDMENT (2026-06-08, P0-2 re-open fix — §O reconciled with §Q write-site 2):** the served misconception is a learner-facing claim, so it MUST cross the `CitationGuard.attach` chokepoint (§Q, P2-RULE8) before it ships — the original §O shape (no citation) let the `/drill/grade` serve build `MisconceptionPayload.from(matched)` and skip the chokepoint entirely (the re-opened P0-2 hole). The fix adds an **additive** `source: SourceRef? = null` field to `MisconceptionPayload` and a `MisconceptionPayload.fromCited(m)` builder that routes the refutation through `attach` (carrying `Misconception.source.first()`), so the served misconception **ships CITED** and **FAIL-LOUD** (`attach` THROWS, the `/drill/grade` handler 500s) when a matched misconception has no resolved `SourceRef` — never silently un-cited. The legacy `from` (citation-skipping) builder is RETAINED for non-learner-facing / test call-sites only; the serve path uses `fromCited`. The new field is optional + defaults `null`, so this is purely additive (no breaking rename of the four original fields; the existing G2 reply shape is untouched).
 
 ## P. `HonestFloor` — the trust-badge cap while the calibration gold-set gate is deferred (DECIDED #2; `/verify/{kcId}/status`)
 
@@ -528,7 +538,7 @@ object CitationGuard {
 | `QueueItem` (§C) | `GET /queue/today` | `{ items:[QueueItem], total_due:Int, day:String }` |
 | `MasterySparklineProps` (§M) | `GET /mastery` | `{ subjects:[{subject_id, subject_name_ro, subject_name_en, kcs:[{kc_id, kc_name_ro, kc_name_en, phase, ewma_score, observations, last_graded_at, verification_status}]}] }` |
 | (calibration; Surface 6, NOT MasterySparkline) | `GET /calibration` | `{ buckets:[{student_confidence, attempts, correct, accuracy}], total_attempts }` |
-| grade reply fields (`Phase`, `NextPhaseAction`, `VerificationStatus`, `MisconceptionPayload` §O, `LadderRung` §O) | `POST /drill/grade` | ADD `verification_status, kc_quarantined:bool, phase, next_phase_action:"advance\|hold\|remediate", cross_checked:bool` **+ (gap C, master §2.2) `misconception:{id, refutation, figure_spec, self_explanation_prompt}\|null, ladder_rungs:[{level:Int, text:String}], self_explanation_prompt:String?`** — frozen in §O |
+| grade reply fields (`Phase`, `NextPhaseAction`, `VerificationStatus`, `MisconceptionPayload` §O, `LadderRung` §O) | `POST /drill/grade` | ADD `verification_status, kc_quarantined:bool, phase, next_phase_action:"advance\|hold\|remediate", cross_checked:bool` **+ (gap C, master §2.2) `misconception_payload:{id, refutation, figure_spec, self_explanation_prompt, source}\|null, ladder_rungs:[{level:Int, text:String}], self_explanation_prompt:String?`** — frozen in §O. **WIRE NAME = `misconception_payload`** (object); the pre-existing scalar `misconception:String?` (grader code) is a SEPARATE coexisting field (D-G7-1 reconciliation, 2026-06-08). |
 | `recordIn`/`upsertRubricCriterion` (§G/§H) | `POST /drill/grade` atomic txn | ONE `transaction{}`: `recordIn(tx)` + `attempts` insert + `upsertRubricCriterion(tx)`, faithful-gated, 409-if-not-ACTIVE |
 | `VerificationStatus` (§I) + `HonestFloor` (§P) + `CitedClaim` (§Q) | `GET /verify/{kcId}/status`, `kc_verification_status` table (B8) | `{ verification_status, badge_text, claims:[CitedClaim], honest_floor:HonestFloor }` — `honest_floor` frozen in §P, `claims[]` element frozen in §Q |
 | `LocateResult` (§J) | `verification_audit` (CHANGE 6) | `page`, `page_anchor_status (LIVE\|DEGRADED\|NONE)`, `span_start/end`, `fuzzy_distance` |
@@ -536,3 +546,37 @@ object CitationGuard {
 | `FsrsForecastReply` (TS) | `GET /fsrs/forecast` | ADD `dueNow:number` (L3) → `{ dueNow, tomorrow, thisWeek, thisMonth }` |
 
 **`FsrsForecastReply` TS delta (L3, frozen):** current `tutor-web/src/lib/fsrsClient.ts:26` is `{ tomorrow, thisWeek, thisMonth }` — ADD `dueNow: number` so `ForecastDotPlot` reads it directly and `App.tsx` drops its inline-type cast. `forecast` endpoint shape is otherwise LOCKED.
+
+---
+
+## R. Phase-3 autonomously-frozen inner shapes + server formulas (PROMOTED 2026-06-08, P1-4)
+
+These were frozen DURING the unattended Phase-3 build (`build-review/2026-06-07-phase3-build-log.md`) because §2.2 left the inner shapes unspecified, but were never promoted into a canonical lock — leaving code and lock silently out of sync. They are promoted here verbatim from the shipped code so the lock is canonical-on-conflict. Each cross-links its build-log decision id.
+
+- **`ApiMasteryDelta` (session/close `mastery_deltas[]` element) — FROZEN (build-log D-G4-7).** Code: `src/main/kotlin/jarvis/web/SessionPlacementExamRoutes.kt`.
+  ```kotlin
+  @Serializable
+  data class ApiMasteryDelta(
+      val kc_id: String,        // the KC the delta is for
+      val attempts: Int,        // in-window attempts on this KC for this user
+      val correct: Int,         // in-window correct attempts
+      val ewma_after: Double,   // the KC's CURRENT ewma (post-window authoritative value)
+      val phase: Phase,         // the KC's current resolved phase (serialized lowercase)
+  )
+  ```
+  The outer `POST /session/close` reply keys (`session_id, narrative, cards_reviewed, kcs_moved_to_mastered, mastery_deltas`) are verbatim from master §2.2; this freezes the `mastery_deltas[]` INNER element. **Phase-6 consumers (`SessionWrapPane`) align to these inner names** (D-G4-7 downstream flag). Server recomputes deltas authoritatively (L1; the request carries none).
+- **`ApiExamDatesReply` (GET `/me/exam-dates`) — FROZEN (build-log D-G4-7 + D-G4-6).** Code: `SessionPlacementExamRoutes.kt`.
+  ```kotlin
+  @Serializable data class ApiExamDatesReply(val exam_dates: List<ApiExamDate>)
+  @Serializable data class ApiExamDate(val subject: String, val start_at: String)   // start_at = ISO
+  @Serializable data class ApiExamDatePut(val subject: String, val start_at: String) // PUT body, ISO
+  ```
+  Route = GET/PUT `/api/v1/me/exam-dates` (CHANGE-9:97 canonical; route-table omits it). One row per `(user, subject)`; PUT upserts (no dup); inherits the `/me/` auth whitelist (D-G4-6). **Phase-6 consumers (`DayOf`, `SettingsMe` exam-date picker, H14) align to `{subject, start_at}`.**
+- **`worked_example_first` SERVER formula — FROZEN (build-log D-G1-3, refined by P1-3b).** The non-nullable `QueueItem.worked_example_first` (§C) is a SERVER decision resolved in `LockedNextKcSelector` (`src/main/kotlin/jarvis/tutor/NextKcSelector.kt`), NOT a raw passthrough of the KC field:
+  ```kotlin
+  // worked-example-first for a novice (the SERVE phase = intro) OR when the KC authored it true.
+  fun workedFirst(servePhase: Phase): Boolean = kc.worked_example_first || servePhase == Phase.intro
+  ```
+  The SERVE phase is the first remaining phase of `ScaffoldPlanner.planFor(kc, mastery)` at-or-above the learner's resolved phase (P1-3b; not the raw `KcCandidate.phase`). This interprets the data-model-lock "degrade to true for novices" as intro-phase. `mode`/`worked_example_first` are resolved ONLY here (single source of truth, no second downstream resolver).
+
+> **DURABLE RULE (P1-4, applies to ALL of this lock + the data-model-lock + the master-plan freeze tables):** any forced deviation from a frozen lock — a renamed wire field, a newly-frozen inner shape, a changed server formula — **MUST amend the lock doc in the SAME commit** that lands the code, so code and lock never silently contradict (the failure mode P1-4 caught). If amending would weaken a Phase-2 trust guarantee, STOP and escalate to the owner instead of carving out a silent exception. Build-log decisions (`build-review/*-build-log.md`) are a journal, NOT a lock — promote the decision here (or cross-link its id) before claiming the contract frozen.

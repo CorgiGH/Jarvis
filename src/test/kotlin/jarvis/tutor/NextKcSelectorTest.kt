@@ -27,10 +27,11 @@ import kotlin.test.assertNull
  */
 class NextKcSelectorTest {
 
-    private fun kc(id: String): KnowledgeConcept = KnowledgeConcept(
+    private fun kc(id: String, phasePlan: List<String>? = null): KnowledgeConcept = KnowledgeConcept(
         id = id, subject = "PA", name_ro = "RO-$id", name_en = "EN-$id",
         cluster = "c", bloom_level = "understand", difficulty = 1, time_minutes = 10,
         exam_weight = 1.0, tier = 1, grounding_tier = "standard",
+        phase_plan = phasePlan,
     )
 
     private fun masteryRow(kcId: String, ewma: Double, obs: Int): KcMastery = KcMastery(
@@ -44,9 +45,18 @@ class NextKcSelectorTest {
         obs: Int = 0,
         phase: Phase = Phase.intro,
         status: VerificationStatus = VerificationStatus.faithful,
+        phasePlan: List<String>? = null,
+        entryPhase: Phase? = null,
     ): KcCandidate = KcCandidate(
-        kc = kc(id),
-        mastery = if (obs == 0) null else masteryRow(id, ewma, obs),
+        kc = kc(id, phasePlan),
+        mastery = when {
+            obs > 0 -> masteryRow(id, ewma, obs).copy(entryPhase = entryPhase)
+            entryPhase != null -> KcMastery(
+                userId = "u", kcId = id, ewmaScore = 0.0, observations = 0,
+                lastGradedAt = Instant.EPOCH, phase = null, entryPhase = entryPhase,
+            )
+            else -> null
+        },
         phase = phase,
         verificationStatus = status,
         fsrsCardId = "card-$id",
@@ -168,6 +178,36 @@ class NextKcSelectorTest {
         val picked = selector.select("u", "PA", listOf(a, b), recentShapes = recent)
         assertNotNull(picked)
         assertEquals("a", picked.kc_id)
+    }
+
+    // ── P1-3(b): the selector CONSUMES ScaffoldPlanner.planFor to resolve the served phase ──────────
+    @Test
+    fun `served phase is the first remaining phase from ScaffoldPlanner planFor (phase_plan honored)`() {
+        // A cold KC whose authored phase_plan EXCLUDES intro. The raw resolved candidate.phase is intro
+        // (cold), but planFor([practice, retrieval], cold) = [practice, retrieval]; the served phase MUST
+        // be `practice` (the first remaining plan phase), NOT the raw `intro`. This proves the selector
+        // reads planFor — without it, the served phase would be intro and mode would be `worked`.
+        val selector = LockedNextKcSelector(PrereqGraph.from(emptyList()))
+        val c = candidate("A", obs = 0, phase = Phase.intro, phasePlan = listOf("practice", "retrieval"))
+        val picked = selector.select("u", "PA", listOf(c), recentShapes = emptyList())
+        assertNotNull(picked)
+        assertEquals(Phase.practice, picked.phase, "selector ignored ScaffoldPlanner.planFor")
+        // practice (not intro, not retrieval) ⇒ NOT worked-first ⇒ mode=drill.
+        assertEquals(QueueMode.drill, picked.mode)
+        assertEquals(false, picked.worked_example_first)
+    }
+
+    @Test
+    fun `served phase respects the entry_phase floor via planFor`() {
+        // Cold ewma but a placement-seeded entry_phase=retrieval floor; phase_plan null ⇒ all four.
+        // resolved KcCandidate.phase = entry_phase = retrieval; planFor(all, floor=retrieval) =
+        // [retrieval, mastered]; first plan phase >= retrieval = retrieval.
+        val selector = LockedNextKcSelector(PrereqGraph.from(emptyList()))
+        val c = candidate("A", obs = 0, phase = Phase.retrieval, entryPhase = Phase.retrieval)
+        val picked = selector.select("u", "PA", listOf(c), recentShapes = emptyList())
+        assertNotNull(picked)
+        assertEquals(Phase.retrieval, picked.phase)
+        assertEquals(QueueMode.retrieve, picked.mode)
     }
 
     // ── QueueItem shape is populated from the candidate ─────────────────────

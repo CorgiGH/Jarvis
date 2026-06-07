@@ -330,6 +330,44 @@ class DrillGradeAtomicTest {
         assertEquals(0, attemptCount(ctx!!, userId, "pa-kc-005"), "409: no attempt written")
     }
 
+    // ── PARTIAL QUARANTINE (per-KC independence, DANGEROUS direction): ONE faithful + ONE non- ───
+    //    faithful KC on the SAME problem must record the FAITHFUL subset AND flag kc_quarantined=true.
+    //    Guards against two regressions: (a) the quarantined sibling silently suppressing the faithful
+    //    KC's mastery (under-recording), and (b) the gate leaking — the non-faithful KC gaining mastery
+    //    (over-recording, a trust breach). Both KCs are resolvable in the corpus; only one is FAITHFUL.
+    @Test
+    fun `mixed faithful + non-faithful KCs - records faithful subset and flags kc_quarantined`(@TempDir tmp: Path) = testApplication {
+        val content = tmp.resolve("content"); seedContent(content, "pa-kc-005", "pa-kc-006")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        drillGraderLlmFactory = { FakeGraderLlm(COHERENT) }
+        var ctx: TutorContext? = null
+        application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (userId, sid) = seedSession(ctx!!)
+        // Only pa-kc-005 gets a B8 faithful row; pa-kc-006 stays unverified ⇒ gate DENY.
+        seedFaithful(ctx!!, content, "pa-kc-005")
+        seedProblem(ctx!!, "task-1", "d1", listOf("pa-kc-005", "pa-kc-006"))
+        val csrf = "test-csrf-12345"
+        val client = newClient(this)
+        val resp = client.post("/api/v1/drill/grade") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json); setBody(gradeBody())
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        // The faithful subset WAS recorded, AND the partial-quarantine flag is set.
+        assertTrue(body.contains("\"recorded\":true"), body)
+        assertTrue(body.contains("\"kc_quarantined\":true"), body)
+        // Faithful KC: full write (mastery + attempt + rubric card).
+        assertNotNull(KcMasteryRepo(ctx!!.db).get(userId, "pa-kc-005"), "faithful KC records mastery")
+        assertEquals(1, attemptCount(ctx!!, userId, "pa-kc-005"), "faithful KC: one attempt")
+        assertNotNull(rubricCard(ctx!!, userId, "pa-kc-005"), "faithful KC: rubric card upserted")
+        // Non-faithful sibling: NOTHING (the gate must NOT leak — per-KC independence, dangerous dir).
+        assertNull(KcMasteryRepo(ctx!!.db).get(userId, "pa-kc-006"), "quarantined KC must NEVER gain mastery")
+        assertEquals(0, attemptCount(ctx!!, userId, "pa-kc-006"), "quarantined KC: no attempt")
+        assertNull(rubricCard(ctx!!, userId, "pa-kc-006"), "quarantined KC: no rubric card")
+    }
+
     // ── 1:N over server-resolved kcIds: both faithful KCs written atomically ─────────────────────
     @Test
     fun `grade resolving to 2 faithful KCs writes mastery+attempt+rubric for BOTH`(@TempDir tmp: Path) = testApplication {

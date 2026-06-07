@@ -132,6 +132,10 @@ fun Route.installQueueMasteryCalibrationRoutes() {
             // refusal). Only `faithful` KCs survive — non-faithful/disputed are OMITTED, never surfaced.
             val candidates = mutableListOf<KcCandidate>()
             val allEdges = mutableListOf<jarvis.content.PrereqEdge>()
+            // P0-2 watch (c): the set of KCs that survived the SAME faithful + non-disputed filter the
+            // queue items use. total_due is counted ONLY over due cards whose KC is in this set, so the
+            // count can never report due work the queue omits (omit-non-faithful contract, line 109/§C).
+            val faithfulKcIds = mutableSetOf<String>()
             for (sub in subjects) {
                 val loaded = runCatching { repo.loadSubject(sub.id) }.getOrNull() ?: continue
                 allEdges += loaded.edges
@@ -142,6 +146,7 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                     // OPEN dispute (faithful→unverified), so the faithful filter above already excludes a
                     // disputed faithful KC. The explicit shared-helper check keeps the contract loud.
                     if (ReportWrongQuery.hasOpenReportWrong(db, kc.id)) continue
+                    faithfulKcIds += kc.id
                     val mastery = readMastery(db, userId, kc.id)
                     candidates += KcCandidate(
                         kc = kc,
@@ -159,16 +164,25 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                 userId = userId, subject = null, candidates = candidates, recentShapes = emptyList(),
             )
 
-            // FSRS-due review cards (status=ACTIVE, due<=now). total_due is the due-card count (§2.2).
-            val dueCardCount = transaction(db) {
-                FsrsCardsTable.selectAll()
-                    .where {
-                        (FsrsCardsTable.userId eq userId) and
-                            (FsrsCardsTable.dueAt lessEq now) and
-                            (FsrsCardsTable.status eq CardStatus.ACTIVE.name)
-                    }
-                    .count()
-            }.toInt()
+            // FSRS-due review cards (status=ACTIVE, due<=now), FILTERED to faithful KCs (§2.2 + line 109).
+            // P0-2 watch (c): a due card whose KC is non-faithful / disputed (NOT in faithfulKcIds) is
+            // EXCLUDED — total_due must match the omit-non-faithful queue contract, never pad the count
+            // with due work the queue refuses to surface. A NULL-kcId card (GAP_PROMOTION / MANUAL) has
+            // no content KC to prove faithful ⇒ fail-closed (excluded). Empty faithful set ⇒ count 0.
+            val dueCardCount = if (faithfulKcIds.isEmpty()) {
+                0
+            } else {
+                transaction(db) {
+                    FsrsCardsTable.selectAll()
+                        .where {
+                            (FsrsCardsTable.userId eq userId) and
+                                (FsrsCardsTable.dueAt lessEq now) and
+                                (FsrsCardsTable.status eq CardStatus.ACTIVE.name) and
+                                (FsrsCardsTable.kcId inList faithfulKcIds)
+                        }
+                        .count()
+                }.toInt()
+            }
 
             val items = listOfNotNull(nextItem)
             call.respond(

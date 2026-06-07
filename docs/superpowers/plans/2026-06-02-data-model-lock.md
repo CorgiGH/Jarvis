@@ -32,7 +32,7 @@ Verified against the live source tree and the live DB (`~/.jarvis/tutor.db`, 871
 
 7. **`record()` is self-transacting today and is called in a `forEach` loop, non-atomically.** `KcMastery.kt:60` `record(...) = transaction(db) { ... }`; the grade route calls it per-KC in a loop at `TutorRoutes.kt:2027` (`masteryKcs.forEach { kcId -> repo.record(userId, kcId, deterministicScore) }`). This is the B3 split site. **Resolution:** Task 8 adds `recordIn(tx,…)` (txn-less, signatures-lock §G) and re-points `record()` to a thin `transaction(db){ recordIn(this,…) }` wrapper. Phase 1 does NOT rewrite the grade route loop into one txn (that is Phase 3 / B1); Phase 1 only ships the split + the wrapper so callers keep compiling. Existing callers (`TutorRoutes.kt:2027`, `KcMasteryTest.kt:24/32/33/40/41/42`) must stay green against the wrapper.
 
-8. **`me/delete` cascade is at `TutorRoutes.kt:2168-2183`** (single `transaction(ctx.db){ ... }`, child-tables-first, then Sessions, then Users; `AuditLinesTable` intentionally excluded). The five new user-scoped tables must be appended **child-first, BEFORE `SessionsTable`/`UsersTable`**. `PRAGMA foreign_keys=ON` is confirmed at `TutorDb.kt:15`.
+8. **`me/delete` cascade** (single `transaction(ctx.db){ ... }`, child-tables-first, then Sessions, then Users; `AuditLinesTable` intentionally excluded). The five new user-scoped tables must be appended **child-first, BEFORE `SessionsTable`/`UsersTable`**. `PRAGMA foreign_keys=ON` is confirmed at `TutorDb.kt:15`. **(2026-06-07 P0-1 refactor — see the Task-13 amendment: the cascade is now the constant `ME_DELETE_CASCADE_TABLES` looped by the route, with a CI invariant over `ALL_TABLES` asserting every user-FK table is covered; the old `:2168-2183` line ref is stale.)**
 
 ---
 
@@ -465,6 +465,25 @@ fun upsertRubricCriterion(tx: Transaction, userId: String, kcId: String, front: 
 - [ ] **Step 4 — Refactor.** Keep `AuditLinesTable` excluded (intentional, `:2164-2167`). Keep ordering: all child tables → `SessionsTable` → `UsersTable`.
 
 **Acceptance:** erasure with rows in every new user-scoped table leaves 0 leftover and throws no FK error under `foreign_keys=ON`.
+
+> **AMENDMENT 2026-06-07 (P0-1, Phase-3 adversarial council):** Task 13's original enumerated
+> append covered the 4 Phase-1 tables but the council found TWO pre-existing user-FK tables STILL
+> missing from the cascade: **`kc_mastery`** (`KcMastery.kt:16`, written by every graded drill) and
+> **`user_provider_config`** (`ProviderConfig.kt:25`). Under `foreign_keys=ON` either one left behind
+> makes the final `UsersTable.deleteWhere` FK-throw → the whole erasure rolls back → `/me/delete`
+> **500s** for any user who graded a drill or set a provider. Both are now in the cascade.
+> **Refactor (SSOT + class-killer, fix-claim discipline):** the cascade is no longer a hand-enumerated
+> inline list. The child-table set is the single constant `ME_DELETE_CASCADE_TABLES` in
+> `TutorRoutes.kt`; the route loops it (deleting by the `user_id` column) then deletes `UsersTable`
+> last. Intentionally-retained user-FK tables (only `AuditLinesTable`, GDPR Art 17(3)(b)) live in
+> `ME_DELETE_RETAINED_USER_FK_TABLES`. A CI invariant (`MeDeleteCascadeTest`) reflects over
+> `jarvis.tutor.ALL_TABLES`, finds **every** table whose column foreign-keys `UsersTable.id`, and
+> asserts each is covered — so the next user-FK table cannot be silently missed. The line refs in this
+> Task (`:2168-2183`, `:2164-2167`, `:2181`) are pre-refactor and stale; the contract (child-first →
+> Sessions → Users, Audit excluded, 0 leftover, no FK throw) is unchanged and now machine-enforced.
+> NOTE: `consent_log` / `user_preferences` / `ai_literacy_confirmation` are user-scoped but FK-LESS
+> (no `.references(UsersTable.id)`) — they were already in the cascade and cannot cause the FK-throw,
+> so the FK-based invariant intentionally does not police them (they have no FK to police).
 
 ---
 

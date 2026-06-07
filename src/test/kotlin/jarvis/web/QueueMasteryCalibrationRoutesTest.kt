@@ -250,6 +250,44 @@ class QueueMasteryCalibrationRoutesTest {
     }
 
     @Test
+    fun `queue today caller CONSUMES ScaffoldPlanner planFor — an authored phase_plan that skips intro changes the served mode`() = testApplication {
+        // P1-3(b): the production serve path (queue/today → LockedNextKcSelector) must consume
+        // ScaffoldPlanner.planFor. A cold faithful root KC whose authored phase_plan EXCLUDES intro must
+        // be served at the FIRST plan phase (practice) ⇒ mode=drill, worked_example_first=false. Without
+        // planFor on the caller path the cold KC would resolve to intro ⇒ mode=worked. This is the
+        // route-level proof the GHOST (planFor with zero production callers) is closed.
+        val dir = Files.createTempDirectory("queue-planfor")
+        val content = dir.resolve("content")
+        content.createDirectories()
+        content.resolve("subjects.yaml").writeText(
+            "version: 1\nsubjects:\n  - id: PA\n    name_ro: \"Proiectarea Algoritmilor\"\n    name_en: \"Algorithm Design\"\n",
+        )
+        val pa = content.resolve("PA")
+        pa.resolve("kcs").createDirectories()
+        pa.resolve("_sources").createDirectories()
+        // A single root KC with phase_plan=[practice, retrieval] (NO intro).
+        pa.resolve("kcs/pa-kc-001.yaml").writeText(
+            "id: pa-kc-001\nsubject: PA\nname_ro: \"Notatia O\"\nname_en: \"Big-O notation\"\n" +
+                "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
+                "exam_weight: 1.0\ntier: 1\nversion: 1\nverification_status: \"faithful\"\n" +
+                "phase_plan:\n  - practice\n  - retrieval\n",
+        )
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (_, sid) = seedUser(db)
+        seedB8(db, content, "pa-kc-001", VerificationStatus.faithful)
+        application { installRoutes(db, dir) }
+        val r = client.get("/api/v1/queue/today") { header("Cookie", "jarvis_session=$sid") }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        assertTrue(body.contains("pa-kc-001"), body)
+        // planFor consumed ⇒ served at practice, NOT intro.
+        assertTrue(body.contains("\"phase\":\"practice\""), "served phase must be practice (planFor), not intro: $body")
+        assertTrue(body.contains("\"mode\":\"drill\""), "served mode must be drill (practice phase), not worked (intro): $body")
+        assertTrue(body.contains("\"worked_example_first\":false"), body)
+    }
+
+    @Test
     fun `queue today OMITS a non-faithful KC — never surfaces it (route-table line 109, QueueItem C)`() = testApplication {
         // pa-kc-001 is the ONLY root, but its runtime status is uncertain (not faithful) ⇒ it must be
         // EXCLUDED from the queue entirely (never surfaced with a degraded badge — the lock OMITS it).
@@ -266,6 +304,88 @@ class QueueMasteryCalibrationRoutesTest {
         assertFalse(body.contains("pa-kc-001"), "a non-faithful KC must be OMITTED from the queue: $body")
         // Nothing surfaced ⇒ empty item list.
         assertTrue(body.contains("\"items\":[]"), body)
+    }
+
+    @Test
+    fun `total_due excludes a due card for a NON-faithful KC — count matches the omit-non-faithful contract`() = testApplication {
+        // P0-2 watch (c): total_due counted ALL ACTIVE due cards with NO faithfulness filter, so it could
+        // report due work the queue OMITS (the items[] only carries faithful KCs). A due card whose KC is
+        // uncertain (non-faithful) must NOT be counted — the count must match the queue contract.
+        val dir = Files.createTempDirectory("queue-totaldue-nonfaithful")
+        val content = dir.resolve("content"); seedContent(content)
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (uid, sid) = seedUser(db)
+        // pa-kc-001 is NON-faithful at runtime; a due review card exists for it.
+        seedB8(db, content, "pa-kc-001", VerificationStatus.uncertain)
+        seedDueCard(db, uid, "pa-kc-001", Instant.now().minus(1, ChronoUnit.DAYS))
+        application { installRoutes(db, dir) }
+        val r = client.get("/api/v1/queue/today") { header("Cookie", "jarvis_session=$sid") }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        assertTrue(body.contains("\"total_due\":0"),
+            "a due card for a non-faithful KC must NOT be counted in total_due (matches the omit contract): $body")
+    }
+
+    @Test
+    fun `total_due excludes a due card for an OPEN-dispute KC (D-RF2 — count matches the omit contract)`() = testApplication {
+        val dir = Files.createTempDirectory("queue-totaldue-dispute")
+        val content = dir.resolve("content"); seedContent(content)
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (uid, sid) = seedUser(db)
+        // A faithful KC, but with an OPEN dispute ⇒ resolveStatus demotes it ⇒ omitted from items AND total_due.
+        seedB8(db, content, "pa-kc-001", VerificationStatus.faithful)
+        seedDueCard(db, uid, "pa-kc-001", Instant.now().minus(1, ChronoUnit.DAYS))
+        transaction(db) {
+            ReportWrongTable.insert {
+                it[id] = TutorTypes.ulid()
+                it[ReportWrongTable.userId] = uid
+                it[ReportWrongTable.kcId] = "pa-kc-001"
+                it[cardId] = null
+                it[gradeAttemptRaw] = "disputed"
+                it[reportedAt] = Instant.now()
+                it[resolution] = "OPEN"
+            }
+        }
+        application { installRoutes(db, dir) }
+        val r = client.get("/api/v1/queue/today") { header("Cookie", "jarvis_session=$sid") }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        assertTrue(body.contains("\"total_due\":0"),
+            "a due card for an OPEN-dispute KC must NOT be counted in total_due (D-RF2): $body")
+    }
+
+    @Test
+    fun `total_due excludes a due card with a NULL kc_id (no faithful KC backing — fail-closed)`() = testApplication {
+        // A GAP_PROMOTION / MANUAL card has kcId=NULL ⇒ no content KC to prove faithful ⇒ fail-closed,
+        // not counted (the queue only surfaces faithful KCs; an un-backed due card must not pad the count).
+        val dir = Files.createTempDirectory("queue-totaldue-nullkc")
+        val content = dir.resolve("content"); seedContent(content)
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (uid, sid) = seedUser(db)
+        transaction(db) {
+            FsrsCardsTable.insert {
+                it[id] = TutorTypes.ulid()
+                it[userId] = uid
+                it[sourceType] = jarvis.tutor.FsrsSource.MANUAL.name
+                it[sourceRef] = "manual-1"
+                it[front] = "f"; it[back] = "b"
+                it[difficulty] = 5.0; it[stability] = 1.0; it[retrievability] = 0.9
+                it[dueAt] = Instant.now().minus(1, ChronoUnit.DAYS)
+                it[lastReviewedAt] = Instant.now().minus(1, ChronoUnit.DAYS)
+                it[lapses] = 0
+                it[kcId] = null
+                it[status] = CardStatus.ACTIVE.name
+            }
+        }
+        application { installRoutes(db, dir) }
+        val r = client.get("/api/v1/queue/today") { header("Cookie", "jarvis_session=$sid") }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        assertTrue(body.contains("\"total_due\":0"),
+            "a NULL-kcId due card has no faithful KC backing ⇒ must not be counted (fail-closed): $body")
     }
 
     @Test

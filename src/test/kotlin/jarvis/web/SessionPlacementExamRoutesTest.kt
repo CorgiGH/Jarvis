@@ -280,6 +280,48 @@ class SessionPlacementExamRoutesTest {
     }
 
     @Test
+    fun `placement submit derives entry_phase from answer strength — a strong answer seeds practice not intro`() = testApplication {
+        // P1-3(a): the old code passed observations=1 to PhaseModel.transition, which ALWAYS returns
+        // intro (obs < PRACTICE_OBS_MIN), so placement was a no-op. A strong (non-blank) placement
+        // answer MUST seed entry_phase=practice; a blank answer stays intro.
+        val dir = Files.createTempDirectory("pl-strength")
+        val content = dir.resolve("content"); seedContent(content)
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        val db = freshDb(dir)
+        val (uid, sid) = seedUser(db)
+        application { installRoutes(db, dir) }
+        val q = client.get("/api/v1/placement/questions") { header("Cookie", "jarvis_session=$sid") }.bodyAsText()
+        val qids = Regex("\"question_id\":\"([^\"]+)\"").findAll(q).map { it.groupValues[1] }.toList()
+        val strongQid = qids[0]
+        val blankQid = qids[1]
+        val r = client.post("/api/v1/placement/submit") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody(
+                """{"answers":[{"question_id":"$strongQid","response":"a substantive correct answer"},""" +
+                    """{"question_id":"$blankQid","response":""}]}""",
+            )
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        // Map each placed question back to its KC.
+        val strongKc = strongQid.removePrefix("plq-")
+        val blankKc = blankQid.removePrefix("plq-")
+        val phases = transaction(db) {
+            KcMasteryTable.selectAll()
+                .where { KcMasteryTable.userId eq uid }
+                .associate { it[KcMasteryTable.kcId] to it[KcMasteryTable.entryPhase] }
+        }
+        assertEquals(
+            Phase.practice.name, phases[strongKc],
+            "a strong placement answer must seed entry_phase=practice (was a no-op intro): $phases",
+        )
+        assertEquals(
+            Phase.intro.name, phases[blankKc],
+            "a blank placement answer must stay entry_phase=intro: $phases",
+        )
+    }
+
+    @Test
     fun `placement submit NEVER regresses an already-higher entry_phase (monotonicity class-killer)`() = testApplication {
         val dir = Files.createTempDirectory("pl-mono")
         val content = dir.resolve("content"); seedContent(content)

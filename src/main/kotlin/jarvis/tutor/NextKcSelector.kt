@@ -58,9 +58,16 @@ data class KcCandidate(
  *    frozen and carries no graph). The graph is memoized in TutorContext per M-NEXTKC.
  *  - A candidate's "shape" for the interleave-cap is its resolved [QueueMode] (the drill-shape
  *    taxonomy is a Group-6 generator concern; KcCandidate carries no shape field). Least-ripple.
- *  - `worked_example_first` / `mode` are SERVER decisions resolved here from phase + authored flag
- *    (§4.1 "worked-example-first faded by mastery"): worked-example-first for a novice (intro phase)
+ *  - `worked_example_first` / `mode` are SERVER decisions resolved here from the SERVE phase + authored
+ *    flag (§4.1 "worked-example-first faded by mastery"): worked-example-first for a novice (intro phase)
  *    OR when authored true; `mode` = retrieve at the retrieval phase, worked when worked-first, else drill.
+ *  - P1-3(b): the SERVE phase is resolved via [ScaffoldPlanner.planFor] — the FIRST remaining phase of
+ *    the KC's `phase_plan ∩ not-yet-mastered`, already trimmed to the learner's `entry_phase` floor. This
+ *    is the ONE place the per-action phase plan is consumed on the serve path, so an authored `phase_plan`
+ *    (e.g. a KC that skips `intro`) and a placement-seeded `entry_phase` floor BOTH actually shape what is
+ *    served. Falls back to the raw resolved [KcCandidate.phase] only when the plan is empty (defensive;
+ *    an eligible — not-fully-mastered — candidate's plan is non-empty unless the floor sits above it).
+ *    `mode`/`worked_example_first` stay the single source of truth here (no second resolver downstream).
  *
  * Pure over its args + the injected graph (no DB, no side effects).
  */
@@ -99,36 +106,60 @@ class LockedNextKcSelector(
      */
     private fun applyInterleaveCap(eligible: List<KcCandidate>, recentShapes: List<String>): KcCandidate {
         val head = eligible.first()
-        val headShape = head.resolvedMode().name
+        val headShape = head.resolvedMode(head.servePhase()).name
         val tailRun = recentShapes.takeLastWhile { it == headShape }.size
         if (tailRun < INTERLEAVE_CAP) return head
-        return eligible.firstOrNull { it.resolvedMode().name != headShape } ?: head
+        return eligible.firstOrNull { it.resolvedMode(it.servePhase()).name != headShape } ?: head
     }
 
     private fun KcCandidate.ewma(): Double = mastery?.ewmaScore ?: 0.0
 
-    /** SERVER decision (§4.1): worked-example-first for a novice (intro) or when authored true. */
-    private fun KcCandidate.workedFirst(): Boolean = kc.worked_example_first || phase == Phase.intro
-
-    /** SERVER decision: retrieve at retrieval phase; worked when worked-first; else drill. */
-    private fun KcCandidate.resolvedMode(): QueueMode = when {
-        phase == Phase.retrieval -> QueueMode.retrieve
-        workedFirst()            -> QueueMode.worked
-        else                     -> QueueMode.drill
+    /**
+     * P1-3(b) — the phase the next action SERVES, resolved via [ScaffoldPlanner.planFor].
+     *
+     * `planFor(kc, mastery)` is the ordered `phase_plan ∩ not-yet-mastered`, already trimmed to the
+     * `entry_phase` floor. That is the set of phases this KC is ALLOWED to run for this learner. The
+     * served phase is the FIRST plan phase AT OR ABOVE the learner's current resolved progression
+     * ([KcCandidate.phase] = kc_mastery.phase ?: entry_phase ?: intro) — so:
+     *   - an authored `phase_plan` that skips a phase (e.g. no `intro`) is honored (the skipped phase is
+     *     never in the plan, so it can never be served);
+     *   - the learner is never REGRESSED below the phase they have already reached via graded history;
+     *   - a placement-seeded `entry_phase` floor still raises a cold learner's start (it raises both the
+     *     plan floor AND the resolved `phase`).
+     * Falls back to the raw resolved [KcCandidate.phase] only when the plan has no phase at/above it
+     * (defensive; e.g. an empty plan when the floor sits above every authored phase).
+     */
+    private fun KcCandidate.servePhase(): Phase {
+        val plan = ScaffoldPlanner.planFor(kc, mastery)
+        return plan.firstOrNull { it.ordinal >= phase.ordinal } ?: phase
     }
 
-    private fun KcCandidate.toQueueItem(): QueueItem = QueueItem(
-        kc_id = kc.id,
-        kc_name_ro = kc.name_ro,
-        kc_name_en = kc.name_en,
-        subject = kc.subject,
-        phase = phase,
-        mastery_ewma = ewma(),
-        fsrs_card_id = fsrsCardId,
-        verification_status = verificationStatus,
-        worked_example_first = workedFirst(),
-        mode = resolvedMode(),
-    )
+    /** SERVER decision (§4.1): worked-example-first for a novice (intro) or when authored true. */
+    private fun KcCandidate.workedFirst(servePhase: Phase): Boolean =
+        kc.worked_example_first || servePhase == Phase.intro
+
+    /** SERVER decision: retrieve at retrieval phase; worked when worked-first; else drill. */
+    private fun KcCandidate.resolvedMode(servePhase: Phase): QueueMode = when {
+        servePhase == Phase.retrieval -> QueueMode.retrieve
+        workedFirst(servePhase)       -> QueueMode.worked
+        else                          -> QueueMode.drill
+    }
+
+    private fun KcCandidate.toQueueItem(): QueueItem {
+        val serve = servePhase()
+        return QueueItem(
+            kc_id = kc.id,
+            kc_name_ro = kc.name_ro,
+            kc_name_en = kc.name_en,
+            subject = kc.subject,
+            phase = serve,
+            mastery_ewma = ewma(),
+            fsrs_card_id = fsrsCardId,
+            verification_status = verificationStatus,
+            worked_example_first = workedFirst(serve),
+            mode = resolvedMode(serve),
+        )
+    }
 
     companion object {
         /** Max consecutive same-shape serves before the interleave-cap kicks in. */

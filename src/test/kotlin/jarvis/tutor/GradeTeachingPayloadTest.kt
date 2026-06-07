@@ -2,8 +2,12 @@ package jarvis.tutor
 
 import jarvis.content.KnowledgeConcept
 import jarvis.content.Misconception
+import jarvis.content.SourceRef
+import jarvis.content.Span
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -31,9 +35,14 @@ class GradeTeachingPayloadTest {
         trigger: String = "Crezi că bucla simplă e mereu O(n).",
         figureSpec: String? = "bar-chart:complexity",
         selfExplain: String? = "Explică de ce crește pătratic.",
+        source: List<SourceRef> = listOf(
+            SourceRef(doc = "pa-lecture-03", quote = "complexitatea buclei imbricate este pătratică",
+                page = 12, span = Span(40, 84)),
+        ),
     ) = Misconception(
         id = "pa-misc-001", kc_id = "pa-kc-005",
         label_ro = "l", label_en = "l", trigger = trigger, refutation = refutation,
+        source = source,
         figure_spec = figureSpec, self_explanation_prompt = selfExplain,
     )
 
@@ -58,6 +67,37 @@ class GradeTeachingPayloadTest {
         val p = MisconceptionPayload.from(misc(figureSpec = null))
         assertTrue(p != null)
         assertNull(p!!.figure_spec, "absent figure_spec ⇒ null, ribbon renders its degraded state")
+    }
+
+    // ── P0-2 (RE-OPEN FIX): the served misconception MUST pass the CitationGuard chokepoint ──
+    // (interface-signatures-lock §Q write-site 2 / P2-RULE8). It ships CITED (carrying its SourceRef)
+    // and FAIL-LOUD when the matched stored misconception has NO SourceRef — never silently un-cited.
+
+    @Test
+    fun `fromCited routes the served misconception through the citation chokepoint and carries its SourceRef`() {
+        val p = MisconceptionPayload.fromCited(misc())
+        assertNotNull(p, "a matched misconception WITH a source must serve a cited inline payload")
+        assertEquals("pa-misc-001", p.id)
+        assertEquals("Nu, complexitatea nu e liniară.", p.refutation)
+        // The chokepoint attached the misconception's verbatim citation onto the payload (ships CITED).
+        assertNotNull(p.source, "the served misconception must carry its SourceRef (P2-RULE8 — ships CITED)")
+        assertEquals("pa-lecture-03", p.source.doc)
+        assertEquals("complexitatea buclei imbricate este pătratică", p.source.quote)
+        assertEquals(Span(40, 84), p.source.span)
+    }
+
+    @Test
+    fun `fromCited FAIL-LOUD - a matched misconception with NO source THROWS (never ships un-cited)`() {
+        // The locked fail-loud behavior: a learner-facing refutation with no resolved SourceRef must
+        // NEVER reach the surface un-cited — CitationGuard.attach throws first (P2-RULE8, §Q).
+        assertFailsWith<IllegalStateException> {
+            MisconceptionPayload.fromCited(misc(source = emptyList()))
+        }
+    }
+
+    @Test
+    fun `fromCited of a null misconception is null (no match ⇒ no ghost, no throw)`() {
+        assertNull(MisconceptionPayload.fromCited(null), "no matched misconception ⇒ null payload, never a throw")
     }
 
     private fun miscRow(id: String, labelEn: String) = Misconception(
