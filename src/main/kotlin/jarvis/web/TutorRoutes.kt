@@ -68,6 +68,7 @@ import jarvis.tutor.CardActionLogTable
 import jarvis.tutor.taskdetect.DetectedTaskMappingTable
 import jarvis.tutor.AttemptsTable
 import jarvis.tutor.ExamDatesTable
+import jarvis.tutor.MockExamsTable
 import jarvis.tutor.ReportWrongTable
 import jarvis.tutor.SessionSummariesTable
 import jarvis.tutor.csrfProtect
@@ -178,6 +179,9 @@ fun Application.installTutorRoutes() {
 
         // Phase 3 Area C GROUP 4: session/close, placement, exam-dates.
         installSessionPlacementExamRoutes()
+
+        // Phase 3 Area C GROUP 5: mock-exam (SYNC 200-only, H13 / CONTRADICTION F1).
+        installMockExamRoutes()
 
         // Daemon health probe: checks if the local background daemon at
         // port 7331 is reachable. No auth required (public liveness data).
@@ -2321,6 +2325,7 @@ fun Application.installTutorRoutes() {
                         AttemptsTable.deleteWhere { AttemptsTable.userId eq uid }
                         ReportWrongTable.deleteWhere { ReportWrongTable.userId eq uid }
                         ExamDatesTable.deleteWhere { ExamDatesTable.userId eq uid }
+                        MockExamsTable.deleteWhere { MockExamsTable.userId eq uid }
                         SessionsTable.deleteWhere { SessionsTable.userId eq uid }
                         UsersTable.deleteWhere { UsersTable.id eq uid }
                     }

@@ -17,8 +17,8 @@ Owner (Alex) authorized autonomous Phase-3 build 2026-06-07 ("just go do them, g
 | G1 | ScaffoldPlanner + PrereqGraph + NextKcSelector (+QueueItem/QueueMode forced by frozen sig) | DONE (suite 1189✓, review SHIP) | d905022 |
 | G2 | atomic grade (B1/B2/B3, faithful-gated, 409) | DONE (suite 1195✓, review SHIP) | 2318d71 |
 | G3 | queue/today + mastery + calibration | DONE (suite ✓, review SHIP) | 06ca1a5 |
-| G4 | session/close + placement + entry_phase + exam_dates | DONE (suite 1219✓, review SHIP) | (this commit) |
-| G5 | mock-exam SYNC-200 | pending | — |
+| G4 | session/close + placement + entry_phase + exam_dates | DONE (suite 1219✓, review SHIP) | 5dcfdd4 |
+| G5 | mock-exam SYNC-200 (+ B6 cascade fix) | DONE (suite 1228✓, review SHIP, +PM cascade fix) | (this commit) |
 | G6 | P3-GEN generator + P3-HONESTY spot-check | pending | — |
 | G7 | P3-MISC-SERVE + P3-LADDER-SERVE + P3-GHOST-FIELDS | pending | — |
 
@@ -73,3 +73,13 @@ Decisions:
 - **D-G4-5:** session/close deltas SERVER-recomputed from this user's attempts in window [session_start_at, now] (client sends none, L1); writes one session_summaries row; empty/zero-width window ⇒ empty deltas.
 - **D-G4-6:** exam-dates = GET/PUT `/api/v1/me/exam-dates` (CHANGE-9:97 canonical; route-table omits it). One row per (user,subject), PUT upserts (no dup); inherits the /me/ auth whitelist.
 - **D-G4-7 (downstream flag):** §2.2 left the `mastery_deltas` inner shape + exam-dates GET envelope unspecified → chose server-authoritative `ApiMasteryDelta{attempts,correct,ewma_after,phase}` + `ApiExamDatesReply{exam_dates:[...]}`. Outer wire keys are verbatim from the lock. **Phase-6 SessionWrapPane/DayOf/SettingsMe must align to these inner names (or adjust there).**
+
+### G5 — mock-exam SYNC-200 (DONE, SHIP, suite 1228/0)
+
+Files: MockExamRoutes.kt (NEW — start/submit/result), MockExamTable.kt (NEW — `mock_exams`, result-of-record NOT `mock_exam_jobs`), Migration.kt (register), TutorRoutes.kt (mount + cascade fix), MockExamRoutesTest.kt (NEW, 9 tests), MeDeleteCascadeTest.kt + MeRoutesTest.kt (cascade fix).
+
+Decisions:
+- **D-G5-1:** Honored the H13/F1 freeze: submit ALWAYS 200; no 202, no poll route, no `mock_exam_jobs`. New `mock_exams` table is the SYNC result-of-record (questions at start; score+kc_results+narrative stamped inline at submit; no job status/poll/202). Review verified no async surface.
+- **D-G5-2:** Question kind = `deterministic` iff the KC has a non-blank `invariant` (checkable), else `open` (LLM-graded, resolve-outside-txn via the G2 seam). Degrade-to-UNCERTAIN: a degraded open question → `verification_status=uncertain`, correct=false, score=0 (NO second enum). A confident grade carries the KC's REAL resolved trust status.
+- **D-G5-3:** ids `meq-<kcId>`; aggregate score = mean of per-question scores; empty exam → 200 empty. mock-exam attempts are graded but NOT fed into attempts/kc_mastery (scoped to assemble→grade→return; §2.2 reply is score/kc_results/narrative only) — flagged as a possible follow-up.
+- **D-G5-4 (PM-caught B6 bug — fix-claim):** `MockExamsTable` has a `userId` FK but the builder did NOT add it to the me/delete cascade (its KDoc claimed it did) — a real GDPR-erasure FK-throw (the B6 risk class). The green suite missed it (MeDeleteCascadeTest didn't seed a mock_exams row; the adversarial review didn't check the cascade). **Fix (TDD, RED-proven):** seeded a mock_exams row in MeDeleteCascadeTest (now fails without the fix), added `MockExamsTable.deleteWhere` to the cascade (child-first, before Users), and added the table to MeRoutesTest's schema. Lesson folded forward: future groups that add a user-FK table MUST wire the me/delete cascade + seed the cascade test.

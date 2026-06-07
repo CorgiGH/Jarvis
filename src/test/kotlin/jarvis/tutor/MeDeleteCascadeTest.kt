@@ -45,6 +45,8 @@ class MeDeleteCascadeTest {
                 TasksTable, FsrsCardsTable, KnowledgeGapsTable, TokensTable,
                 // Phase-1 new user-scoped tables
                 SessionSummariesTable, AttemptsTable, ReportWrongTable, ExamDatesTable,
+                // Phase-3 G5 user-scoped table
+                MockExamsTable,
             )
         }
 
@@ -98,6 +100,14 @@ class MeDeleteCascadeTest {
                 it[startAt] = Instant.now().plusSeconds(3600)
                 it[createdAt] = Instant.now()
             }
+
+            MockExamsTable.insert {
+                it[id] = TutorTypes.ulid()
+                it[userId] = uid
+                it[subject] = "PA"
+                it[questionsJson] = "[]"
+                it[createdAt] = Instant.now()
+            }
         }
 
         // Verify rows exist before deletion.
@@ -106,6 +116,7 @@ class MeDeleteCascadeTest {
             assertEquals(1, AttemptsTable.selectAll().where { AttemptsTable.userId eq uid }.count().toInt())
             assertEquals(1, ReportWrongTable.selectAll().where { ReportWrongTable.userId eq uid }.count().toInt())
             assertEquals(1, ExamDatesTable.selectAll().where { ExamDatesTable.userId eq uid }.count().toInt())
+            assertEquals(1, MockExamsTable.selectAll().where { MockExamsTable.userId eq uid }.count().toInt())
         }
 
         application {
@@ -145,6 +156,11 @@ class MeDeleteCascadeTest {
                 ExamDatesTable.selectAll().where { ExamDatesTable.userId eq uid }.count().toInt(),
                 "exam_dates must be empty after me/delete"
             )
+            assertEquals(
+                0,
+                MockExamsTable.selectAll().where { MockExamsTable.userId eq uid }.count().toInt(),
+                "mock_exams must be empty after me/delete"
+            )
         }
     }
 
@@ -163,6 +179,7 @@ class MeDeleteCascadeTest {
                 jarvis.tutor.taskdetect.DetectedTaskMappingTable,
                 TasksTable, FsrsCardsTable, KnowledgeGapsTable, TokensTable,
                 SessionSummariesTable, AttemptsTable, ReportWrongTable, ExamDatesTable,
+                MockExamsTable,
             )
         }
 
