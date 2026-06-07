@@ -214,12 +214,15 @@ enum class AuditOutcome {
     FAMILY_COLLAPSE,                   // both legs same configured family -> uncertain
     DEFINITIONAL_NO_GOLD_SPAN,         // -> uncertain
     NONLLM_LEG_NONE,                   // domain has no checker -> uncertain (floor)
+    EQUATIONAL_LLM_UNCONFIRMED,        // B5r-3/D-R9: SymPy+round-trip pass, LLM family merely UNCLEAR -> uncertain
+    PROSE_LLM_UNCONFIRMED,             // MF-1/D-R17: prose anchor round-trips, LLM family not bothSupported -> uncertain
     DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW, // -> failed/uncertain
     REPORT_WRONG,                      // faithful -> pending
 }
 ```
 
 - **Five literals** match `/verify/{kcId}/status` + CHANGE-3's four authored literals `{unverified, pending, faithful, uncertain}` PLUS `failed` (the §2.5 FAILED state; never authored in YAML, only reached at runtime).
+- **`AuditOutcome` post-lock additions (SESSION-57 sync):** `EQUATIONAL_LLM_UNCONFIRMED` (B5r-3 / D-R9) + `PROSE_LLM_UNCONFIRMED` (MF-1 / D-R17) are internal driver values, BOTH mapping to `uncertain`. They were ratified during the Phase-2 B5-RESHAPE / false-faithful work and do NOT widen the frozen `VerificationStatus` wire surface (still the 5 literals). Canonical code: `VerificationStatus.kt:46-62`.
 - **Wire consistency:** `verification_status` appears in `/queue/today`, `/mastery`, `/calibration`(no), `/drill/grade`, `/fsrs/due`, `/verify/{kcId}/status`, `mock-exam` kc_results, `QueueItem`, `KcCandidate`. ONE enum, every site serializes its lowercase `name`.
 - **YAML caveat:** the four-literal subset is the authored seed (CHANGE 3 / `KnowledgeConcept.verification_status: String`); the runtime store can ALSO hold `failed`. The validator's enum check (H11) accepts the four authored literals only; `failed` is runtime-only.
 - **Invariant (§2.5, LOCKED):** no path reaches `faithful` without BOTH a non-LLM-leg pass AND families-agree.

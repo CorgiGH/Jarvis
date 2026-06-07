@@ -71,22 +71,18 @@ class SymPyLeg(
         /** Split an `lhs = rhs` invariant on its single top-level `=`. Returns null when the
          *  equation does not have exactly one `=` (e.g. `<=`, `==`, or no `=`).
          *
+         *  MED-b: the parsing logic now lives in the ONE shared [EquationSyntax.split] (this leg is its
+         *  canonical owner) — the previously copy-pasted siblings in `ContentReconcile.isPlainEquation`
+         *  and `ContentValidator.checkTautologicalInvariants` delegate to the same helper, so the three
+         *  cannot drift (guarded by `EquationSyntaxAgreementTest`).
+         *
          *  NOTE (D4): a TAUTOLOGICAL invariant (`t = t`, `0 = 0`) is rejected at AUTHOR/AUDIT time by
          *  `ContentValidator.checkTautologicalInvariants` (the canonical D4 fix), so it can never reach
          *  a stamped claim. This split is intentionally NOT made tautology-aware: it is exercised by
          *  the hermetic test suite with `x = x` as a generic equation PLACEHOLDER, and a syntactic
          *  reject here would silently change that established convention. The `bothSupported`
          *  requirement upstream already blunts any weaponization (LOW severity). */
-        fun splitEquation(eq: String): Pair<String, String>? {
-            // Reject relational operators that aren't a plain equality.
-            if (eq.contains("<=") || eq.contains(">=") || eq.contains("!=") || eq.contains("==")) return null
-            val idx = eq.indexOf('=')
-            if (idx < 0 || idx != eq.lastIndexOf('=')) return null
-            val lhs = eq.substring(0, idx).trim()
-            val rhs = eq.substring(idx + 1).trim()
-            if (lhs.isEmpty() || rhs.isEmpty()) return null
-            return lhs to rhs
-        }
+        fun splitEquation(eq: String): Pair<String, String>? = EquationSyntax.split(eq)
     }
 }
 

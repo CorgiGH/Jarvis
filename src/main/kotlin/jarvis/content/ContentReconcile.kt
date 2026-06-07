@@ -3,6 +3,7 @@ package jarvis.content
 import jarvis.tutor.KcVerificationStatusTable
 import jarvis.tutor.VerificationStatus
 import jarvis.tutor.verify.ClaimKind
+import jarvis.tutor.verify.EquationSyntax
 import jarvis.tutor.verify.VerificationClaim
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.insert
@@ -236,17 +237,14 @@ object ContentReconcile {
     )
 
     /**
-     * Is [text] a plain `lhs = rhs` equation the SYMPY leg can machine-check? Mirrors
-     * `SymPyLeg.splitEquation`: exactly one top-level `=`, no relational operators (`<=`/`>=`/`!=`/`==`),
-     * both sides non-empty. A prose grader rule returns false ⇒ the reconcile emits `invariant = null`
-     * so it floors to UNCERTAIN rather than a hollow tautological SymPy pass (FIX-C).
+     * Is [text] a plain `lhs = rhs` equation the SYMPY leg can machine-check? MED-b: delegates to the
+     * ONE shared [EquationSyntax.isPlainEquation] (exactly one top-level `=`, no relational operator
+     * `<=`/`>=`/`!=`/`==`, both sides non-empty) so it can never drift from `SymPyLeg.splitEquation`
+     * or the validator's tautology split (guarded by `EquationSyntaxAgreementTest`). A prose grader
+     * rule returns false ⇒ the reconcile emits `invariant = null` so it floors to UNCERTAIN rather
+     * than a hollow tautological SymPy pass (FIX-C).
      */
-    private fun isPlainEquation(text: String): Boolean {
-        if (text.contains("<=") || text.contains(">=") || text.contains("!=") || text.contains("==")) return false
-        val idx = text.indexOf('=')
-        if (idx < 0 || idx != text.lastIndexOf('=')) return false
-        return text.substring(0, idx).isNotBlank() && text.substring(idx + 1).isNotBlank()
-    }
+    private fun isPlainEquation(text: String): Boolean = EquationSyntax.isPlainEquation(text)
 
     /** The frozen content-hash id `"{kcId}:{KIND}:{sha256_8(content)}"` (M-CLAIM). */
     fun claimId(kcId: String, kind: ClaimKind, content: String): String =

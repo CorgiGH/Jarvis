@@ -253,11 +253,15 @@ enum class AuditOutcome {
     FAMILY_COLLAPSE,                        // -> uncertain
     DEFINITIONAL_NO_GOLD_SPAN,              // -> uncertain
     NONLLM_LEG_NONE,                        // -> uncertain (floor)
+    EQUATIONAL_LLM_UNCONFIRMED,             // B5r-3/D-R9: SymPy+round-trip pass, LLM family UNCLEAR -> uncertain
+    PROSE_LLM_UNCONFIRMED,                  // MF-1/D-R17: prose anchor round-trips, LLM not bothSupported -> uncertain
     DISAGREE_OR_ROUNDTRIP_FAIL_OR_THREW,    // -> failed/uncertain
     REPORT_WRONG,                           // faithful -> pending
 }
 ```
 **§2.4 invariants (LOCKED):** no path reaches `faithful` without BOTH a non-LLM-leg pass AND families-agree. `FAMILY_COLLAPSE` ⇒ uncertain. A thrown leg ⇒ uncertain (never a mid-txn crash; that handling is Phase 2). No auto-clear from student attempts. FAIL-LOUD: "never ran" ≠ "disagreed".
+
+**`AuditOutcome` post-lock additions (SESSION-57 sync):** `EQUATIONAL_LLM_UNCONFIRMED` (B5r-3/D-R9) + `PROSE_LLM_UNCONFIRMED` (MF-1/D-R17) — internal driver values added during the Phase-2 false-faithful work, BOTH mapping to `uncertain`. They keep the §2.4 invariant strict (anything short of bothSupported ⇒ not `faithful`) and do NOT widen the frozen `VerificationStatus` 5-literal wire surface. Canonical code: `VerificationStatus.kt:46-62`.
 
 **Files:**
 - New: `src/main/kotlin/jarvis/tutor/VerificationStatus.kt` (or `jarvis.content` — VERIFY AT BUILD the package the Phase-2 consumers expect; the lock places it where `VerificationGate`/`QueueItem` read it. Keep it where `KnowledgeConcept` and the trust store can both see it).

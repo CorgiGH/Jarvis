@@ -36,8 +36,12 @@ object ReportWrongQuery {
     fun hasOpenReportWrong(db: Database, kcId: String): Boolean =
         try {
             transaction(db) { hasOpenReportWrong(this, kcId) }
-        } catch (_: Throwable) {
-            true   // FAIL-CLOSED: a lookup failure must darken the badge, never serve over a dispute.
+        } catch (e: Throwable) {
+            // FAIL-CLOSED: a lookup failure must darken the badge, never serve over a dispute. The
+            // additive diagnostic closes the SILENT swallow (a recurring DB fault would otherwise
+            // darken every faithful badge corpus-wide with no trail). kcId ONLY — never row data.
+            failClosedDiag("db", kcId, e)
+            true
         }
 
     /**
@@ -53,9 +57,26 @@ object ReportWrongQuery {
                     .limit(1)
                     .any()
             }
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            // FAIL-CLOSED (assume OPEN). Additive diagnostic — same silent-swallow fix as the Database
+            // overload, on the relight-guard path (so a copy-pasted swallow can't darken silently here).
+            failClosedDiag("tx", kcId, e)
             true
         }
+
+    /**
+     * Emit ONE bracketed `[ReportWrongQuery]` line on a fail-closed throw, BEFORE the `true` return.
+     * States the overload (db|tx), the kcId, that it is failing CLOSED (assume OPEN dispute ⇒ badge
+     * darkened), and the exception class + a truncated message. kcId ONLY — no report row data
+     * (avoids leaking dispute content). No SLF4J in this codebase: System.err.println is the
+     * convention (see BlockReminder / content.SourceOfRecord).
+     */
+    private fun failClosedDiag(overload: String, kcId: String, e: Throwable) {
+        System.err.println(
+            "[ReportWrongQuery] hasOpenReportWrong($overload) threw for kcId=$kcId — failing CLOSED " +
+                "(assume OPEN dispute ⇒ badge darkened): ${e.javaClass.simpleName}: ${e.message?.take(160)}",
+        )
+    }
 
     /**
      * D3 closing edge — CLOSE every OPEN dispute for [kcId] with [resolution] (a terminal edge:

@@ -46,11 +46,25 @@ object ContentCli {
     /**
      * curate-tutor **Stage-9 reconcile**. Runs the structural [validateOnly] gate FIRST — a malformed
      * corpus (any `error`-severity issue) is NEVER reconciled into the audit queue (anti-contamination,
-     * council R2) — then emits each KC's [jarvis.tutor.verify.VerificationClaim]s and sets every
-     * unaudited KC's `kc_verification_status` to `pending` (UNVERIFIED→PENDING, DIRECTLY) via
-     * [ContentReconcile.reconcile]. Idempotent + H10-safe (never regresses a faithful KC).
+     * council R2) — then, in ONE flow, runs the two PC-side reconcile legs over the loaded subjects:
      *
-     * @return the [ContentReconcile.ReconcileReport] (emitted claims + promoted kcIds).
+     *  1. [ContentReconcile.reconcileSourceSpans] — the **D1 source-edit WATCHER**. For every audited
+     *     KC carrying a stored `source_span_hash`, recompute it from the LIVE `_sources` bytes (via the
+     *     [ContentRepo.sourceText] resolver, mirroring [jarvis.tutor.verify.VerifyContentCli]); a real
+     *     fold-different edit NULLs `content_hash` + `source_span_hash` and re-pends the KC so the serve
+     *     gate fails CLOSED until a fresh audit. Idempotent on whitespace-only churn (H10-safe except
+     *     the council-approved narrowed exception: regress faithful→pending ONLY on a REAL source edit).
+     *
+     *  2. [ContentReconcile.reconcile] — the **Stage-9 setPending leg**. Emits each KC's
+     *     [jarvis.tutor.verify.VerificationClaim]s and sets every still-unaudited KC's
+     *     `kc_verification_status` to `pending` (UNVERIFIED→PENDING, DIRECTLY). Idempotent + H10-safe
+     *     (never regresses a faithful KC). Runs AFTER the watcher so a KC the watcher just re-pended is
+     *     left at `pending` (the watcher set it; setPending leaves any `pending` row untouched).
+     *
+     * Order: validate → reconcileSourceSpans (NULL+re-pend edited) → reconcile (setPending). Both legs
+     * are PC-SIDE ONLY (D7): the watcher reads `_sources` bytes that exist only on the authoring PC.
+     *
+     * @return the [ContentReconcile.ReconcileReport] (emitted claims + promoted kcIds) from leg 2.
      * @throws IllegalStateException if [validateOnly] reports any error-severity issue.
      */
     fun reconcile(
@@ -66,6 +80,19 @@ object ContentCli {
         val repo = ContentRepo(contentDir)
         val manifest = repo.loadManifest()
         val subjects = manifest.subjects.map { repo.loadSubject(it.id) }
+
+        // Leg 1 — D1 source-edit watcher. The live `_sources/{doc}.md` resolver mirrors how
+        // VerifyContentCli builds rawSourceFor (VerifyContentCli.kt:136-141): (subject, doc) ->
+        // repo.sourceText(subject, doc). An absent source returns null ⇒ the recomputed hash differs
+        // ⇒ the KC is invalidated (the correct fail-closed move).
+        ContentReconcile.reconcileSourceSpans(
+            subjects = subjects,
+            db = db,
+            rawSourceFor = { subject, doc -> repo.sourceText(subject, doc) },
+            clock = clock,
+        )
+
+        // Leg 2 — Stage-9 setPending (UNVERIFIED→PENDING). Returns the claim/promotion report.
         return ContentReconcile.reconcile(subjects, db, clock)
     }
 }

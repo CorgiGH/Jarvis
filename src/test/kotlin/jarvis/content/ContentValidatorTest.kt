@@ -333,4 +333,68 @@ class ContentValidatorTest {
         assertFalse(report.ok, "a tautological invariant must fail validateContent (D4 hard error)")
         assertTrue(report.issues.any { it.rule == "tautological_invariant" })
     }
+
+    // --- P2-RULE1: wire ExtractionConfidence — garbled _sources doc ERRORs at validateContent ----
+    // master-impl-plan-v2.md:196 — garbled-but-present extraction must ERROR before a KC is authored.
+    // The Kotlin chokepoint is ContentValidator.validate(); the legibility check runs over the
+    // resolved source text of every doc referenced by a KC/misconception source ref.
+
+    // A mojibake blob dominated by U+FFFD (the canonical bad-decode marker) — score < MIN_CONFIDENCE.
+    private val garbledBlob = "��� ���� �� �����"
+
+    @Test
+    fun `P2-RULE1 validate() FAILS a corpus whose KC source doc resolves to a garbled extraction`() {
+        val withSrc = kc("a", weight = 1.0, tier = 1)
+            .copy(source = listOf(SourceRef("garbled-doc", "anything")))
+        val sub = LoadedSubject("PA", kcs = listOf(withSrc), edges = emptyList(), misconceptions = emptyList())
+        val report = ContentValidator.validate(listOf(sub)) { doc -> if (doc == "garbled-doc") garbledBlob else null }
+        assertFalse(report.ok, "a garbled _sources doc must fail validateContent (P2-RULE1 hard error)")
+        val issue = report.issues.single { it.rule == "garbled_extraction" }
+        assertEquals("error", issue.severity, "a garbled extraction is an ERROR, not a warning")
+        assertTrue(issue.detail.contains("garbled-doc"), "the issue must name the offending doc: ${issue.detail}")
+    }
+
+    @Test
+    fun `P2-RULE1 a misconception source doc that is garbled also FAILS (both entry points covered)`() {
+        // Class-killing: the legibility check covers misconception source refs too, not just KCs.
+        val m = Misconception(
+            "m1", "a", label_ro = "ro", label_en = "en", trigger = "t", refutation = "r",
+            source = listOf(SourceRef("garbled-misc-doc", "anything")), version = 1,
+        )
+        val sub = LoadedSubject(
+            "PA",
+            kcs = listOf(kc("a", weight = 1.0, tier = 1)),
+            edges = emptyList(),
+            misconceptions = listOf(m),
+        )
+        val report = ContentValidator.validate(listOf(sub)) { doc -> if (doc == "garbled-misc-doc") garbledBlob else null }
+        assertFalse(report.ok, "a garbled misconception _sources doc must also fail validateContent")
+        assertTrue(report.issues.any { it.rule == "garbled_extraction" && it.detail.contains("garbled-misc-doc") })
+    }
+
+    @Test
+    fun `P2-RULE1 a clean legible source emits NO garbled_extraction issue (no over-rejection)`() {
+        val withSrc = kc("a", weight = 1.0, tier = 1)
+            .copy(source = listOf(SourceRef("pa-lecture-01", "a finite sequence of unambiguous steps")))
+        val sub = LoadedSubject("PA", kcs = listOf(withSrc), edges = emptyList(), misconceptions = emptyList())
+        val report = ContentValidator.validate(listOf(sub), sourceText = srcLookup)
+        assertTrue(
+            report.issues.none { it.rule == "garbled_extraction" },
+            "a clean legible source must not raise a garbled_extraction issue: ${report.issues}",
+        )
+    }
+
+    @Test
+    fun `P2-RULE1 a doc with no extracted text on disk does NOT raise a garbled_extraction issue`() {
+        // null source text is the "unverifiable" verbatim-source case (a warning) — NOT a garble error;
+        // garbled_extraction only fires on present-but-illegible text.
+        val withSrc = kc("a", weight = 1.0, tier = 1)
+            .copy(source = listOf(SourceRef("absent-doc", "anything")))
+        val sub = LoadedSubject("PA", kcs = listOf(withSrc), edges = emptyList(), misconceptions = emptyList())
+        val report = ContentValidator.validate(listOf(sub)) { null }
+        assertTrue(
+            report.issues.none { it.rule == "garbled_extraction" },
+            "a doc with no on-disk text must not raise garbled_extraction (null != garbled)",
+        )
+    }
 }

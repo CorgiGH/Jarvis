@@ -196,3 +196,22 @@ tasks.register<JavaExec>("verifyContent") {
     args = (project.findProperty("verifyArgs") as String?)?.split(" ")?.filter { it.isNotEmpty() } ?: listOf()
     jvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
 }
+
+// Phase 2 (Area B): curate-tutor Stage-9 reconcile — the CHEAP owner-run reconcile that does NOT
+// require a full audit (unlike verifyContent). It validates the corpus, then in ONE flow runs the
+// D1 source-edit WATCHER (ContentReconcile.reconcileSourceSpans — NULL+re-pend any KC whose
+// _sources bytes changed since its audit) and the Stage-9 setPending leg (ContentReconcile.reconcile
+// — UNVERIFIED->PENDING, H10-safe). PC-side only (D7: reads _sources bytes). NEVER calls an LLM and
+// NEVER touches the serve path, so — unlike verifyContent — it has no env preconditions; it is still
+// DELIBERATELY NOT a dependency of `check` (it mutates the runtime kc_verification_status table).
+tasks.register<JavaExec>("reconcileContent") {
+    group = "verification"
+    description = "Stage-9 reconcile of the content/ corpus into the trust-net (owner/manual; PC-side, " +
+        "D7). Runs the D1 source-edit watcher (re-pend KCs whose _sources changed) + UNVERIFIED->PENDING " +
+        "(H10-safe). No LLM, no serve ripple. NOT part of check (mutates kc_verification_status)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("jarvis.content.ContentReconcileCliKt")
+    args = (project.findProperty("reconcileArgs") as String?)?.split(" ")?.filter { it.isNotEmpty() }
+        ?: listOf("content")
+    jvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+}

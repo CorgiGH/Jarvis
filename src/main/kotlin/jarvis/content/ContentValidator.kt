@@ -1,5 +1,7 @@
 package jarvis.content
 
+import jarvis.tutor.verify.EquationSyntax
+import jarvis.tutor.verify.ExtractionConfidence
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -162,6 +164,7 @@ object ContentValidator {
             issues += checkStrictGrounding(sub)
             issues += checkVerificationStatusEnum(sub)
             issues += checkTautologicalInvariants(sub)
+            issues += checkExtractionLegibility(sub, sourceText)
         }
         val ok = issues.none { it.severity == "error" }
         return ValidationReport(ok = ok, disclaimer = DISCLAIMER, issues = issues)
@@ -271,13 +274,9 @@ object ContentValidator {
         fun checkOne(owner: String, id: String, invariant: String?) {
             val inv = invariant?.trim() ?: return
             if (inv.isEmpty()) return
-            // Mirror SymPyLeg.splitEquation: exactly one top-level '=', no relational operators.
-            if (inv.contains("<=") || inv.contains(">=") || inv.contains("!=") || inv.contains("==")) return
-            val idx = inv.indexOf('=')
-            if (idx < 0 || idx != inv.lastIndexOf('=')) return
-            val lhs = inv.substring(0, idx).trim()
-            val rhs = inv.substring(idx + 1).trim()
-            if (lhs.isEmpty() || rhs.isEmpty()) return
+            // MED-b: delegate the split to the ONE shared EquationSyntax.split (was a copy-paste of
+            // SymPyLeg.splitEquation). The D4 tautology test then layers lhs==rhs ON TOP of the split.
+            val (lhs, rhs) = EquationSyntax.split(inv) ?: return
             if (lhs == rhs) {
                 issues += ValidationIssue(
                     severity = "error",
@@ -289,6 +288,48 @@ object ContentValidator {
             }
         }
         for (kc in sub.kcs) checkOne("KC", kc.id, kc.invariant)
+        return issues
+    }
+
+    /**
+     * P2-RULE1 — wire [ExtractionConfidence] into the validateContent chokepoint (master-impl-plan-v2
+     * §196). A garbled-but-PRESENT `_sources` extraction (mojibake / binary-shredded `pdftotext`
+     * output) must ERROR here, BEFORE any KC is authored/reconciled over it — otherwise a garbled doc
+     * validates GREEN and a KC gets stamped against text no human (or re-locator) can re-ground.
+     *
+     * For each DISTINCT doc referenced by a KC or misconception source ref, resolve its source text
+     * via [sourceText]. When the text is non-null and non-blank, run [ExtractionConfidence.reason]:
+     * a non-null reason (score < [ExtractionConfidence.MIN_CONFIDENCE]) is an `error`-severity issue
+     * naming the doc + the reason + the score. A null source text is NOT a garble error here — that is
+     * the "unverifiable" verbatim-source case (a warning in [checkVerbatimSources]); garble only fires
+     * on present-but-illegible text. Each distinct doc is reported at most once.
+     *
+     * Localized PC-side author/audit check — ZERO serve/sync/hash ripple (mirrors the shape of
+     * [checkTautologicalInvariants]). Because validateContent gates Stage-9 reconcile (ContentCli),
+     * a garbled doc anywhere in the corpus blocks KC authoring, not just one enumerated ref.
+     */
+    fun checkExtractionLegibility(
+        sub: LoadedSubject,
+        sourceText: (doc: String) -> String?,
+    ): List<ValidationIssue> {
+        val issues = mutableListOf<ValidationIssue>()
+        val docs = LinkedHashSet<String>()
+        for (kc in sub.kcs) for (ref in kc.source) docs += ref.doc
+        for (m in sub.misconceptions) for (ref in m.source) docs += ref.doc
+        for (doc in docs) {
+            val text = sourceText(doc) ?: continue        // null = unverifiable (warning elsewhere), not garble
+            if (text.isBlank()) continue                   // blank handled by checkVerbatimSources; not a garble emit here
+            val reason = ExtractionConfidence.reason(text) ?: continue
+            val score = ExtractionConfidence.score(text)
+            issues += ValidationIssue(
+                severity = "error",
+                rule = "garbled_extraction",
+                subject = sub.subject,
+                detail = "source '$doc': extraction is illegible ($reason, " +
+                    "score %.2f < %.2f) — re-extract before authoring a KC over it"
+                        .format(score, ExtractionConfidence.MIN_CONFIDENCE),
+            )
+        }
         return issues
     }
 
