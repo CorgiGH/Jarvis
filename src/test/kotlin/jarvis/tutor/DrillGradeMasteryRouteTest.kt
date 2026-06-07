@@ -20,14 +20,20 @@ import jarvis.Llm
 import jarvis.web.drillGraderLlmFactory
 import jarvis.web.installTutorContext
 import jarvis.web.installTutorRoutes
+import jarvis.content.ContentReconcile
+import jarvis.content.ContentRepo
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -79,6 +85,48 @@ class DrillGradeMasteryRouteTest {
         // Restore the production factory so we don't leak the fake into other
         // tests that share the same JVM (the seam is a module-level var).
         drillGraderLlmFactory = { jarvis.OpenRouterChatLlm() }
+        System.clearProperty("JARVIS_CONTENT_DIR")
+    }
+
+    /**
+     * Phase-3 GROUP 2: the grade path is now FAITHFUL-GATED (master §2.2 line 113). A confident grade
+     * records mastery ONLY when the KC resolves to faithful via the B8 store. These helpers seed a
+     * span-bearing PA KC + a matching faithful B8 row so the E1/E2 recording tests below exercise the
+     * deterministic-recording contract over a faithful KC (mirrors TrustRoutesTest.seedContent).
+     */
+    private fun seedFaithfulContent(content: Path, kcId: String) {
+        content.createDirectories()
+        content.resolve("subjects.yaml").writeText(
+            "version: 1\nsubjects:\n  - id: PA\n    name_ro: \"P\"\n    name_en: \"Algorithm Design\"\n")
+        val pa = content.resolve("PA")
+        pa.resolve("kcs").createDirectories()
+        pa.resolve("_sources").createDirectories()
+        pa.resolve("kcs/$kcId.yaml").writeText(
+            "id: $kcId\nsubject: PA\nname_ro: \"A\"\nname_en: \"Algorithm\"\n" +
+                "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
+                "exam_weight: 1.0\ntier: 1\nversion: 1\nverification_status: \"faithful\"\n" +
+                "source:\n  - doc: pa-lecture-01\n    quote: \"Algorithm\"\n    page: 1\n" +
+                "    span:\n      start: 0\n      end: 9\n")
+        pa.resolve("_sources/pa-lecture-01.md").writeText("Algorithm is a finite sequence.\n")
+        pa.resolve("edges.yaml").writeText("subject: PA\nedges: []\n")
+    }
+
+    private fun seedFaithfulB8(ctx: TutorContext, content: Path, kcId: String) {
+        val repo = ContentRepo(content)
+        val kc = repo.loadSubject("PA").kcs.single { it.id == kcId }
+        val contentHash = ContentReconcile.kcContentHash(kc)
+        val spanHash = ContentReconcile.sourceSpanHashOf(ContentReconcile.claimsFor(kc)) { subject, doc ->
+            repo.sourceText(subject, doc)
+        } ?: error("kc $kcId quote must relocate for a source_span_hash")
+        transaction(ctx.db) {
+            KcVerificationStatusTable.insert {
+                it[KcVerificationStatusTable.kcId] = kcId
+                it[status] = VerificationStatus.faithful.name
+                it[KcVerificationStatusTable.contentHash] = contentHash
+                it[sourceSpanHash] = spanHash
+                it[updatedAt] = Instant.now()
+            }
+        }
     }
 
     private fun Application.installFreshTutor(tmp: Path) {
@@ -113,6 +161,9 @@ class DrillGradeMasteryRouteTest {
     fun `confident grade records mastery`(@TempDir tmp: Path) = testApplication {
         // COHERENT GradeResult: correct=true AND every rubric item true →
         // GradeScoring.isConfident == true → grade is recorded.
+        // Phase-3 GROUP 2: also FAITHFUL-GATED — pa-kc-001 is seeded faithful so it records.
+        val content = tmp.resolve("content"); seedFaithfulContent(content, "pa-kc-001")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
         drillGraderLlmFactory = {
             FakeGraderLlm(
                 """{"correct":true,"rubric":{"numeric":true,"mechanism":true},""" +
@@ -127,6 +178,7 @@ class DrillGradeMasteryRouteTest {
         }
         startApplication()
         val (userId, sid) = seedSession(ctx!!)
+        seedFaithfulB8(ctx!!, content, "pa-kc-001")
         TaskPrepRepo(ctx!!.db).upsert(TaskPrep(
             taskId = "task-1", generatedAt = Instant.now(), version = 1,
             problemsJson = Json.encodeToString(ListSerializer(Problem.serializer()),
@@ -215,6 +267,9 @@ class DrillGradeMasteryRouteTest {
         // COHERENT grade: correct=true, all rubric items true → rubricCorrect=true,
         // coherent=true. canonicalAnswer normalises equal to userAttempt →
         // answerMatch=true, answerAgrees=true → confident=true → recorded=true.
+        // Phase-3 GROUP 2: also FAITHFUL-GATED — pa-kc-001 seeded faithful so it records.
+        val content = tmp.resolve("content"); seedFaithfulContent(content, "pa-kc-001")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
         drillGraderLlmFactory = {
             FakeGraderLlm(
                 """{"correct":true,"rubric":{"numeric":true,"mechanism":true},""" +
@@ -229,6 +284,7 @@ class DrillGradeMasteryRouteTest {
         }
         startApplication()
         val (userId, sid) = seedSession(ctx!!)
+        seedFaithfulB8(ctx!!, content, "pa-kc-001")
         TaskPrepRepo(ctx!!.db).upsert(TaskPrep(
             taskId = "task-1", generatedAt = Instant.now(), version = 1,
             problemsJson = Json.encodeToString(ListSerializer(Problem.serializer()),

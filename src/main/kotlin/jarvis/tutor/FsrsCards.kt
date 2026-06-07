@@ -107,6 +107,22 @@ class FsrsCardRepo(private val db: Database) {
     }
 
     /**
+     * Phase-3 GROUP 2 (M-GATE-PATHS) — find the existing RUBRIC_CRITERION card for (userId, kcId),
+     * the SAME dedup key `upsertRubricCriterion` uses. The atomic grade route reads `.status` off the
+     * result to enforce the 409-if-not-ACTIVE rule BEFORE opening the write txn. null ⇒ no card yet
+     * (the upsert will INSERT it ACTIVE — no 409). Opens its own read txn (called pre-txn).
+     */
+    fun findRubricCriterionCard(userId: String, kcId: String): TutorCard? = transaction(db) {
+        FsrsCardsTable.selectAll()
+            .where {
+                (FsrsCardsTable.userId eq userId) and
+                    (FsrsCardsTable.sourceType eq FsrsSource.RUBRIC_CRITERION.name) and
+                    (FsrsCardsTable.kcId eq kcId)
+            }
+            .singleOrNull()?.toCard()
+    }
+
+    /**
      * NEW (B2, §H) — SELECT-then-UPDATE-or-INSERT inside the CALLER's txn (no own transaction).
      *
      * Dedup key = (userId, source=RUBRIC_CRITERION, kcId): one card per (user, KC).

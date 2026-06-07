@@ -14,8 +14,8 @@ Owner (Alex) authorized autonomous Phase-3 build 2026-06-07 ("just go do them, g
 
 | Group | Scope | Status | Commit |
 |---|---|---|---|
-| G1 | ScaffoldPlanner + PrereqGraph + NextKcSelector (+QueueItem/QueueMode forced by frozen sig) | DONE (suite 1189✓, review SHIP) | (this commit) |
-| G2 | atomic grade (B1/B2/B3, faithful-gated, 409) | pending | — |
+| G1 | ScaffoldPlanner + PrereqGraph + NextKcSelector (+QueueItem/QueueMode forced by frozen sig) | DONE (suite 1189✓, review SHIP) | d905022 |
+| G2 | atomic grade (B1/B2/B3, faithful-gated, 409) | DONE (suite 1195✓, review SHIP) | (this commit) |
 | G3 | queue/today + mastery + calibration | pending | — |
 | G4 | session/close + placement + entry_phase + exam_dates | pending | — |
 | G5 | mock-exam SYNC-200 | pending | — |
@@ -35,3 +35,16 @@ Decisions made by the builder (all forced by frozen signatures, no wire-surface 
 - **D-G1-4:** interleave-cap (lock §D 3rd scoring step) uses resolved `QueueMode.name` as the same-shape key (KcCandidate has no shape field); INTERLEAVE_CAP=3, deterministic id tie-break, falls through when no differently-shaped candidate. Class-killers remain on prereq-gating + 0-KC degrade.
 - **D-G1-5:** `ScaffoldPlanner` fully-mastered KC ⇒ `emptyList()` (lock §F:147); entry_phase floor trims phases rank<floor; null mastery/entry_phase ⇒ intro floor; unknown phase_plan literal dropped via runCatching.
 - **D-G1-6:** `PrereqGraph` cycle-safety = iterative DFS + visited set; self-loops/cycle-backs stripped; cyclic closure degrades deterministically to "all other reachable nodes" (no hang).
+
+### G2 — atomic grade (DONE, SHIP, suite 1195/0)
+
+Files: TutorRoutes.kt (+151/-9), FsrsCards.kt (+16, findRubricCriterionCard for 409 pre-check), DrillGradeAtomicTest.kt (NEW, 6 tests) + 5 existing E1/E2/E3 grade tests reseeded.
+
+Contract delivered: LLM grade resolved OUTSIDE the txn (H4) → ONE `transaction(ctx.db)` loops gated-faithful kcIds doing recordIn (B3) + attempts insert (H1) + card upsert (B1 fault point) + upsertRubricCriterion (B2); all-or-nothing rollback; 1:N kcIds; faithful-gated; 409 not-ACTIVE. Review verified all 9 points against code incl. a REAL fault-injection rollback test.
+
+Decisions:
+- **D-G2-1:** Faithful-gate = `VerificationGate.gate` in the per-KC loop (status from `resolveStatus` + `hasOpenReportWrong`). This is the D-RF2 owner-ratified ADMISSION caller ("B1 upsert" site) — **VerificationGate was a zero-caller ghost (completeness-audit F2); now wired in production here.** Not a serve-filter, not flag-gated.
+- **D-G2-2:** Non-faithful KC ⇒ skip writes, `recorded=false`, `kc_quarantined=true`, **HTTP 200** (master-plan:113). 409 reserved for the not-ACTIVE card only. KC absent from corpus ⇒ DENY (fail-closed; resolveStatus needs a live kc for content_hash).
+- **D-G2-3:** **Closed a real prior gap** — pre-existing E1/E2 grade tests recorded mastery over UNVERIFIED KCs (now forbidden by the gate). Per frozen-locks-WIN, updated the TESTS to seed faithful B8 rows (preserving recording-intent over a now-faithful KC), did NOT weaken the route.
+- **D-G2-4:** Added internal no-op `drillCardUpsertHook` B1 fault-seam (fires before the LAST in-txn write) for the rollback class-killer; does not bypass the gate.
+- **D-G2-5 (scope):** H15 reply fields (`verification_status`/`phase`/`next_phase_action`/`cross_checked`) + inline `misconception{}`/`ladder_rungs[]`/`self_explanation_prompt` serve fields deliberately NOT built here — they are G7 serve-wiring (master-plan:113/206/207). Attempts already STORE student_confidence/scaffold_level/is_far_transfer/self_explanation (H1 inputs wired). No ghost: the fields are stored+consumed-by-grade, serve-exposure is the named G7 task.

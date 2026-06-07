@@ -32,10 +32,13 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.io.TempDir
+import org.jetbrains.exposed.sql.insert
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -104,6 +107,46 @@ class E3RealRelayProofTest {
         drillCriticLlmFactory = { jarvis.RelayLlm() }
         drillGraderLlmFactory = { jarvis.OpenRouterChatLlm() }
         drillKcLookup = { _, _ -> null }
+        System.clearProperty("JARVIS_CONTENT_DIR")
+    }
+
+    /** Phase-3 GROUP 2: the grade path is FAITHFUL-GATED. Seed pa-kc-relayproof as a faithful content
+     *  KC (its source quote relocating in _sources/pa-relayproof.md) + a matching B8 row, in a temp
+     *  content dir, so the real generate→grade→mastery loop records over a faithful KC. */
+    private fun seedFaithfulRelayProof(ctx: TutorContext, content: Path) {
+        val quote = PROOF_KC.source.first().quote
+        content.resolve("PA/kcs").createDirectories()
+        content.resolve("PA/_sources").createDirectories()
+        content.resolve("subjects.yaml").writeText(
+            "version: 1\nsubjects:\n  - id: PA\n    name_ro: \"P\"\n    name_en: \"Algorithm Design\"\n")
+        content.resolve("PA/edges.yaml").writeText("subject: PA\nedges: []\n")
+        content.resolve("PA/_sources/pa-relayproof.md").writeText("$quote\n")
+        content.resolve("PA/kcs/pa-kc-relayproof.yaml").writeText(
+            "id: pa-kc-relayproof\nsubject: PA\n" +
+                "name_ro: \"Numarul maxim de noduri intr-un arbore binar\"\n" +
+                "name_en: \"Maximum number of nodes in a binary tree\"\n" +
+                "cluster: \"Structuri arborescente\"\nbloom_level: apply\ndifficulty: 2\n" +
+                "time_minutes: 10\nexam_weight: 0.0\ntier: 2\nversion: 1\n" +
+                "verification_status: \"faithful\"\n" +
+                "source:\n  - doc: pa-relayproof\n    quote: \"$quote\"\n    page: 1\n" +
+                "    span:\n      start: 0\n      end: ${quote.length}\n")
+        val repo = jarvis.content.ContentRepo(content)
+        val kc = repo.loadSubject("PA").kcs.single { it.id == "pa-kc-relayproof" }
+        val contentHash = jarvis.content.ContentReconcile.kcContentHash(kc)
+        val spanHash = jarvis.content.ContentReconcile.sourceSpanHashOf(
+            jarvis.content.ContentReconcile.claimsFor(kc),
+        ) { subject, doc -> repo.sourceText(subject, doc) }
+            ?: error("pa-kc-relayproof quote must relocate for a source_span_hash")
+        org.jetbrains.exposed.sql.transactions.transaction(ctx.db) {
+            KcVerificationStatusTable.insert {
+                it[kcId] = "pa-kc-relayproof"
+                it[status] = VerificationStatus.faithful.name
+                it[KcVerificationStatusTable.contentHash] = contentHash
+                it[sourceSpanHash] = spanHash
+                it[updatedAt] = Instant.now()
+            }
+        }
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
     }
 
     /**
@@ -219,6 +262,10 @@ class E3RealRelayProofTest {
 
         // 3. No mastery yet.
         assertNull(KcMasteryRepo(ctx!!.db).get(userId, "pa-kc-relayproof"), "mastery must be null before grade")
+
+        // 3.5 Phase-3 GROUP 2: the grade path is FAITHFUL-GATED — seed pa-kc-relayproof faithful
+        //     (temp content dir) so the real generate→grade→mastery loop records over a faithful KC.
+        seedFaithfulRelayProof(ctx!!, tmp.resolve("content"))
 
         // 4. Grade the REAL generated drill. Grade decision is a deterministic
         //    fake (consistent verdict) so the generate->grade->mastery loop is

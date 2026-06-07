@@ -76,6 +76,7 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 import java.nio.file.Files
@@ -130,6 +131,14 @@ internal var reprepExtractorFn: suspend (pdfPath: java.nio.file.Path, llm: jarvi
     { pdfPath, llm -> jarvis.tutor.PdfProblemExtractor.identifyProblems(pdfPath, llm) }
 /** E3 Task 12 seam: the Llm instance used for reprep extraction (ignored when reprepExtractorFn is overridden). */
 internal var reprepExtractorLlmFactory: () -> jarvis.Llm = { jarvis.OpenRouterChatLlm() }
+
+/**
+ * Phase-3 GROUP 2 (B1) atomicity test seam. Invoked INSIDE the single atomic grade transaction,
+ * immediately BEFORE the LAST in-txn write (the rubric-criterion card upsert), once per gated-faithful
+ * KC. Production is a no-op; the B1 class-killer test injects a throw here to prove that a failure on
+ * the last write step rolls back ALL prior writes (recordIn + attempts) — no orphaned partial state.
+ */
+internal var drillCardUpsertHook: () -> Unit = { }
 
 fun Application.installTutorRoutes() {
     routing {
@@ -1992,6 +2001,10 @@ fun Application.installTutorRoutes() {
                     null
                 }
 
+                // HTTP status for the single response below. The atomic-grade branch may flip this to
+                // 409 (a targeted card is not ACTIVE — M-GATE-PATHS) or 500 (fail-loud on an in-txn
+                // throw — the whole txn rolled back, B1). All other paths stay 200.
+                var httpStatus = HttpStatusCode.OK
                 val (reply, status) = when {
                     attempt == null -> {
                         ApiDrillGradeReply(
@@ -2018,6 +2031,16 @@ fun Application.installTutorRoutes() {
                         // `score`/`correct` are never trusted. Only confident grades
                         // (rubric-coherent AND, if a canonical answer was supplied,
                         // agreeing with the deterministic match) record KC mastery.
+                        //
+                        // Phase-3 GROUP 2 — the ATOMIC GRADE (master §2.2 line 113; B1/B2/B3/H1/H4/
+                        // M-GATE-PATHS/M-B1-CARD). EVERYTHING that touches an LLM (the grader, above)
+                        // is ALREADY resolved OUTSIDE any txn (H4) — `attempt` is in hand here, no
+                        // model call remains. We then: (1) faithful-gate each server-resolved KC via
+                        // VerificationGate.gate (the D-RF2 admission gate — its frozen caller-set names
+                        // "B1 upsert"; non-faithful ⇒ recorded=false, kc_quarantined=true, NO write);
+                        // (2) 409 if a targeted ACTIVE-only card is not ACTIVE; (3) ONE transaction{}
+                        // doing recordIn (+phase) + attempts + upsertRubricCriterion per gated KC, all
+                        // or nothing (a throw anywhere rolls back everything — B1).
                         val g: GradeResult = attempt.parsed!!
                         val canonical = serverProblem?.canonicalAnswer ?: req.canonicalAnswer
                         val answerMatch: Boolean? = canonical?.let { GradeScoring.answerMatches(it, req.userAttempt) }
@@ -2027,14 +2050,111 @@ fun Application.installTutorRoutes() {
                         val coherent = GradeScoring.isConfident(g)
                         val answerAgrees = answerMatch == null || answerMatch == rubricCorrect
                         val confident = coherent && answerAgrees
+                        val allKcs = serverProblem?.kcIds ?: emptyList()
+
                         var recorded = false
-                        val masteryKcs = serverProblem?.kcIds ?: emptyList()
-                        if (confident && masteryKcs.isNotEmpty()) {
-                            val repo = jarvis.tutor.KcMasteryRepo(ctx.db)
-                            masteryKcs.forEach { kcId -> repo.record(userId, kcId, deterministicScore) }
-                            recorded = true
-                        } else if (confident && masteryKcs.isEmpty()) {
-                            System.err.println("[drill-grade] confident grade for task=${req.taskId} problem=${req.problemId} but no server-side kcIds — mastery NOT recorded")
+                        var kcQuarantined = false
+                        var replyStatus = "ok"
+
+                        if (!confident) {
+                            // LOW-confidence grade: show the verdict, record nothing (unchanged E1).
+                            if (allKcs.isEmpty()) {
+                                System.err.println("[drill-grade] confident grade for task=${req.taskId} problem=${req.problemId} but no server-side kcIds — mastery NOT recorded")
+                            }
+                        } else {
+                            if (allKcs.isEmpty()) {
+                                System.err.println("[drill-grade] confident grade for task=${req.taskId} problem=${req.problemId} but no server-side kcIds — mastery NOT recorded")
+                            } else {
+                                // (1) FAITHFUL-GATE each server-resolved KC. resolveStatus reads the B8
+                                // table (D8/D1 fresh-faithful) + the gate's ALWAYS-ON OPEN-report-wrong
+                                // refusal. A KC not in the content corpus (kc==null) can never be
+                                // faithful ⇒ DENY. Gating is per-KC (1:N, each independent — M-B1-CARD).
+                                val contentRepo = jarvis.content.ContentRepo(drillContentDir())
+                                val faithfulKcs = allKcs.filter { kcId ->
+                                    val contentKc = runCatching { jarvis.web.VerifyAdmin.findKc(contentRepo, kcId) }.getOrNull()
+                                    if (contentKc == null) {
+                                        false
+                                    } else {
+                                        val st = jarvis.web.VerifyAdmin.resolveStatus(ctx.db, kcId, contentKc)
+                                        val openRw = jarvis.tutor.verify.ReportWrongQuery.hasOpenReportWrong(ctx.db, kcId)
+                                        jarvis.tutor.verify.VerificationGate.gate(contentKc, st, openRw) ==
+                                            jarvis.tutor.verify.GateDecision.ALLOW
+                                    }
+                                }
+                                kcQuarantined = faithfulKcs.size < allKcs.size
+
+                                // (2) 409-IF-NOT-ACTIVE (M-GATE-PATHS). A targeted RUBRIC_CRITERION card
+                                // for a gated KC that exists but is not ACTIVE (QUARANTINED / PAUSED)
+                                // refuses the grade entirely — 409, NO write. A non-existent card is fine
+                                // (the upsert will INSERT it ACTIVE). Read-only pre-check, before the txn.
+                                val notActive = faithfulKcs.firstOrNull { kcId ->
+                                    val existing = jarvis.tutor.FsrsCardRepo(ctx.db)
+                                        .findRubricCriterionCard(userId, kcId)
+                                    existing != null && existing.status != jarvis.tutor.CardStatus.ACTIVE
+                                }
+                                if (notActive != null) {
+                                    httpStatus = HttpStatusCode.Conflict
+                                    replyStatus = "conflict"
+                                } else if (faithfulKcs.isNotEmpty()) {
+                                    // (3) THE SINGLE ATOMIC TXN (B1). recordIn (+phase, B3) + attempts
+                                    // (H1) + upsertRubricCriterion (B2) per gated KC. A throw anywhere
+                                    // inside rolls back ALL — no orphaned mastery without its card/attempt.
+                                    val now = Instant.now()
+                                    val masteryRepo = jarvis.tutor.KcMasteryRepo(ctx.db)
+                                    val cardRepo = jarvis.tutor.FsrsCardRepo(ctx.db)
+                                    val initial = jarvis.Fsrs.initial(if (deterministicCorrect) 3 else 2)
+                                    val front = serverProblem?.statement?.takeIf { it.isNotBlank() }
+                                        ?: req.problemStatement
+                                    val back = canonical ?: ""
+                                    try {
+                                        org.jetbrains.exposed.sql.transactions.transaction(ctx.db) {
+                                            for (kcId in faithfulKcs) {
+                                                // recordIn — EWMA + phase, in THIS txn (B3).
+                                                val m = masteryRepo.recordIn(this, userId, kcId, deterministicScore, now)
+                                                // attempts — the graded attempt (H1).
+                                                AttemptsTable.insert {
+                                                    it[id] = jarvis.tutor.TutorTypes.ulid()
+                                                    it[AttemptsTable.userId] = userId
+                                                    it[AttemptsTable.kcId] = kcId
+                                                    it[taskId] = req.taskId
+                                                    it[problemId] = req.problemId
+                                                    it[phase] = m.phase?.name ?: jarvis.tutor.Phase.intro.name
+                                                    it[studentConfidence] = req.student_confidence
+                                                    it[correct] = deterministicCorrect
+                                                    it[score] = deterministicScore
+                                                    it[scaffoldLevel] = (req.scaffold_level ?: 0).coerceIn(0, 4)
+                                                    it[isFarTransfer] = req.is_far_transfer
+                                                    it[selfExplanation] = req.self_explanation
+                                                    it[AttemptsTable.recorded] = true
+                                                    it[gradedAt] = now
+                                                }
+                                                // LAST in-txn write: the rubric-criterion card upsert (B2).
+                                                // The B1 atomicity hook fires immediately before it.
+                                                drillCardUpsertHook()
+                                                cardRepo.upsertRubricCriterion(
+                                                    this, userId, kcId, front, back,
+                                                    jarvis.tutor.FsrsState(
+                                                        difficulty = initial.difficulty,
+                                                        stability = initial.stability,
+                                                        retrievability = 1.0,
+                                                        dueAt = now.plus(java.time.Duration.ofDays(1)),
+                                                        lastReviewedAt = now,
+                                                        lapses = 0,
+                                                    ),
+                                                )
+                                            }
+                                        }
+                                        recorded = true
+                                    } catch (e: Exception) {
+                                        // FAIL-LOUD (H4/B1): the single txn rolled back — NOTHING persisted.
+                                        // 500 so a real write failure is never silently swallowed as a pass.
+                                        System.err.println("[drill-grade] atomic grade txn FAILED (rolled back) for task=${req.taskId}: ${e.javaClass.simpleName}: ${e.message?.take(160)}")
+                                        httpStatus = HttpStatusCode.InternalServerError
+                                        replyStatus = "error"
+                                        recorded = false
+                                    }
+                                }
+                            }
                         }
                         ApiDrillGradeReply(
                             correct = deterministicCorrect,
@@ -2045,11 +2165,12 @@ fun Application.installTutorRoutes() {
                             confidence = if (confident) "HIGH" else "LOW",
                             recorded = recorded,
                             answerMatch = answerMatch,
-                        ) to "ok"
+                            kc_quarantined = kcQuarantined,
+                        ) to replyStatus
                     }
                 }
 
-                call.respond(HttpStatusCode.OK, reply)
+                call.respond(httpStatus, reply)
 
                 // Build + enqueue the envelope (non-blocking via the bounded
                 // channel inside TutorEventLog). If serialization or hashing
@@ -2223,6 +2344,17 @@ fun Application.installTutorRoutes() {
 }
 
 private val sensorJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+/**
+ * Resolve the content/ directory (mirrors TrustRoutes.trustContentDir + the drillKcLookup seam).
+ * The atomic grade route uses it to load the content KC for the Phase-3 faithful gate.
+ */
+private fun drillContentDir(): Path =
+    Path.of(
+        System.getProperty("JARVIS_CONTENT_DIR")
+            ?: System.getenv("JARVIS_CONTENT_DIR")
+            ?: "content",
+    )
 
 // Gate 2: request body for POST /auth/request-link.
 @kotlinx.serialization.Serializable
@@ -2553,6 +2685,12 @@ private data class ApiDrillGradeRequest(
     // mastery (E2: mastery records on the server-side Problem.kcIds, never client input).
     val canonicalAnswer: String? = null,
     val conceptIds: List<String>? = null,
+    // Phase-3 GROUP 2 (H1) — per-attempt calibration / scaffolding inputs (master §2.2).
+    // student_confidence ∈ DEFINITELY|MAYBE|GUESS|IDK | null; NOT the grader HIGH|LOW confidence.
+    val student_confidence: String? = null,
+    val scaffold_level: Int? = null,
+    val is_far_transfer: Boolean = false,
+    val self_explanation: String? = null,
 )
 
 @Serializable
@@ -2567,6 +2705,10 @@ private data class ApiDrillGradeReply(
     val confidence: String,            // "HIGH" | "LOW"
     val recorded: Boolean,             // true iff this grade updated mastery
     val answerMatch: Boolean? = null,  // present iff canonicalAnswer was supplied
+    // Phase-3 GROUP 2 (H15 / faithful-gating) — trust signals on the served grade. `kc_quarantined`
+    // is true iff at least one server-resolved KC was DENY-gated (non-faithful) so its mastery was
+    // NOT recorded; the displayed verdict still ships, only the mastery write is withheld.
+    val kc_quarantined: Boolean = false,
 )
 
 @Serializable

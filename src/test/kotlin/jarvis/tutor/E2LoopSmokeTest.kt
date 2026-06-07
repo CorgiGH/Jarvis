@@ -17,15 +17,21 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation as ServerCon
 import io.ktor.server.testing.testApplication
 import jarvis.ChatMessage
 import jarvis.Llm
+import jarvis.content.ContentReconcile
+import jarvis.content.ContentRepo
 import jarvis.web.drillGraderLlmFactory
 import jarvis.web.installTutorContext
 import jarvis.web.installTutorRoutes
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeAll
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -50,6 +56,41 @@ class E2LoopSmokeTest {
     @AfterEach
     fun resetSeam() {
         drillGraderLlmFactory = { jarvis.OpenRouterChatLlm() }
+        System.clearProperty("JARVIS_CONTENT_DIR")
+    }
+
+    /** Phase-3 GROUP 2: the grade path is FAITHFUL-GATED. Seed a span-bearing faithful KC + B8 row
+     *  (temp content dir) so the prep-authored→grade→mastery loop records over a faithful KC. */
+    private fun seedFaithful(ctx: TutorContext, content: Path, kcId: String) {
+        content.createDirectories()
+        content.resolve("subjects.yaml").writeText(
+            "version: 1\nsubjects:\n  - id: PA\n    name_ro: \"P\"\n    name_en: \"Algorithm Design\"\n")
+        val pa = content.resolve("PA")
+        pa.resolve("kcs").createDirectories()
+        pa.resolve("_sources").createDirectories()
+        pa.resolve("kcs/$kcId.yaml").writeText(
+            "id: $kcId\nsubject: PA\nname_ro: \"A\"\nname_en: \"Algorithm\"\n" +
+                "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
+                "exam_weight: 1.0\ntier: 1\nversion: 1\nverification_status: \"faithful\"\n" +
+                "source:\n  - doc: pa-lecture-01\n    quote: \"Algorithm\"\n    page: 1\n" +
+                "    span:\n      start: 0\n      end: 9\n")
+        pa.resolve("_sources/pa-lecture-01.md").writeText("Algorithm is a finite sequence.\n")
+        pa.resolve("edges.yaml").writeText("subject: PA\nedges: []\n")
+        val repo = ContentRepo(content)
+        val kc = repo.loadSubject("PA").kcs.single { it.id == kcId }
+        val contentHash = ContentReconcile.kcContentHash(kc)
+        val spanHash = ContentReconcile.sourceSpanHashOf(ContentReconcile.claimsFor(kc)) { subject, doc ->
+            repo.sourceText(subject, doc)
+        } ?: error("kc $kcId quote must relocate for a source_span_hash")
+        transaction(ctx.db) {
+            KcVerificationStatusTable.insert {
+                it[KcVerificationStatusTable.kcId] = kcId
+                it[status] = VerificationStatus.faithful.name
+                it[KcVerificationStatusTable.contentHash] = contentHash
+                it[sourceSpanHash] = spanHash
+                it[updatedAt] = Instant.now()
+            }
+        }
     }
 
     companion object {
@@ -113,6 +154,10 @@ class E2LoopSmokeTest {
         // 1. Seed session + task owned by userId
         val (userId, sid) = seedSession(ctx!!)
         seedTask(ctx!!, userId, "task-1")
+        // Phase-3 GROUP 2: FAITHFUL-GATED — seed pa-kc-001 faithful (temp content dir) so it records.
+        val content = tmp.resolve("content")
+        seedFaithful(ctx!!, content, "pa-kc-001")
+        System.setProperty("JARVIS_CONTENT_DIR", content.toString())
 
         val csrf = "test-csrf-e2-smoke"
         val client = createClient {
