@@ -173,6 +173,9 @@ fun Application.installTutorRoutes() {
         // Phase 2: trust-net routes (verify status / owner re-audit / report-wrong).
         installTrustRoutes()
 
+        // Phase 3 Area C GROUP 3: read routes (queue/today, mastery, calibration).
+        installQueueMasteryCalibrationRoutes()
+
         // Daemon health probe: checks if the local background daemon at
         // port 7331 is reachable. No auth required (public liveness data).
         get("/api/v1/daemon/health") {

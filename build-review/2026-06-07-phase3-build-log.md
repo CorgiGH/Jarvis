@@ -15,8 +15,8 @@ Owner (Alex) authorized autonomous Phase-3 build 2026-06-07 ("just go do them, g
 | Group | Scope | Status | Commit |
 |---|---|---|---|
 | G1 | ScaffoldPlanner + PrereqGraph + NextKcSelector (+QueueItem/QueueMode forced by frozen sig) | DONE (suite 1189✓, review SHIP) | d905022 |
-| G2 | atomic grade (B1/B2/B3, faithful-gated, 409) | DONE (suite 1195✓, review SHIP) | (this commit) |
-| G3 | queue/today + mastery + calibration | pending | — |
+| G2 | atomic grade (B1/B2/B3, faithful-gated, 409) | DONE (suite 1195✓, review SHIP) | 2318d71 |
+| G3 | queue/today + mastery + calibration | DONE (suite ✓, review SHIP) | (this commit) |
 | G4 | session/close + placement + entry_phase + exam_dates | pending | — |
 | G5 | mock-exam SYNC-200 | pending | — |
 | G6 | P3-GEN generator + P3-HONESTY spot-check | pending | — |
@@ -48,3 +48,15 @@ Decisions:
 - **D-G2-3:** **Closed a real prior gap** — pre-existing E1/E2 grade tests recorded mastery over UNVERIFIED KCs (now forbidden by the gate). Per frozen-locks-WIN, updated the TESTS to seed faithful B8 rows (preserving recording-intent over a now-faithful KC), did NOT weaken the route.
 - **D-G2-4:** Added internal no-op `drillCardUpsertHook` B1 fault-seam (fires before the LAST in-txn write) for the rollback class-killer; does not bypass the gate.
 - **D-G2-5 (scope):** H15 reply fields (`verification_status`/`phase`/`next_phase_action`/`cross_checked`) + inline `misconception{}`/`ladder_rungs[]`/`self_explanation_prompt` serve fields deliberately NOT built here — they are G7 serve-wiring (master-plan:113/206/207). Attempts already STORE student_confidence/scaffold_level/is_far_transfer/self_explanation (H1 inputs wired). No ghost: the fields are stored+consumed-by-grade, serve-exposure is the named G7 task.
+
+### G3 — read routes (DONE, SHIP, suite ✓)
+
+Files: QueueMasteryCalibrationRoutes.kt (NEW — 3 routes + frozen DTOs), TutorRoutes.kt (1-line registration), QueueMasteryCalibrationRoutesTest.kt (NEW, 12 tests). Read-only; zero schema writes. RED-proven class-killers (broke 2 spots → exactly 2 tests failed).
+
+Decisions:
+- **D-G3-1 (the queue trust-gate question, resolved):** `queue/today` **EXCLUDES** non-faithful KCs — does NOT surface-with-degraded-badge. Authority: route-table:109 "Quarantined/non-faithful OMITTED", QueueItem KDoc, KcCandidate §D, D-RF2 owner-ratification ("queue/today filter calls hasOpenReportWrong"). Implemented via `VerifyAdmin.resolveStatus` (folds D8 staleness + D3 dispute) keeping only faithful, PLUS the shared `hasOpenReportWrong` belt-and-braces. `verification_status` is carried per surviving item.
+- **D-G3-2:** queue new-KC = ONE item from `LockedNextKcSelector` (frozen single-item `select`); `total_due` = count of FSRS-due ACTIVE cards. No invented multi-item ranking.
+- **D-G3-3:** calibration `?subject=X` resolves the subject's KC ids from the corpus + filters attempts by kc_id membership (KC ids lowercase `pa-kc-001` vs subject `PA` ⇒ a prefix heuristic would silently return nothing).
+- **D-G3-4:** calibration excludes NULL `student_confidence` (no predicted point on the reliability curve); bucket order DEFINITELY>MAYBE>GUESS>IDK; per-user scoped.
+- **D-G3-5:** mastery = §M BAND (ewma_score + observations, NO history series); bilingual subject_name_ro/_en from the corpus (not hardcoded); cold-degrade ewma 0.0 / obs 0 / last_graded_at null.
+- **D-G3-6:** read-only discipline — private `readMastery` helper rather than widening `KcMasteryRepo`'s public API.
