@@ -176,6 +176,9 @@ fun Application.installTutorRoutes() {
         // Phase 3 Area C GROUP 3: read routes (queue/today, mastery, calibration).
         installQueueMasteryCalibrationRoutes()
 
+        // Phase 3 Area C GROUP 4: session/close, placement, exam-dates.
+        installSessionPlacementExamRoutes()
+
         // Daemon health probe: checks if the local background daemon at
         // port 7331 is reachable. No auth required (public liveness data).
         get("/api/v1/daemon/health") {

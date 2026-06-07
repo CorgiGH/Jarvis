@@ -16,8 +16,8 @@ Owner (Alex) authorized autonomous Phase-3 build 2026-06-07 ("just go do them, g
 |---|---|---|---|
 | G1 | ScaffoldPlanner + PrereqGraph + NextKcSelector (+QueueItem/QueueMode forced by frozen sig) | DONE (suite 1189✓, review SHIP) | d905022 |
 | G2 | atomic grade (B1/B2/B3, faithful-gated, 409) | DONE (suite 1195✓, review SHIP) | 2318d71 |
-| G3 | queue/today + mastery + calibration | DONE (suite ✓, review SHIP) | (this commit) |
-| G4 | session/close + placement + entry_phase + exam_dates | pending | — |
+| G3 | queue/today + mastery + calibration | DONE (suite ✓, review SHIP) | 06ca1a5 |
+| G4 | session/close + placement + entry_phase + exam_dates | DONE (suite 1219✓, review SHIP) | (this commit) |
 | G5 | mock-exam SYNC-200 | pending | — |
 | G6 | P3-GEN generator + P3-HONESTY spot-check | pending | — |
 | G7 | P3-MISC-SERVE + P3-LADDER-SERVE + P3-GHOST-FIELDS | pending | — |
@@ -60,3 +60,16 @@ Decisions:
 - **D-G3-4:** calibration excludes NULL `student_confidence` (no predicted point on the reliability curve); bucket order DEFINITELY>MAYBE>GUESS>IDK; per-user scoped.
 - **D-G3-5:** mastery = §M BAND (ewma_score + observations, NO history series); bilingual subject_name_ro/_en from the corpus (not hardcoded); cold-degrade ewma 0.0 / obs 0 / last_graded_at null.
 - **D-G3-6:** read-only discipline — private `readMastery` helper rather than widening `KcMasteryRepo`'s public API.
+
+### G4 — session/close + placement + exam_dates (DONE, SHIP, suite 1219/0)
+
+Files: SessionPlacementExamRoutes.kt (NEW — 5 endpoints), TutorRoutes.kt (1-line mount), SessionPlacementExamRoutesTest.kt (NEW, 11 tests). All writes per-user scoped + transactional. Phase-1 tables confirmed present (SessionSummariesTable/AttemptsTable/ExamDatesTable) — no invented migration.
+
+Decisions:
+- **D-G4-1:** Placement cluster source — live corpus has only **2** distinct clusters (both PA), not 8. Route is corpus-driven: one representative KC per DISTINCT cluster present (deterministic, first-by-id). The "8" was the PA-cluster expectation, not a hard count.
+- **D-G4-2:** `question_id = "plq-<kcId>"` (deterministic/reversible) so submit maps answer→KC with no server-side question store.
+- **D-G4-3:** Placement grading deterministic, **NO LLM on serve** (no-paid): non-blank ⇒ 1.0, blank ⇒ 0.0; entry_phase via PhaseModel.transition (one observation reaches at most intro — placement raises the floor, never claims mastery off one item).
+- **D-G4-4:** entry_phase write = `max(existing, candidate)` by Phase.ordinal — NEVER regresses a higher phase (the monotonicity class-killer).
+- **D-G4-5:** session/close deltas SERVER-recomputed from this user's attempts in window [session_start_at, now] (client sends none, L1); writes one session_summaries row; empty/zero-width window ⇒ empty deltas.
+- **D-G4-6:** exam-dates = GET/PUT `/api/v1/me/exam-dates` (CHANGE-9:97 canonical; route-table omits it). One row per (user,subject), PUT upserts (no dup); inherits the /me/ auth whitelist.
+- **D-G4-7 (downstream flag):** §2.2 left the `mastery_deltas` inner shape + exam-dates GET envelope unspecified → chose server-authoritative `ApiMasteryDelta{attempts,correct,ewma_after,phase}` + `ApiExamDatesReply{exam_dates:[...]}`. Outer wire keys are verbatim from the lock. **Phase-6 SessionWrapPane/DayOf/SettingsMe must align to these inner names (or adjust there).**
