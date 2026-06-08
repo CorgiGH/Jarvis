@@ -87,6 +87,18 @@ data class KnowledgeConcept(
      *  Surfaced in queue/today; consumed by Phase-5 DrillStack. Default = false. */
     // content/authored default = false; the /queue serving layer (Phase 3) degrades to true when unauthored (worked-example-first scaffold for novices) — data-model-lock §default.
     val worked_example_first: Boolean = false,
+    // ── Grounded-teaching layer (council 1780928193, CLAIM-vs-PRESENTATION) — both nullable + Kotlin-
+    //    defaulted so existing YAML deserializes unchanged AND emits NO claim when null (kcContentHash
+    //    is folded from claimsFor(), so a null field leaves every existing KC's content_hash untouched
+    //    — no re-audit cascade). When authored, each emits ONE prose claim (EXPLANATION / WORKED_EXAMPLE)
+    //    that flows through the EXISTING faithful-check (ContentReconcile.claimsFor → VerificationRunner),
+    //    anchored on the KC's first span-bearing source ref. ──
+    /** Authored plain-words restatement of the concept's core meaning (Romanian). The claim it emits
+     *  is round-trip-anchored on the KC's first span-bearing source ref. Null/blank ⇒ no claim emitted. */
+    val explanation_ro: String? = null,
+    /** Authored worked solution demonstrating the concept (Romanian). The claim it emits is round-trip-
+     *  anchored on the KC's first span-bearing source ref. Null/blank ⇒ no claim emitted. */
+    val worked_example_ro: String? = null,
 )
 
 /** content/viz-ids.yaml — the canonical set of valid viz ids (Kotlin↔TS source of truth). */
