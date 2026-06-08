@@ -112,6 +112,22 @@ data class ApiCalibrationBucket(
     val accuracy: Double,               // correct / attempts
 )
 
+/**
+ * Grounded-teaching serve reply (council 1780928193). Served by GET /api/v1/teaching/{kcId} ONLY
+ * when the KC resolves `faithful` + has no OPEN dispute. Both prose fields are AUTHORED and have
+ * passed the faithful-check pipeline, so `provenance` is stamped {authored, faithful-checked=true}
+ * — the type-honest counterpart to the generated DrillContentDto.provenance marker. A field is null
+ * when the author did not write it. FAIL-LOUD: non-faithful / disputed KCs are 404 (never served).
+ */
+@Serializable
+data class ApiTeachingReply(
+    val kcId: String,
+    val name_ro: String,
+    val explanation_ro: String?,
+    val worked_example_ro: String?,
+    val provenance: jarvis.tutor.DrillProvenanceDto,
+)
+
 fun Route.installQueueMasteryCalibrationRoutes() {
 
     // ── GET /api/v1/queue/today ───────────────────────────────────────────────────────────────────
@@ -292,6 +308,45 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                 )
             }
             call.respond(HttpStatusCode.OK, ApiCalibrationReply(buckets = buckets, total_attempts = total))
+        }
+    }
+
+    // ── GET /api/v1/teaching/{kcId} ─────────────────────────────────────────────────────────────────
+    // The authored grounded teaching (plain-words explanation + worked example) for ONE KC. Served
+    // ONLY when the KC resolves `faithful` (VerifyAdmin.resolveStatus folds the D8 staleness gate)
+    // AND has no OPEN report_wrong (D-RF2 always-on serve refusal). Non-faithful / disputed / unknown
+    // ⇒ 404 (OMIT, never a degraded payload) — the SAME gate queue/today uses (lines 143-148).
+    get("/api/v1/teaching/{kcId}") {
+        requireUser { _ ->
+            val ctx = call.application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@requireUser }
+            val db = ctx.db
+            val kcId = call.parameters["kcId"]?.takeIf { it.isNotBlank() }
+                ?: run { call.respond(HttpStatusCode.BadRequest, "kcId required"); return@requireUser }
+            val repo = ContentRepo(groupThreeContentDir())
+            val kc = VerifyAdmin.findKc(repo, kcId)
+                ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"unknown kc"}"""); return@requireUser }
+
+            // The faithful gate, mirrored from queue/today (lines 143-148):
+            val resolved = VerifyAdmin.resolveStatus(db, kc.id, kc)
+            if (resolved != VerificationStatus.faithful) {
+                call.respond(HttpStatusCode.NotFound, """{"error":"not faithful"}"""); return@requireUser
+            }
+            if (ReportWrongQuery.hasOpenReportWrong(db, kc.id)) {
+                call.respond(HttpStatusCode.NotFound, """{"error":"disputed"}"""); return@requireUser
+            }
+
+            call.respond(
+                HttpStatusCode.OK,
+                ApiTeachingReply(
+                    kcId = kc.id,
+                    name_ro = kc.name_ro,
+                    explanation_ro = kc.explanation_ro?.takeIf { it.isNotBlank() },
+                    worked_example_ro = kc.worked_example_ro?.takeIf { it.isNotBlank() },
+                    // Served only behind the faithful gate above ⇒ honest authored+checked provenance.
+                    provenance = jarvis.tutor.DrillProvenanceDto(type = "authored", hasBeenFaithfulChecked = true),
+                ),
+            )
         }
     }
 }
