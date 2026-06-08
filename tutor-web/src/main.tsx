@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { App } from "./App";
 import { VizDemoPage } from "./components/viz/VizDemoPage";
+import { OggiScreen } from "./components/OggiScreen";
 import { ThemeProvider } from "./theme/ThemeProvider";
 
 // App is the shell — it renders the header/nav for every route and switches
@@ -24,6 +25,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/login" element={<App />} />
           <Route path="/welcome/ai-literacy" element={<App />} />
           <Route path="/viz-demo" element={<VizDemoPage />} />
+          <Route path="/oggi" element={<OggiScreen />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

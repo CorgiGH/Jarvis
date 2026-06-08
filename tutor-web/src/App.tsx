@@ -251,6 +251,13 @@ export function App() {
               tasks
             </Link>
             <Link
+              to="/oggi"
+              aria-current={here.pathname === "/oggi" ? "page" : undefined}
+              className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+            >
+              azi
+            </Link>
+            <Link
               to="/review"
               aria-current={here.pathname === "/review" ? "page" : undefined}
               aria-label={reviewDue > 0
