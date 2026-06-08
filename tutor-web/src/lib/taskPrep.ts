@@ -46,3 +46,33 @@ export async function submitTask(taskId: string, note?: string): Promise<TaskSub
   if (!res.ok) throw new Error(`submitTask ${res.status}: ${await res.text().catch(() => "")}`);
   return res.json() as Promise<TaskSubmitReply>;
 }
+
+/** GET /api/v1/queue/today (Phase 5+). ADDITIVE — the task-prep path is unchanged.
+ *  Returns null on auth failure (401). Companion fetch for the trust-engine
+ *  queue-driven study path; the queue OMITS quarantined/non-faithful KCs server-side. */
+export async function getQueueToday(): Promise<QueueToday | null> {
+  const res = await jarvisFetch("/api/v1/queue/today");
+  if (res.status === 401) return null;
+  if (!res.ok) throw new Error(`getQueueToday ${res.status}: ${await res.text().catch(() => "")}`);
+  return res.json() as Promise<QueueToday>;
+}
+
+export interface QueueToday {
+  items: QueueItem[];
+  total_due: number;
+  day: string; // ISO
+}
+
+/** Mirrors jarvis/tutor/QueueItem.kt 1:1 (snake_case preserved on the wire). */
+export interface QueueItem {
+  kc_id: string;
+  kc_name_ro: string;
+  kc_name_en: string;
+  subject: string;
+  phase: "intro" | "practice" | "retrieval" | "mastered";
+  mastery_ewma: number;
+  fsrs_card_id: string | null;
+  verification_status: "unverified" | "pending" | "faithful" | "uncertain" | "failed";
+  worked_example_first: boolean;
+  mode: "worked" | "drill" | "retrieve";
+}
