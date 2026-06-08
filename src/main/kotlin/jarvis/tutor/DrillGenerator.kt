@@ -102,7 +102,10 @@ object DrillGenerator {
             content = DrillContentDto(drill = d.statement, worked = d.worked, definition = d.definition,
                 check = d.check, expectedAnswerHint = d.expectedAnswerHint,
                 referenceSolution = d.referenceSolution,
-                rubricItems = d.rubricItems.ifEmpty { null }, vizId = kc.viz_id),
+                rubricItems = d.rubricItems.ifEmpty { null }, vizId = kc.viz_id,
+                // Trust-leak fix: a generated drill's worked/definition is LLM-authored + unaudited.
+                // Stamp it generated so the faithful badge can never span it (set at generate time).
+                provenance = DrillProvenanceDto(type = "generated", hasBeenFaithfulChecked = false)),
         )
         return GenerateResult(bundles, rejects)
     }
@@ -150,7 +153,10 @@ object DrillGenerator {
                 content = DrillContentDto(drill = d.statement, worked = d.worked, definition = d.definition,
                     check = d.check, expectedAnswerHint = d.expectedAnswerHint,
                     referenceSolution = d.referenceSolution,
-                    rubricItems = d.rubricItems.ifEmpty { null }, vizId = kc.viz_id),
+                    rubricItems = d.rubricItems.ifEmpty { null }, vizId = kc.viz_id,
+                    // Trust-leak fix: a generated drill's worked/definition is LLM-authored + unaudited.
+                    // Stamp it generated so the faithful badge can never span it (set at generate time).
+                    provenance = DrillProvenanceDto(type = "generated", hasBeenFaithfulChecked = false)),
             )
         }
         return GenerateResult(bundles, rejects)
