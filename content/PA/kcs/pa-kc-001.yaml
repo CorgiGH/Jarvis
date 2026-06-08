@@ -10,18 +10,18 @@ exam_weight: 0.22
 tier: 1
 source:
   - doc: pa-lecture-01
-    quote: "It does not exists a standard definition for the notion of algorithm."
-    page: 4
-    span:
-      start: 811
-      end: 880
-    provenance: located
-  - doc: pa-lecture-01
     quote: "An algorithm is a well-ordered collection of unambiguous and effectively computable\noperations that when executed produces a result and halts in a finite amount of time."
     page: 4
     span:
       start: 1184
       end: 1353
+    provenance: located
+  - doc: pa-lecture-01
+    quote: "It does not exists a standard definition for the notion of algorithm."
+    page: 4
+    span:
+      start: 811
+      end: 880
     provenance: located
   - doc: pa-lecture-01
     quote: "An algorithm is an ordered sequence of instructions that is guaranteed to solve a\nspecific problem."
@@ -48,3 +48,20 @@ far_transfer_stem: >-
   Ai o rețetă de bucătărie scrisă pas cu pas. Verifică, folosind definiția algoritmului din curs
   (operații neambigue, efectiv calculabile, care produc un rezultat și se opresc în timp finit),
   care condiții sunt îndeplinite și care nu, și argumentează dacă rețeta este sau nu un algoritm.
+# ── Grounded-teaching layer (council 1780928193, CLAIM-vs-PRESENTATION) — authored plain-words
+#    explanation + worked example, RESTATING ONLY the page-4 definition quote
+#    ("An algorithm is a well-ordered collection of unambiguous and effectively computable
+#    operations that when executed produces a result and halts in a finite amount of time.").
+#    Each flows through the faithful-check as a prose EXPLANATION / WORKED_EXAMPLE claim, anchored
+#    on this KC's first span-bearing source ref (pa-lecture-01, span 1184-1353). ──
+explanation_ro: >-
+  Pe scurt: un algoritm este o colecție bine ordonată de operații care sunt neambigue și efectiv
+  calculabile; atunci când este executat, el produce un rezultat și se oprește într-un timp finit.
+  Cu alte cuvinte, fiecare pas este clar (nu lasă loc de interpretare), poate fi efectiv dus la
+  capăt, iar execuția nu continuă la nesfârșit — se termină după un număr finit de pași.
+worked_example_ro: >-
+  Exemplu lucrat: vrem să adunăm două numere a și b. Pasul 1 — citim a; pasul 2 — citim b; pasul 3
+  — calculăm s = a + b; pasul 4 — afișăm s și ne oprim. Fiecare pas este neambiguu (știm exact ce
+  avem de făcut) și efectiv calculabil (adunarea se poate executa), iar după pasul 4 execuția se
+  oprește, deci produce un rezultat în timp finit. Conform definiției din curs, această secvență
+  este un algoritm.
