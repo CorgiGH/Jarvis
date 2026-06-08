@@ -117,6 +117,18 @@ object ContentReconcile {
                 out += claim(kc, ClaimKind.GRADER_RULE, content = rule, invariant = null, source = anchorRef)
             }
         }
+        // ── Grounded-teaching layer (council 1780928193) — authored prose claims ──────────────────
+        // EXPLANATION — authored plain-words restatement. PROSE (invariant = null ⇒ !isEquationalKind),
+        // anchored on `anchorRef` (the KC's first span-bearing ref) so the round-trip leg can relocate
+        // the gold span; routes like a prose GRADER_RULE (decideOutcome case 3pr/4p). Emitted only when
+        // non-blank, so a KC without it keeps its content_hash unchanged (no re-audit cascade).
+        kc.explanation_ro?.takeIf { it.isNotBlank() }?.let { expl ->
+            out += claim(kc, ClaimKind.EXPLANATION, content = expl, invariant = null, source = anchorRef)
+        }
+        // WORKED_EXAMPLE — authored worked solution. Same routing + anchoring as EXPLANATION.
+        kc.worked_example_ro?.takeIf { it.isNotBlank() }?.let { ex ->
+            out += claim(kc, ClaimKind.WORKED_EXAMPLE, content = ex, invariant = null, source = anchorRef)
+        }
         // Deterministic, reorder-stable order by the content-addressed id.
         return out.sortedBy { it.claimId }
     }

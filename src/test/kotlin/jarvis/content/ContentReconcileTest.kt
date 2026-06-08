@@ -19,6 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -410,6 +411,66 @@ class ContentReconcileTest {
                 .count()
         }
         assertEquals(1L, rows, "one B8 row per KC — reconcile upserts, never duplicates")
+    }
+
+    // --- Grounded-teaching layer (Task 4: EXPLANATION + WORKED_EXAMPLE claims) -----------------
+
+    private fun teachingKc(
+        explanation: String? = null,
+        workedExample: String? = null,
+    ): KnowledgeConcept = KnowledgeConcept(
+        id = "pa-kc-001", subject = "PA", name_ro = "Noțiunea de algoritm",
+        name_en = "The notion of an algorithm", cluster = "Fundamentele algoritmilor",
+        bloom_level = "understand", difficulty = 1, time_minutes = 25, exam_weight = 0.22, tier = 1,
+        source = listOf(
+            SourceRef(
+                doc = "pa-lecture-01",
+                quote = "An algorithm is a well-ordered collection of unambiguous and effectively computable\noperations that when executed produces a result and halts in a finite amount of time.",
+                page = 4, span = Span(1184, 1353), provenance = "located",
+            ),
+        ),
+        version = 1,
+        explanation_ro = explanation,
+        worked_example_ro = workedExample,
+    )
+
+    @Test fun `no EXPLANATION or WORKED_EXAMPLE claim when both fields are null`() {
+        val claims = ContentReconcile.claimsFor(teachingKc())
+        assertFalse(claims.any { it.kind == ClaimKind.EXPLANATION }, "null explanation_ro ⇒ no EXPLANATION claim")
+        assertFalse(claims.any { it.kind == ClaimKind.WORKED_EXAMPLE }, "null worked_example_ro ⇒ no WORKED_EXAMPLE claim")
+    }
+
+    @Test fun `blank fields emit no claim`() {
+        val claims = ContentReconcile.claimsFor(teachingKc(explanation = "   ", workedExample = ""))
+        assertFalse(claims.any { it.kind == ClaimKind.EXPLANATION })
+        assertFalse(claims.any { it.kind == ClaimKind.WORKED_EXAMPLE })
+    }
+
+    @Test fun `authored explanation emits one prose EXPLANATION claim anchored on the span ref`() {
+        val text = "Un algoritm este o colecție bine ordonată de operații neambigue și efectiv calculabile."
+        val claims = ContentReconcile.claimsFor(teachingKc(explanation = text))
+        val expl = claims.single { it.kind == ClaimKind.EXPLANATION }
+        assertEquals(text, expl.content)
+        assertNull(expl.invariant, "EXPLANATION is prose ⇒ invariant null (never equational)")
+        assertNotNull(expl.source?.span, "anchored on the KC's first span-bearing ref")
+        assertEquals(1184, expl.source!!.span!!.start)
+        assertEquals(ContentReconcile.claimId("pa-kc-001", ClaimKind.EXPLANATION, text), expl.claimId)
+    }
+
+    @Test fun `authored worked example emits one prose WORKED_EXAMPLE claim anchored on the span ref`() {
+        val text = "Exemplu: pașii adunării a două numere sunt neambigui, se execută și se opresc în timp finit."
+        val claims = ContentReconcile.claimsFor(teachingKc(workedExample = text))
+        val ex = claims.single { it.kind == ClaimKind.WORKED_EXAMPLE }
+        assertEquals(text, ex.content)
+        assertNull(ex.invariant)
+        assertEquals(1184, ex.source!!.span!!.start)
+    }
+
+    @Test fun `adding a teaching field changes ONLY that KC content hash - null fields leave it unchanged`() {
+        val without = ContentReconcile.kcContentHash(teachingKc())
+        val withExpl = ContentReconcile.kcContentHash(teachingKc(explanation = "Un algoritm este o colecție bine ordonată."))
+        assertNotEquals(without, withExpl, "an authored explanation adds a claim ⇒ the hash MUST change")
+        assertEquals(without, ContentReconcile.kcContentHash(teachingKc()))
     }
 
     @Test
