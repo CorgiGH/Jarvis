@@ -59,8 +59,14 @@ object ContentReconcile {
      *  - **GRADER_RULE** — one per `grader_rules` entry, `content = the rule`,
      *    `source = the KC's first span-bearing ref`.
      *
-     * Reorder-stability: claimIds are content-addressed, so the RETURNED set is independent of the
-     * order of `grader_rules` / `source`. The list is sorted by `claimId` for a deterministic order.
+     * Reorder-stability: the RETURNED claim set (by claimId) is independent of `grader_rules` order.
+     * `source` reorder is stable for DEFINITION claims (each ref is its own claim, so no ref is
+     * "first"). For anchorRef-bound kinds (INVARIANT / GRADER_RULE / EXPLANATION / WORKED_EXAMPLE),
+     * the emitted claim's `source` is `kc.source.firstOrNull { it.span != null }` (anchorRef); a
+     * source-list reorder that promotes a different span-bearing ref to first changes that claim's
+     * `doc|page|spanStart|spanEnd` — and therefore changes `kcContentHash`. Source reorder is stable
+     * ONLY for DEFINITION-only KCs (no anchorRef-bound claims). See [kcContentHashOf].
+     * The list is sorted by `claimId` for a deterministic order.
      */
     fun claimsFor(kc: KnowledgeConcept): List<VerificationClaim> {
         val out = ArrayList<VerificationClaim>()

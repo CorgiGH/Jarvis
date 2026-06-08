@@ -505,4 +505,72 @@ class ContentReconcileTest {
         val gr006 = report.claims.filter { it.kcId == "pa-kc-006" && it.kind == ClaimKind.GRADER_RULE && it.invariant != null }
         assertEquals("t + t + t = 3*t", gr006.first().invariant, "pa-kc-006's sympy directive extracts t + t + t = 3*t")
     }
+
+    // --- #3: source-reorder stability (anchorRef-bound vs DEFINITION-only) ----------------------
+
+    /** An invariant-bearing KC with TWO different span-bearing source refs — promoting the second
+     *  ref to first changes the anchorRef, which changes doc|page|spanStart|spanEnd on every
+     *  anchorRef-bound claim ⇒ the content_hash MUST change. */
+    @Test fun `source reorder changes kcContentHash for a KC with anchorRef-bound claims (invariant+grader)`() {
+        val refA = SourceRef(doc = "pa-lecture-01", quote = "quote A", page = 1, span = Span(100, 200), provenance = "located")
+        val refB = SourceRef(doc = "pa-lecture-02", quote = "quote B", page = 5, span = Span(500, 600), provenance = "located")
+        val kcAB = KnowledgeConcept(
+            id = "pa-kc-005", subject = "PA", name_ro = "RO", name_en = "EN",
+            cluster = "c", bloom_level = "apply", difficulty = 3, time_minutes = 30,
+            exam_weight = 1.0, tier = 3, grounding_tier = "strict",
+            source = listOf(refA, refB),
+            invariant = "1 + 1 = 2",
+            grader_rules = listOf("the answer must be 2"),
+            version = 1,
+        )
+        val kcBA = kcAB.copy(source = listOf(refB, refA))
+        assertNotEquals(
+            ContentReconcile.kcContentHash(kcAB),
+            ContentReconcile.kcContentHash(kcBA),
+            "promoting a different span-bearing ref to first changes anchorRef ⇒ changes content_hash for INVARIANT/GRADER_RULE claims",
+        )
+    }
+
+    /** A DEFINITION-only KC (no invariant, no grader_rules, no teaching prose) — no anchorRef-bound
+     *  claims, so reordering the source list does NOT change the content_hash (each DEFINITION claim
+     *  folds its OWN ref, not a shared anchorRef). */
+    @Test fun `source reorder does NOT change kcContentHash for a DEFINITION-only KC`() {
+        val refA = SourceRef(doc = "pa-lecture-01", quote = "quote A", page = 1, span = Span(100, 200), provenance = "located")
+        val refB = SourceRef(doc = "pa-lecture-02", quote = "quote B", page = 5, span = Span(500, 600), provenance = "located")
+        val defOnly = KnowledgeConcept(
+            id = "pa-kc-001", subject = "PA", name_ro = "RO", name_en = "EN",
+            cluster = "c", bloom_level = "understand", difficulty = 1, time_minutes = 25,
+            exam_weight = 1.0, tier = 1,
+            source = listOf(refA, refB),
+            version = 1,
+        )
+        val defOnlyReordered = defOnly.copy(source = listOf(refB, refA))
+        assertEquals(
+            ContentReconcile.kcContentHash(defOnly),
+            ContentReconcile.kcContentHash(defOnlyReordered),
+            "DEFINITION-only KC: source reorder is stable (each DEFINITION claim folds its own ref, no shared anchorRef)",
+        )
+    }
+
+    // --- #4: un-anchored EXPLANATION (anchorRef null) ----------------------------------------
+
+    /** A KC whose explanation_ro is authored but all source refs have NO span (anchorRef is null).
+     *  claimsFor must still emit an EXPLANATION claim — with null source — documenting that this
+     *  authored prose can never be faithful-checked (no gold span ⇒ no round-trip leg to anchor on). */
+    @Test fun `un-anchored explanation (all source refs span-null) emits EXPLANATION claim with null source`() {
+        val noSpanKc = KnowledgeConcept(
+            id = "pa-kc-001", subject = "PA", name_ro = "RO", name_en = "EN",
+            cluster = "c", bloom_level = "understand", difficulty = 1, time_minutes = 25,
+            exam_weight = 1.0, tier = 1,
+            source = listOf(
+                SourceRef(doc = "pa-lecture-01", quote = "some quote", page = 1, span = null, provenance = "located"),
+            ),
+            explanation_ro = "Un algoritm este o colecție bine ordonată.",
+            version = 1,
+        )
+        val claims = ContentReconcile.claimsFor(noSpanKc)
+        val expl = claims.single { it.kind == ClaimKind.EXPLANATION }
+        assertEquals("Un algoritm este o colecție bine ordonată.", expl.content)
+        assertNull(expl.source?.span, "no span-bearing ref ⇒ anchorRef null ⇒ EXPLANATION source has no span (can never be faithful-checked)")
+    }
 }
