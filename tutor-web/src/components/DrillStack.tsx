@@ -2,7 +2,7 @@ import { useState } from "react";
 import { DrillCard } from "./DrillCard";
 import type { DrillCardState } from "./DrillCard";
 import { gradeDrill } from "../lib/drillGrader";
-import type { GradeResult } from "../lib/drillGrader";
+import type { GradeResult, StudentConfidence } from "../lib/drillGrader";
 import { MathText } from "./MathText";
 import { formatEnum } from "../lib/formatEnum";
 import { RoutedViz } from "./RoutedViz";
@@ -83,6 +83,7 @@ export function DrillStack({
 }: DrillStackProps) {
   const [attempt, setAttempt] = useState("");
   const [prediction, setPrediction] = useState("");
+  const [studentConfidence, setStudentConfidence] = useState<StudentConfidence | null>(null);
   const [phase, setPhase] = useState<StackPhase>("idle");
   const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +124,7 @@ export function DrillStack({
         referenceSolution: content.referenceSolution,
         rubricItems: content.rubricItems,
         prediction: prediction.trim() || undefined,
+        studentConfidence: studentConfidence ?? undefined,
       });
       setGradeResult(result);
       setPhase(result.correct ? "correct" : "incorrect");
@@ -148,6 +150,7 @@ export function DrillStack({
         referenceSolution: content.referenceSolution,
         rubricItems: content.rubricItems,
         prediction: prediction.trim() || undefined,
+        studentConfidence: studentConfidence ?? undefined,
       });
       setGradeResult(result);
       setPhase("given-up");
@@ -281,6 +284,36 @@ export function DrillStack({
         )}
         {error && (
           <div className="mt-2 text-danger-text font-mono text-xs">{error}</div>
+        )}
+        {!unlocked && (
+          <div
+            data-testid="drill-confidence-row"
+            role="radiogroup"
+            aria-label="confidence before checking"
+            className="mt-3 flex flex-wrap gap-2"
+          >
+            <span className="font-mono text-[10px] uppercase tracking-widest text-page-fg/70 self-center">
+              cât de sigur ești?
+            </span>
+            {(["DEFINITELY", "MAYBE", "GUESS", "IDK"] as StudentConfidence[]).map((c) => (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={studentConfidence === c}
+                data-testid={`confidence-${c}`}
+                onClick={() => setStudentConfidence(c)}
+                disabled={phase === "grading"}
+                className={`px-2 py-1 font-mono text-[10px] tracking-widest border-2 transition-all duration-[180ms] ${
+                  studentConfidence === c
+                    ? "bg-accent text-page-fg border-border-strong"
+                    : "bg-page-bg text-page-fg/70 border-border-thin hover:border-border-strong"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
         )}
         {!unlocked && (
           <div className="mt-3 flex gap-2">
