@@ -40,7 +40,13 @@ data class VerificationClaim(
 )
 
 /** §K — what a claim asserts. Wire literal == name (UPPER). == verification_audit.claim_kind. */
-enum class ClaimKind { DEFINITION, INVARIANT, GRADER_RULE, MISCONCEPTION_REFUTATION, STEM }
+enum class ClaimKind {
+    DEFINITION, INVARIANT, GRADER_RULE, MISCONCEPTION_REFUTATION, STEM,
+    // Grounded-teaching layer (council 1780928193): authored prose claims for the plain-words
+    // explanation + worked example. Routed EXACTLY like a prose GRADER_RULE (invariant = null ⇒
+    // !isEquationalKind ⇒ decideOutcome case 3pr/4p). Wire literals → verification_audit.claim_kind.
+    EXPLANATION, WORKED_EXAMPLE,
+}
 
 /**
  * §K — domain of the non-LLM verification leg. Domain-scoped: PA ⇒ SYMPY;

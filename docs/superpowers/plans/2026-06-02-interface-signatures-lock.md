@@ -348,7 +348,7 @@ data class VerificationClaim(
 )
 
 /** What a claim asserts. Wire literal == name (UPPER). == verification_audit.claim_kind. */
-enum class ClaimKind { DEFINITION, INVARIANT, GRADER_RULE, MISCONCEPTION_REFUTATION, STEM }
+enum class ClaimKind { DEFINITION, INVARIANT, GRADER_RULE, MISCONCEPTION_REFUTATION, STEM, EXPLANATION, WORKED_EXAMPLE }
 
 fun interface NonLlmLeg {
     fun check(claim: VerificationClaim): NonLlmResult
@@ -366,6 +366,7 @@ data class NonLlmResult(
 - **The "output type" the master plan names** = `NonLlmResult` (above). `kind == NONE ⇒ ran=false ⇒ pass ignored ⇒ UNCERTAIN floor` (§2.5 invariant, FAIL-LOUD H5).
 - **Wire to `verification_audit`:** `nonllm_leg` column = `kind.name` (`SYMPY|TEST_EXEC|HUMAN_GOLD|NONE`), `nonllm_result` text = `detail`, `agree` partly driven by `pass` (CHANGE 6).
 - **`VerificationClaim` input (frozen above):** the unit every audit leg consumes. `claimId` == `verification_audit.claim_id` (content-hash, M-CLAIM); `kind` == `verification_audit.claim_kind` (the `ClaimKind` enum, 5 literals matching CHANGE 6's `DEFINITION|INVARIANT|GRADER_RULE|MISCONCEPTION_REFUTATION|STEM`); `source: SourceRef?` `[EXISTS]` carries the RAW span `LiveSourceLocator`/`SpanClaimRoundTrip` (§J) operate on. A null `source.span` ⇒ no gold span ⇒ the §2.5 `DEFINITIONAL_NO_GOLD_SPAN` outcome (UNCERTAIN floor). Emitted by curate-tutor Stage-9 reconcile; never a wire type.
+- **AMENDMENT (grounded-teaching layer, council 1780928193 — deviation-amends-lock):** `ClaimKind` gains two literals `EXPLANATION` + `WORKED_EXAMPLE` (authored plain-words explanation + worked example on `KnowledgeConcept.{explanation_ro, worked_example_ro}`). Both are PROSE claims (`invariant = null`) anchored on the KC's first span-bearing source ref; they route through `VerificationRunner.decideOutcome` EXACTLY like an existing prose `GRADER_RULE` (case 3pr faithful / case 4p `PROSE_LLM_UNCONFIRMED` floor) — `isEquationalKind` returns false for them, so they NEVER reach the equational or DEFINITION branches. They are additive wire literals → `verification_audit.claim_kind`; emitted only when the corresponding field is non-blank, so existing KCs' `content_hash` is unchanged (no re-audit cascade).
 
 ## L. LLM-leg family enum (H3) — collapse detection
 

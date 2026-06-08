@@ -11,12 +11,27 @@ import kotlin.test.assertTrue
 /** §K / §L — leaf type shape + the FAIL-LOUD never-ran-≠-disagreed invariant on NonLlmResult. */
 class VerificationTypesTest {
 
+    /** §K — ClaimKind is a frozen wire enum: the EXACT literal set (UPPER) flows to
+     *  verification_audit.claim_kind. The grounded-teaching layer adds EXPLANATION + WORKED_EXAMPLE. */
     @Test
-    fun `ClaimKind has exactly the five frozen literals`() {
+    fun `ClaimKind has exactly the seven wire literals`() {
+        val names = ClaimKind.entries.map { it.name }.toSet()
         assertEquals(
-            listOf("DEFINITION", "INVARIANT", "GRADER_RULE", "MISCONCEPTION_REFUTATION", "STEM"),
-            ClaimKind.entries.map { it.name },
+            setOf(
+                "DEFINITION", "INVARIANT", "GRADER_RULE",
+                "MISCONCEPTION_REFUTATION", "STEM",
+                "EXPLANATION", "WORKED_EXAMPLE",
+            ),
+            names,
         )
+    }
+
+    @Test
+    fun `the two new teaching kinds serialize as their UPPER name`() {
+        assertEquals("EXPLANATION", ClaimKind.EXPLANATION.name)
+        assertEquals("WORKED_EXAMPLE", ClaimKind.WORKED_EXAMPLE.name)
+        assertTrue(ClaimKind.valueOf("EXPLANATION") == ClaimKind.EXPLANATION)
+        assertTrue(ClaimKind.valueOf("WORKED_EXAMPLE") == ClaimKind.WORKED_EXAMPLE)
     }
 
     @Test
