@@ -282,6 +282,11 @@ export function DrillStack({
         {gradeResult && !gradeResult.correct && gradeResult.misconception_payload && (
           <MisconceptionRibbon payload={gradeResult.misconception_payload} />
         )}
+        {gradeResult && content.provenance?.type !== "generated" && (
+          <div className="mt-2">
+            <TrustBadge status={gradeResult.verification_status} />
+          </div>
+        )}
         {error && (
           <div className="mt-2 text-danger-text font-mono text-xs">{error}</div>
         )}
@@ -345,13 +350,9 @@ export function DrillStack({
         staggerIndex={1}
       >
         <div data-content-block="worked">
-          {content.provenance?.type === "generated" ? (
+          {content.provenance?.type === "generated" && (
             <div className="mb-2">
               <ProvenanceBadge provenance={content.provenance} />
-            </div>
-          ) : (
-            <div className="mb-2">
-              <TrustBadge status={gradeResult?.verification_status} />
             </div>
           )}
           <MathText text={content.worked} className="text-sm" />
