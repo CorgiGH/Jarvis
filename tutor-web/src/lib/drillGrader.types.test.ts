@@ -3,7 +3,7 @@ import type { GradeResult, LadderRung, MisconceptionPayload, StudentConfidence }
 
 describe("T0 trust wire types", () => {
   it("GradeResult carries the served-but-formerly-ignored trust fields", () => {
-    expectTypeOf<GradeResult>().toHaveProperty("ladder_rungs").toEqualTypeOf<LadderRung[]>();
+    expectTypeOf<GradeResult>().toHaveProperty("ladder_rungs").toEqualTypeOf<LadderRung[] | undefined>();
     expectTypeOf<GradeResult>().toHaveProperty("misconception_payload");
     expectTypeOf<GradeResult>().toHaveProperty("verification_status");
     expectTypeOf<GradeResult>().toHaveProperty("self_explanation_prompt");

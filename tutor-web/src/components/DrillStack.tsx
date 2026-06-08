@@ -7,6 +7,13 @@ import { MathText } from "./MathText";
 import { formatEnum } from "../lib/formatEnum";
 import { RoutedViz } from "./RoutedViz";
 
+/** Provenance of the prose in `worked`/`definition` (DrillProvenanceDto, sibling backend plan Task 5).
+ *  CI invariant: hasBeenFaithfulChecked may be true ONLY when type === "authored". */
+export interface DrillProvenance {
+  type: "authored" | "generated";
+  hasBeenFaithfulChecked: boolean;
+}
+
 export interface DrillContent {
   drill: string;
   worked: string;
@@ -24,6 +31,9 @@ export interface DrillContent {
   rubricItems?: string[];
   /** E3 routing: when set, DrillStack mounts the registry component for this id. */
   vizId?: string;
+  /** T0 (Phase-5): trust-leak fix — provenance of generated vs authored prose.
+   *  null/undefined on legacy prep blobs → render fail-closed (no faithful badge). */
+  provenance?: DrillProvenance;
 }
 
 interface DrillStackProps {
