@@ -10,6 +10,7 @@ import { FeedbackLadder } from "./FeedbackLadder";
 import { MisconceptionRibbon } from "./MisconceptionRibbon";
 import { TrustBadge } from "./TrustBadge";
 import { GroundedExplanationCard } from "./GroundedExplanationCard";
+import { ProvenanceBadge } from "./ProvenanceBadge";
 
 /** Provenance of the prose in `worked`/`definition` (DrillProvenanceDto, sibling backend plan Task 5).
  *  CI invariant: hasBeenFaithfulChecked may be true ONLY when type === "authored". */
@@ -311,7 +312,11 @@ export function DrillStack({
         staggerIndex={1}
       >
         <div data-content-block="worked">
-          {content.provenance?.type !== "generated" && (
+          {content.provenance?.type === "generated" ? (
+            <div className="mb-2">
+              <ProvenanceBadge provenance={content.provenance} />
+            </div>
+          ) : (
             <div className="mb-2">
               <TrustBadge status={gradeResult?.verification_status} />
             </div>
