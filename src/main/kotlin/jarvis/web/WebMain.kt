@@ -102,6 +102,11 @@ internal suspend fun runWeb() {
                 path.startsWith("/api/v1/sidekick/") ||
                 path.startsWith("/api/v1/gap") ||
                 path.startsWith("/api/v1/daemon/health") ||
+                // Phase-3 Group-3 read routes — session-authed (queue/today, mastery, calibration, teaching)
+                path.startsWith("/api/v1/queue/") ||
+                path.startsWith("/api/v1/mastery") ||
+                path.startsWith("/api/v1/calibration") ||
+                path.startsWith("/api/v1/teaching/") ||
                 // Gate 3: curator routes — self-authenticate via jarvis_session + requireOwner
                 path.startsWith("/api/v1/curator/")) return@intercept
 
