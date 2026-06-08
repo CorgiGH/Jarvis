@@ -9,6 +9,7 @@ import { RoutedViz } from "./RoutedViz";
 import { FeedbackLadder } from "./FeedbackLadder";
 import { MisconceptionRibbon } from "./MisconceptionRibbon";
 import { TrustBadge } from "./TrustBadge";
+import { GroundedExplanationCard } from "./GroundedExplanationCard";
 
 /** Provenance of the prose in `worked`/`definition` (DrillProvenanceDto, sibling backend plan Task 5).
  *  CI invariant: hasBeenFaithfulChecked may be true ONLY when type === "authored". */
@@ -42,6 +43,10 @@ export interface DrillContent {
 interface DrillStackProps {
   taskId: string;
   problemId: string;
+  /** KC behind this drill, used to fetch grounded teaching. Sourced from
+   *  QueueItem.kc_id on the queue/today path; absent on the task-prep path
+   *  (prep blob has no kc id) → GroundedExplanationCard no-ops. */
+  kcId?: string;
   content: DrillContent;
   onProblemComplete: (problemId: string) => void;
 }
@@ -71,6 +76,7 @@ type StackPhase =
 export function DrillStack({
   taskId,
   problemId,
+  kcId,
   content,
   onProblemComplete,
 }: DrillStackProps) {
@@ -322,6 +328,9 @@ export function DrillStack({
         staggerIndex={2}
       >
         <MathText text={content.definition} className="text-sm" />
+        {(phase === "correct" || phase === "given-up" || phase === "check-done") && (
+          <GroundedExplanationCard kcId={kcId} />
+        )}
       </DrillCard>
 
       {/* 4. CHECK card — locked until drill graded */}
