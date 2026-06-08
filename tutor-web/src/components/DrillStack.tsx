@@ -6,6 +6,7 @@ import type { GradeResult } from "../lib/drillGrader";
 import { MathText } from "./MathText";
 import { formatEnum } from "../lib/formatEnum";
 import { RoutedViz } from "./RoutedViz";
+import { FeedbackLadder } from "./FeedbackLadder";
 
 /** Provenance of the prose in `worked`/`definition` (DrillProvenanceDto, sibling backend plan Task 5).
  *  CI invariant: hasBeenFaithfulChecked may be true ONLY when type === "authored". */
@@ -262,6 +263,9 @@ export function DrillStack({
           >
             MISCONCEPTION · {formatEnum(gradeResult.misconception)}
           </div>
+        )}
+        {gradeResult && gradeResult.ladder_rungs && gradeResult.ladder_rungs.length > 0 && (
+          <FeedbackLadder rungs={gradeResult.ladder_rungs} />
         )}
         {error && (
           <div className="mt-2 text-danger-text font-mono text-xs">{error}</div>
