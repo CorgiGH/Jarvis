@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { App } from "../App";
+import { ThemeProvider } from "../theme/ThemeProvider";
 
 function LocationProbe() {
   const loc = useLocation();
@@ -34,7 +35,7 @@ test("App prefers server jarvis_last_task cookie over localStorage on cold mount
   render(
     <MemoryRouter initialEntries={["/"]}>
       <Routes>
-        <Route path="/" element={<><App /><LocationProbe /></>} />
+        <Route path="/" element={<><ThemeProvider><App /></ThemeProvider><LocationProbe /></>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -63,7 +64,7 @@ test("App falls back to localStorage when server cookie absent", async () => {
   render(
     <MemoryRouter initialEntries={["/"]}>
       <Routes>
-        <Route path="/" element={<><App /><LocationProbe /></>} />
+        <Route path="/" element={<><ThemeProvider><App /></ThemeProvider><LocationProbe /></>} />
       </Routes>
     </MemoryRouter>,
   );

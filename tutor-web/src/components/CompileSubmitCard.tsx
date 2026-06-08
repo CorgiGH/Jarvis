@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { jarvisFetch } from "../lib/api";
+import { useReducedMotion } from "../theme/ThemeProvider";
 
 export interface ProblemAnswer {
   problemId: string;
@@ -13,13 +14,6 @@ interface CompileSubmitCardProps {
 }
 
 type SubmitPhase = "idle" | "submitting" | "done" | "error";
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
 
 /**
  * Builds a plain-text LaTeX-friendly export from per-problem answers.
@@ -50,7 +44,7 @@ export function CompileSubmitCard({
 }: CompileSubmitCardProps) {
   const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const reduced = prefersReducedMotion();
+  const reduced = useReducedMotion();
   const latexExport = buildLatexExport(answers);
 
   async function handleSubmit() {

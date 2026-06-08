@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import { ACCENT, INK } from "./theme";
+import { prefersReducedMotionNow } from "../../theme/applyTheme";
 
 const TITLE_ID = "num-line-direct-title";
 const DESC_ID = "num-line-direct-desc";
@@ -38,8 +39,7 @@ export function NumLineDirect({ data, mu, onMu, min, max }: NumLineDirectProps) 
   const pendingX = useRef<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const prefersReduced = typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const prefersReduced = prefersReducedMotionNow();
 
   // NOTE: No imperative setAttribute path. Both the circle cx and the μ label x
   // derive purely from the `mu` prop via React render, so they always stay in sync.

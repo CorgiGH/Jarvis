@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/* ---------- Manual motion toggle bridge (spine §2.3, ADHD) ----------
+   The masthead MotionToggle sets `data-reduce-motion` on <html> when the user
+   forces reduced motion. This single rule then neutralizes ALL animation +
+   transition app-wide — covering both JS-class-driven animations (DrillCard,
+   CompileSubmitCard, ProgressStrip, …) and CSS-`@media`-only ones (FsrsReview,
+   RailDrawer, AlgoStepperShell) without touching each component. */
+html[data-reduce-motion] *,
+html[data-reduce-motion] *::before,
+html[data-reduce-motion] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
 /* ---------- Brutalist-yellow design tokens (Phase 2.1) ----------
    Color tokens are semantic, not literal. To reskin (e.g. light/dark
    later phase), swap the :root block; components don't churn.

@@ -11,6 +11,7 @@ import { DaemonHealthPill } from "./components/DaemonHealthPill";
 import { KnowledgeLedger } from "./components/KnowledgeLedger";
 import { LoginPage } from "./components/LoginPage";
 import { AiLiteracyGate } from "./components/AiLiteracyGate";
+import { AppShell } from "./components/AppShell";
 import { jarvisFetch } from "./lib/api";
 import { recordTelemetry } from "./lib/telemetry";
 
@@ -231,13 +232,70 @@ export function App() {
   }
 
   return (
-    <div className="h-dvh flex flex-col">
-      <header className="bg-panel-dark-bg text-panel-dark-fg px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b-4 border-accent">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="text-lg font-bold tracking-widest">JARVIS · TUTOR</span>
-          {!showQuickStart && (
-            <>
-              <span className="text-xs tracking-widest text-panel-dark-fg/80 truncate">{taskId}</span>
+    <>
+      <AppShell
+        nav={
+          <nav className="flex items-center gap-4 text-xs font-bold tracking-widest">
+            <Link
+              to={explicitTaskId && !pickMode ? `/?taskId=${explicitTaskId}` : "/?pick=1"}
+              aria-current={here.pathname === "/" ? "page" : undefined}
+              className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+            >
+              workspace
+            </Link>
+            <Link
+              to="/tasks"
+              aria-current={here.pathname === "/tasks" ? "page" : undefined}
+              className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+            >
+              tasks
+            </Link>
+            <Link
+              to="/review"
+              aria-current={here.pathname === "/review" ? "page" : undefined}
+              aria-label={reviewDue > 0
+                ? `review, ${Math.min(reviewDue, REVIEW_DAILY_CAP)} cards due`
+                : "review"}
+              className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+            >
+              review
+              {reviewDue > 0 && (
+                <span aria-hidden="true" className="opacity-70 font-bold">
+                  {" · "}{Math.min(reviewDue, REVIEW_DAILY_CAP)}
+                </span>
+              )}
+            </Link>
+            <Link
+              to="/settings/trust"
+              aria-current={here.pathname === "/settings/trust" ? "page" : undefined}
+              className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+            >
+              trust
+            </Link>
+            <Link
+              to="/me"
+              aria-current={here.pathname === "/me" ? "page" : undefined}
+              className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+            >
+              me
+            </Link>
+            <button
+              data-testid="header-ledger-btn"
+              onClick={() => {
+                // 2026-05-17 hot-work #4: telemetry ping per council 1778988899
+                // Devil's Advocate carry-over. If this counter stays at 0 by
+                // 2026-05-31, Option B (delete KnowledgeLedger entirely) fires.
+                recordTelemetry("ledger.opened");
+                setLedgerOpen(true);
+              }}
+              aria-label="Open knowledge ledger"
+              aria-haspopup="dialog"
+              aria-expanded={ledgerOpen}
+              className="hover:underline"
+            >
+              ledger
+            </button>
+            {!showQuickStart && (
               <button
                 onClick={pickAnotherTask}
                 data-testid="pick-another-task-btn"
@@ -245,89 +303,27 @@ export function App() {
               >
                 × close
               </button>
-            </>
-          )}
-        </div>
-        <nav className="flex items-center gap-4 text-xs font-bold tracking-widest">
-          <Link
-            to={explicitTaskId && !pickMode ? `/?taskId=${explicitTaskId}` : "/?pick=1"}
-            aria-current={here.pathname === "/" ? "page" : undefined}
-            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
-          >
-            workspace
-          </Link>
-          <Link
-            to="/tasks"
-            aria-current={here.pathname === "/tasks" ? "page" : undefined}
-            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
-          >
-            tasks
-          </Link>
-          <Link
-            to="/review"
-            aria-current={here.pathname === "/review" ? "page" : undefined}
-            aria-label={reviewDue > 0
-              ? `review, ${Math.min(reviewDue, REVIEW_DAILY_CAP)} cards due`
-              : "review"}
-            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
-          >
-            review
-            {reviewDue > 0 && (
-              <span aria-hidden="true" className="opacity-70 font-bold">
-                {" · "}{Math.min(reviewDue, REVIEW_DAILY_CAP)}
-              </span>
             )}
-          </Link>
-          <Link
-            to="/settings/trust"
-            aria-current={here.pathname === "/settings/trust" ? "page" : undefined}
-            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
-          >
-            trust
-          </Link>
-          <Link
-            to="/me"
-            aria-current={here.pathname === "/me" ? "page" : undefined}
-            className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
-          >
-            me
-          </Link>
-          <button
-            data-testid="header-ledger-btn"
-            onClick={() => {
-              // 2026-05-17 hot-work #4: telemetry ping per council 1778988899
-              // Devil's Advocate carry-over. If this counter stays at 0 by
-              // 2026-05-31, Option B (delete KnowledgeLedger entirely) fires.
-              recordTelemetry("ledger.opened");
-              setLedgerOpen(true);
-            }}
-            aria-label="Open knowledge ledger"
-            aria-haspopup="dialog"
-            aria-expanded={ledgerOpen}
-            className="hover:underline"
-          >
-            ledger
-          </button>
-          {debug ? (
-            <>
-              <DaemonHealthPill />
-              <span data-testid="domain-footer" className="text-[11px] tracking-widest text-panel-dark-fg/85">
-                READY · CTRL+ENTER · CORGFLIX.DUCKDNS.ORG
-              </span>
-            </>
-          ) : (
-            <span className="text-[11px] tracking-widest text-panel-dark-fg/85">READY</span>
-          )}
-        </nav>
-      </header>
-      {missingPinnedTask && (
-        <div data-testid="missing-pinned-task"
-             role="status" aria-live="polite"
-             className="bg-accent border-b-4 border-border-strong text-page-fg font-mono text-xs font-bold tracking-widest px-4 py-1.5">
-          couldn't open last task ({taskId}) — pick another below
-        </div>
-      )}
-      <main className="flex-1 min-h-0 overflow-hidden overflow-y-auto bg-page-bg">
+            {debug ? (
+              <>
+                <DaemonHealthPill />
+                <span data-testid="domain-footer" className="text-[11px] tracking-widest text-panel-dark-fg/85">
+                  READY · CTRL+ENTER · CORGFLIX.DUCKDNS.ORG
+                </span>
+              </>
+            ) : (
+              <span className="text-[11px] tracking-widest text-panel-dark-fg/85">READY</span>
+            )}
+          </nav>
+        }
+      >
+        {missingPinnedTask && (
+          <div data-testid="missing-pinned-task"
+               role="status" aria-live="polite"
+               className="bg-accent border-b-4 border-border-strong text-page-fg font-mono text-xs font-bold tracking-widest px-4 py-1.5">
+            couldn't open last task ({taskId}) — pick another below
+          </div>
+        )}
         {here.pathname === "/login"
           ? <LoginPage />
           : here.pathname === "/welcome/ai-literacy"
@@ -345,8 +341,8 @@ export function App() {
                   : showQuickStart
                     ? <ActiveTaskDashboard />
                     : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
-      </main>
+      </AppShell>
       {ledgerOpen && <KnowledgeLedger onClose={() => setLedgerOpen(false)} />}
-    </div>
+    </>
   );
 }

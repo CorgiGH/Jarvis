@@ -1,3 +1,5 @@
+import { useReducedMotion } from "../theme/ThemeProvider";
+
 interface ProgressTier {
   done: number;
   total: number;
@@ -7,13 +9,6 @@ interface ProgressStripProps {
   outer: ProgressTier;
   inner: ProgressTier;
   currentProblemLabel: string;
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
 }
 
 /**
@@ -33,7 +28,7 @@ export function ProgressStrip({
   inner,
   currentProblemLabel,
 }: ProgressStripProps) {
-  const reduced = prefersReducedMotion();
+  const reduced = useReducedMotion();
 
   return (
     <div

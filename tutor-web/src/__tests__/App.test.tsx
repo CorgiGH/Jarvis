@@ -2,6 +2,7 @@
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../App";
+import { ThemeProvider } from "../theme/ThemeProvider";
 import React from "react";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { FsrsReview } from "../components/FsrsReview";
@@ -30,7 +31,7 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 test("default route shows ActiveTaskDashboard (no real task pinned)", async () => {
-  render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/"]}><ThemeProvider><App /></ThemeProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("active-task-dashboard")).toBeInTheDocument());
   // Header doesn't show task chip or Ã— close button when on dashboard.
   expect(screen.queryByTestId("pick-another-task-btn")).toBeNull();
@@ -38,12 +39,12 @@ test("default route shows ActiveTaskDashboard (no real task pinned)", async () =
 
 test("pick=1 query param forces dashboard even with last-task in localStorage", async () => {
   try { localStorage.setItem("jarvis.lastTaskId", "T-REAL"); } catch (_) {}
-  render(<MemoryRouter initialEntries={["/?pick=1"]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/?pick=1"]}><ThemeProvider><App /></ThemeProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("active-task-dashboard")).toBeInTheDocument());
 });
 
 test("Ã— close button clears last-task and returns to dashboard", async () => {
-  render(<MemoryRouter initialEntries={["/?taskId=T-REAL"]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/?taskId=T-REAL"]}><ThemeProvider><App /></ThemeProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("pick-another-task-btn")).toBeInTheDocument());
   // Persisted by the cold-start effect.
   expect(localStorage.getItem("jarvis.lastTaskId")).toBe("T-REAL");
@@ -78,20 +79,23 @@ test("real taskId pinned in URL renders TutorWorkspace", async () => {
     }
     return new Response("{}", { status: 200 });
   }));
-  render(<MemoryRouter initialEntries={["/?taskId=T-REAL"]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/?taskId=T-REAL"]}><ThemeProvider><App /></ThemeProvider></MemoryRouter>);
   // Wait for the drill stack to render (skeleton exits â†’ full layout).
   await waitFor(() => expect(screen.getByTestId("tutor-header")).toBeInTheDocument(), { timeout: 5000 });
-  expect(screen.getAllByText(/T-REAL/).length).toBeGreaterThan(0);
+  // The pinned taskId routes to TutorWorkspace (not the dashboard) — tutor-header
+  // proves it mounted. (The old masthead taskId chip was dropped in the AppShell
+  // migration; task identity now lives in TutorWorkspace's own header.)
+  expect(screen.getByTestId("tutor-header")).toBeInTheDocument();
 });
 
 test("missing taskId falls back to dashboard even when explicit", async () => {
-  render(<MemoryRouter initialEntries={["/?taskId=T-NONEXISTENT"]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/?taskId=T-NONEXISTENT"]}><ThemeProvider><App /></ThemeProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("active-task-dashboard")).toBeInTheDocument());
 });
 
 test("manual-entry path reveals TaskQuickStart presets", async () => {
   const { fireEvent } = await import("@testing-library/react");
-  render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/"]}><ThemeProvider><App /></ThemeProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("active-task-dashboard")).toBeInTheDocument());
   fireEvent.click(screen.getByTestId("active-task-manual-btn"));
   await waitFor(() => expect(screen.getByTestId("task-preset-PS")).toBeInTheDocument());
@@ -99,12 +103,12 @@ test("manual-entry path reveals TaskQuickStart presets", async () => {
 });
 
 test("/review route renders FsrsReview page", async () => {
-  render(<MemoryRouter initialEntries={["/review"]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/review"]}><ThemeProvider><App /></ThemeProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("fsrs-review-page")).toBeInTheDocument());
 });
 
 test("header nav pill 'review' links to /review", async () => {
-  render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/"]}><ThemeProvider><App /></ThemeProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("active-task-dashboard")).toBeInTheDocument());
   const pill = screen.getByRole("link", { name: /review/i });
   expect(pill).toBeInTheDocument();
@@ -112,7 +116,7 @@ test("header nav pill 'review' links to /review", async () => {
 });
 
 test("review nav pill has aria-current=page when on /review", async () => {
-  render(<MemoryRouter initialEntries={["/review"]}><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={["/review"]}><ThemeProvider><App /></ThemeProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByTestId("fsrs-review-page")).toBeInTheDocument());
   const pill = screen.getByRole("link", { name: /review/i });
   expect(pill.getAttribute("aria-current")).toBe("page");

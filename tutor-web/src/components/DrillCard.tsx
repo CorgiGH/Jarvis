@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { useReducedMotion } from "../theme/ThemeProvider";
 
 export type CardType = "DRILL" | "WORKED" | "DEFINITION" | "CHECK";
 export type DrillCardState = "locked" | "open" | "complete";
@@ -16,13 +17,6 @@ interface DrillCardProps {
   state: DrillCardState;
   staggerIndex: number;
   children: ReactNode;
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
 }
 
 /**
@@ -43,7 +37,7 @@ export function DrillCard({
   staggerIndex,
   children,
 }: DrillCardProps) {
-  const reduced = prefersReducedMotion();
+  const reduced = useReducedMotion();
   const animClass =
     state !== "locked" && !reduced ? "animate-slide-in" : "";
 

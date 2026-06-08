@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
+import { prefersReducedMotionNow } from "../theme/applyTheme";
 
 // Lazy import keeps Plotly out of the base bundle. Plotly.js (~3MB)
 // only loads when the first <PlotlyEmbed> mounts. Browser caches
@@ -60,9 +61,7 @@ export function PlotlyEmbed({
     import("plotly.js-dist-min").then((mod) => {
       const Plotly = (mod as any).default ?? mod;
       if (typeof Plotly.animate !== "function") return;
-      const prefersReduced =
-        typeof window !== "undefined" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const prefersReduced = prefersReducedMotionNow();
       const dur = prefersReduced ? 0 : 600;
       Plotly.animate(el, frames, {
         transition: { duration: dur, easing: "cubic-bezier(.4,0,.2,1)" },

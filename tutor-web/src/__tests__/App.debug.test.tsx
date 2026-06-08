@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "../App";
+import { ThemeProvider } from "../theme/ThemeProvider";
 
 vi.mock("../lib/api", () => ({
   jarvisFetch: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
@@ -25,7 +26,7 @@ describe("App ?debug=1 toggle", () => {
   it("hides DaemonHealthPill when debug query absent (default)", () => {
     render(
       <MemoryRouter initialEntries={["/?taskId=t1"]}>
-        <App />
+        <ThemeProvider><App /></ThemeProvider>
       </MemoryRouter>
     );
     expect(screen.queryByTestId("daemon-health-pill")).toBeNull();
@@ -34,7 +35,7 @@ describe("App ?debug=1 toggle", () => {
   it("shows DaemonHealthPill when debug=1 query present", () => {
     render(
       <MemoryRouter initialEntries={["/?taskId=t1&debug=1"]}>
-        <App />
+        <ThemeProvider><App /></ThemeProvider>
       </MemoryRouter>
     );
     expect(screen.queryByTestId("daemon-health-pill")).not.toBeNull();
@@ -43,7 +44,7 @@ describe("App ?debug=1 toggle", () => {
   it("renders domain footer as 'READY' by default (no domain-footer testid)", () => {
     render(
       <MemoryRouter initialEntries={["/?taskId=t1"]}>
-        <App />
+        <ThemeProvider><App /></ThemeProvider>
       </MemoryRouter>
     );
     expect(screen.queryByTestId("domain-footer")).toBeNull();
