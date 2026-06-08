@@ -128,6 +128,31 @@ data class ApiTeachingReply(
     val provenance: jarvis.tutor.DrillProvenanceDto,
 )
 
+/**
+ * Faithful-gated first-encounter lesson reply (Task T7-1, §NEW-L). Served by
+ * GET /api/v1/lesson/{kcId} ONLY when the KC resolves `faithful` + has no OPEN dispute — the
+ * IDENTICAL gate as /teaching/{kcId}. Maps KnowledgeConcept authored fields to the lesson surface.
+ * FAIL-LOUD: non-faithful / disputed / unknown KCs are 404 (OMIT, never a degraded payload).
+ *
+ * prediction_options is always an empty list for now (no option source on KC yet — honest degraded,
+ * DO NOT fabricate). provenance is stamped {authored, hasBeenFaithfulChecked=true} because the
+ * route only returns 200 when the faithful gate passes.
+ */
+@Serializable
+data class ApiLessonReply(
+    val kcId: String,
+    val kc_name_ro: String,
+    val kc_name_en: String,
+    val concrete_question_ro: String?,    // stem_template or null
+    val echo_source_ro: String?,          // kc.source[0].quote or null
+    val prediction_options: List<String>, // 2-4 RO options; empty list = gate disabled (no source yet)
+    val term_ro: String,                  // = kc_name_ro
+    val definition_ro: String?,
+    val explanation_ro: String?,
+    val worked_example_ro: String?,
+    val provenance: jarvis.tutor.DrillProvenanceDto, // {authored, hasBeenFaithfulChecked=true}
+)
+
 fun Route.installQueueMasteryCalibrationRoutes() {
 
     // ── GET /api/v1/queue/today ───────────────────────────────────────────────────────────────────
@@ -347,6 +372,60 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                     explanation_ro = kc.explanation_ro?.takeIf { it.isNotBlank() },
                     worked_example_ro = kc.worked_example_ro?.takeIf { it.isNotBlank() },
                     // Served only behind the faithful gate above ⇒ honest authored+checked provenance.
+                    provenance = jarvis.tutor.DrillProvenanceDto(type = "authored", hasBeenFaithfulChecked = true),
+                ),
+            )
+        }
+    }
+
+    // ── GET /api/v1/lesson/{kcId} ─────────────────────────────────────────────────────────────────
+    // First-encounter lesson surface for ONE KC. Applies the IDENTICAL faithful gate as /teaching:
+    // resolveStatus (D8 staleness + D1 content-hash) + hasOpenReportWrong (D-RF2). Non-faithful /
+    // disputed / unknown ⇒ 404 (OMIT, never a degraded payload). Maps KnowledgeConcept authored
+    // fields to ApiLessonReply; prediction_options is honest-degraded empty list (no source yet).
+    get("/api/v1/lesson/{kcId}") {
+        requireUser { _ ->
+            val ctx = call.application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@requireUser }
+            val db = ctx.db
+            val kcId = call.parameters["kcId"]?.takeIf { it.isNotBlank() }
+                ?: run { call.respond(HttpStatusCode.BadRequest, "kcId required"); return@requireUser }
+            val repo = ContentRepo(groupThreeContentDir())
+            // Mirror /teaching: wrap in runCatching so absent/malformed subjects.yaml degrades to
+            // 404 (OMIT) instead of a Ktor 500 leaking the file path.
+            val kc = runCatching { VerifyAdmin.findKc(repo, kcId) }.getOrNull()
+                ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"unknown kc"}"""); return@requireUser }
+
+            // Identical faithful gate as /teaching (lines above):
+            val resolved = VerifyAdmin.resolveStatus(db, kc.id, kc)
+            if (resolved != VerificationStatus.faithful) {
+                call.respond(HttpStatusCode.NotFound, """{"error":"not faithful"}"""); return@requireUser
+            }
+            if (ReportWrongQuery.hasOpenReportWrong(db, kc.id)) {
+                call.respond(HttpStatusCode.NotFound, """{"error":"disputed"}"""); return@requireUser
+            }
+
+            call.respond(
+                HttpStatusCode.OK,
+                ApiLessonReply(
+                    kcId = kc.id,
+                    kc_name_ro = kc.name_ro,
+                    kc_name_en = kc.name_en,
+                    // stem_template → concrete question stem (null if not authored yet)
+                    concrete_question_ro = kc.stem_template?.takeIf { it.isNotBlank() },
+                    // First source quote → echo anchor (null if no source refs)
+                    echo_source_ro = kc.source.firstOrNull()?.quote?.takeIf { it.isNotBlank() },
+                    // Honest degraded: no option source on KC yet — empty list, DO NOT fabricate
+                    prediction_options = emptyList(),
+                    // term = name_ro (primary Romanian label)
+                    term_ro = kc.name_ro,
+                    // definition_ro: no dedicated KC field exists today. Honest-null rather than
+                    // duplicating explanation_ro (trust-first: never imply a definition was authored
+                    // when none was). Field kept nullable for forward-compat if a source is added.
+                    definition_ro = null,
+                    explanation_ro = kc.explanation_ro?.takeIf { it.isNotBlank() },
+                    worked_example_ro = kc.worked_example_ro?.takeIf { it.isNotBlank() },
+                    // Served only behind the faithful gate ⇒ honest authored+checked provenance.
                     provenance = jarvis.tutor.DrillProvenanceDto(type = "authored", hasBeenFaithfulChecked = true),
                 ),
             )

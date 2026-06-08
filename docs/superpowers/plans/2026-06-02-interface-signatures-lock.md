@@ -581,4 +581,37 @@ These were frozen DURING the unattended Phase-3 build (`build-review/2026-06-07-
   ```
   The SERVE phase is the first remaining phase of `ScaffoldPlanner.planFor(kc, mastery)` at-or-above the learner's resolved phase (P1-3b; not the raw `KcCandidate.phase`). This interprets the data-model-lock "degrade to true for novices" as intro-phase. `mode`/`worked_example_first` are resolved ONLY here (single source of truth, no second downstream resolver).
 
+---
+
+## §NEW-L. `GET /api/v1/lesson/{kcId}` — faithful-gated first-encounter lesson (Task T7-1, 2026-06-09)
+
+**Gate:** IDENTICAL to `GET /api/v1/teaching/{kcId}` — `VerifyAdmin.resolveStatus` (D8 staleness + D1 content-hash) returns `faithful` AND `ReportWrongQuery.hasOpenReportWrong` returns false. Non-faithful / disputed / unknown ⇒ 404 (OMIT, never a degraded payload). No session ⇒ 401.
+
+**Route:** `GET /api/v1/lesson/{kcId}` (implemented in `QueueMasteryCalibrationRoutes.kt`, mounted via `installTutorRoutes`)
+
+**Reply shape (`ApiLessonReply`):**
+```kotlin
+@Serializable
+data class ApiLessonReply(
+    val kcId: String,                      // KnowledgeConcept.id
+    val kc_name_ro: String,                // KnowledgeConcept.name_ro
+    val kc_name_en: String,                // KnowledgeConcept.name_en
+    val concrete_question_ro: String?,     // KnowledgeConcept.stem_template or null
+    val echo_source_ro: String?,           // KnowledgeConcept.source[0].quote or null
+    val prediction_options: List<String>,  // 2-4 RO options; ALWAYS empty list (no option source on KC yet)
+    val term_ro: String,                   // = kc_name_ro (primary Romanian label)
+    val definition_ro: String?,            // ALWAYS null today (no dedicated KC definition field; honest-null, not a dup of explanation_ro)
+    val explanation_ro: String?,           // KnowledgeConcept.explanation_ro
+    val worked_example_ro: String?,        // KnowledgeConcept.worked_example_ro
+    val provenance: DrillProvenanceDto,    // always {type="authored", hasBeenFaithfulChecked=true}
+)
+```
+
+**Field-mapping notes:**
+- `definition_ro` is ALWAYS `null` today — `KnowledgeConcept` has no dedicated `definition` field, and we do NOT duplicate `explanation_ro` into it (trust-first: never imply an authored definition that doesn't exist). Field kept nullable for forward-compat if a definition source is added.
+- `prediction_options` is always `emptyList()` — honest-degraded; DO NOT fabricate. Future: populate from a KC options source when one exists.
+- `provenance` is `{type="authored", hasBeenFaithfulChecked=true}` — the gate guarantees faithfulness before 200 is returned.
+
+**Consistency:** uses the same `VerifyAdmin.resolveStatus` + `ReportWrongQuery.hasOpenReportWrong` helpers as `GET /teaching/{kcId}` (same faithful-gate contract, §I.2 + D-RF2).
+
 > **DURABLE RULE (P1-4, applies to ALL of this lock + the data-model-lock + the master-plan freeze tables):** any forced deviation from a frozen lock — a renamed wire field, a newly-frozen inner shape, a changed server formula — **MUST amend the lock doc in the SAME commit** that lands the code, so code and lock never silently contradict (the failure mode P1-4 caught). If amending would weaken a Phase-2 trust guarantee, STOP and escalate to the owner instead of carving out a silent exception. Build-log decisions (`build-review/*-build-log.md`) are a journal, NOT a lock — promote the decision here (or cross-link its id) before claiming the contract frozen.
