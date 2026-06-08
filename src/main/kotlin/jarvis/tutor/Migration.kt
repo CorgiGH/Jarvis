@@ -68,6 +68,8 @@ internal val ALL_TABLES = arrayOf(
     KcVerificationStatusTable,
     // Phase-3 GROUP 5 — mock-exam SYNC result-of-record (H13; NOT the forbidden mock_exam_jobs).
     MockExamsTable,
+    // Grader provider selector (per-user setting; user-scoped FK to UsersTable.id).
+    GraderProviderSettingTable,
 )
 
 /**

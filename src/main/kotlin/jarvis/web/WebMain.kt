@@ -703,6 +703,10 @@ internal suspend fun runWeb() {
             ledgerDir = java.nio.file.Path.of(jarvis.Config.tutorLedgerDir),
         )
         installTutorRoutes()
+        installGraderProviderRoutes()
+        // Wire per-user grader provider routing ONLY in production startup. Tests leave
+        // drillGraderLlmResolver = null so the overridable drillGraderLlmFactory seam holds.
+        drillGraderLlmResolver = ::productionGraderResolver
     }.start(wait = true)
 }
 

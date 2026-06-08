@@ -70,6 +70,7 @@ import jarvis.tutor.taskdetect.DetectedTaskMappingTable
 import jarvis.tutor.AttemptsTable
 import jarvis.tutor.ExamDatesTable
 import jarvis.tutor.MockExamsTable
+import jarvis.tutor.GraderProviderSettingTable
 import jarvis.tutor.ReportWrongTable
 import jarvis.tutor.SessionSummariesTable
 import jarvis.tutor.csrfProtect
@@ -126,6 +127,7 @@ internal val ME_DELETE_CASCADE_TABLES: List<org.jetbrains.exposed.sql.Table> = l
     ReportWrongTable,
     ExamDatesTable,
     MockExamsTable,
+    GraderProviderSettingTable,  // per-user grader provider setting; user-scoped, GDPR Art.17 erasure.
     // SessionsTable is itself a user-FK child; deleted just before the parent UsersTable.
     SessionsTable,
 )
@@ -164,6 +166,32 @@ internal val ME_DELETE_RETAINED_USER_FK_TABLES: List<org.jetbrains.exposed.sql.T
  * in-module (test) code reassigns it.
  */
 internal var drillGraderLlmFactory: () -> jarvis.Llm = { jarvis.OpenRouterChatLlm() }
+
+/**
+ * Production-facing per-user grader LLM resolver. Reads [GraderProvider] from
+ * [jarvis.tutor.GraderProviderSettingRepo] and returns the matching [jarvis.Llm].
+ *
+ * Null (default) = production path. Non-null tests override to a deterministic lambda.
+ * The call site checks this first; falls back to [drillGraderLlmFactory] when null so
+ * every existing test that sets `drillGraderLlmFactory = { FakeLlm() }` continues
+ * to work unchanged.
+ */
+internal var drillGraderLlmResolver: ((userId: String, db: org.jetbrains.exposed.sql.Database) -> jarvis.Llm)? = null
+
+/**
+ * Production per-user grader resolver. Wired into [drillGraderLlmResolver] by
+ * [jarvis.web.WebMain] at startup ONLY. Left as `null` by default so tests
+ * (which never call the wiring) fall through to the overridable
+ * [drillGraderLlmFactory] seam — keeping every `drillGraderLlmFactory = { FakeLlm() }`
+ * test working unchanged. (Bug fixed 2026-06-09: the field used to default to this
+ * lambda, which bypassed the test seam and reddened the whole drill-grade suite.)
+ */
+internal fun productionGraderResolver(userId: String, db: org.jetbrains.exposed.sql.Database): jarvis.Llm =
+    when (jarvis.tutor.GraderProviderSettingRepo(db).get(userId)) {
+        jarvis.tutor.GraderProvider.free        -> jarvis.OpenRouterChatLlm()
+        jarvis.tutor.GraderProvider.claude      -> jarvis.ClaudeMaxLlm()
+        jarvis.tutor.GraderProvider.freellmapi  -> jarvis.FreeLlmApiLlm()
+    }
 
 /** E3 test seams. Production: generator = free OpenRouter Llama; critic = Claude via relay (DEC-1 relay-only). */
 internal var drillGeneratorLlmFactory: () -> jarvis.Llm = { jarvis.OpenRouterChatLlm() }
@@ -2050,7 +2078,7 @@ fun Application.installTutorRoutes() {
                 // grader now returns GradeAttempt carrying raw LLM output so
                 // A.3 can populate envelope llm_output_raw_truncated below.
                 val attempt: jarvis.tutor.GradeAttempt? = try {
-                    drillGraderLlmFactory().use { llm ->
+                    (drillGraderLlmResolver?.invoke(userId, ctx.db) ?: drillGraderLlmFactory()).use { llm ->
                         kotlinx.coroutines.runBlocking {
                             jarvis.tutor.DrillGrader.grade(
                                 problemStatement = req.problemStatement,
