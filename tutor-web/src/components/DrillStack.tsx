@@ -7,6 +7,7 @@ import { MathText } from "./MathText";
 import { formatEnum } from "../lib/formatEnum";
 import { RoutedViz } from "./RoutedViz";
 import { FeedbackLadder } from "./FeedbackLadder";
+import { MisconceptionRibbon } from "./MisconceptionRibbon";
 
 /** Provenance of the prose in `worked`/`definition` (DrillProvenanceDto, sibling backend plan Task 5).
  *  CI invariant: hasBeenFaithfulChecked may be true ONLY when type === "authored". */
@@ -266,6 +267,9 @@ export function DrillStack({
         )}
         {gradeResult && gradeResult.ladder_rungs && gradeResult.ladder_rungs.length > 0 && (
           <FeedbackLadder rungs={gradeResult.ladder_rungs} />
+        )}
+        {gradeResult && !gradeResult.correct && gradeResult.misconception_payload && (
+          <MisconceptionRibbon payload={gradeResult.misconception_payload} />
         )}
         {error && (
           <div className="mt-2 text-danger-text font-mono text-xs">{error}</div>
