@@ -8,6 +8,7 @@ import { formatEnum } from "../lib/formatEnum";
 import { RoutedViz } from "./RoutedViz";
 import { FeedbackLadder } from "./FeedbackLadder";
 import { MisconceptionRibbon } from "./MisconceptionRibbon";
+import { TrustBadge } from "./TrustBadge";
 
 /** Provenance of the prose in `worked`/`definition` (DrillProvenanceDto, sibling backend plan Task 5).
  *  CI invariant: hasBeenFaithfulChecked may be true ONLY when type === "authored". */
@@ -303,7 +304,14 @@ export function DrillStack({
         state={secondaryState()}
         staggerIndex={1}
       >
-        <MathText text={content.worked} className="text-sm" />
+        <div data-content-block="worked">
+          {content.provenance?.type !== "generated" && (
+            <div className="mb-2">
+              <TrustBadge status={gradeResult?.verification_status} />
+            </div>
+          )}
+          <MathText text={content.worked} className="text-sm" />
+        </div>
       </DrillCard>
 
       {/* 3. DEFINITION card — locked until drill graded */}
