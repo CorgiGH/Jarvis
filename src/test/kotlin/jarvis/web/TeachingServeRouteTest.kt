@@ -191,4 +191,22 @@ class TeachingServeRouteTest {
         val resp = client.get("/api/v1/teaching/pa-kc-001")
         assertEquals(HttpStatusCode.Unauthorized, resp.status, resp.bodyAsText())
     }
+
+    /** Regression: a content dir with NO subjects.yaml (malformed manifest) must degrade to 404,
+     *  never 500.  VerifyAdmin.findKc calls repo.loadManifest() bare; wrapping it in runCatching
+     *  on the teaching route prevents the IllegalStateException from leaking as a 500. */
+    @Test fun `missing subjects yaml degrades to 404 not 500`() = testApplication {
+        val dir = Path.of(System.getProperty("java.io.tmpdir"), "teach-${TutorTypes.ulid()}")
+        // Point JARVIS_CONTENT_DIR at an EMPTY directory — no subjects.yaml present.
+        val emptyContent = dir.resolve("empty-content")
+        emptyContent.createDirectories()
+        System.setProperty("JARVIS_CONTENT_DIR", emptyContent.toString())
+        val db = freshDb(dir); val (_, sid) = seedUser(db)
+        application { installRoutes(db, dir) }
+        val resp = client.get("/api/v1/teaching/pa-kc-001") { header("Cookie", "jarvis_session=$sid") }
+        assertEquals(
+            HttpStatusCode.NotFound, resp.status,
+            "absent subjects.yaml must degrade to 404 (OMIT), not 500 — got: ${resp.bodyAsText()}",
+        )
+    }
 }

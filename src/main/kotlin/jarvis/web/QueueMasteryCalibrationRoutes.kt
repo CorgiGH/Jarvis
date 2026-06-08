@@ -324,7 +324,10 @@ fun Route.installQueueMasteryCalibrationRoutes() {
             val kcId = call.parameters["kcId"]?.takeIf { it.isNotBlank() }
                 ?: run { call.respond(HttpStatusCode.BadRequest, "kcId required"); return@requireUser }
             val repo = ContentRepo(groupThreeContentDir())
-            val kc = VerifyAdmin.findKc(repo, kcId)
+            // Mirror queue/today + the other findKc call sites (TrustRoutes, TutorRoutes): wrap in
+            // runCatching so an absent/malformed subjects.yaml degrades to 404 (OMIT) rather than
+            // propagating an unhandled IllegalStateException → Ktor default 500 leaking the file path.
+            val kc = runCatching { VerifyAdmin.findKc(repo, kcId) }.getOrNull()
                 ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"unknown kc"}"""); return@requireUser }
 
             // The faithful gate, mirrored from queue/today (lines 143-148):
