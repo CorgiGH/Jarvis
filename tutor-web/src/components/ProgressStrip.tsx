@@ -54,7 +54,7 @@ export function ProgressStrip({
                 data-testid="outer-dot"
                 data-filled={filled ? "true" : "false"}
                 aria-hidden="true"
-                className={`inline-block w-3 h-3 rounded-full border-2 border-border-strong transition-transform ${
+                className={`inline-block w-3 h-3 border-2 border-border-strong transition-transform ${
                   filled
                     ? `bg-accent ${!reduced ? "animate-outer-dot-fill" : ""}`
                     : "bg-transparent"
@@ -90,7 +90,7 @@ export function ProgressStrip({
                 data-testid="inner-dot"
                 data-filled={filled ? "true" : "false"}
                 aria-hidden="true"
-                className={`inline-block w-2 h-2 rounded-full border-2 border-border-strong transition-transform ${
+                className={`inline-block w-2 h-2 border-2 border-border-strong transition-transform ${
                   filled
                     ? `bg-accent ${!reduced ? "animate-dot-fill" : ""}`
                     : "bg-transparent"

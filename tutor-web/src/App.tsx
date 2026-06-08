@@ -8,7 +8,11 @@ import { TasksScreen } from "./components/TasksScreen";
 import { TrustSettings } from "./components/TrustSettings";
 import { SettingsMe } from "./components/SettingsMe";
 import { DaemonHealthPill } from "./components/DaemonHealthPill";
-import { KnowledgeLedger } from "./components/KnowledgeLedger";
+import { LedgerDrawer } from "./components/LedgerDrawer";
+import { SessionWrapPane } from "./components/SessionWrapPane";
+import { SubjectMap } from "./components/SubjectMap";
+import { OggiScreen } from "./components/OggiScreen";
+import { BottomTabBar } from "./components/BottomTabBar";
 import { LoginPage } from "./components/LoginPage";
 import { AiLiteracyGate } from "./components/AiLiteracyGate";
 import { AppShell } from "./components/AppShell";
@@ -54,6 +58,16 @@ export function App() {
   const [sessionReady, setSessionReady] = useState(false);
   const [gateLang, setGateLang] = useState<"ro" | "en">("ro");
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [sessionWrapOpen, setSessionWrapOpen] = useState(false);
+  const [sessionWrapReply, setSessionWrapReply] = useState<import('./components/SessionWrapPane').ApiSessionCloseReply | null>(null);
+  useEffect(() => {
+    function onSessionWrap(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail) { setSessionWrapReply(detail); setSessionWrapOpen(true); }
+    }
+    window.addEventListener('jarvis:session-wrap', onSessionWrap);
+    return () => window.removeEventListener('jarvis:session-wrap', onSessionWrap);
+  }, []);
 
   // Strip ?deduped=1 after a tick so a refresh doesn't re-flash the banner.
   useEffect(() => {
@@ -99,7 +113,7 @@ export function App() {
               !data.aiLiteracyConfirmed &&
               pathname !== "/welcome/ai-literacy"
             ) {
-              navigate("/welcome/ai-literacy", { replace: true });
+              navigate("/welcome", { replace: true });
               return;
             }
           }
@@ -258,6 +272,20 @@ export function App() {
               azi
             </Link>
             <Link
+              to="/subjects"
+              aria-current={here.pathname === "/subjects" ? "page" : undefined}
+              className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+            >
+              materie
+            </Link>
+            <Link
+              to="/exam/PA"
+              aria-current={here.pathname.startsWith("/exam/") ? "page" : undefined}
+              className="hover:underline aria-[current=page]:bg-accent aria-[current=page]:text-page-fg aria-[current=page]:px-2 aria-[current=page]:py-0.5"
+            >
+              exam
+            </Link>
+            <Link
               to="/review"
               aria-current={here.pathname === "/review" ? "page" : undefined}
               aria-label={reviewDue > 0
@@ -343,13 +371,24 @@ export function App() {
                 ? <TrustSettings />
                 : here.pathname === "/me"
                 ? <SettingsMe />
+                : here.pathname === "/subjects"
+                ? <SubjectMap />
+                : here.pathname === "/oggi"
+                ? <OggiScreen />
                 : !sessionReady
                   ? <div className="p-6 font-mono text-sm text-page-fg/80">setting up tutor session…</div>
                   : showQuickStart
                     ? <ActiveTaskDashboard />
                     : <TutorWorkspace pdfUrl={`/api/v1/tasks/${encodeURIComponent(taskId)}/pdf`} taskId={taskId} dedupedNotice={dedupedFlag} />}
       </AppShell>
-      {ledgerOpen && <KnowledgeLedger onClose={() => setLedgerOpen(false)} />}
+      {ledgerOpen && <LedgerDrawer onClose={() => setLedgerOpen(false)} />}
+      {sessionWrapOpen && sessionWrapReply && (
+        <SessionWrapPane
+          reply={sessionWrapReply}
+          onDone={() => { setSessionWrapOpen(false); setSessionWrapReply(null); }}
+        />
+      )}
+      <BottomTabBar />
     </>
   );
 }

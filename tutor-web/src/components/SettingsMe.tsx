@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { getCsrfToken } from "../lib/api";
 import { useInFlight } from "../lib/inFlight";
+import { GraderProviderToggle } from "./GraderProviderToggle";
+import { RightsSidebar } from "./RightsSidebar";
 
 /**
  * SettingsMe — Settings / Me tab (surface #12).
@@ -313,6 +315,16 @@ export function SettingsMe() {
           {actionError}
         </div>
       )}
+
+      {/* Grader provider selector */}
+      <section className="mb-4">
+        <GraderProviderToggle />
+      </section>
+
+      {/* GDPR + AI Act rights sidebar */}
+      <section className="mb-4">
+        <RightsSidebar />
+      </section>
     </div>
   );
 }
