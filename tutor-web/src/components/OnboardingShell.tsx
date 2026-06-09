@@ -71,10 +71,10 @@ export function OnboardingShell({ onComplete }: Props) {
       {/* Step 2 — ToS / privacy */}
       {step === 2 && (
         <div data-testid="onboarding-step-2" className="w-full max-w-lg flex flex-col gap-6">
-          <h2 className="text-base font-bold tracking-widest uppercase">
+          <h2 className="text-base font-bold tracking-widest uppercase text-panel-dark-fg">
             {lang === "ro" ? "Termeni și confidențialitate" : "Terms & Privacy"}
           </h2>
-          <p className="text-sm text-panel-dark-fg/80 leading-relaxed">
+          <p className="text-sm text-panel-dark-fg leading-relaxed">
             {lang === "ro"
               ? "Datele tale de progres sunt stocate în siguranță pe serverele Jarvis și nu sunt partajate cu terți. Poți solicita exportul sau ștergerea oricând din Setări → Confidențialitate."
               : "Your progress data is stored securely on Jarvis servers and is not shared with third parties. You may request export or deletion at any time from Settings → Privacy."}
@@ -92,10 +92,10 @@ export function OnboardingShell({ onComplete }: Props) {
       {/* Step 3 — Placement intent */}
       {step === 3 && (
         <div data-testid="onboarding-step-3" className="w-full max-w-lg flex flex-col gap-6">
-          <h2 className="text-base font-bold tracking-widest uppercase">
+          <h2 className="text-base font-bold tracking-widest uppercase text-panel-dark-fg">
             {lang === "ro" ? "Test de plasare" : "Placement Test"}
           </h2>
-          <p className="text-sm text-panel-dark-fg/80 leading-relaxed">
+          <p className="text-sm text-panel-dark-fg leading-relaxed">
             {lang === "ro"
               ? "Vrei să faci testul de plasare acum? Acesta ne ajută să stabilim nivelul tău de cunoștințe și să îți oferim un program de studiu personalizat."
               : "Would you like to take the placement test now? It helps us assess your knowledge level and provide a personalised study plan."}
@@ -122,10 +122,10 @@ export function OnboardingShell({ onComplete }: Props) {
       {/* Step 4 — Profile + LangToggle */}
       {step === 4 && (
         <div data-testid="onboarding-step-4" className="w-full max-w-lg flex flex-col gap-6">
-          <h2 className="text-base font-bold tracking-widest uppercase">
+          <h2 className="text-base font-bold tracking-widest uppercase text-panel-dark-fg">
             {lang === "ro" ? "Profilul tău" : "Your Profile"}
           </h2>
-          <p className="text-sm text-panel-dark-fg/80">
+          <p className="text-sm text-panel-dark-fg">
             {lang === "ro"
               ? "Alege limba preferată pentru explicații:"
               : "Choose your preferred language for explanations:"}
@@ -144,10 +144,10 @@ export function OnboardingShell({ onComplete }: Props) {
       {/* Step 5 — Notifications */}
       {step === 5 && (
         <div data-testid="onboarding-step-5" className="w-full max-w-lg flex flex-col gap-6">
-          <h2 className="text-base font-bold tracking-widest uppercase">
+          <h2 className="text-base font-bold tracking-widest uppercase text-panel-dark-fg">
             {lang === "ro" ? "Notificări" : "Notifications"}
           </h2>
-          <p className="text-sm text-panel-dark-fg/80 leading-relaxed">
+          <p className="text-sm text-panel-dark-fg leading-relaxed">
             {lang === "ro"
               ? "Jarvis îți poate reaminti să revizuiești materialul la momentul optim. Notificările sunt opționale și pot fi dezactivate oricând."
               : "Jarvis can remind you to review material at the optimal time. Notifications are optional and can be disabled at any time."}

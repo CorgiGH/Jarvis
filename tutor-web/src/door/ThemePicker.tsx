@@ -177,29 +177,49 @@ export function ThemePicker({
             <div style={{ display: "flex", gap: 8 }}>
               {(["brutalist", "warm"] as Skin[]).map((s) => {
                 const active = s === skin;
+                const deferred = s === "warm";
                 return (
                   <button
                     key={s}
                     type="button"
-                    onClick={() => onSkin(s)}
+                    onClick={deferred ? undefined : () => onSkin(s)}
                     data-testid={`skin-${s}`}
+                    disabled={deferred}
+                    aria-disabled={deferred}
+                    title={deferred ? "în curând" : undefined}
                     style={{
                       flex: 1,
                       appearance: "none",
-                      cursor: "pointer",
+                      cursor: deferred ? "not-allowed" : "pointer",
                       fontFamily: "inherit",
                       fontSize: 11,
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
                       padding: "9px 0",
-                      color: active ? "#0b0b0d" : PANEL_INK,
-                      background: active ? primary : "transparent",
-                      border: `1px solid ${active ? primary : PANEL_LINE}`,
+                      color: deferred ? PANEL_MUTED : active ? "#0b0b0d" : PANEL_INK,
+                      background: deferred ? "transparent" : active ? primary : "transparent",
+                      border: `1px solid ${deferred ? "#3a3a42" : active ? primary : PANEL_LINE}`,
                       fontWeight: active ? 700 : 400,
+                      opacity: deferred ? 0.4 : 1,
                       transition: "all 150ms",
                     }}
                   >
                     {s}
+                    {deferred && (
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: 9,
+                          letterSpacing: "0.05em",
+                          textTransform: "lowercase",
+                          marginTop: 2,
+                          color: PANEL_MUTED,
+                          opacity: 0.8,
+                        }}
+                      >
+                        în curând
+                      </span>
+                    )}
                   </button>
                 );
               })}

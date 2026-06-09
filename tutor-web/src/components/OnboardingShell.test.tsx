@@ -46,6 +46,16 @@ describe("OnboardingShell", () => {
     expect(screen.queryByTestId("onboarding-step-1")).not.toBeInTheDocument();
   });
 
+  it("step 2 heading has explicit text-panel-dark-fg color class (contrast on dark bg)", async () => {
+    render(<OnboardingShell onComplete={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /am înțeles|confirm/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("onboarding-step-2")).toBeInTheDocument(),
+    );
+    const heading = screen.getByTestId("onboarding-step-2").querySelector("h2");
+    expect(heading?.className).toMatch(/text-panel-dark-fg/);
+  });
+
   it("advances through all 5 steps and calls onComplete after step 5", async () => {
     const onComplete = vi.fn();
     render(<OnboardingShell onComplete={onComplete} />);

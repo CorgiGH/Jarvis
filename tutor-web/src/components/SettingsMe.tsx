@@ -170,8 +170,13 @@ export function SettingsMe() {
   }
 
   return (
-    <div data-testid="settings-me" className="p-4 font-mono max-w-2xl">
+    <div data-testid="settings-me" className="p-4 font-mono">
       <h1 className="text-lg font-bold tracking-widest mb-4">ACCOUNT &amp; PRIVACY</h1>
+
+      {/* 2-col layout: settings left (7fr), RightsSidebar right (3fr). Stacks on mobile. */}
+      <div className="flex flex-col md:flex-row gap-4 items-start">
+      {/* ── LEFT: main settings content ── */}
+      <div className="flex-1 min-w-0">
 
       {/* Account section */}
       <section className="border-2 border-border-strong p-3 mb-4">
@@ -321,10 +326,14 @@ export function SettingsMe() {
         <GraderProviderToggle />
       </section>
 
-      {/* GDPR + AI Act rights sidebar */}
-      <section className="mb-4">
+      </div>{/* ── end LEFT column ── */}
+
+      {/* ── RIGHT: GDPR + AI Act rights sidebar (3fr, sticky top) ── */}
+      <aside className="w-full md:w-80 md:shrink-0 md:sticky md:top-4">
         <RightsSidebar />
-      </section>
+      </aside>
+
+      </div>{/* ── end 2-col flex ── */}
     </div>
   );
 }
