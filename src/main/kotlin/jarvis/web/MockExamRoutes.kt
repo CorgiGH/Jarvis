@@ -347,7 +347,7 @@ private fun toQuestion(kc: KnowledgeConcept): ApiMockExamQuestion {
     return ApiMockExamQuestion(
         question_id = "meq-${kc.id}",
         kc_id = kc.id,
-        stem = kc.stem_template ?: kc.name_en,
+        stem = kc.stem_template ?: kc.name_ro,
         // Always `open`: no canonical-answer field exists, so nothing can be scored closed-form.
         kind = "open",
     )
