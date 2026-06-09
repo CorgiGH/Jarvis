@@ -44,7 +44,7 @@ export function GroundedExplanationCard({ kcId }: GroundedExplanationCardProps) 
       className="mt-3 border-4 border-accent bg-page-bg font-mono"
     >
       <div className="px-3 py-1.5 border-b-4 border-accent bg-accent text-page-fg text-[10px] tracking-widest font-bold">
-        EXPLICAȚIE · matches your lecture
+        EXPLICAȚIE · corespunde cursului
       </div>
       <div className="px-4 py-3 flex flex-col gap-3">
         {reply.explanation_ro && (

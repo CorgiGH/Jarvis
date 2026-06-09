@@ -6,11 +6,13 @@ interface TrustBadgeProps {
 }
 
 /**
- * Per-KC trust-boundary sentinel. The copy is PINNED — only ever "matches your
- * lecture" (faithful) or "unverified". NEVER "verified correct". Falls closed to
- * unverified for any non-faithful status. `data-faithful` drives the rendering-
- * boundary test that proves this badge never co-renders with the generated
- * provenance badge.
+ * Per-KC trust-boundary sentinel. The copy is PINNED — only ever "corespunde
+ * cursului" (faithful; = "matches your lecture") or "neverificat"
+ * (= "unverified"). NEVER claims correctness ("verified correct" / "corect").
+ * Romanian because it sits on the learner surface (language-split rule). Falls
+ * closed to neverificat for any non-faithful status. `data-faithful` drives the
+ * rendering-boundary test that proves this badge never co-renders with the
+ * generated provenance badge.
  */
 export function TrustBadge({ status }: TrustBadgeProps) {
   if (!status) return null;
@@ -26,7 +28,7 @@ export function TrustBadge({ status }: TrustBadgeProps) {
           : "border-border-thin bg-page-bg text-page-fg/70"
       }`}
     >
-      {faithful ? "matches your lecture" : "unverified"}
+      {faithful ? "corespunde cursului" : "neverificat"}
     </span>
   );
 }

@@ -110,7 +110,7 @@ test("Phase-5 core loop: all trust surfaces paint + interact with zero errors", 
   await expect(page.getByTestId("misconception-ribbon-refutation")).toBeVisible();
   await expect(page.getByTestId("misconception-ribbon-citation")).toContainText("curs3.pdf");
   await expect(page.getByTestId("trust-badge")).toBeVisible();
-  await expect(page.getByTestId("trust-badge")).toContainText(/matches your lecture/i);
+  await expect(page.getByTestId("trust-badge")).toContainText(/corespunde cursului/i);
   // grounded-explanation-card is a QUEUE-PATH surface (needs QueueItem.kc_id). The
   // task-prep blob has no kc_id, so the card honestly no-ops here — assert it is
   // ABSENT on the task-prep path. Its paint-when-kcId-present behavior is covered by
