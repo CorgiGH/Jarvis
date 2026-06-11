@@ -47,6 +47,31 @@ class ContentRepo(private val root: Path) {
         return Yaml.default.decodeFromString(VizIdsFile.serializer(), f.readText()).viz_ids.toSet()
     }
 
+    /**
+     * Plan-2 Task 3 — load content/{subject}/viz/ YAML files into typed [VizInstance] rows, mirroring
+     * the KC loader (one YAML per instance, sorted by id). An absent/empty viz/ dir yields an empty
+     * list (every subject today). Unknown family_id is ALLOWED here (the family registry lands in
+     * Plan 3); a duplicate instance id WITHIN the subject is a load error (instance ids must be unique).
+     */
+    fun loadVizInstances(subject: String): List<VizInstance> {
+        val dir = root.resolve(subject).resolve("viz")
+        val instances = yamlFilesIn(dir)
+            .map { Yaml.default.decodeFromString(VizInstance.serializer(), it.readText()) }
+            .sortedBy { it.id }
+        val firstDup = instances.groupingBy { it.id }.eachCount().entries.firstOrNull { it.value > 1 }
+        check(firstDup == null) {
+            "duplicate viz instance id '${firstDup!!.key}' in subject '$subject' " +
+                "(${firstDup.value} files share it) — instance ids must be unique per subject"
+        }
+        // Parse-validate data_json at load (§0.9D contract): malformed JSON = load error naming the instance.
+        for (inst in instances) {
+            runCatching { inst.instance.dataElement() }.getOrElse {
+                error("viz instance '${inst.id}' (subject '$subject') has malformed data_json: ${it.message}")
+            }
+        }
+        return instances
+    }
+
     /** Extracted source text for a `_sources/{doc}.md` file, or null if absent. */
     fun sourceText(subject: String, doc: String): String? {
         val f = root.resolve(subject).resolve("_sources").resolve("$doc.md")
