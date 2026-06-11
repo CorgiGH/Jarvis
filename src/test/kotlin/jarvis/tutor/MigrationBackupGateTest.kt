@@ -24,7 +24,10 @@ class MigrationBackupGateTest {
     private fun tempDb(tmp: Path, name: String = "gate.db"): Database =
         TutorDb.connect(tmp.resolve(name).toString())
 
-    /** Old-shape DB with N protected rows: a legacy fsrs_cards only — migrate() has pending DDL. */
+    /**
+     * Old-shape DB with N protected rows: a legacy fsrs_cards only — migrate() has pending DDL.
+     * Must NOT include newer-CHANGE columns — keep the original legacy production columns.
+     */
     private fun seedOldShape(db: Database, cards: Int) {
         transaction(db) {
             exec(
@@ -169,6 +172,26 @@ class MigrationBackupGateTest {
         assertEquals(
             MigrationResult.Success,
             TutorMigration.migrate(db, backupGate = gate(tmp.resolve("backups-empty"))),
+        )
+    }
+
+    @Test
+    fun `corrupt manifest json refuses like no manifest`(@TempDir tmp: Path) {
+        val db = tempDb(tmp)
+        seedOldShape(db, 10)
+        val dir = tmp.resolve("backups-corrupt")
+        // Write a malformed JSON file as the ONLY *.manifest.json — silent-skip must land on refusal
+        Files.createDirectories(dir)
+        Files.writeString(dir.resolve("jarvis-tutor-db-corrupt.sql.gz.manifest.json"), "{not json")
+
+        val e = assertFailsWith<MigrationException> {
+            TutorMigration.migrate(db, backupGate = gate(dir))
+        }
+
+        assertIs<BackupGateRefusal>(e.cause)
+        assertTrue(
+            e.cause!!.message!!.contains("no backup manifest"),
+            "corrupt manifest must be skipped, landing on 'no backup manifest' refusal: ${e.cause!!.message}",
         )
     }
 }

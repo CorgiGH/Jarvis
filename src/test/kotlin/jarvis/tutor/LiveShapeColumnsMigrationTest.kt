@@ -64,4 +64,36 @@ class LiveShapeColumnsMigrationTest {
         assertEquals(7, columnsOf(db, "kc_verification_status").size)
     }
 
+    @Test
+    fun `report_wrong gains exactly resolved_by and resolved_at, both nullable (D-RF3)`(@TempDir tmp: Path) {
+        val db = liveShapeDb(tmp, mapOf("report_wrong" to listOf("resolved_by", "resolved_at")))
+        assertEquals(
+            listOf("id", "user_id", "kc_id", "card_id", "grade_attempt_raw", "reported_at", "resolution"),
+            columnsOf(db, "report_wrong"),
+            "replica must match the live 7-column shape before re-migration",
+        )
+
+        TutorMigration.migrate(db)
+
+        assertEquals(
+            setOf(
+                "id", "user_id", "kc_id", "card_id", "grade_attempt_raw",
+                "reported_at", "resolution", "resolved_by", "resolved_at",
+            ),
+            columnsOf(db, "report_wrong").toSet(),
+        )
+
+        // Both NULLable (PRAGMA notnull == 0): additive, no backfill needed on the empty live
+        // table; a pre-existing OPEN row would read NULL = not-yet-resolved (Phase1Tables KDoc).
+        transaction(db) {
+            exec("PRAGMA table_info(report_wrong)") { rs ->
+                while (rs.next()) {
+                    val name = rs.getString("name")
+                    if (name == "resolved_by" || name == "resolved_at") {
+                        assertEquals(0, rs.getInt("notnull"), "$name must be nullable")
+                    }
+                }
+            }
+        }
+    }
 }
