@@ -215,3 +215,18 @@ tasks.register<JavaExec>("reconcileContent") {
         ?: listOf("content")
     jvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
 }
+
+// Plan-1 (trust-net ON): machine-checked invariants over the REAL DB + corpus. READ-ONLY.
+// INV-3.3 (828 cards survive, vs the newest backup manifest when JARVIS_BACKUP_DIR is set),
+// frozen schema columns, >=1 faithful row, and content-hash PARITY (stored == recomputed from
+// content/ — the machine replacement for manual spot-checks). Owner/manual; NOT part of check
+// (it reads the runtime DB).
+tasks.register<JavaExec>("trustInvariants") {
+    group = "verification"
+    description = "Trust-net ON invariants (INV-3.3, schema, >=1 faithful, content-hash parity) " +
+        "against the REAL DB (JARVIS_TUTOR_DB) + content/ corpus. Read-only; NOT part of check."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("jarvis.tutor.verify.TrustInvariantsCliKt")
+    args = (project.findProperty("invariantsArgs") as String?)?.split(" ")?.filter { it.isNotEmpty() } ?: listOf()
+    jvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+}
