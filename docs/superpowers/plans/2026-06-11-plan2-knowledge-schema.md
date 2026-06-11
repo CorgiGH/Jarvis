@@ -482,18 +482,18 @@ Key facts the seeder encodes (Task 7 carries the full literal Kotlin seed list �
 
 Row 10's subject stays the raw string `Reverse Engineering` (G13 — identity unconfirmed, NEVER seeded as SORC/RC). PS: zero rows, correct (Verificare). `exam_dates` additionally gets 4 rows via its frozen upsert: (ALO, 2026-06-03T16:00), (SORC, 2026-06-06T11:00), (POO, 2026-06-09T08:00), (PA, 2026-06-10T12:00) — timestamps stored UTC (Europe/Bucharest is UTC+3 in June: 16:00 EEST = 13:00Z).
 
-**concept_type backfill (Task 4) — the 8 PA KCs.** Dual-agent independent classification with agreement requirement; the plan PRE-REGISTERS the expected assignments so reviewers diff against something (disagreement with these = escalate to PM, do not silently pick):
+**concept_type backfill (Task 4) — the 8 PA KCs. RATIFIED 2026-06-12** — the dual-agent classification protocol RAN (execution workflow `wf_f98a2b4f`, two independent Sonnet classifiers, different lenses); both disagreed with the original pre-registered guesses on 3 KCs; the PM read the 3 YAML files and ruled (rulings + reasons below). This table is now the BINDING assignment — Task 4 executors use it directly and skip the dispatch step:
 
-| KC | expected concept_type | basis |
+| KC | ratified concept_type | basis |
 |---|---|---|
-| pa-kc-001 Noțiunea de algoritm | definition-taxonomy | definitional KC, bloom=understand |
-| pa-kc-002 Problemă/model/pereche | definition-taxonomy | definitional |
-| pa-kc-003 Moduri de descriere | comparison | contrasts description modes |
-| pa-kc-004 Necesitatea formalizării | definition-taxonomy | conceptual/definitional |
-| pa-kc-005 Dimensiunea valorilor | formula-application | bloom=apply, numeric invariant `1+1+1=3`, grounding strict |
-| pa-kc-006 Costul de timp | formula-application | bloom=apply, numeric invariant `t+t+t=3*t` |
-| pa-kc-fixture-recursion | code-trace | recursion-tree viz fixture |
-| pa-kc-fixture-compute | procedure | compute fixture |
+| pa-kc-001 Noțiunea de algoritm | definition-taxonomy | definitional KC, bloom=understand (both classifiers concur) |
+| pa-kc-002 Problemă/model/pereche | definition-taxonomy | definitional (both concur) |
+| pa-kc-003 Moduri de descriere | definition-taxonomy | **PM ruling** (classifiers split def-tax/comparison): content is a 3+-mode TAXONOMY ("There are various ways to describe an algorithm" — natural language/flowchart/pseudo-code); classify-an-example-first is the natural ① beat; the spec's comparison variant is for TWO named things side-by-side. Original "comparison" guess retracted. |
+| pa-kc-004 Necesitatea formalizării | proof | **PM ruling** (BOTH classifiers said proof, against the original def-tax guess): the KC is an argument chain — "To PROVE that there is no algorithm... we need a formal definition!" → models → equivalence; the self-explanation prompt asks the learner to reconstruct "argumentul din curs... pentru a putea demonstra că NU există". Proof variant (② structured sub-step attempt + ③ proof-skeleton reveal) is the fit. |
+| pa-kc-005 Dimensiunea valorilor | formula-application | bloom=apply, numeric invariant `1+1+1=3`, grounding strict (both concur) |
+| pa-kc-006 Costul de timp | formula-application | bloom=apply, numeric invariant `t+t+t=3*t` (both concur) |
+| pa-kc-fixture-recursion | code-trace | recursion-tree viz fixture (both concur) |
+| pa-kc-fixture-compute | formula-application | **PM ruling** (BOTH classifiers said formula-application, against the original "procedure" guess): bloom=apply + "cost de calcul" = numeric-skeleton territory. |
 
 ---
 
@@ -1647,31 +1647,20 @@ Expected: `BUILD SUCCESSFUL`, 1 test passed. **STOP if it fails** — then the l
 
 Run each agent over all 8 KC files (`pa-kc-001.yaml` … `pa-kc-006.yaml`, `pa-kc-fixture-compute.yaml`, `pa-kc-fixture-recursion.yaml`). Collect agent-A's 8 outputs and agent-B's 8 outputs.
 
-3b. Diff the THREE columns per KC: agent-A literal, agent-B literal, and the §0.9F pre-registered literal below. They must all three agree per KC.
+3b. **[DONE 2026-06-12 — protocol already executed, results ratified.]** The dual classification ran in execution workflow `wf_f98a2b4f` (two independent Sonnet classifiers, learning-action lens vs exam lens). Disagreements on pa-kc-003 / pa-kc-004 / pa-kc-fixture-compute were escalated; the PM read the three YAML files and ruled. The RATIFIED table in §0.9F is binding.
 
-| KC | §0.9F expected `concept_type` |
-|---|---|
-| pa-kc-001 | `definition-taxonomy` |
-| pa-kc-002 | `definition-taxonomy` |
-| pa-kc-003 | `comparison` |
-| pa-kc-004 | `definition-taxonomy` |
-| pa-kc-005 | `formula-application` |
-| pa-kc-006 | `formula-application` |
-| pa-kc-fixture-recursion | `code-trace` |
-| pa-kc-fixture-compute | `procedure` |
-
-3c. **Agreement gate.** If, for every one of the 8 KCs, agent-A == agent-B == §0.9F literal: proceed to Step 4. **If ANY KC has a three-way disagreement** (A≠B, or A≠§0.9F, or B≠§0.9F): STOP. Do not edit any YAML. Escalate to PM with a table of the disagreements (kc_id, agent-A, agent-B, §0.9F, each agent's one_line_basis). The PM ratifies the type — the executor never silently picks (no-false-attribution / no-oracle-inversion).
+3c. **Executor instruction (post-ratification):** SKIP the dispatch — do NOT re-run classifiers (no verdict-shopping). Use the §0.9F ratified literals verbatim in Step 4. If any §0.9F literal seems wrong while editing: STOP and escalate (never silently substitute).
 
 - [ ] **Step 4: Edit the 8 YAML files — add one `concept_type` line each** (only after Step 3c agreement). Add the line on its own line at top level (not nested), anywhere among the scalar fields; placing it directly after the `tier:` line keeps the files readable. Use the §0.9F literal (now ratified by the dual-agent agreement). The 8 edits:
 
   - `content/PA/kcs/pa-kc-001.yaml` → add `concept_type: definition-taxonomy`
   - `content/PA/kcs/pa-kc-002.yaml` → add `concept_type: definition-taxonomy`
-  - `content/PA/kcs/pa-kc-003.yaml` → add `concept_type: comparison`
-  - `content/PA/kcs/pa-kc-004.yaml` → add `concept_type: definition-taxonomy`
+  - `content/PA/kcs/pa-kc-003.yaml` → add `concept_type: definition-taxonomy`
+  - `content/PA/kcs/pa-kc-004.yaml` → add `concept_type: proof`
   - `content/PA/kcs/pa-kc-005.yaml` → add `concept_type: formula-application`
   - `content/PA/kcs/pa-kc-006.yaml` → add `concept_type: formula-application`
   - `content/PA/kcs/pa-kc-fixture-recursion.yaml` → add `concept_type: code-trace`
-  - `content/PA/kcs/pa-kc-fixture-compute.yaml` → add `concept_type: procedure`
+  - `content/PA/kcs/pa-kc-fixture-compute.yaml` → add `concept_type: formula-application`
 
 For each file, insert the line immediately after the existing `tier:` line. Concretely (example for pa-kc-001):
 
