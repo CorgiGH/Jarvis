@@ -1,7 +1,7 @@
 # One-Pass Digestion Teaching Engine — Binding Design Specification
 
 **Date:** 2026-06-11
-**Status:** BINDING — the implementation plan is derived from this document. Where this spec and any earlier plan disagree, this spec wins, except for `docs/superpowers/plans/2026-06-02-interface-signatures-lock.md`, which remains canonical-on-conflict for already-frozen signatures (see §13).
+**Status:** BINDING — the implementation plan is derived from this document. Where this spec and any earlier plan disagree, this spec wins, except for `docs/superpowers/plans/2026-06-02-interface-signatures-lock.md`, which remains canonical-on-conflict for already-frozen signatures (see §13). Adversarially reviewed 2026-06-11 (3-agent approval-diff + claim spot-check); this revision incorporates its fixes.
 **Audience:** the implementation planner and future sessions.
 **Language of this document:** English (jarvis-meta). All learner-facing content the system produces is in the learner's language (§8).
 
@@ -27,9 +27,9 @@ There is exactly one path from raw material to the learner. There are no side do
 
 ### 1.2 Invariants (binding)
 
-**(a) The user never iterates on output.** Gates pass, retry, or park. A hard failure becomes a **gap-record** that asks the user for **FILES, never judgments** — "upload the seminar sheet for week 6" is legal; "is this proof correct?" is forbidden. This is the no-oracle-inversion rule: the tutor exists because the user cannot vet content; asking him to do so is a design violation, not a fallback.
+**(a) The user never iterates on CORRECTNESS** — never debugs output, never verifies truth, never fixes content; gates pass, retry, or park. A hard failure becomes a **gap-record** that asks the user for **FILES, never judgments** — "upload the seminar sheet for week 6" is legal; "is this proof correct?" is forbidden. This is the no-oracle-inversion rule: the tutor exists because the user cannot vet content; asking him to do so is a design violation, not a fallback. The §1.4 experience checkpoint is the single, deliberate exception: an approve/reject on how it TEACHES, bounded by the §9.1 rejection budget — it is not iteration on correctness.
 
-**(b) Nothing unverified reaches the learner.** The trust-net is admission-only (content must pass faithful-check to enter the servable set) *and* there is an always-on serve-side refusal: the serving layer re-checks verification status at read time and refuses to render unverified content, so a bad migration or a bug that flips a flag cannot leak content. (The refusal half already exists in code — the lesson endpoint requires `faithful` status and 404s otherwise, `QueueMasteryCalibrationRoutes.kt:399-403`; this design keeps it and widens what it covers.) Both halves are extended beyond KC text to **generated teaching content (beat fields) and figures** — a beat or a figure that has not passed its gates is exactly as unservable as an unverified KC. (Decision D-RF2, see §12.)
+**(b) Nothing unverified reaches the learner.** The trust-net is admission-only (content must pass faithful-check to enter the servable set) *and* there is an always-on serve-side refusal: the serving layer re-checks verification status at read time and refuses to render unverified content, so a bad migration or a bug that flips a flag cannot leak content. (The refusal half already exists in code — the lesson endpoint requires `faithful` status and 404s otherwise, `QueueMasteryCalibrationRoutes.kt:400-403`; this design keeps it and widens what it covers.) Both halves are extended beyond KC text to **generated teaching content (beat fields) and figures** — a beat or a figure that has not passed its gates is exactly as unservable as an unverified KC. (Decision D-RF2, see §12.)
 
 ### 1.3 Existing assets absorbed, not discarded
 
@@ -45,11 +45,13 @@ Artifacts are processed **one at a time, sequentially**. For each artifact:
 2. The pipeline **stops** and presents the rendered result — the actual lesson route, real data, real theme — on the **checkpoint review screen** (§1.5).
 3. The user clicks through the lesson exactly as a learner would.
 4. The user **approves** or **rejects with a one-line note**.
-   - **Reject:** the one-liner is fed back into the generation prompt and generation re-runs for that artifact. The user's note is experience feedback ("too dense", "figure confusing"), never a truth judgment — truth remains machine-verified.
+   - **Reject:** the one-liner is fed back into the generation prompt and generation re-runs for that artifact. The user's note is experience feedback ("too dense", "figure confusing"), never a truth judgment — truth remains machine-verified. Rejection counts are bounded by the unified retry table in §9.1: one re-generation per first rejection; a second rejection on the same artifact routes to design review.
    - **Approve:** the content goes live, and the approved artifact's shape (beat plan, figure choices, density) becomes the **reference pattern** for the next artifact of the same kind × subject, so quality converges instead of resetting.
 5. Only then does the next artifact enter the pipeline.
 
 **Division of labor, stated once and binding:** machines verify **truth** (faithfulness to source, trace correctness, render correctness); the user approves **experience** (does this teach well, does it feel right). Neither party does the other's job.
+
+**Checkpoint FORM follows the artifact kind:** teaching kinds present the rendered lesson; analytics-only kinds (grade-ledger) and registry kinds (grading-doc) present the extracted data summary (registry rows, difficulty seeds) for the same approve/reject. Student-notes go through the full lesson checkpoint.
 
 **Spot-check mode:** per subject, the user may explicitly choose to relax the checkpoint from every-artifact to sampled spot-checks. This is unlockable **by user choice only** — the system never auto-graduates a subject out of full review, never suggests it as a default, and records who flipped the switch and when.
 
@@ -64,14 +66,15 @@ Route: the checkpoint surface mounts inside the existing tutor shell. On first p
 - `[data-testid="checkpoint-lesson-frame"]` — the embedded real lesson route (not a mock, not a screenshot).
 - `[data-testid="checkpoint-approve"]` and `[data-testid="checkpoint-reject"]` — the two actions.
 - `[data-testid="checkpoint-reject-note"]` — the one-line note input, enabled only when reject is selected.
+- `[data-testid="checkpoint-kind-selector"]` — the detected-kind control allowing one-click re-classification (§2.2).
 
-Interaction smoke: clicking through every beat inside `checkpoint-lesson-frame`, then clicking approve, produces zero 4xx/5xx network responses and no on-screen text matching `/404|HTTP \d{3}|not found|error/i`. Reject with a note re-enqueues the artifact and the screen shows `[data-testid="checkpoint-requeued"]`.
+Interaction smoke: clicking through every beat inside `checkpoint-lesson-frame`, then clicking approve, produces zero 4xx/5xx network responses and no on-screen text matching `/404|HTTP \d{3}|not found|error/i`. Reject with a note re-enqueues the artifact and the screen shows `[data-testid="checkpoint-requeued"]` (first rejection only; a second rejection routes to design review and shows `[data-testid="checkpoint-design-review"]`). Changing the kind via `checkpoint-kind-selector` re-runs classification-downstream stages and the header updates, zero 4xx/5xx.
 
 ### 1.6 Acceptance criteria (machine-checkable, real DB)
 
 - **INV-1.1:** For every row in the servable content set (KCs, beat fields, figures, problems), verification status = passed. CI query against the production schema: `SELECT COUNT(*) FROM <servable view> WHERE verification_status != 'VERIFIED'` returns 0. Runs against the real DB, not a fixture.
 - **INV-1.2:** Serve-side refusal test: flip one row to unverified in a transaction against a copy of the real DB, request it through the serving API, assert refusal (structured "not available" response, never the content), roll back.
-- **INV-1.3:** Every artifact in `artifacts` with state `live` has exactly one `approved` checkpoint event row (or its subject is in user-enabled spot-check mode and the artifact has a `sampled-pass` or `auto-after-spot-check-grant` event). Zero artifacts are `live` with no checkpoint event.
+- **INV-1.3:** Every artifact in `artifacts` with state `live` has exactly one `approved` checkpoint event row of the kind-appropriate form (§1.4: lesson form for teaching kinds, data-summary form for grade-ledger/grading-doc) — or its subject is in user-enabled spot-check mode and the artifact has a `sampled-pass` or `auto-after-spot-check-grant` event. Zero artifacts are `live` with no checkpoint event.
 - **INV-1.4:** Every gap-record's user-facing request text matches the FILES-only grammar (a lintable template: request names an artifact kind + subject + week/topic; contains no question mark directed at content correctness).
 
 ---
@@ -192,7 +195,7 @@ Problems are first-class rows, not KC appendages:
 
 ### 3.5 Course-meta
 
-- **Grade-model registry** (R-GRADEMODEL): one verified row per subject per component — formula, weights, minimum gates, **evidence tier** (`official-site` vs `corpus-evidence`), and **source URL** — seeded exclusively from the 2026-06-11 verified sweep (`docs/superpowers/findings/2026-06-11-verified-grade-models-exam-schedule.md`), **never from the uncorrected taxonomy** (the sweep carries 15 errata against it). The verified anchors:
+- **Grade-model registry** (R-GRADEMODEL): one verified row per subject per component — formula, weights, minimum gates, **evidence tier** (`official-site` vs `corpus-evidence`), and **source URL** — seeded exclusively from the 2026-06-11 verified sweep (`docs/superpowers/findings/2026-06-11-verified-grade-models-exam-schedule.md`), **never from the uncorrected taxonomy** (the sweep carries 15 errata against it; additionally, the taxonomy's §4 dashboard row for POO — 30/30/30/18, summing to 108 — is itself wrong and superseded by the official-site model here; treat it as an unrecorded erratum). The verified anchors:
   - **ALO:** `Punctaj final = punctaj laborator + 10*nota test seminar + 40*nota test scris` (verbatim from the course page); max total = **800** (the taxonomy's 1000 is CONTRADICTED — erratum E1); pass = exam ≥ 3/10 AND total ≥ 360; Gaussian curve over passers; temas T1–T5 = 50/60/60/60/70 pts with early-submission bonus.
   - **SORC:** `NF = 0.1*SO1 + 0.3*SO2 + 0.1*SO3 + 0.1*RC1 + 0.4*RC2`; pass = RC2 ≥ 5 AND NF ≥ 5; RC2 retakeable. SO1/SO2/SO3 definitions UNKNOWN (SO sub-site HTTP 401, gap G7) → gap-records, not guesses; the corpus-only T.SO claims (week 8, 30 pts, 12-pt gate) carry `corpus-evidence` tier (erratum E9).
   - **POO:** T1 (wk 8) 30 + T2 (wk 14/15) 30 + final 30 + lab activity 10; pass = **total ≥ 45** only. The taxonomy's "≥20 combined lab gate" and "attendance ≥ 10 gate" are NOT STATED on the official site (errata E13/E14) and are **excluded** from the registry.
@@ -208,9 +211,10 @@ Problems are first-class rows, not KC appendages:
 
 1. **BACKUP FIRST.** The live DB (`~/.jarvis/tutor.db`, 828 cards, irreplaceable user history) gets an **off-box dump before any mutation**. This is a locked decision (§12); a migration script that does not begin by producing and verifying the backup is non-compliant. The backup tooling itself is hardened as part of this step: the final audit (limitation #12) found `tools/db-backup.py` has no flag parsing — `--help` executed a live backup into a directory named `--help`. A restore drill (backup → restore to scratch → row-count + schema-hash equality) is part of step 1, not optional.
 2. `kc_verification_status` **+3 columns** — the live DB is 3 columns behind the sealed trust-net code; this migration closes that gap and is the prerequisite for turning the trust-net on (§9.2 gate 2).
-3. **`fsrs_cards.kc_id` backfill** — links the 828 cards to KCs so existing review history feeds unified mastery (§7.1). Cards that cannot be confidently linked stay null-linked and keep scheduling independently; no forced guesses.
-4. **Beat fields** — the §3.2 per-beat, language-keyed columns/tables, additive only.
-5. **Problem bank + course-meta tables** — §3.4/§3.5, additive only.
+3. `report_wrong` gains `resolved_by` + `resolved_at` NOW while the table is empty (council D-RF3, build-review/2026-06-05-trustnet-refreeze-decisions.md — provenance is un-backfillable once rows exist).
+4. **`fsrs_cards.kc_id` backfill** — links the 828 cards to KCs so existing review history feeds unified mastery (§7.1). Cards that cannot be confidently linked stay null-linked and keep scheduling independently; no forced guesses.
+5. **Beat fields** — the §3.2 per-beat, language-keyed columns/tables, additive only.
+6. **Problem bank + course-meta tables** — §3.4/§3.5, additive only.
 
 ### 3.7 Language keying
 
@@ -241,7 +245,7 @@ A React component that **replaces** the current 3-step `LessonScreen`. The repla
 
 ### 4.2 BeatSelector (server)
 
-Server-side selection of the beat plan: **`concept_type` × mastery phase → beat plan**. The beat **vocabulary is FIXED** (locked, council-1781052957): the five beats ① PREDICT ② ATTEMPT ③ REVEAL ④ NAME ⑤ CHECK; a legal plan always contains at minimum ① ② ③ ⑤, beats are **never reordered**, and no sixth beat kind may be invented by a prompt. The selector chooses *variants* and *compression*, not new vocabulary.
+Server-side selection of the beat plan: **`concept_type` × mastery phase → beat plan**. The beat **vocabulary is FIXED** (locked, council-1781052957): the five beats ① PREDICT ② ATTEMPT ③ REVEAL ④ NAME ⑤ CHECK; a legal plan contains at minimum ① ② ③ ⑤ for FIRST ENCOUNTERS — compressed plans only per the §4.5 closed table — beats are **never reordered**, and no sixth beat kind may be invented by a prompt. The selector chooses *variants* and *compression*, not new vocabulary.
 
 ### 4.3 Beat variants per `concept_type`
 
@@ -263,6 +267,17 @@ Every beat with learner input is graded (predict correctness, attempt path, chec
 
 Revisits of mastered KCs skip the predict gate (① becomes optional/elided per the selector); the compressed re-lesson trigger (§7.3) serves ③+⑤ only, with fresh parameter values. Compression is the selector's decision from mastery state — never a user-facing "skip" button that defeats the gating.
 
+The legal beat plans are a CLOSED set:
+
+| Plan | Beats | Legal when |
+|---|---|---|
+| FULL | ①②③④⑤ | any encounter |
+| STANDARD | ①②③⑤ | the minimum for first encounters |
+| MASTERED-REVISIT | ②③⑤ | revisit of a mastered KC (predict elided) |
+| RE-LESSON | ③⑤ | forgetting trigger (§7.3) only, never a first encounter |
+
+No other plan is legal; the BeatSelector chooses among these four.
+
 ### 4.6 Scrubber requirement (machine-checked)
 
 Every animated reveal ships the **full scrubber**: back / play / forward / reset, with a "pas k/N" step counter. A one-shot animation (plays once, no way back) is a **gate violation** caught by the rendered interaction test (§9.2 gate 4), not a style preference. The canonical violation this kills: the Dijkstra demo's beat-③ one-shot ~17 s run whose play button is destroyed on completion (`lectie-dijkstra.html:188` — rendered-audit DIJ-ONESHOT: replay impossible, revisits show a dead figure). The MergeSort demo's scrubber (back/play/forward/restart + `pas N/9`) is the reference implementation.
@@ -282,7 +297,7 @@ Interaction smoke: complete all beats by clicking; zero 4xx/5xx during the whole
 
 ### 4.8 Acceptance criteria
 
-- **INV-4.1:** Beat-plan legality: CI property test over the BeatSelector for every (`concept_type` × mastery phase) pair asserts: output ⊆ fixed vocabulary, contains ①②③⑤ minimum (modulo §4.5 compression rules, which are themselves enumerated), order strictly increasing.
+- **INV-4.1:** Beat-plan legality: CI property test over the BeatSelector for every (`concept_type` × mastery phase) pair asserts: output is exactly one of the four plans in the §4.5 closed table (FULL / STANDARD / MASTERED-REVISIT / RE-LESSON), first encounters receive only FULL or STANDARD, order strictly increasing.
 - **INV-4.2:** Dwell formula unit-tested at boundary word counts (0, 2, 14, 1000 words → 1400, 1400+ , …, 5500 capped).
 - **INV-4.3:** Against the real DB after a real lesson run-through: attempt rows exist with `beat_type` populated for each graded beat; EWMA and FSRS rows updated; first-encounter flag set exactly once per KC.
 - **INV-4.4:** Playwright suite (§4.7 selectors + interaction smoke) runs on the real lesson route against the real corpus in CI; the one-shot-animation check asserts the scrubber's back control exists and functions on every animated ③.
@@ -320,7 +335,7 @@ A family may gain sub-layouts; a *new family* is a design-level event requiring 
 
 ### 5.5 Migration of the 24 existing primitives
 
-The 24 existing viz components are **seeds**: their rendering ideas are refactored into the families; their hardcoded one-off content is re-expressed as instance data (audit V3: 17 of 24 are zero-prop hardcoded scenarios — BayesTree's P(D)=0.01 disease, SchedulerGantt's fixed 4-job batch, OsiEncap's fixed MTU — making different concrete instances structurally impossible without code changes; this is what instance-data re-expression fixes). Components with **no corpus anchor** (TcpCwnd's full Reno, Tls0Rtt — audit) yield family render logic only; their content cannot become instances because instances are content rows and content requires a source. The per-component registry bottleneck **dies**: today registering one component requires lockstep changes across vizRegistry + viz-ids.yaml + Kotlin `checkVizReferences` + an exact-match test (audit V1 + limitation #14); under families, the family registers once and instances are data. The three independent production breaks (V1: 1 of ~24 registered; V2: zero KCs carry viz_id; E6: no viz field on the lesson wire) are removed by one mechanism: the §3.2 figure binding. End state: zero lesson-facing figures outside the family system.
+The 24 existing viz components (~24, exact count reconciled at migration — see §1.3 note) are **seeds**: their rendering ideas are refactored into the families; their hardcoded one-off content is re-expressed as instance data (audit V3: 17 of 24 are zero-prop hardcoded scenarios — BayesTree's P(D)=0.01 disease, SchedulerGantt's fixed 4-job batch, OsiEncap's fixed MTU — making different concrete instances structurally impossible without code changes; this is what instance-data re-expression fixes). Components with **no corpus anchor** (TcpCwnd's full Reno, Tls0Rtt — audit) yield family render logic only; their content cannot become instances because instances are content rows and content requires a source. The per-component registry bottleneck **dies**: today registering one component requires lockstep changes across vizRegistry + viz-ids.yaml + Kotlin `checkVizReferences` + an exact-match test (audit V1 + limitation #14); under families, the family registers once and instances are data. The three independent production breaks (V1: 1 of ~24 registered; V2: zero KCs carry viz_id; E6: no viz field on the lesson wire) are removed by one mechanism: the §3.2 figure binding. End state: zero lesson-facing figures outside the family system.
 
 ### 5.6 SVG-only policy (council-approved, locked)
 
@@ -379,7 +394,7 @@ The existing drill CHECK card becomes a **real graded input** wired into this st
 
 ### 6.4 Acceptance criteria
 
-- **INV-6.1:** Grader routing table is total: CI asserts every (subject × problem-archetype) in the real problem bank resolves to a grader chain whose first element is non-LLM.
+- **INV-6.1:** Grader routing table is total: CI asserts every (subject × problem-archetype) in the real problem bank resolves to a grader chain whose first element is non-LLM. Meaningful only once the problem bank is non-empty; CI marks it pending-not-green until the proof run populates ≥1 row per subject.
 - **INV-6.2:** Execution-grader sandbox test per language against real corpus problems: known-good reference solution → pass; known-bad mutant → fail; for each of R/Python/C++/Alk.
 - **INV-6.3:** LLM-judge is never alone: CI asserts no grader chain consists of LLM-judge only.
 - **INV-6.4:** Golden answer sets (§9.2 gate 7) green per grader per subject before any grader change merges.
@@ -461,10 +476,18 @@ Per beat per KC: predict accuracy, attempt accuracy, replay count, give-ups. Thi
 
 Per artifact: gates run in order; **any red → bounded self-retry (~3 attempts) with the failure data fed back** into the failing stage; still red → **parked gap-record with diagnostics attached**. Broken output never ships; the user never debugs. The retry budget is a constant in config, not a vibe.
 
+**Retry semantics (the only three loops that exist):**
+
+| Loop | Trigger | Bound |
+|---|---|---|
+| (a) Machine gate red | any gate in the chain fails | ≤3 self-retries with the failure data fed back into the failing stage; still red → park as gap-record |
+| (b) User REJECT #1 at the checkpoint | first rejection of an artifact | one re-generation incorporating the one-line note |
+| (c) User REJECT #2 on the same artifact | second rejection of the same artifact | STOP — pipeline design review (the §10.3 rule); never a third regeneration |
+
 ### 9.2 The chain
 
 1. **Extraction gate** (§2.3).
-2. **Trust-net faithful-check, turned ON** — operational sequence: **backup → migrate 3 columns → run `verifyContent` over the corpus → D9 PC→VPS sync**. Coverage extended to: generated beat content (per-field), `pedagogical_instance` method-consistency (§3.3), provenance-tiered strictness (§2.5). **CI fix folded in:** missing verifier dependencies = **loud red, never silent UNCERTAIN** (the failure mode where an absent dep made everything "uncertain-pass" is closed at the CI level).
+2. **Trust-net faithful-check, turned ON** — operational sequence: **backup → migrate 3 columns → run `verifyContent` over the corpus → D9 PC→VPS sync**. Coverage extended to: generated beat content (per-field), `pedagogical_instance` method-consistency (§3.3), provenance-tiered strictness (§2.5). **CI fix folded in:** missing verifier dependencies = **loud red, never silent UNCERTAIN** (the failure mode where an absent dep made everything "uncertain-pass" is closed at the CI level). The pre-flip zero-row guard is scoped to flip time only (D-RF1: content_hash rows = 0 before the v2 re-key); it is NOT a standing "kc_verification_status must be empty" check — re-audits over populated tables are normal operation and must remain runnable, keyed by audit_run_id.
 3. **Semantic figure gates** — per-family trace-match + invariant asserts (§5.4).
 4. **Rendered gates via Playwright on the real lesson route:** (a) **no-clip/overlap promoted into the @playwright/test suite FIRST** (council ordering — this lands before the other rendered gates and before any baseline exists; today the no-clip check lives only in the ad-hoc `shoot.qrqa2.mjs`, not in CI — audit V10); (b) per-element legibility/contrast — the concrete floor: the QR payoff zeros rendered at ~1.75:1 against a 4.5:1 requirement (rendered-audit QR-CONTRAST-ZERO), and truncation that hides meaning (the TLS "Finished" ellipsis, VIZ-05) fails; (c) interaction test — all beats clickable, gates actually lock, zero console errors, zero 4xx/5xx; (d) language gate (§8.3). The rendered audit proves this gate set is satisfiable: the three demo lessons pass zero-clip / zero-overlap / zero-truncation / gates-genuinely-lock in all 12 theme×viewport passes; its 23 findings (0 blocker / 9 high / 10 medium / 4 low: 7 clip-overlap, 8 legibility, 3 EN-leak, 1 broken-interaction) all fall inside what gates 3–4 catch going forward.
 5. **Impeccable** (design-rule linting) **with the council's amendment (a):** calibrate on this repo first (one `detect --json` run, catalogue every rule hit) → enable only the applicable-rules subset → **pin the version** (explicit `npx impeccable@<ver>`, never floating) → fail-open (warn, don't block) until calibrated AND pinned → only then blocking; `DESIGN.md` is auto-generated from `index.css` tokens, never a hand-maintained second source of truth.
@@ -480,7 +503,7 @@ Per the fix-claim discipline: a gate that exists as a script someone remembers t
 ### 9.4 Tooling adoption (per the tooling eval + council-1781132987)
 
 - **Adopt:** Impeccable; **self-hosted fonts** (Fraunces/Nunito/JetBrains Mono woff2 under `tutor-web/public/fonts/`, CDN `<link>`s removed — kills the silent system-font fallback in headless renders, plus offline/exam-day safety); **Playwright extensions** (`toHaveScreenshot` for the fixed shell, `assertNoOverflow` in the @playwright/test suite, `trace`/`video: 'retain-on-failure'`, and the one-line vitest-axe import fix that un-breaks 8 silently-dead axe tests).
-- **The council's 5 amendments** (council-1781132987 judge — verdict FLAWED → adopt-with-amendments, all 11 verdicts upheld, confidence 8):
+- **The council's 5 amendments** (council-1781132987 judge — verdict FLAWED → adopt-with-amendments, all 11 tooling choices upheld (5 council agents: 1 APPROVE / 4 CONDITIONAL / 0 REJECT), confidence 8):
   (a) Impeccable: calibrate → applicable subset → version-pin → fail-open until both → only then gate; DESIGN.md auto-generated from `index.css` tokens (folded into §9.2 gate 5);
   (b) screenshot baselines for the fixed shell + 2 theme reference pages ONLY, environment-locked, human-recommitted — never for generated lessons (folded into gate 6);
   (c) `assertNoOverflow` lands in the test suite BEFORE any baseline exists — "a baseline of a clipped layout is worse than no baseline" (folded into gate 4a's ordering);
@@ -503,7 +526,7 @@ Per the fix-claim discipline: a gate that exists as a script someone remembers t
 ### 10.1 Build order (dependency order only — no schedule semantics)
 
 1. **Trust-net ON** (backup → migrate → verifyContent → D9 sync) **and the template-contract doc** — these two are independent and proceed in parallel.
-2. **Schema migrations** (§3.6, backup-first) — depends on the backup discipline being in place.
+2. **Schema migrations** (§3.6, backup-first) — depends on step 1's backup+restore-drill runner existing and green — the same runner gates every subsequent mutating migration; no separate backup deliverable exists.
 3. **BeatOrchestrator + the first viz family (graph/tree, seeded from the MergeSort port)** — depends on schema (beat fields).
 4. **Gate chain wired** (§9.2) — depends on the things it gates existing.
 5. **Proof run** (§10.2).
@@ -519,6 +542,10 @@ Per the fix-claim discipline: a gate that exists as a script someone remembers t
 | POO lab (`labs/labNN.html`) | code-practice session generation (C++ execution grader live, banned-API constraints honored) |
 | POO past exam (user corpus, 2023–24 PNG scans) | mock-exam items with rubric scoring **+ the OCR extraction route exercised** |
 | SORC fișă (grading-doc; `Fisa-SO+RC_ro.pdf` — the sweep could not parse it remotely, so the local pdftotext path is exercised) | grade-model registry row + readiness dashboard wiring |
+| ALO Tema PDF (live-site `Tema N.pdf`) | homework kind: deliverable-tracker entry + skeleton prep drills |
+| ALO "Foaie de referință" or `Fituica_Metode_Numerice` (Desktop) | cheat-sheet kind: reference index + proof templates + permitted-materials metadata |
+| PA `NP_Complete_Course_Notes.md` (Desktop) | student-notes kind: lecture-equivalent digestion at student-notes provenance tier (stricter faithful-check exercised) |
+| PA partial-test grade ledger (user corpus) | grade-ledger kind: FSRS difficulty seeding + rubric reconstruction; checkpoint shows the extracted analytics summary (§1.4 data-summary form) |
 
 Each proof artifact runs the full loop: **upload → all gates green → user clicks through at the checkpoint → approve/reject**.
 
@@ -526,10 +553,10 @@ Each proof artifact runs the full loop: **upload → all gates green → user cl
 
 The pipeline is proven when, and only when:
 
-1. **Every artifact kind has ≥1 end-to-end user-approved exemplar.**
+1. **Every artifact kind has ≥1 end-to-end user-approved exemplar** — the proof set (one per artifact kind, 11 artifacts, §10.2) supplies them.
 2. **Zero garbage reached the user checkpoint** — every defect in the proof run was caught by a machine gate, not by the user's eyes. A defect the user catches is a missing gate, and the gate gets built before "proven" is claimable.
 3. **Every gate exists as a CI invariant** (§9.3, INV-9.4 seeded drills green).
-4. **The same artifact failing the checkpoint twice = a pipeline design bug**, owned by the system, not the user — it triggers a design review of the failing stage, never a third "try again".
+4. **The same artifact failing the checkpoint twice = a pipeline design bug**, owned by the system, not the user — it triggers a design review of the failing stage, never a third "try again". This is loop (c) of the §9.1 retry table; §1.5's `checkpoint-design-review` state is its surface.
 
 ### 10.4 Then: bulk upload
 
@@ -551,8 +578,9 @@ The 140 inventoried site URLs + the user's files, **sequential** (§1.4), with t
 |---|---|---|
 | Lesson form: gated 5-beat step-through | council-1781052957 | Fixed beat vocabulary ①–⑤, min ①②③⑤, never reordered; un-skippable gates; reveal fused with explanation |
 | Numerical lesson form | council-1781097621 | Skeleton-dominant active trace; one formula-line per click; named sign-step row; geometry = 1-screen anchor before arithmetic only |
-| SVG-only + tooling verdicts | council-1781132987 (verdict FLAWED→adopt-with-amendments; 1 APPROVE / 4 CONDITIONAL / 0 REJECT; all 11 verdicts upheld) | Block WebGL/WebGPU/Three.js/canvas + scroll/mouse decoration; adopt Impeccable/self-host-fonts/Playwright-extensions **with the 5 amendments (a)–(e) of §9.4** (calibrate-subset-pin-fail-open + auto-DESIGN.md; shell-only environment-locked baselines; assertNoOverflow first; named unlock events; lint/baseline = geometry-CSS only with §5 as the semantic mechanism); adopt-later Taste-brutalist/VoltAgent/Stitch with those unlocks; skip SkillUI/UI-UX-Pro-Max/21st.dev/webgpu-skill |
+| SVG-only + tooling verdicts | council-1781132987 (verdict FLAWED→adopt-with-amendments; all 11 tooling choices upheld — 5 council agents: 1 APPROVE / 4 CONDITIONAL / 0 REJECT) | Block WebGL/WebGPU/Three.js/canvas + scroll/mouse decoration; adopt Impeccable/self-host-fonts/Playwright-extensions **with the 5 amendments (a)–(e) of §9.4** (calibrate-subset-pin-fail-open + auto-DESIGN.md; shell-only environment-locked baselines; assertNoOverflow first; named unlock events; lint/baseline = geometry-CSS only with §5 as the semantic mechanism); adopt-later Taste-brutalist/VoltAgent/Stitch with those unlocks; skip SkillUI/UI-UX-Pro-Max/21st.dev/webgpu-skill |
 | D-RF2: admission-only gate + always-on serve-side refusal | trust-net refreeze decisions (build-review/2026-06-05-trustnet-refreeze-decisions.md) | Verification gates admission; serving independently refuses unverified content at read time |
+| D-RF3: `report_wrong` resolution-provenance columns | trust-net refreeze decisions (build-review/2026-06-05-trustnet-refreeze-decisions.md) | `report_wrong` gains `resolved_by` + `resolved_at` while the table is empty — provenance is un-backfillable once rows exist (§3.6 step 3) |
 | No paid LLM APIs | feedback_no_paid_apis (standing) | OpenRouter `:free` or the claude-max relay only |
 | Trust badge copy | SESSION lang fixes (`9825005`) | "corespunde cursului", never "corect" — the badge claims source-faithfulness, not truth |
 | Live-DB backup before mutation | locked decision (this design cycle) | Off-box dump verified before any migration step touches `~/.jarvis/tutor.db` |
