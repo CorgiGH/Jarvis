@@ -78,6 +78,8 @@ class TrustSyncTest {
         assertEquals(listOf("pa-kc-002"), dump.rows.map { it.kc_id })
     }
 
+    // ── Task 10: import contract — idempotent, monotonic, report_wrong untouched ──────────────
+
     @Test
     fun `import inserts then re-import is a no-op (idempotent)`(@TempDir tmp: Path) {
         val pc = db(tmp, "pc.db")
