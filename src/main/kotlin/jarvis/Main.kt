@@ -16,6 +16,11 @@ private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | s
   reindex                    Embed any wiki entries not yet in the vector store.
   import-anki <subj> <apkg>  Import an Anki .apkg deck as concepts under archival/<subj>/.
   ingest-corpus              Build / refresh the knowledge graph from archival/ markdown.
+  trust-export [out.json] [--run <id>]
+                             D9 PC-side: dump kc_verification_status verdict rows
+                             (frozen allowlist) to JSON for VPS import.
+  trust-import <in.json>     D9 VPS-side: surgical, idempotent upsert of a verdict
+                             dump into kc_verification_status. Never report_wrong.
   seed-fsrs [opts]           Walk one or more corpus dirs and generate FSRS cards via
                              the claude CLI (free OAuth, NOT paid API). Run
                              'jarvis seed-fsrs --help' for the flag list.
@@ -74,6 +79,8 @@ fun main(args: Array<String>) {
         }
         "migrate-concept-refs" -> runMigrateConceptRefs()
         "migrate" -> runMigrate(args.getOrNull(1))
+        "trust-export" -> jarvis.tutor.verify.TrustSyncCli.runExport(args.drop(1))
+        "trust-import" -> jarvis.tutor.verify.TrustSyncCli.runImport(args.drop(1))
         "seed-fsrs" -> runSeedFsrs(args.drop(1).toList())
         "import-anki" -> {
             val subject = args.getOrNull(1)
