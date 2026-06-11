@@ -99,6 +99,9 @@ data class KnowledgeConcept(
     /** Authored worked solution demonstrating the concept (Romanian). The claim it emits is round-trip-
      *  anchored on the KC's first span-bearing source ref. Null/blank ⇒ no claim emitted. */
     val worked_example_ro: String? = null,
+    // ===== Plan 2 (spec §3.1) — ADDITIVE; this field does NOT feed claimsFor()/content_hash =====
+    /** Spec §3.1 — wire literal, validated against ConceptType.fromWire at load. Required for every real KC (INV-3.2). */
+    val concept_type: String? = null,
 )
 
 /** content/viz-ids.yaml — the canonical set of valid viz ids (Kotlin↔TS source of truth). */

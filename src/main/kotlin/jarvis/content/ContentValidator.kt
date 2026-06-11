@@ -163,6 +163,7 @@ object ContentValidator {
             issues += checkVizReferences(sub, validVizIds)
             issues += checkStrictGrounding(sub)
             issues += checkVerificationStatusEnum(sub)
+            issues += checkConceptTypeEnum(sub)
             issues += checkTautologicalInvariants(sub)
             issues += checkExtractionLegibility(sub, sourceText)
         }
@@ -239,6 +240,32 @@ object ContentValidator {
                     subject = sub.subject,
                     detail = "misconception '${m.id}': verification_status='${m.verification_status}' " +
                         "is not an authored literal (must be one of $AUTHORED_VERIFICATION_STATUSES)",
+                )
+            }
+        }
+        return issues
+    }
+
+    /**
+     * Plan-2 Task 1 (spec §3.1) — concept_type load-time validation.
+     *
+     * When a KC's [KnowledgeConcept.concept_type] is non-null it MUST be a valid wire literal
+     * (ConceptType.fromWire non-null). Null is ALLOWED here; Task 4 tightens it to required-for-all
+     * after the YAML backfill. Localized author/audit check — ZERO serve/sync/hash ripple (concept_type
+     * does NOT feed ContentReconcile.claimsFor / kcContentHashOf, plan core §0.3).
+     */
+    fun checkConceptTypeEnum(sub: LoadedSubject): List<ValidationIssue> {
+        val issues = mutableListOf<ValidationIssue>()
+        val validLiterals = ConceptType.entries.joinToString(", ") { ConceptType.wireOf(it) }
+        for (kc in sub.kcs) {
+            val ct = kc.concept_type ?: continue   // null allowed in Task 1; required in Task 4
+            if (ConceptType.fromWire(ct) == null) {
+                issues += ValidationIssue(
+                    severity = "error",
+                    rule = "concept_type_enum",
+                    subject = sub.subject,
+                    detail = "KC '${kc.id}': concept_type='$ct' is not a valid literal " +
+                        "(must be one of: $validLiterals)",
                 )
             }
         }
