@@ -123,9 +123,27 @@ object TutorMigration {
          * and the assertion is skipped (the re-key is a one-time event).
          */
         v2HashFlipEnabled: () -> Boolean = ::defaultV2HashFlipEnabled,
+        /**
+         * INV-3.1 (Plan-1, spec §3.8) — the BACKUP-FIRST refusal gate. Consulted ONLY when this run
+         * has pending schema DDL AND the DB holds a protected corpus (fsrs_cards >= the gate's
+         * floor, default 800 / MIN_EXPECTED_CARDS). Refuses (throws, NO DDL executed) unless a
+         * same-day VERIFIED off-box dump manifest exists. Tests inject a gate pointed at a temp
+         * manifest dir; production callers leave the default (reads JARVIS_BACKUP_DIR, else ./backups).
+         */
+        backupGate: MigrationBackupGate = MigrationBackupGate(),
     ): MigrationResult {
         return try {
             transaction(db) {
+                // INV-3.1 — BACKUP-FIRST: compute the pending DDL; if this boot would MUTATE the
+                // schema of a protected corpus, demand the same-day verified dump BEFORE any ALTER.
+                val pendingDdl = SchemaUtils.statementsRequiredToActualizeScheme(*ALL_TABLES, withLogs = false)
+                if (pendingDdl.isNotEmpty()) {
+                    val liveCards = MigrationBackupGate.liveFsrsCardCount(this)
+                    if (liveCards >= backupGate.minExpectedCards) {
+                        backupGate.assertSafeToMutate(liveCards, MigrationBackupGate.liveSchemaHash(this))
+                    }
+                }
+
                 SchemaUtils.createMissingTablesAndColumns(*ALL_TABLES)
 
                 // DELTA-4 (Step-0): HARD pre-flip ABORT. On the operator's one-time v2-hash flip boot,
@@ -162,6 +180,13 @@ object TutorMigration {
             }
             MigrationResult.Success
         } catch (e: Throwable) {
+            // INV-3.1 refusal: NOTHING was mutated (the gate throws before any DDL). Do NOT fire
+            // the M-PARTIAL recovery backup — there is nothing to recover. Rethrow with the
+            // refusal intact so callers/tests can read the reason.
+            if (e is BackupGateRefusal) {
+                System.err.println("[TutorMigration] ${e.message}")
+                throw MigrationException(null, e)
+            }
             val failingColumn = extractFailingColumn(e)
             System.err.println(
                 "[TutorMigration] ABORT — migration failed" +
