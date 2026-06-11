@@ -1,0 +1,15 @@
+# One-Pass Build — Plan Index
+
+Derived from the binding spec `docs/superpowers/specs/2026-06-11-one-pass-digestion-teaching-engine-design.md` (§10.1 build order). Seven plans; each detailed plan is written JUST-IN-TIME from the spec + current code, immediately before execution — never ahead (stale-plan lesson, final-audit 2026-06-10). Each plan ships working, tested software; subagent-driven execution with two-stage review per task.
+
+| # | Plan | Spec sections | Status | Detailed plan doc |
+|---|---|---|---|---|
+| 1 | Trust-net ON — backup hardening, INV-3.1 gate, live migrations (+3 kvs cols, D-RF3), first production audit, D9 PC→VPS sync, CI loud-red | §3.6, §9.2 g2, §12 | **DONE 2026-06-11** (4 faithful KCs live on PC + VPS; pa-kc-006 re-audit pending relay re-auth) | `2026-06-11-plan1-trustnet-on.md` |
+| 2 | Knowledge schema — concept_type, per-beat language-keyed teaching fields, pedagogical_instance class, problem bank (archetype/slots/rubrics), grade-model registry + exam_dates seeding, 828-card kc_id backfill | §3 | next | just-in-time |
+| 3 | Lesson engine — BeatOrchestrator (replaces 3-step LessonScreen), BeatSelector (concept_type × mastery, closed plan table), graded beats + completion writes, lesson→drill handoff, first viz family (graph/tree, MergeSort port), scrubber requirement | §4, §5 (first family) | pending | just-in-time |
+| 4 | Gate chain — no-clip into @playwright/test FIRST, legibility/interaction/language rendered gates, Impeccable (calibrate→subset→pin), shell-only visual baselines, grader eval harness, retry-semantics table | §9 | pending | just-in-time |
+| 5 | Digestion pipeline — upload door (file/URL), content-based 9-kind classifier, extraction-legibility front gate, per-kind extraction, dedup/provenance, gap-ledger cards, generation of beat content + viz instances, checkpoint review screen | §1.4-1.5, §2 | pending | just-in-time |
+| 6 | Practice surfaces + graders — proof drill, step-trace drill, code-practice (Alk/R/C++/bash), mock-exam mode (phases/rubrics/synthetic-tag), deliverable tracker; numeric oracle → execution → rubric → LLM-last stack, per-subject misconception codes | §6 | pending | just-in-time |
+| 7 | Tracking, timeline + PROOF RUN — unified FSRS+EWMA state, beat telemetry, forgetting→re-lesson, misconception→re-queue, exam-aware queue priority, readiness dashboard, ADHD session shape, placement rebuild; then the 11-artifact proof run (§10.2) → user approvals → bulk upload of the 140 sources | §7, §10 | pending | just-in-time |
+
+Carried follow-ups (fold into the next plan that touches the area): cross-language schema-hash parity CI test (python `db-backup.py` vs Kotlin `MigrationBackupGate.liveSchemaHash`) · pre-existing `tutor-shell-api-contract.spec.ts` e2e red (needs a served backend in CI or a mock) · runbook line for `trustInvariants` with `JARVIS_BACKUP_DIR` (PowerShell invocation) · relay resilience (timeout retry/backoff in VerificationRunner — the pa-kc-006 false-negative class) · VPS operator note: ALWAYS pass explicit `JARVIS_TUTOR_DB`/DB path (JVM ignores $HOME; the 871-vs-0 wrong-DB incident, caught by the INV-3.1 gate).
