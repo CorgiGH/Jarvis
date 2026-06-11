@@ -8,6 +8,7 @@ difficulty: 4
 time_minutes: 35
 exam_weight: 0.17
 tier: 4
+concept_type: formula-application
 grounding_tier: strict
 # Precise, machine-checkable invariant (SymPyLeg-checkable: a single `lhs = rhs`).
 # Grounded in the lecture's rule that a computation's time cost is the SUM of its

@@ -8,6 +8,7 @@ difficulty: 1
 time_minutes: 25
 exam_weight: 0.22
 tier: 1
+concept_type: definition-taxonomy
 source:
   - doc: pa-lecture-01
     quote: "An algorithm is a well-ordered collection of unambiguous and effectively computable\noperations that when executed produces a result and halts in a finite amount of time."

@@ -8,6 +8,7 @@ difficulty: 3
 time_minutes: 30
 exam_weight: 0.17
 tier: 3
+concept_type: proof
 source:
   - doc: pa-lecture-01
     quote: "To prove that there is no algorithm that solve this problem, we need a\nformal definition for algorithm!"

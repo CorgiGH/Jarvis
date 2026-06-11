@@ -12,6 +12,7 @@ class ContentValidatorTest {
         id = id, subject = "PA", name_ro = "ro-$id", name_en = "en-$id",
         cluster = "c", bloom_level = "understand", difficulty = 1, time_minutes = 10,
         exam_weight = weight, tier = tier, source = emptyList(), version = 1,
+        concept_type = "definition-taxonomy",
     )
 
     @Test
@@ -255,7 +256,7 @@ class ContentValidatorTest {
         pa.resolve("kcs/pa-kc-001.yaml").writeText(
             "id: pa-kc-001\nsubject: PA\nname_ro: \"A\"\nname_en: \"Algorithm\"\n" +
             "cluster: f\nbloom_level: understand\ndifficulty: 1\ntime_minutes: 10\n" +
-            "exam_weight: 1.0\ntier: 1\nversion: 1\n" +
+            "exam_weight: 1.0\ntier: 1\nconcept_type: definition-taxonomy\nversion: 1\n" +
             "source:\n  - doc: pa-lecture-01\n    quote: \"a finite sequence of steps\"\n")
         pa.resolve("edges.yaml").writeText("subject: PA\nedges: []\n")
         val report = ContentCli.runValidation(tmp)

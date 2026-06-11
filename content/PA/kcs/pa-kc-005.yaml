@@ -8,6 +8,7 @@ difficulty: 3
 time_minutes: 30
 exam_weight: 0.13
 tier: 3
+concept_type: formula-application
 grounding_tier: strict
 # Precise, machine-checkable invariant (SymPyLeg-checkable: a single `lhs = rhs`).
 # Grounded in the lecture's array-size rule |a|_d = |a0|_d + ... + |a_{n-1}|_d together

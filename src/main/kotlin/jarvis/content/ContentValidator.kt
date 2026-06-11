@@ -258,9 +258,16 @@ object ContentValidator {
         val issues = mutableListOf<ValidationIssue>()
         val validLiterals = ConceptType.entries.joinToString(", ") { ConceptType.wireOf(it) }
         for (kc in sub.kcs) {
-            val ct = kc.concept_type ?: continue   // null allowed in Task 1; required in Task 4
-            if (ConceptType.fromWire(ct) == null) {
-                issues += ValidationIssue(
+            val ct = kc.concept_type
+            when {
+                ct == null -> issues += ValidationIssue(
+                    severity = "error",
+                    rule = "concept_type_enum",
+                    subject = sub.subject,
+                    detail = "KC '${kc.id}': concept_type is required (INV-3.2) " +
+                        "— must be one of: $validLiterals",
+                )
+                ConceptType.fromWire(ct) == null -> issues += ValidationIssue(
                     severity = "error",
                     rule = "concept_type_enum",
                     subject = sub.subject,

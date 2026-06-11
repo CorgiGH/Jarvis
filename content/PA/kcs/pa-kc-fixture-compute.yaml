@@ -8,6 +8,7 @@ difficulty: 2
 time_minutes: 10
 exam_weight: 0.0
 tier: 2
+concept_type: formula-application
 source:
   - doc: pa-lecture-01
     quote: "It does not exists a standard definition for the notion of algorithm."

@@ -26,9 +26,12 @@ class ConceptTypeValidationTest {
         assertTrue(issues.isEmpty(), "$issues")
     }
 
-    @Test fun `null concept_type passes in this task`() {
+    @Test fun `null concept_type is now an error (Task 4 tightening, INV-3-2)`() {
         val issues = ContentValidator.checkConceptTypeEnum(loaded(kc("k1", null)))
-        assertTrue(issues.isEmpty(), "null is allowed until Task 4 tightens it: $issues")
+        assertEquals(1, issues.size)
+        val it = issues.single()
+        assertEquals("concept_type_enum", it.rule)
+        assertTrue(it.detail.contains("k1") && it.detail.contains("required"), it.detail)
     }
 
     @Test fun `an invalid literal is an error naming the KC, the bad value, and the 8 valid literals`() {

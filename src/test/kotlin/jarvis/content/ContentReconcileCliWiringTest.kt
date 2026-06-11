@@ -63,6 +63,7 @@ class ContentReconcileCliWiringTest {
         exam_weight = 1.0, tier = 1, grounding_tier = "standard",
         source = listOf(SourceRef(doc = docId, quote = quote, page = 2, span = Span(17, 81))),
         version = 1,
+        concept_type = "definition-taxonomy",
     )
 
     // --- on-disk fixture content/ corpus (what the production ContentRepo loads) ----------------
@@ -102,6 +103,7 @@ class ContentReconcileCliWiringTest {
             time_minutes: ${kc.time_minutes}
             exam_weight: ${kc.exam_weight}
             tier: ${kc.tier}
+            concept_type: ${kc.concept_type ?: "definition-taxonomy"}
             grounding_tier: ${kc.grounding_tier}
             source:
               - doc: ${ref.doc}
