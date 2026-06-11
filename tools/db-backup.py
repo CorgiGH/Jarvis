@@ -18,10 +18,13 @@ Exit codes: 0 = success, 1 = any failure, 2 = bad CLI usage (argparse).
 
 import argparse
 import gzip
+import hashlib
+import json
 import os
 import sqlite3
 import sys
-from datetime import datetime
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Fail-closed schema-ALTER precondition (M-DB). The backup MUST refuse if the
@@ -52,6 +55,11 @@ def parse_args(argv=None) -> argparse.Namespace:
         "--min-cards", type=int, default=None,
         help="override the fail-closed floor (default: $MIN_EXPECTED_CARDS, else 800)",
     )
+    p.add_argument(
+        "--restore-drill", metavar="DUMP_SQL_GZ", default=None,
+        help="verify an EXISTING dump against the live DB (restore to scratch, "
+             "row-count + schema-hash equality), update its manifest, exit 0/1",
+    )
     return p.parse_args(argv)
 
 
@@ -71,7 +79,104 @@ def resolve_floor(args: argparse.Namespace) -> int | None:
 
 
 def open_ro(db_path: Path) -> sqlite3.Connection:
-    return sqlite3.connect(db_path.as_uri() + "?mode=ro", uri=True)
+    return sqlite3.connect(db_path.as_uri() + "?mode=ro&immutable=1", uri=True)
+
+
+MANIFEST_VERSION = 1
+
+
+def schema_hash(conn: sqlite3.Connection) -> str:
+    """sha256 hex over the sorted, stripped CREATE statements of all user objects.
+
+    MUST stay byte-identical with MigrationBackupGate.liveSchemaHash (Kotlin):
+    SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE
+    'sqlite_%'; strip each; sort; join with '\\n'; sha256 hex digest.
+    """
+    rows = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"
+    ).fetchall()
+    canon = "\n".join(sorted(r[0].strip() for r in rows))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+def manifest_path_for(dump_path: Path) -> Path:
+    return dump_path.with_name(dump_path.name + ".manifest.json")
+
+
+def run_restore_drill(db_path: Path, dump_path: Path) -> tuple[bool, str]:
+    """Restore the dump into a scratch FILE db; compare row-count + schema-hash vs live."""
+    src = open_ro(db_path)
+    try:
+        live_cards = src.execute("SELECT COUNT(*) FROM fsrs_cards").fetchone()[0]
+        live_schema = schema_hash(src)
+    finally:
+        src.close()
+
+    try:
+        with gzip.open(dump_path, "rt", encoding="utf-8") as gz:
+            sql_text = gz.read()
+        fd, scratch = tempfile.mkstemp(prefix="restore-drill-", suffix=".db")
+        os.close(fd)
+        restored = sqlite3.connect(scratch)
+        restored.executescript(sql_text)
+    except Exception as exc:
+        return False, f"restore failed: {exc}"
+
+    try:
+        r_cards = restored.execute("SELECT COUNT(*) FROM fsrs_cards").fetchone()[0]
+        r_schema = schema_hash(restored)
+    except sqlite3.OperationalError as exc:
+        restored.close()
+        return False, f"restored DB unreadable: {exc}"
+    restored.close()
+    try:
+        os.unlink(scratch)
+    except OSError:
+        pass
+
+    if r_cards != live_cards:
+        return False, f"row-count mismatch (live={live_cards}, restored={r_cards})"
+    if r_schema != live_schema:
+        return False, (
+            f"schema-hash mismatch (live={live_schema[:12]}…, restored={r_schema[:12]}…)"
+        )
+    return True, f"cards {r_cards}=={live_cards}, schema_hash match"
+
+
+def write_manifest(dump_path: Path, db_path: Path, cards: int,
+                   s_hash: str, drill_status: str) -> None:
+    now = datetime.now(timezone.utc)
+    manifest = {
+        "tool": "db-backup.py",
+        "manifest_version": MANIFEST_VERSION,
+        "created_date": datetime.now().strftime("%Y-%m-%d"),  # LOCAL date — gate compares LocalDate.now()
+        "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "db_path": str(db_path),
+        "dump_file": dump_path.name,
+        "fsrs_cards": cards,
+        "schema_hash": s_hash,
+        "integrity": drill_status,
+        "restore_drill": drill_status,
+    }
+    manifest_path_for(dump_path).write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
+
+
+def cmd_restore_drill(db_path: Path, dump_path: Path) -> int:
+    if not dump_path.exists():
+        print(f"ERROR: dump not found at {dump_path}", file=sys.stderr)
+        return 1
+    ok, detail = run_restore_drill(db_path, dump_path)
+    label = "PASS" if ok else "FAIL"
+    print(f"[db-backup] restore drill: {label} ({detail})")
+    mp = manifest_path_for(dump_path)
+    if mp.exists():
+        m = json.loads(mp.read_text(encoding="utf-8"))
+        m["restore_drill"] = label
+        m["drilled_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        mp.write_text(json.dumps(m, indent=2), encoding="utf-8")
+    return 0 if ok else 1
 
 
 def cmd_backup(db_path: Path, out_dir: Path, min_expected_cards: int) -> int:
@@ -110,38 +215,32 @@ def cmd_backup(db_path: Path, out_dir: Path, min_expected_cards: int) -> int:
     except Exception as exc:
         print(f"ERROR: dump failed: {exc}", file=sys.stderr)
         src.close()
+        out_path.unlink(missing_ok=True)  # never leave a partial dump (M-DB trusted-dump contract)
         return 1
     src.close()
     dump_size = out_path.stat().st_size
 
-    # --- integrity check: restore to :memory: and compare card count ---
-    # (Task 2 replaces this with the full restore drill to a scratch FILE
-    #  + schema-hash equality + the manifest sidecar.)
-    integrity_ok = False
-    try:
-        with gzip.open(out_path, "rt", encoding="utf-8") as gz:
-            sql_text = gz.read()
-        mem = sqlite3.connect(":memory:")
-        mem.executescript(sql_text)
-        restored_count = mem.execute("SELECT COUNT(*) FROM fsrs_cards").fetchone()[0]
-        mem.close()
-        if restored_count == src_count:
-            integrity_ok = True
-            integrity_label = "OK"
-        else:
-            integrity_label = f"FAIL (source={src_count}, restored={restored_count})"
-    except Exception as exc:
-        integrity_label = f"FAIL ({exc})"
+    # --- restore DRILL (spec §3.6 step 1): restore to a scratch FILE,
+    #     row-count + schema-hash equality vs live; then write the manifest
+    #     sidecar the migration runner's INV-3.1 gate reads. ---
+    src2 = open_ro(db_path)
+    src_schema = schema_hash(src2)
+    src2.close()
+    drill_ok, drill_detail = run_restore_drill(db_path, out_path)
+    status = "PASS" if drill_ok else "FAIL"
+    integrity_label = "OK" if drill_ok else f"FAIL ({drill_detail})"
 
-    status = "PASS" if integrity_ok else "FAIL"
+    write_manifest(out_path, db_path, src_count, src_schema, status)
+
     print(f"[db-backup] integrity: {status}")
+    print(f"[db-backup] restore drill: {status} ({drill_detail})")
     print(
         f"[db-backup] backed up {src_count} fsrs_cards"
         f" -> {out_path}"
         f" ({dump_size:,} bytes);"
         f" integrity: {integrity_label}"
     )
-    return 0 if integrity_ok else 1
+    return 0 if drill_ok else 1
 
 
 def main(argv=None) -> int:
@@ -155,6 +254,8 @@ def main(argv=None) -> int:
     if not db_path.exists():
         print(f"ERROR: DB not found at {db_path}", file=sys.stderr)
         return 1
+    if args.restore_drill:
+        return cmd_restore_drill(db_path, Path(args.restore_drill))
     return cmd_backup(db_path, Path(args.output_dir), floor)
 
 

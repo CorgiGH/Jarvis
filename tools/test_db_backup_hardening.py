@@ -122,5 +122,91 @@ class FlagSafetyTests(unittest.TestCase):
             self.assertEqual(len(glob.glob(str(out / "*.sql.gz"))), 1)
 
 
+class ManifestAndDrillTests(unittest.TestCase):
+    def _backup(self, tmp: Path, n: int = 50):
+        db = tmp / "live.db"
+        make_db(db, n)
+        out = tmp / "backups"
+        proc = run_tool([str(out)], db, cwd=tmp)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        dumps = glob.glob(str(out / "*.sql.gz"))
+        self.assertEqual(len(dumps), 1)
+        return db, Path(dumps[0])
+
+    def test_manifest_sidecar_written_with_schema_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            db, dump = self._backup(tmp)
+            mp = Path(str(dump) + ".manifest.json")
+            self.assertTrue(mp.exists(), "manifest sidecar missing")
+            m = json.loads(mp.read_text(encoding="utf-8"))
+            self.assertEqual(m["fsrs_cards"], 50)
+            self.assertEqual(m["integrity"], "PASS")
+            self.assertEqual(m["restore_drill"], "PASS")
+            self.assertEqual(m["dump_file"], dump.name)
+            self.assertIn("created_date", m)
+            # schema_hash matches an independent recompute over the live DB —
+            # the EXACT algorithm MigrationBackupGate.liveSchemaHash (Kotlin) mirrors.
+            conn = sqlite3.connect(db)
+            rows = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL "
+                "AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+            conn.close()
+            expect = hashlib.sha256(
+                "\n".join(sorted(r[0].strip() for r in rows)).encode("utf-8")
+            ).hexdigest()
+            self.assertEqual(m["schema_hash"], expect)
+
+    def test_restore_drill_runs_inside_every_backup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            db = tmp / "live.db"
+            make_db(db, 50)
+            proc = run_tool([str(tmp / "backups")], db, cwd=tmp)
+            self.assertEqual(proc.returncode, 0)
+            self.assertIn("restore drill: PASS", proc.stdout)
+
+    def test_restore_drill_flag_passes_on_fresh_dump(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            db, dump = self._backup(tmp)
+            proc = run_tool(["--restore-drill", str(dump)], db, cwd=tmp)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertIn("restore drill: PASS", proc.stdout)
+
+    def test_restore_drill_fails_on_row_count_drift(self):
+        """Live gains a row AFTER the dump -> the dump no longer covers the data."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            db, dump = self._backup(tmp)
+            conn = sqlite3.connect(db)
+            conn.execute("INSERT INTO fsrs_cards (id, due, stability) VALUES (999, 'x', 0.0)")
+            conn.commit()
+            conn.close()
+
+            proc = run_tool(["--restore-drill", str(dump)], db, cwd=tmp)
+
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("restore drill: FAIL", proc.stdout)
+            m = json.loads(Path(str(dump) + ".manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(m["restore_drill"], "FAIL", "manifest must be downgraded")
+
+    def test_restore_drill_fails_on_schema_drift(self):
+        """Live schema changes AFTER the dump -> schema-hash mismatch."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            db, dump = self._backup(tmp)
+            conn = sqlite3.connect(db)
+            conn.execute("ALTER TABLE fsrs_cards ADD COLUMN kc_id TEXT")
+            conn.commit()
+            conn.close()
+
+            proc = run_tool(["--restore-drill", str(dump)], db, cwd=tmp)
+
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("schema-hash mismatch", proc.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
