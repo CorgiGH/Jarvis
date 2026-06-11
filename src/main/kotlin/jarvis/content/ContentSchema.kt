@@ -102,6 +102,8 @@ data class KnowledgeConcept(
     // ===== Plan 2 (spec §3.1) — ADDITIVE; this field does NOT feed claimsFor()/content_hash =====
     /** Spec §3.1 — wire literal, validated against ConceptType.fromWire at load. Required for every real KC (INV-3.2). */
     val concept_type: String? = null,
+    /** Spec §3.2/§3.7 — language-keyed beat content; key = language code ("ro"). Empty for pre-digestion KCs. */
+    val beats: Map<String, KcBeats> = emptyMap(),
 )
 
 /** content/viz-ids.yaml — the canonical set of valid viz ids (Kotlin↔TS source of truth). */
