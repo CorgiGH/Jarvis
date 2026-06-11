@@ -1576,6 +1576,9 @@ Backfills `concept_type` onto all 8 PA KC YAML files using a **dual-agent indepe
 - Modify: `src/main/kotlin/jarvis/content/ContentValidator.kt` (tighten `checkConceptTypeEnum` to require non-null)
 - Create: `src/test/kotlin/jarvis/content/ConceptTypeHashStabilityTest.kt`
 - Modify: `src/test/kotlin/jarvis/content/ConceptTypeValidationTest.kt` (update the "null passes" expectation to "null fails")
+- Modify: `src/test/kotlin/jarvis/content/ContentReconcileCliWiringTest.kt` (add `concept_type` to inline KC fixture + inline YAML template so the wiring test passes under the now-required field)
+- Modify: `src/test/kotlin/jarvis/content/ContentValidatorTest.kt` (add `concept_type` to inline KC constructor call + inline YAML fixture string)
+- Modify: `src/test/kotlin/jarvis/web/CuratorRoutesTest.kt` (add `concept_type` to inline YAML fixture string)
 
 - [ ] **Step 1: Capture the BEFORE hashes (machine, no commit).** Before any YAML edit, write a throwaway proof harness so the hash-stability test in Step 6 has a verified baseline. First run this read-only Kotlin-free check that the live ground-truth hashes still recompute from the CURRENT YAML (this is the pre-edit invariant — the badges are lit on these exact hashes). Create `src/test/kotlin/jarvis/content/ConceptTypeHashStabilityTest.kt` now (it is written to pass on the CURRENT corpus first, then keep passing after the edit):
 
@@ -1678,10 +1681,10 @@ concept_type: definition-taxonomy
 
 (For pa-kc-005 / pa-kc-006 the line after `tier:` is `grounding_tier: strict` — insert `concept_type:` after the `tier:` line, before `grounding_tier:`. Both orderings parse identically; just keep it at top level.)
 
-- [ ] **Step 5: Re-run the hash-stability proof — expect GREEN (UNCHANGED hashes).** This is the load-bearing assertion: adding `concept_type` (and the defaulted empty `beats`) left every production hash byte-identical:
+- [ ] **Step 5: Re-run the hash-stability proof — expect GREEN (UNCHANGED hashes).** This is the load-bearing assertion: adding `concept_type` (and the defaulted empty `beats`) left every production hash byte-identical. Use `--rerun-tasks` to force Gradle to re-execute the test against the edited YAML (Gradle's incremental-test cache can skip re-execution when no compiled source changed, but `ConceptTypeHashStabilityTest` reads YAML at runtime — caching would not prove the post-edit hashes):
 
 ```powershell
-gradle --no-daemon :test --tests "jarvis.content.ConceptTypeHashStabilityTest"
+gradle --no-daemon :test --tests "jarvis.content.ConceptTypeHashStabilityTest" --rerun-tasks
 ```
 
 Expected: `BUILD SUCCESSFUL`, 1 test passed (same 6 hashes as Step 2). **STOP and escalate if any hash changed** — that would mean `claimsFor()` somehow folded `concept_type`, contradicting Section 0.3; revert the YAML and investigate before proceeding.
@@ -1768,10 +1771,10 @@ gradle --no-daemon :check
 
 Expected: `BUILD SUCCESSFUL`. **STOP and fix if** a `concept_type_enum` error names a KC — that file's backfill line is missing or mistyped; correct it (re-run Step 3 agreement if the type itself is in doubt).
 
-- [ ] **Step 10: Commit** (explicit YAML + source + test paths only — NEVER `git add -A`; the untracked door files must stay untracked):
+- [ ] **Step 10: Commit** (explicit YAML + source + test paths only — NEVER `git add -A`; the untracked door files must stay untracked). The 3 existing test files listed below must also be staged because the Task 4 validator tightening (null → error) causes their inline KC fixtures to fail unless `concept_type` is added to each:
 
 ```powershell
-git add content/PA/kcs/pa-kc-001.yaml content/PA/kcs/pa-kc-002.yaml content/PA/kcs/pa-kc-003.yaml content/PA/kcs/pa-kc-004.yaml content/PA/kcs/pa-kc-005.yaml content/PA/kcs/pa-kc-006.yaml content/PA/kcs/pa-kc-fixture-compute.yaml content/PA/kcs/pa-kc-fixture-recursion.yaml src/main/kotlin/jarvis/content/ContentValidator.kt src/test/kotlin/jarvis/content/ConceptTypeValidationTest.kt src/test/kotlin/jarvis/content/ConceptTypeHashStabilityTest.kt
+git add content/PA/kcs/pa-kc-001.yaml content/PA/kcs/pa-kc-002.yaml content/PA/kcs/pa-kc-003.yaml content/PA/kcs/pa-kc-004.yaml content/PA/kcs/pa-kc-005.yaml content/PA/kcs/pa-kc-006.yaml content/PA/kcs/pa-kc-fixture-compute.yaml content/PA/kcs/pa-kc-fixture-recursion.yaml src/main/kotlin/jarvis/content/ContentValidator.kt src/test/kotlin/jarvis/content/ConceptTypeValidationTest.kt src/test/kotlin/jarvis/content/ConceptTypeHashStabilityTest.kt src/test/kotlin/jarvis/content/ContentReconcileCliWiringTest.kt src/test/kotlin/jarvis/content/ContentValidatorTest.kt src/test/kotlin/jarvis/web/CuratorRoutesTest.kt
 git commit -m "feat(content): backfill concept_type on 8 PA KCs + require it (INV-3.2); hash-stability proof keeps the 4 faithful badges lit"
 ```
 
