@@ -206,6 +206,8 @@ class ManifestAndDrillTests(unittest.TestCase):
 
             self.assertEqual(proc.returncode, 1)
             self.assertIn("schema-hash mismatch", proc.stdout)
+            m = json.loads(Path(str(dump) + ".manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(m["restore_drill"], "FAIL", "manifest must be downgraded")
 
 
 if __name__ == "__main__":

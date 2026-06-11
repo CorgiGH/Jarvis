@@ -103,44 +103,67 @@ def manifest_path_for(dump_path: Path) -> Path:
     return dump_path.with_name(dump_path.name + ".manifest.json")
 
 
-def run_restore_drill(db_path: Path, dump_path: Path) -> tuple[bool, str]:
-    """Restore the dump into a scratch FILE db; compare row-count + schema-hash vs live."""
-    src = open_ro(db_path)
-    try:
-        live_cards = src.execute("SELECT COUNT(*) FROM fsrs_cards").fetchone()[0]
-        live_schema = schema_hash(src)
-    finally:
-        src.close()
+def run_restore_drill(
+    db_path: Path, dump_path: Path,
+    live_cards: int | None = None, live_schema: str | None = None,
+) -> tuple[bool, str, int, str]:
+    """Restore the dump into a scratch FILE db; compare row-count + schema-hash vs live.
 
+    If live_cards / live_schema are supplied (pre-computed by the caller to avoid a
+    second DB open), they are used directly; otherwise they are read from db_path.
+
+    Returns (ok, detail, live_cards, live_schema) so the caller can reuse the live
+    values when writing the manifest — avoiding any redundant re-open and ensuring
+    the manifest's schema_hash comes from the same read as the drill comparison.
+    """
+    if live_cards is None or live_schema is None:
+        src = open_ro(db_path)
+        try:
+            live_cards = src.execute("SELECT COUNT(*) FROM fsrs_cards").fetchone()[0]
+            live_schema = schema_hash(src)
+        finally:
+            src.close()
+
+    fd, scratch = tempfile.mkstemp(prefix="restore-drill-", suffix=".db")
+    os.close(fd)
+    scratch_path = scratch  # str path for unlink
+    restored = None
     try:
         with gzip.open(dump_path, "rt", encoding="utf-8") as gz:
             sql_text = gz.read()
-        fd, scratch = tempfile.mkstemp(prefix="restore-drill-", suffix=".db")
-        os.close(fd)
-        restored = sqlite3.connect(scratch)
-        restored.executescript(sql_text)
-    except Exception as exc:
-        return False, f"restore failed: {exc}"
+        restored = sqlite3.connect(scratch_path)
+        try:
+            restored.executescript(sql_text)
+        except Exception as exc:
+            return False, f"restore failed: {exc}", live_cards, live_schema
 
-    try:
-        r_cards = restored.execute("SELECT COUNT(*) FROM fsrs_cards").fetchone()[0]
-        r_schema = schema_hash(restored)
-    except sqlite3.OperationalError as exc:
-        restored.close()
-        return False, f"restored DB unreadable: {exc}"
-    restored.close()
-    try:
-        os.unlink(scratch)
-    except OSError:
-        pass
+        try:
+            r_cards = restored.execute("SELECT COUNT(*) FROM fsrs_cards").fetchone()[0]
+            r_schema = schema_hash(restored)
+        except sqlite3.OperationalError as exc:
+            return False, f"restored DB unreadable: {exc}", live_cards, live_schema
+    finally:
+        if restored is not None:
+            try:
+                restored.close()
+            except Exception:
+                pass
+        for suffix in ("", "-journal", "-wal"):
+            try:
+                os.unlink(scratch_path + suffix)
+            except OSError:
+                pass
 
     if r_cards != live_cards:
-        return False, f"row-count mismatch (live={live_cards}, restored={r_cards})"
+        return False, f"row-count mismatch (live={live_cards}, restored={r_cards})", live_cards, live_schema
     if r_schema != live_schema:
-        return False, (
-            f"schema-hash mismatch (live={live_schema[:12]}…, restored={r_schema[:12]}…)"
+        return (
+            False,
+            f"schema-hash mismatch (live={live_schema[:12]}…, restored={r_schema[:12]}…)",
+            live_cards,
+            live_schema,
         )
-    return True, f"cards {r_cards}=={live_cards}, schema_hash match"
+    return True, f"cards {r_cards}=={live_cards}, schema_hash match", live_cards, live_schema
 
 
 def write_manifest(dump_path: Path, db_path: Path, cards: int,
@@ -149,7 +172,7 @@ def write_manifest(dump_path: Path, db_path: Path, cards: int,
     manifest = {
         "tool": "db-backup.py",
         "manifest_version": MANIFEST_VERSION,
-        "created_date": datetime.now().strftime("%Y-%m-%d"),  # LOCAL date — gate compares LocalDate.now()
+        "created_date": now.astimezone().strftime("%Y-%m-%d"),  # LOCAL date — gate compares LocalDate.now()
         "created_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "db_path": str(db_path),
         "dump_file": dump_path.name,
@@ -167,7 +190,7 @@ def cmd_restore_drill(db_path: Path, dump_path: Path) -> int:
     if not dump_path.exists():
         print(f"ERROR: dump not found at {dump_path}", file=sys.stderr)
         return 1
-    ok, detail = run_restore_drill(db_path, dump_path)
+    ok, detail, _live_cards, _live_schema = run_restore_drill(db_path, dump_path)
     label = "PASS" if ok else "FAIL"
     print(f"[db-backup] restore drill: {label} ({detail})")
     mp = manifest_path_for(dump_path)
@@ -176,6 +199,10 @@ def cmd_restore_drill(db_path: Path, dump_path: Path) -> int:
         m["restore_drill"] = label
         m["drilled_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         mp.write_text(json.dumps(m, indent=2), encoding="utf-8")
+    else:
+        print(
+            f"[db-backup] WARNING: no manifest sidecar for {dump_path} — drill result not persisted"
+        )
     return 0 if ok else 1
 
 
@@ -208,6 +235,14 @@ def cmd_backup(db_path: Path, out_dir: Path, min_expected_cards: int) -> int:
     # --- dump to gzip ---
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_path = out_dir / f"jarvis-tutor-db-{ts}.sql.gz"
+    # Capture schema hash while src is still open (same read as src_count).
+    try:
+        src_schema = schema_hash(src)
+    except Exception as exc:
+        print(f"ERROR: cannot read schema: {exc}", file=sys.stderr)
+        src.close()
+        return 1
+
     try:
         with gzip.open(out_path, "wt", encoding="utf-8") as gz:
             for line in src.iterdump():
@@ -222,11 +257,12 @@ def cmd_backup(db_path: Path, out_dir: Path, min_expected_cards: int) -> int:
 
     # --- restore DRILL (spec §3.6 step 1): restore to a scratch FILE,
     #     row-count + schema-hash equality vs live; then write the manifest
-    #     sidecar the migration runner's INV-3.1 gate reads. ---
-    src2 = open_ro(db_path)
-    src_schema = schema_hash(src2)
-    src2.close()
-    drill_ok, drill_detail = run_restore_drill(db_path, out_path)
+    #     sidecar the migration runner's INV-3.1 gate reads.
+    #     Pass the already-read live values so the drill needs no second DB open
+    #     and the manifest's schema_hash comes from the same read. ---
+    drill_ok, drill_detail, _lc, _ls = run_restore_drill(
+        db_path, out_path, live_cards=src_count, live_schema=src_schema
+    )
     status = "PASS" if drill_ok else "FAIL"
     integrity_label = "OK" if drill_ok else f"FAIL ({drill_detail})"
 
