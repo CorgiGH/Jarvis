@@ -70,6 +70,10 @@ internal val ALL_TABLES = arrayOf(
     MockExamsTable,
     // Grader provider selector (per-user setting; user-scoped FK to UsersTable.id).
     GraderProviderSettingTable,
+    // Plan-2 tables (spec §3.4/§3.5) — problem bank ×3 (Task 5); registry/glossary/schedule (Task 6).
+    ProblemsTable,
+    ProblemRubricItemsTable,
+    ProblemKcLinksTable,
 )
 
 /**
