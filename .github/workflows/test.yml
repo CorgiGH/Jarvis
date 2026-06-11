@@ -87,3 +87,61 @@ jobs:
           workspaces: daemon
       - name: cargo test
         run: cargo test --locked
+
+  backup-tooling:
+    name: backup tooling (db-backup.py unittest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: db-backup floor tests (M-DB fail-closed)
+        run: python tools/test_db_backup.py
+      - name: db-backup hardening tests (argparse + manifest + restore drill)
+        run: python tools/test_db_backup_hardening.py
+
+  verifier-deps-loud-red:
+    name: verifier deps loud-red (INV-9.3 seeded drill)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10"
+      - name: ALL verifier deps hidden -> verifyContent aborts RED before touching any DB
+        env:
+          JARVIS_TUTOR_DB: /tmp/loudred-all.db
+        run: |
+          set +e
+          gradle --no-daemon verifyContent > loudred-all.log 2>&1
+          code=$?
+          set -e
+          echo "gradle exit=$code"
+          tail -40 loudred-all.log
+          test "$code" -ne 0
+          grep -q "verifyContent ABORTED (FAIL-LOUD, H4)" loudred-all.log
+          grep -q "JARVIS_RELAY_URL" loudred-all.log
+          grep -q "JARVIS_PYTHON3" loudred-all.log
+          test ! -e /tmp/loudred-all.db
+      - name: ONE hidden dep (JARVIS_PYTHON3) -> still RED, named in the abort
+        env:
+          JARVIS_TUTOR_DB: /tmp/loudred-one.db
+          JARVIS_RELAY_URL: http://127.0.0.1:1
+          JARVIS_RELAY_TOKEN: seeded-drill-dummy
+        run: |
+          set +e
+          gradle --no-daemon verifyContent > loudred-one.log 2>&1
+          code=$?
+          set -e
+          echo "gradle exit=$code"
+          tail -40 loudred-one.log
+          test "$code" -ne 0
+          grep -q "JARVIS_PYTHON3" loudred-one.log
+          test ! -e /tmp/loudred-one.db
