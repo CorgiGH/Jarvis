@@ -1,5 +1,6 @@
 package jarvis.content
 
+import org.junit.jupiter.api.DisplayName
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -26,7 +27,9 @@ class ConceptTypeValidationTest {
         assertTrue(issues.isEmpty(), "$issues")
     }
 
-    @Test fun `null concept_type is now an error (Task 4 tightening, INV-3-2)`() {
+    @Test
+    @DisplayName("null concept_type is now an error (Task 4 tightening, INV-3.2)")
+    fun `null concept_type is now an error (Task 4 tightening, INV-3-2)`() {
         val issues = ContentValidator.checkConceptTypeEnum(loaded(kc("k1", null)))
         assertEquals(1, issues.size)
         val it = issues.single()
