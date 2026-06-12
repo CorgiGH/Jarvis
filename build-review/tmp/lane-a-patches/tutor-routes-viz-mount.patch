@@ -1,0 +1,14 @@
+diff --git a/src/main/kotlin/jarvis/web/TutorRoutes.kt b/src/main/kotlin/jarvis/web/TutorRoutes.kt
+index 9b4dccf..bc036cc 100644
+--- a/src/main/kotlin/jarvis/web/TutorRoutes.kt
++++ b/src/main/kotlin/jarvis/web/TutorRoutes.kt
+@@ -250,6 +250,9 @@ fun Application.installTutorRoutes() {
+             call.respondText("""{"ok":true}""", ContentType.Application.Json)
+         }
+ 
++        // Plan 4b Task 3 — viz instance serve route (§0.9B; GET /api/v1/viz/{instanceId}).
++        installVizInstanceRoutes()
++
+         // Gate 3: content-authoring curator routes (read + validate only).
+         installCuratorRoutes()
+ 

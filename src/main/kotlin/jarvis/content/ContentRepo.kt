@@ -72,6 +72,19 @@ class ContentRepo(private val root: Path) {
         return instances
     }
 
+    /**
+     * Plan 4b Task 3 — enumerate ALL viz instances across EVERY admitted subject (route + tests
+     * enumerate the corpus once). Loops [loadVizInstances] over every subject in subjects.yaml.
+     * Absent/empty viz/ directories yield empty lists — same guarantee as [loadVizInstances].
+     * Instance ids are unique within a subject; cross-subject collisions are permitted
+     * (subjects are independent namespaces) but the route serves by id — if two subjects ever
+     * share an instance id the first one wins (sorted by subject name for determinism).
+     */
+    fun loadAllVizInstances(): List<VizInstance> {
+        val manifest = loadManifest()
+        return manifest.subjects.flatMap { entry -> loadVizInstances(entry.id) }
+    }
+
     /** Extracted source text for a `_sources/{doc}.md` file, or null if absent. */
     fun sourceText(subject: String, doc: String): String? {
         val f = root.resolve(subject).resolve("_sources").resolve("$doc.md")
