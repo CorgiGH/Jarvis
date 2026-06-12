@@ -2,9 +2,12 @@ package jarvis.web
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.application
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import jarvis.tutor.csrfProtect
 import jarvis.content.ContentRepo
 import jarvis.content.SubjectEntry
 import jarvis.tutor.AttemptsTable
@@ -23,6 +26,7 @@ import jarvis.tutor.verify.ReportWrongQuery
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import kotlinx.serialization.Serializable
@@ -193,6 +197,34 @@ data class ApiLessonBeats(
 @Serializable data class ApiBeatReveal(val steps: List<ApiRevealStep>, val figure: ApiFigureBinding? = null)
 @Serializable data class ApiBeatName(val definition: String, val invariant_statement: String, val why_matters: String)
 @Serializable data class ApiBeatCheck(val item_stem: String, val choices: List<ApiAttemptChoice> = emptyList(), val numeric_answer: String? = null, val numeric_tolerance: Double? = null)
+
+/**
+ * Plan-3 §0.9C — the per-beat grade request. Sent for the gated beats with learner input
+ * (predict / attempt / check). The server grades from the KC's OWN beats data; the client reply
+ * is never trusted for writes.
+ */
+@Serializable
+data class ApiBeatGradeRequest(
+    val beat_type: String,                // "predict" | "attempt" | "check"
+    val selected_index: Int? = null,      // choice beats: index into the served options/choices
+    val free_input: String? = null,       // numerical attempt / numeric check
+    val prediction_text: String? = null,  // predict beats: the chosen option text (stored on the attempt row)
+)
+
+@Serializable
+data class ApiBeatGradeReply(
+    val correct: Boolean,
+    val score: Double,                                // predict/attempt: 1.0/0.0 informational; check: feeds EWMA
+    val feedback_ro: String,                          // both-path feedback / option callback (RO)
+    val beat_type: String,
+    val lesson_complete: Boolean,                     // true on the graded CHECK
+    val first_encounter: Boolean,
+    val phase: jarvis.tutor.Phase? = null,            // post-write phase (CHECK only)
+    val verification_status: jarvis.tutor.VerificationStatus? = null,
+)
+
+/** Local JSON for beat-grade request decode (matches the server CN config: ignore unknown, encode defaults). */
+private val beatGradeJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
 fun Route.installQueueMasteryCalibrationRoutes() {
 
@@ -534,6 +566,214 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                     beats = apiBeats,
                 ),
             )
+        }
+    }
+
+    // ── POST /api/v1/lesson/{kcId}/beat ───────────────────────────────────────────────────────────────────
+    // Server-side beat grading + the §4.4 completion-writes contract (spec §4.4). Same faithful + dispute
+    // + beats-complete gate as the GET. EVERY graded beat writes ONE attempts row (beat_type, prediction,
+    // first_encounter). On beat_type=="check": same-txn recordIn (EWMA+phase) + upsertRubricCriterion FSRS
+    // seed, mirroring TutorRoutes.kt:2222-2256, and lesson_complete=true. CSRF-gated (POST).
+    post("/api/v1/lesson/{kcId}/beat") {
+        requireUser { userId ->
+            val ctx = call.application.attributes.getOrNull(TutorContextKey)
+                ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@requireUser }
+            call.csrfProtect {
+                val db = ctx.db
+                val kcId = call.parameters["kcId"]?.takeIf { it.isNotBlank() }
+                    ?: run { call.respond(HttpStatusCode.BadRequest, """{"error":"kcId required"}"""); return@csrfProtect }
+
+                val req = try {
+                    beatGradeJson.decodeFromString(ApiBeatGradeRequest.serializer(), call.receiveText())
+                } catch (_: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, """{"error":"bad body"}"""); return@csrfProtect
+                }
+
+                // beat_type must be one of the three gradable beats; anything else (reveal/name/garbage) ⇒ 400.
+                val beatType = req.beat_type.lowercase()
+                if (beatType !in setOf("predict", "attempt", "check")) {
+                    call.respond(HttpStatusCode.BadRequest, """{"error":"beat_type not gradable"}"""); return@csrfProtect
+                }
+
+                val repo = ContentRepo(groupThreeContentDir())
+                val kc = runCatching { VerifyAdmin.findKc(repo, kcId) }.getOrNull()
+                    ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"unknown kc"}"""); return@csrfProtect }
+
+                // Identical faithful gate as the GET.
+                val resolved = VerifyAdmin.resolveStatus(db, kc.id, kc)
+                if (resolved != VerificationStatus.faithful) {
+                    call.respond(HttpStatusCode.NotFound, """{"error":"not faithful"}"""); return@csrfProtect
+                }
+                if (ReportWrongQuery.hasOpenReportWrong(db, kc.id)) {
+                    call.respond(HttpStatusCode.NotFound, """{"error":"disputed"}"""); return@csrfProtect
+                }
+
+                // Identical beats guard as the GET (concept_type parse + structural completeness).
+                val conceptType = kc.concept_type?.let { jarvis.content.ConceptType.fromWire(it) }
+                    ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"concept_type invalid"}"""); return@csrfProtect }
+                val roBeats = kc.beats["ro"]
+                if (roBeats == null || !roBeats.isCompleteFor(conceptType)) {
+                    call.respond(HttpStatusCode.NotFound, """{"error":"beats not complete"}"""); return@csrfProtect
+                }
+
+                // ── Grade from the KC's OWN beats data. correct flag + RO feedback.
+                var correct = false
+                var feedbackRo = ""
+                when (beatType) {
+                    "predict" -> {
+                        val opts = roBeats.predict?.options ?: emptyList()
+                        val sel = req.selected_index?.takeIf { it in opts.indices }
+                            ?: run { call.respond(HttpStatusCode.BadRequest, """{"error":"selected_index out of range"}"""); return@csrfProtect }
+                        correct = opts[sel].correct
+                        feedbackRo = opts[sel].callback   // the option callback IS the both-path feedback (§3.2 ①)
+                    }
+                    "attempt" -> {
+                        val a = roBeats.attempt
+                            ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"beats not complete"}"""); return@csrfProtect }
+                        if (a.choices.isNotEmpty()) {
+                            val sel = req.selected_index?.takeIf { it in a.choices.indices }
+                                ?: run { call.respond(HttpStatusCode.BadRequest, """{"error":"selected_index out of range"}"""); return@csrfProtect }
+                            correct = a.choices[sel].correct
+                            feedbackRo = if (correct) a.feedback_correct else a.choices[sel].feedback
+                        } else {
+                            // Numeric attempt variant: compare free_input to the trace's final value.
+                            // DELIBERATE PLACEHOLDER (consistency#5 — PM-accepted mechanism, NOT served in
+                            // Plan 3). The 4 faithful KCs Plan 3 serves (pa-kc-001..004) are ALL choice-variant
+                            // (a.choices non-empty), so this branch is DEAD on the served corpus. trace_steps[].value
+                            // is INSTANCE/teaching data (e.g. a formula string like "3*t"), NOT the numeric a learner
+                            // would type, and the last trace step is not guaranteed to be the answer — so exact-string
+                            // match here would essentially always grade a real numeric answer incorrect. It exists only
+                            // so the code compiles for FORMULA_APPLICATION/PROCEDURE/PROBABILISTIC numerical variants.
+                            // CARRIED FOLLOW-UP: when a numerical-variant KC is actually served, grade numeric ATTEMPT
+                            // against a real expected value (add an attempt.numeric_answer + tolerance, mirror the
+                            // numeric CHECK path below) and add a LessonBeatGradeRouteTest case pinning the match.
+                            val expected = a.trace_steps.lastOrNull()?.value
+                            val got = req.free_input?.trim()
+                            correct = expected != null && got != null && got == expected
+                            feedbackRo = if (correct) a.feedback_correct else "Reanalizează pașii din schelet."
+                        }
+                    }
+                    "check" -> {
+                        val c = roBeats.check
+                            ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"beats not complete"}"""); return@csrfProtect }
+                        if (c.choices.isNotEmpty()) {
+                            val sel = req.selected_index?.takeIf { it in c.choices.indices }
+                                ?: run { call.respond(HttpStatusCode.BadRequest, """{"error":"selected_index out of range"}"""); return@csrfProtect }
+                            correct = c.choices[sel].correct
+                            feedbackRo = c.choices[sel].feedback
+                        } else {
+                            // Numeric check: parse free_input as double, compare to numeric_answer within tolerance.
+                            val answer = c.numeric_answer?.toDoubleOrNull()
+                            val tol = c.numeric_tolerance ?: 0.0
+                            val got = req.free_input?.trim()?.toDoubleOrNull()
+                            correct = answer != null && got != null && kotlin.math.abs(got - answer) <= tol
+                            feedbackRo = if (correct) "Corect." else "Reanalizează: răspunsul numeric nu se potrivește."
+                        }
+                    }
+                }
+                val score = if (correct) 1.0 else 0.0
+
+                // ── first_encounter: computed BEFORE any write (§0.9C). True iff no mastery row AND zero prior
+                //    lesson attempt rows for (user, kc). taskId="lesson" marks an attempt as lesson-originated.
+                val firstEncounter = transaction(db) {
+                    val noMastery = KcMasteryTable.selectAll()
+                        .where { (KcMasteryTable.userId eq userId) and (KcMasteryTable.kcId eq kc.id) }
+                        .empty()
+                    val noPriorLessonAttempts = AttemptsTable.selectAll()
+                        .where {
+                            (AttemptsTable.userId eq userId) and
+                                (AttemptsTable.kcId eq kc.id) and
+                                (AttemptsTable.taskId eq "lesson")
+                        }
+                        .empty()
+                    noMastery && noPriorLessonAttempts
+                }
+
+                val now = Instant.now()
+                var postPhase: Phase? = null
+                if (beatType == "check") {
+                    // ── CHECK: completion writes in ONE atomic txn (mirror TutorRoutes.kt:2222-2256).
+                    //    recordIn (EWMA + phase) → attempts row → upsertRubricCriterion FSRS seed.
+                    val masteryRepo = jarvis.tutor.KcMasteryRepo(db)
+                    val cardRepo = jarvis.tutor.FsrsCardRepo(db)
+                    val initial = jarvis.Fsrs.initial(if (correct) 3 else 2)
+                    // front derivation mirrors TutorRoutes:2218 (server problem statement → fallback). The lesson
+                    // has no server problem; use the KC stem_template, else name_en (a stable rubric front).
+                    val front = kc.stem_template?.takeIf { it.isNotBlank() } ?: kc.name_en
+                    val back = roBeats.name?.definition?.takeIf { it.isNotBlank() } ?: kc.explanation_ro ?: ""
+                    try {
+                        transaction(db) {
+                            val m = masteryRepo.recordIn(this, userId, kc.id, score, now)
+                            postPhase = m.phase
+                            AttemptsTable.insert {
+                                it[id] = jarvis.tutor.TutorTypes.ulid()
+                                it[AttemptsTable.userId] = userId
+                                it[AttemptsTable.kcId] = kc.id
+                                it[taskId] = "lesson"
+                                it[problemId] = kc.id + ":" + beatType
+                                it[phase] = m.phase?.name ?: Phase.intro.name
+                                it[AttemptsTable.correct] = correct
+                                it[AttemptsTable.score] = score
+                                it[scaffoldLevel] = 0
+                                it[AttemptsTable.recorded] = true
+                                it[gradedAt] = now
+                                it[AttemptsTable.beatType] = beatType
+                                it[AttemptsTable.prediction] = req.prediction_text
+                                it[AttemptsTable.firstEncounter] = firstEncounter
+                            }
+                            cardRepo.upsertRubricCriterion(
+                                this, userId, kc.id, front, back,
+                                jarvis.tutor.FsrsState(
+                                    difficulty = initial.difficulty,
+                                    stability = initial.stability,
+                                    retrievability = 1.0,
+                                    dueAt = now.plus(java.time.Duration.ofDays(1)),
+                                    lastReviewedAt = now,
+                                    lapses = 0,
+                                ),
+                            )
+                        }
+                    } catch (e: Exception) {
+                        System.err.println("[lesson-beat] atomic completion txn FAILED (rolled back) for kc=${kc.id}: ${e.javaClass.simpleName}: ${e.message?.take(160)}")
+                        call.respond(HttpStatusCode.InternalServerError, """{"error":"completion write failed"}"""); return@csrfProtect
+                    }
+                } else {
+                    // ── predict / attempt: ONE attempt row only, no mastery/FSRS write. Phase from mastery (or intro).
+                    val phaseNow = resolvePhase(readMastery(db, userId, kc.id))
+                    transaction(db) {
+                        AttemptsTable.insert {
+                            it[id] = jarvis.tutor.TutorTypes.ulid()
+                            it[AttemptsTable.userId] = userId
+                            it[AttemptsTable.kcId] = kc.id
+                            it[taskId] = "lesson"
+                            it[problemId] = kc.id + ":" + beatType
+                            it[phase] = phaseNow.name
+                            it[AttemptsTable.correct] = correct
+                            it[AttemptsTable.score] = score
+                            it[scaffoldLevel] = 0
+                            it[AttemptsTable.recorded] = true
+                            it[gradedAt] = now
+                            it[AttemptsTable.beatType] = beatType
+                            it[AttemptsTable.prediction] = req.prediction_text
+                            it[AttemptsTable.firstEncounter] = firstEncounter
+                        }
+                    }
+                }
+
+                call.respond(
+                    HttpStatusCode.OK,
+                    ApiBeatGradeReply(
+                        correct = correct,
+                        score = score,
+                        feedback_ro = feedbackRo,
+                        beat_type = beatType,
+                        lesson_complete = beatType == "check",
+                        first_encounter = firstEncounter,
+                        phase = if (beatType == "check") postPhase else null,
+                        verification_status = if (beatType == "check") resolved else null,
+                    ),
+                )
+            }
         }
     }
 }
