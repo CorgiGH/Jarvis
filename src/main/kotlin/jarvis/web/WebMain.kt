@@ -107,6 +107,10 @@ internal suspend fun runWeb() {
                 path.startsWith("/api/v1/mastery") ||
                 path.startsWith("/api/v1/calibration") ||
                 path.startsWith("/api/v1/teaching/") ||
+                // Plan-3 lesson surface (GET lesson + POST beat) — session-authed via requireUser
+                // inside the routes; found by the INV-4.3 real-backend run-through (2026-06-12):
+                // the prefix was missing here, so browser sessions got the outer token-401.
+                path.startsWith("/api/v1/lesson/") ||
                 // Gate 3: curator routes — self-authenticate via jarvis_session + requireOwner
                 path.startsWith("/api/v1/curator/")) return@intercept
 
