@@ -85,7 +85,13 @@ private fun runBackfillKcIds(args: List<String>) {
     System.err.println("[backfill-kc-ids] db=$dbPath content=$contentDir dryRun=$dryRun")
 
     val db = jarvis.tutor.TutorDb.connect(dbPath)
-    jarvis.tutor.TutorMigration.migrate(db)
+    // --dry-run is a read-only computation: do NOT call migrate() on the dry-run path.
+    // migrate() invokes the INV-3.1 backup gate (MigrationBackupGate.assertSafeToMutate) which
+    // refuses unless a same-day verified backup manifest exists, making the dry-run non-functional
+    // on any day after the last backup. The live DB already carries the kc_id column (verified
+    // 2026-06-11 read-only PRAGMA), so migrate() is also not needed to read cards on the dry path.
+    // On the real apply path (no --dry-run) the caller must take a fresh backup first (Task 11).
+    if (!dryRun) jarvis.tutor.TutorMigration.migrate(db)
 
     // read all cards (id, source_ref) read-only
     val cards = org.jetbrains.exposed.sql.transactions.transaction(db) {
