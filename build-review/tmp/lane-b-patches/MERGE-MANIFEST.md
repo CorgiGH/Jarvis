@@ -11,6 +11,7 @@
 
 ## Commits (git log --oneline main..lane-b/plan4a)
 ```
+3a2ddad (review fix) Task 6: fix MERGE-MANIFEST contradictions + stale spec comment
 a448f35 docs(plan4a): Task 6 re-verify — update manifest (patch --3way note + fresh gate results)
 965e48a docs(plan4a): Lane B merge manifest — commits, changed files, CI patch, follow-ups, PM recipe
 42a3b3b fix(plan4a): regenerate impeccable CI patch with proper CRLF-aware unified diff (git apply --check passes)
@@ -84,18 +85,18 @@ tutor-web/theme-ref.html
 verifiably do not touch it, Task 5 recon). `build-review/tmp/lane-b-patches/MERGE-MANIFEST.md`
 IS in this list (the manifest itself is a Lane-B deliverable; Plan-3 does not touch it).
 `.github/workflows/test.yml` is NOT in this list (it ships as a patch — see below).
-Zero post-cut intersection confirmed.
+Zero post-cut intersection confirmed. **All 13 commits land on main at merge.**
 
 **PM RULING (2026-06-12) applied:** `themeRefHarness.tsx` is SELF-CONTAINED — zero imports
 from `src/door/DoorBrutalist|concept|figures`. Committed-state proof: moved those 3
 untracked files aside → `npm run e2e:visual` → 3/3 passed → files restored. Commit 3a26958.
 
-## Lane gate result (run in the worktree, 2026-06-12; re-verified Task 6 2026-06-12)
+## Lane gate result (run in the worktree, 2026-06-12; review-fix re-verified 2026-06-12)
 - `gradle --no-daemon -p ../jarvis-kotlin-lane-b :check` → BUILD SUCCESSFUL (incl. GraderGoldenHarnessTest 12 cases, validateContent 0 errors)
 - `npm --prefix ../jarvis-kotlin-lane-b/tutor-web test` → vitest GREEN (171 files, 876 tests incl. INV-9.5 baselineScope, designMdSync, fontLoading)
 - `npm --prefix ../jarvis-kotlin-lane-b/tutor-web run e2e:visual` → 3 passed (shell + theme-dark + theme-light baselines)
-- Zero-intersection re-check: `OK — zero post-cut intersection (besides the PM-resolved package.json/-lock baseline).` (49 Lane B files vs 18 Plan-3 post-cut files, base b3aa963)
-- CI patch `git apply --check --recount` exits 0 (clean); `git apply --check --3way` fails — use plain `git apply` (see PM recipe step 2)
+- Zero-intersection re-check: `OK — zero post-cut intersection (besides the PM-resolved package.json/-lock baseline).` (49 Lane B files vs post-cut Plan-3 files, base b3aa963)
+- CI patch `git apply --check` exits 0 (plain, no flags); `git apply --check --3way` FAILS — PM must use plain `git apply` only (see PM recipe step 2)
 - (`npm run e2e` standard suite has a PRE-EXISTING red `tutor-shell-api-contract.spec.ts` — NOT Lane B's; Plan-2 §0.6)
 
 ## CI patch the PM must apply (the ONE shared file)
@@ -109,8 +110,8 @@ untracked files aside → `npm run e2e:visual` → 3/3 passed → files restored
 - Subset deliverables on the branch: `tools/impeccable-rules.json` (the `{"enabled":[…],"disabled":{…}}`
   antipattern allow-list) + `tools/impeccable-filter.mjs` (the stdin filter) + the UNFILTERED calibrate
   output `build-review/impeccable-calibration-2026-06-12.json`. There is NO `impeccable.config.json`.
-- Verified `git apply --check --recount` clean against current `test.yml` at manifest time (Task 6 re-verification: `git apply --check` exits 0; `git apply --check --3way` fails with "patch failed: …:65" — `--3way` requires a 3-way index merge that is not available in the worktree; PM must use plain `git apply` or `git apply --recount`, not `--3way`).
-- Note: patch uses git's full-diff format (with index/hash header); PM applies with plain `git apply` (NO `--3way` — verified to fail; see PM recipe step 2).
+- Verified `git apply --check` exits 0 cleanly (plain, no flags) against current `test.yml` at manifest time (Task 6 review-fix re-verification, 2026-06-12). `git apply --check --3way` FAILS with "patch failed: …:65" — `--3way` requires a 3-way index merge not available in this context; PM must NOT use `--3way`.
+- Note: patch uses git's full-diff format (with index/hash header); PM applies with plain `git apply` only (see PM recipe step 2).
 
 ## Carried follow-ups (NOT done in Lane B — explicit hand-off)
 1. **theme.ts ⇄ DESIGN.md drift (recon §0 #3):** `tutor-web/src/components/viz/theme.ts` hardcodes
