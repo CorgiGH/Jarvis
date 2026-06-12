@@ -11,6 +11,7 @@
 
 ## Commits (git log --oneline main..lane-b/plan4a)
 ```
+2429162 (review fix) Task 6: restore dirty tracked tutor-dist files + fix manifest (13 commits, --3way note)
 3a2ddad (review fix) Task 6: fix MERGE-MANIFEST contradictions + stale spec comment
 a448f35 docs(plan4a): Task 6 re-verify — update manifest (patch --3way note + fresh gate results)
 965e48a docs(plan4a): Lane B merge manifest — commits, changed files, CI patch, follow-ups, PM recipe
@@ -85,13 +86,13 @@ tutor-web/theme-ref.html
 verifiably do not touch it, Task 5 recon). `build-review/tmp/lane-b-patches/MERGE-MANIFEST.md`
 IS in this list (the manifest itself is a Lane-B deliverable; Plan-3 does not touch it).
 `.github/workflows/test.yml` is NOT in this list (it ships as a patch — see below).
-Zero post-cut intersection confirmed. **All 13 commits land on main at merge.**
+Zero post-cut intersection confirmed. **All 14 commits land on main at merge.**
 
 **PM RULING (2026-06-12) applied:** `themeRefHarness.tsx` is SELF-CONTAINED — zero imports
 from `src/door/DoorBrutalist|concept|figures`. Committed-state proof: moved those 3
 untracked files aside → `npm run e2e:visual` → 3/3 passed → files restored. Commit 3a26958.
 
-## Lane gate result (run in the worktree, 2026-06-12; review-fix re-verified 2026-06-12)
+## Lane gate result (run in the worktree, 2026-06-12; final review-fix re-verified 2026-06-12)
 - `gradle --no-daemon -p ../jarvis-kotlin-lane-b :check` → BUILD SUCCESSFUL (incl. GraderGoldenHarnessTest 12 cases, validateContent 0 errors)
 - `npm --prefix ../jarvis-kotlin-lane-b/tutor-web test` → vitest GREEN (171 files, 876 tests incl. INV-9.5 baselineScope, designMdSync, fontLoading)
 - `npm --prefix ../jarvis-kotlin-lane-b/tutor-web run e2e:visual` → 3 passed (shell + theme-dark + theme-light baselines)
