@@ -85,10 +85,12 @@ list (it ships as a patch — see below). Zero post-cut intersection confirmed.
 from `src/door/DoorBrutalist|concept|figures`. Committed-state proof: moved those 3
 untracked files aside → `npm run e2e:visual` → 3/3 passed → files restored. Commit 3a26958.
 
-## Lane gate result (run in the worktree, 2026-06-12)
+## Lane gate result (run in the worktree, 2026-06-12; re-verified Task 6 2026-06-12)
 - `gradle --no-daemon -p ../jarvis-kotlin-lane-b :check` → BUILD SUCCESSFUL (incl. GraderGoldenHarnessTest 12 cases, validateContent 0 errors)
 - `npm --prefix ../jarvis-kotlin-lane-b/tutor-web test` → vitest GREEN (171 files, 876 tests incl. INV-9.5 baselineScope, designMdSync, fontLoading)
 - `npm --prefix ../jarvis-kotlin-lane-b/tutor-web run e2e:visual` → 3 passed (shell + theme-dark + theme-light baselines)
+- Zero-intersection re-check: `OK — zero post-cut intersection (besides the PM-resolved package.json/-lock baseline).` (49 Lane B files vs 18 Plan-3 post-cut files, base b3aa963)
+- CI patch `git apply --check --recount` exits 0 (clean); `git apply --check --3way` fails — use plain `git apply` (see PM recipe step 2)
 - (`npm run e2e` standard suite has a PRE-EXISTING red `tutor-shell-api-contract.spec.ts` — NOT Lane B's; Plan-2 §0.6)
 
 ## CI patch the PM must apply (the ONE shared file)
@@ -102,7 +104,7 @@ untracked files aside → `npm run e2e:visual` → 3/3 passed → files restored
 - Subset deliverables on the branch: `tools/impeccable-rules.json` (the `{"enabled":[…],"disabled":{…}}`
   antipattern allow-list) + `tools/impeccable-filter.mjs` (the stdin filter) + the UNFILTERED calibrate
   output `build-review/impeccable-calibration-2026-06-12.json`. There is NO `impeccable.config.json`.
-- Verified `git apply --check --recount` clean against current `test.yml` at manifest time.
+- Verified `git apply --check --recount` clean against current `test.yml` at manifest time (Task 6 re-verification: `git apply --check` exits 0; `git apply --check --3way` fails with "patch failed: …:65" — `--3way` requires a 3-way index merge that is not available in the worktree; PM must use plain `git apply` or `git apply --recount`, not `--3way`).
 - Note: patch uses git's full-diff format (with index/hash header); PM applies with `git apply --3way`.
 
 ## Carried follow-ups (NOT done in Lane B — explicit hand-off)
@@ -143,7 +145,8 @@ untracked files aside → `npm run e2e:visual` → 3/3 passed → files restored
 1. Merge the branch (no fast-forward, preserve the lane history):
    `git -C C:\Users\User\jarvis-kotlin merge --no-ff lane-b/plan4a`
 2. Apply the Impeccable CI patch (the one shared file Lane B never edited directly):
-   `git -C C:\Users\User\jarvis-kotlin apply --3way build-review/tmp/lane-b-patches/test-yml-impeccable.patch`
+   `git -C C:\Users\User\jarvis-kotlin apply build-review/tmp/lane-b-patches/test-yml-impeccable.patch`
+   (do NOT use `--3way` — verified to fail in the lane; plain `git apply` exits 0 cleanly)
    then stage + commit it: `git -C C:\Users\User\jarvis-kotlin add .github/workflows/test.yml && git -C C:\Users\User\jarvis-kotlin commit -m "ci(plan4a): impeccable fail-open frontend step (Lane B patch)"`
 3. Run the FULL gate on merged main (never pipe through | tail):
    - `gradle --no-daemon :check` → BUILD SUCCESSFUL
