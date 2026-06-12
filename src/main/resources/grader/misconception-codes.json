@@ -1,0 +1,38 @@
+{
+  "subjects": {
+    "PS": [
+      {
+        "code": "L2_ESTIMATOR_CONFUSION",
+        "label_ro": "Confuzie medie vs mediană",
+        "judge_hint_en": "student computed the arithmetic mean (sum/n) when the median was expected"
+      },
+      {
+        "code": "MINIMAX_CONFUSION",
+        "label_ro": "Confuzie midrange vs mediană",
+        "judge_hint_en": "student used the midrange formula ((min+max)/2) instead of sorting and picking the middle value"
+      },
+      {
+        "code": "MODE_CONFUSION",
+        "label_ro": "Confuzie modul vs mediană",
+        "judge_hint_en": "student gave the mode (most frequent value) when the median was expected"
+      },
+      {
+        "code": "OTHER",
+        "label_ro": "Altă eroare",
+        "judge_hint_en": "answer is wrong but does not match any classified pattern"
+      }
+    ],
+    "PA": [
+      {
+        "code": "REDUCTION_DIRECTION_FLIPPED",
+        "label_ro": "Direcția reducerii inversată",
+        "judge_hint_en": "student reduces the known NP-hard problem TO the new problem instead of FROM it — the arrow is backwards; a correct polynomial reduction proves the new problem is at least as hard as the known NP-hard one by reducing the known problem to the new one"
+      },
+      {
+        "code": "OTHER",
+        "label_ro": "Altă eroare",
+        "judge_hint_en": "answer is wrong but does not match any classified pattern"
+      }
+    ]
+  }
+}
