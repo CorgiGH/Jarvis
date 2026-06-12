@@ -25,7 +25,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10"
-      - name: Gradle check (root project only — android subproject skipped; includes validateContent)
+      - name: Gradle check (root project only; includes validateContent + INV-3.5 SignatureLockPinTest)
         run: gradle --no-daemon :check --stacktrace --info
       - name: Print failing test XML on failure
         if: failure()
