@@ -64,6 +64,10 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation("io.ktor:ktor-server-test-host:3.0.1")
     testImplementation("io.ktor:ktor-client-content-negotiation:3.0.1")
+    // Plan-4a Task 5 — JUnit 5 parameterized API for the grader-golden harness.
+    // (kotlin("test") brings the platform runner via useJUnitPlatform(); these add @ParameterizedTest.)
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.2")
 }
 
 application {

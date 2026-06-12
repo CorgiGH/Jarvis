@@ -1,0 +1,1 @@
+{ "grader": "grade-scoring", "subject": "ALO", "id": "alo-one-short", "input": { "rubric": { "G1": true, "G2": true, "G3": true, "G4": true, "G5": false } }, "expected": { "score": 0.8, "correct": false } }

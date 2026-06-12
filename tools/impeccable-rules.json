@@ -1,0 +1,11 @@
+{
+  "$comment": "Plan 4a §0.9C applicable-subset, applied as a POST-PROCESS FILTER (impeccable has no --config / rule-subset flag). 'enabled' = antipattern ids with >0 true-positive hits in build-review/impeccable-calibration-2026-06-12.json OR a DESIGN.md hard-lock we enforce forward. 'disabled' carries a reason per dropped antipattern. The key is the detect JSON finding field 'antipattern'. Version pinned to impeccable@2.3.2 in the CI command (council-1781132987 amendment).",
+  "enabled": [
+    "side-tab",
+    "layout-transition"
+  ],
+  "disabled": {
+    "overused-font": "false-positive only: (1) all 5 DoorWarm.tsx hits are intentional — DoorWarm is the explicitly DESIGN.md-violating demo scoped under .door-warm (Section 0 #1); (2) index.css hits are @font-face declarations registering the Task-1 self-hosted Fraunces woff2 files — infrastructure, not a design-font choice. No production chrome uses Fraunces.",
+    "em-dash-overuse": "false-positive only: the 2 hits fire on CSS and JS source-code comments (index.css line 0 = 184 em-dashes in comments; applyTheme.ts line 0 = 5 em-dashes in comments), not in user-facing body text. The antipattern description targets learner-visible copy; our CSS/TS comments are tooling-only."
+  }
+}

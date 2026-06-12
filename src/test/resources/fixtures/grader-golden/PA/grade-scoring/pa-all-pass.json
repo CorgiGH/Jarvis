@@ -1,0 +1,1 @@
+{ "grader": "grade-scoring", "subject": "PA", "id": "pa-all-pass", "input": { "rubric": { "G1": true, "G2": true, "G3": true } }, "expected": { "score": 1.0, "correct": true } }

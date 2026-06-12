@@ -1,0 +1,1 @@
+{ "grader": "grade-scoring", "subject": "PS", "id": "ps-all-or-nothing-one-false", "input": { "rubric": { "G1": true, "G2": true, "G3": true, "G4": true, "G5": true, "G6": false } }, "expected": { "score": 0.8333333333333334, "correct": false } }

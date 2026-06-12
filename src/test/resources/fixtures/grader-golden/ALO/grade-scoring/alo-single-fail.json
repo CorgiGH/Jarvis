@@ -1,0 +1,1 @@
+{ "grader": "grade-scoring", "subject": "ALO", "id": "alo-single-fail", "input": { "rubric": { "G1": false } }, "expected": { "score": 0.0, "correct": false } }

@@ -1,0 +1,17 @@
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index de9b2e0..a2ebb29 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -65,6 +65,12 @@ jobs:
+         run: npm ci
+       - name: vitest run
+         run: npm test
++      # Plan 4a §0.9C — Impeccable design-quality gate, FAIL-OPEN (council-1781132987 amendment).
++      # Pinned impeccable@2.3.2; applicable-subset applied as a POST-PROCESS FILTER (no --config
++      # flag exists). The `|| true` keeps it non-blocking until calibrate+subset are landed AND
++      # reviewed; flip to blocking in a follow-up once validated against a few green PRs.
++      - name: Impeccable detect (fail-open)
++        run: npx --yes impeccable@2.3.2 detect --json src/ | node ../tools/impeccable-filter.mjs || true
+       - name: Install Playwright browsers (chromium only)
+         run: npx playwright install --with-deps chromium
+       - name: Playwright e2e

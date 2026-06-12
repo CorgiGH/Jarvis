@@ -1,0 +1,1 @@
+{ "grader": "grade-scoring", "subject": "ALO", "id": "alo-half-4of8", "input": { "rubric": { "G1": true, "G2": true, "G3": true, "G4": true, "G5": false, "G6": false, "G7": false, "G8": false } }, "expected": { "score": 0.5, "correct": false } }

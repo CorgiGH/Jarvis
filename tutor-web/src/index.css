@@ -107,6 +107,90 @@ html[data-reduce-motion] *::after {
   --tracking-mega: 0.3em;                  /* -> tracking-mega (kills tracking-[0.3em]) */
 }
 
+/* ---------- Self-hosted fonts (Plan 4a §0.9A — replaces DoorWarm CDN injection) ----------
+   woff2 committed under tutor-web/public/fonts/ (Vite base '/tutor/' ⇒ served at /tutor/fonts/).
+   gwfh static instances (one woff2 per weight); font-display: swap so first paint never blocks.
+   Headless Playwright renders are now font-deterministic (no CDN race, no silent system-font
+   fallback) — the reason the visual baselines (Plan 4a Task 4) can be committed. All three
+   families are OFL-licensed. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/tutor/fonts/JetBrainsMono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/tutor/fonts/JetBrainsMono-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/tutor/fonts/Fraunces-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/tutor/fonts/Fraunces-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/tutor/fonts/Fraunces-900.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Fraunces';
+  font-style: italic;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/tutor/fonts/Fraunces-600italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/tutor/fonts/Nunito-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/tutor/fonts/Nunito-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/tutor/fonts/Nunito-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/tutor/fonts/Nunito-800.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/tutor/fonts/Nunito-900.woff2') format('woff2');
+}
+
 /* ---------- Body baseline typography (Phase 2.2) ---------- */
 html, body {
   font-size: var(--type-body);

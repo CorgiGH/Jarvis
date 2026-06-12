@@ -1,0 +1,1 @@
+{ "grader": "grade-scoring", "subject": "ALO", "id": "alo-all-pass-2", "input": { "rubric": { "G1": true, "G2": true } }, "expected": { "score": 1.0, "correct": true } }
