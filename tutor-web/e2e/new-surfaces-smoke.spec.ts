@@ -104,7 +104,7 @@ test("Phase-6 /lesson/:kcId: beat-orchestrator paints + handoff → /oggi (same 
           { text: "Culoare", callback: "Nu.", correct: false } ] },
         attempt: { statement: "Alege.", choices: [
           { text: "Pași de legat șireturi", correct: true, feedback: "Corect." },
-          { text: "„pantof"", correct: false, feedback: "Nu." } ], feedback_correct: "Da." },
+          { text: "„pantof”", correct: false, feedback: "Nu." } ], feedback_correct: "Da." },
         reveal: { steps: [
           { text: "Pas 1.", callout: "Intrarea." },
           { text: "Pas 2.", callout: "Pași neambigui." } ] },
