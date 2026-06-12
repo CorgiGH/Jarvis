@@ -65,7 +65,7 @@ beats:
           correct: false
     attempt:
       # ② choice attempt: map a concrete problem to start/final configuration (both-path feedback).
-      statement: "Pentru problema „dat un număr n, calculează n!“, ce reprezintă configurația de start?"
+      statement: "Pentru problema „dat un număr n, calculează n!”, ce reprezintă configurația de start?"
       choices:
         - text: "Valoarea n (intrarea)"
           correct: true
@@ -90,7 +90,7 @@ beats:
       why_matters: "Fără să fixezi ce e intrarea și ce e ieșirea, nu poți spune precis ce trebuie să calculeze algoritmul."
     check:
       # ⑤ different-instance: sorting (the far_transfer example), classify start vs final config.
-      item_stem: "Pentru problema „sortează o listă de numere“, ce conține configurația finală?"
+      item_stem: "Pentru problema „sortează o listă de numere”, ce conține configurația finală?"
       choices:
         - text: "Lista sortată (ieșirea)"
           correct: true

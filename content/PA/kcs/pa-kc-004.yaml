@@ -48,8 +48,6 @@ far_transfer_stem: >-
   Cursul afirmă că diferitele modele de calcul introduse pentru definiția formală a algoritmului sunt
   echivalente din punct de vedere computațional. Pornind de la această afirmație, argumentează de ce
   alegerea unui anumit model de calcul nu schimbă mulțimea problemelor care pot fi rezolvate algoritmic.
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Plan-3 Task 7 — 5-beat teaching content (RO). concept_type=proof (proof variant: ② supply
 #   the next named sub-step from choices; ③ proof-skeleton reveal, one named sub-step per step).
@@ -84,7 +82,7 @@ beats:
         - text: "Se renunță la ideea de a demonstra ceva."
           correct: false
           feedback: "Nu — argumentul continuă: definiția formală se obține introducând modele de calcul, nu abandonând demonstrația."
-      feedback_correct: "Bun — ai trecut corect de la „avem nevoie de o definiție formală“ la „o introducem prin modele de calcul“."
+      feedback_correct: "Bun — ai trecut corect de la „avem nevoie de o definiție formală” la „o introducem prin modele de calcul”."
     reveal:
       # ③ proof-skeleton reveal: need-formal-def -> models-introduced -> models-equivalent -> conclusion.
       steps:
