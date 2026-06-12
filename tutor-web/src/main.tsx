@@ -17,7 +17,7 @@ import { PlacementShell } from "./components/PlacementShell";
 
 /**
  * Plan-3 Task 6 — the lesson route now mounts the BeatOrchestrator. It loads the beats payload
- * (GET /api/v1/lesson/{kcId}); null/404/beats-absent -> honest-degraded unavailable message.
+ * (GET /api/v1/lesson/{kcId}); null/404/beats-absent → honest-degraded unavailable message.
  * The concrete drill-handoff navigation target is wired in Task 10 (fallback: /tutor/oggi).
  */
 function BeatOrchestratorRoute() {
@@ -35,24 +35,19 @@ function BeatOrchestratorRoute() {
   }, [id]);
 
   if (lesson === undefined) {
-    return <div data-testid="lesson-screen" className="flex-1 p-6 font-mono text-xs text-page-fg/50 tracking-widest">Se incarca...</div>;
+    return <div data-testid="lesson-screen" className="flex-1 p-6 font-mono text-xs text-page-fg/50 tracking-widest">Se încarcă…</div>;
   }
   if (lesson === null || !lesson.beats) {
     return (
       <div data-testid="lesson-screen" className="flex-1 p-6 font-mono">
         <div data-testid="lesson-unavailable" className="border-2 border-border-strong p-4 text-xs text-page-fg/60 tracking-wide">
-          KC nu este inca verificat — revin mai tarziu.
+          KC nu este încă verificat — revin mai târziu.
         </div>
       </div>
     );
   }
   // Task 10 replaces the fallback nav with the verified drill route.
   return <BeatOrchestrator kcId={id} lesson={lesson} onComplete={() => { window.location.href = "/tutor/oggi"; }} />;
-}
-
-function LessonScreenRoute() {
-  const { kcId } = useParams<{ kcId: string }>();
-  return <LessonScreen kcId={kcId ?? ""} />;
 }
 
 function ExamRoute() {
