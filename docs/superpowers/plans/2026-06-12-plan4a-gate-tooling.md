@@ -1886,7 +1886,7 @@ Expected: commit list = Tasks 1–5's commits (fonts, DESIGN.md autogen, Impecca
 
 ```powershell
 Get-Item ../jarvis-kotlin-lane-b/build-review/tmp/lane-b-patches/test-yml-impeccable.patch | Select-Object FullName, Length
-git -C ../jarvis-kotlin-lane-b apply --check --3way build-review/tmp/lane-b-patches/test-yml-impeccable.patch
+git -C ../jarvis-kotlin-lane-b apply --check build-review/tmp/lane-b-patches/test-yml-impeccable.patch  # PM AMENDMENT: --3way fails on CRLF; plain --check verified exit 0
 ```
 
 Expected: the patch file exists (non-zero length) and `git apply --check` reports nothing (the patch applies cleanly against the worktree's `.github/workflows/test.yml`). **STOP if** `git apply --check` errors — the patch is stale against the current `test.yml` and the PM cannot apply it; flag it in the manifest as needing a refresh before merge.
