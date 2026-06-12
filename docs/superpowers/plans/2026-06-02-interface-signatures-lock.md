@@ -174,6 +174,15 @@ class KcMasteryRepo(private val db: Database) {
 - **Side effects in-txn:** writes `ewma_score, observations, last_graded_at` (existing cols) PLUS `phase` (CHANGE-2 col, value = `PhaseModel.transition(...)`). `PhaseModel` is called ONLY here.
 - **Atomic-grade consistency:** the grade route's single `transaction{}` calls `recordIn(tx,…)` then `attempts` insert then `upsertRubricCriterion(tx,…)` — all-or-nothing (B1/B3).
 
+**Note (Plan 3, 2026-06-12, additive — NOT a new pin):** `AttemptsTable` (`Phase1Tables.kt`) gains 3
+additive nullable columns for the lesson-completion contract (spec §4.4, audit T3): `beat_type`
+varchar(12), `prediction` text, `first_encounter` bool — all nullable (drill attempts write NULL).
+These are NOT in the frozen-pin set: `SignatureLockPinTest` lists `attempts` only in its
+frozen-table-NAME additivity set (no column-set pin on `attempts`), so adding columns breaks no pin.
+The 3-column delta is pinned by `AttemptsBeatColumnsMigrationTest` (the live-shape replica test),
+mirroring `LiveShapeColumnsMigrationTest`. INV-3.1: this is pending DDL ⇒ the backup gate FIRES on
+both live DBs; operational apply is Plan-3 Tasks 12 (PC) / 13 (VPS), never a unit test.
+
 ## H. `FsrsCardRepo.upsertRubricCriterion(tx, …)` (B2)
 
 ```kotlin

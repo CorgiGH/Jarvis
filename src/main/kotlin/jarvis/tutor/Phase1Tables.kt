@@ -46,6 +46,12 @@ object AttemptsTable : Table("attempts") {
     val selfExplanation = text("self_explanation").nullable()
     val recorded = bool("recorded")
     val gradedAt = timestamp("graded_at")
+    /** Plan-3 §4.4 (audit T3) — which lesson beat produced this attempt; NULL for drill attempts. */
+    val beatType = varchar("beat_type", 12).nullable()
+    /** Plan-3 §4.4 — the learner's predict-beat commitment, echoed at reveal; NULL otherwise. */
+    val prediction = text("prediction").nullable()
+    /** Plan-3 §4.4 — true iff this attempt was the user's FIRST contact with the KC. */
+    val firstEncounter = bool("first_encounter").nullable()
     override val primaryKey = PrimaryKey(id)
     init { index(false, userId, kcId, gradedAt) }
 }
