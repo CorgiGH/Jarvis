@@ -4041,7 +4041,9 @@ export type GraphTreeData = { nodes: GtNode[]; steps: GtStep[] };
 export type ActiveNode = { id: string; label: string };
 export type GraphTreeState = {
   activeNodes: ActiveNode[];   // the occupied frontier at this step (by current label)
-  highlight: string[];         // node ids highlighted this step
+  highlight: string[];         // current LABELS of highlighted nodes (trace-match compares visible
+                               // state by label — PM ruling 2026-06-12, Task-8 blocker-2 Option A)
+  highlightIds: string[];      // node IDs of highlighted nodes (layout/render lookup only)
   callout: string;
 };
 
@@ -4419,7 +4421,9 @@ Expected: `tsc` clean; vitest GREEN except the known pre-existing `tutor-shell-a
 - [ ] **Step 11: Commit (explicit paths only — NEVER `git add -A`; door files on `main` must not be swept):**
 
 ```powershell
-git add tutor-web/src/components/viz/families/familyRegistry.ts tutor-web/src/components/viz/families/GraphTreeFamily.tsx tutor-web/src/components/viz/families/__tests__/GraphTreeFamily.test.tsx tutor-web/src/components/viz/families/__tests__/mergesortTrace.ts content/PA/viz/viz-pa-mergesort-001.yaml tutor-web/src/components/viz/AlgoStepperShell.tsx tutor-web/src/components/viz/VizDemoPage.tsx
+git add tutor-web/src/components/viz/families/familyRegistry.ts tutor-web/src/components/viz/families/GraphTreeFamily.tsx tutor-web/src/components/viz/families/__tests__/GraphTreeFamily.test.tsx tutor-web/src/components/viz/families/__tests__/mergesortTrace.ts content/PA/viz/viz-pa-mergesort-001.yaml tutor-web/src/components/viz/AlgoStepperShell.tsx tutor-web/src/components/viz/VizDemoPage.tsx tutor-web/package.json tutor-web/package-lock.json tutor-web/src/vite-raw.d.ts tutor-web/vite.config.ts
+# (last 4 PM-ratified 2026-06-12, Task-8 blocker-1: the Step-1 cross-root `?raw` YAML import
+#  functionally requires vite server.fs.allow + the ?raw TS declaration + the yaml devDependency)
 git commit -m @'
 feat(viz): graph-tree family + MergeSort instance + trace-match/semantic invariants (INV-5.1/5.2)
 
