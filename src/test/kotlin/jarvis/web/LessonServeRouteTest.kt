@@ -349,7 +349,7 @@ class LessonServeRouteTest {
                     - text: "O rețetă"
                       callback: "Corect."
                       correct: true
-                    - text: "Fii fericit"
+                    - text: "„Fii fericit”"
                       callback: "Nu."
                       correct: false
                     - text: "Buclă infinită"
