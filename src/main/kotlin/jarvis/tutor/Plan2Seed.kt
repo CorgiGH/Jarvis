@@ -52,7 +52,7 @@ object Plan2Seed {
         val startAt: Instant, val endAt: Instant?, val room: String?,
     )
 
-    // ── Grade models (8) — evidenceTier="official-site" for every MODEL row (corpus tier on components) ──
+    // ── Grade models (7) — evidenceTier="official-site" for every MODEL row (corpus tier on components) ──
     private val MODELS = listOf(
         Model(
             "gm-alo", "ALO", null, true,
