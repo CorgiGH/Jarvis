@@ -4,7 +4,7 @@ import jarvis.web.runWeb
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
-private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web | reindex | import-anki <subject> <path> | google-auth-bootstrap | seed-fsrs [opts] | seed-knowledge-meta]
+private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web | reindex | import-anki <subject> <path> | google-auth-bootstrap | seed-fsrs [opts] | seed-knowledge-meta | backfill-kc-ids]
 
   chat                       Start interactive chat REPL (default).
   logger                     Always-on activity logger (5-min interval).
@@ -24,6 +24,10 @@ private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | s
   seed-knowledge-meta [--db PATH]
                              Plan-2: seed grade-model registry + exam schedule + exam_dates
                              primaries from the 2026-06-11 verified sweep (idempotent).
+  backfill-kc-ids [--db PATH] [--dry-run]
+                             Plan-2: link fsrs_cards to KCs by EXACT normalized source-doc
+                             stem (confident-match only; no fuzzy/LLM). Prints per-subject
+                             link counts + total. 0 links is the honest result today.
   seed-fsrs [opts]           Walk one or more corpus dirs and generate FSRS cards via
                              the claude CLI (free OAuth, NOT paid API). Run
                              'jarvis seed-fsrs --help' for the flag list.
@@ -59,6 +63,58 @@ private fun runMigrate(pathArg: String?) {
     }
     val after = cardCount()
     println("[migrate] SUCCESS — fsrs_cards before=$before after=$after")
+}
+
+/**
+ * Plan-2 Task 8 — `jarvis backfill-kc-ids [--db PATH] [--dry-run]`. Confident-match-only kc_id
+ * backfill: links each card to a KC iff their normalized source-doc stems are EXACTLY equal
+ * (KcIdBackfill). Prints per-subject link counts + the total. `--dry-run` computes + prints but
+ * writes NOTHING. The honest result on today's corpus is 0 links (PA cards = lecture11/seminar;
+ * PA KCs = pa-lecture-01) — a 0 total is SUCCESS, exit 0.
+ */
+private fun runBackfillKcIds(args: List<String>) {
+    val dryRun = "--dry-run" in args
+    val dbIdx = args.indexOf("--db")
+    val dbPath = (if (dbIdx >= 0) args.getOrNull(dbIdx + 1) else null)
+        ?: System.getenv("JARVIS_TUTOR_DB")
+        ?: System.getProperty("JARVIS_TUTOR_DB")
+        ?: jarvis.Config.tutorDbPath
+    val contentDir = java.nio.file.Path.of(
+        System.getenv("JARVIS_CONTENT_DIR")?.takeIf { it.isNotBlank() } ?: "content",
+    )
+    System.err.println("[backfill-kc-ids] db=$dbPath content=$contentDir dryRun=$dryRun")
+
+    val db = jarvis.tutor.TutorDb.connect(dbPath)
+    jarvis.tutor.TutorMigration.migrate(db)
+
+    // read all cards (id, source_ref) read-only
+    val cards = org.jetbrains.exposed.sql.transactions.transaction(db) {
+        val out = ArrayList<jarvis.tutor.KcIdBackfill.CardRef>()
+        exec("SELECT id, source_ref FROM fsrs_cards") { rs ->
+            while (rs.next()) out.add(jarvis.tutor.KcIdBackfill.CardRef(rs.getString(1), rs.getString(2)))
+        }
+        out
+    }
+
+    // load every KC from content/
+    val repo = jarvis.content.ContentRepo(contentDir)
+    val kcs = repo.loadManifest().subjects.flatMap { repo.loadSubject(it.id).kcs }
+
+    val links = jarvis.tutor.KcIdBackfill.computeLinks(cards, kcs)
+    val perSubject = links.groupingBy { it.subject }.eachCount().toSortedMap()
+
+    val applied = if (dryRun) 0 else jarvis.tutor.KcIdBackfill.applyLinks(db, links)
+
+    println("[backfill-kc-ids] candidate links: ${links.size} (cards=${cards.size}, kcs=${kcs.size})")
+    if (perSubject.isEmpty()) {
+        println("[backfill-kc-ids] per-subject: (none — 0 confident source-doc overlaps, the honest result)")
+    } else {
+        for ((subject, n) in perSubject) println("[backfill-kc-ids]   $subject: $n")
+    }
+    println(
+        if (dryRun) "[backfill-kc-ids] DRY-RUN — wrote 0 rows (total candidate links=${links.size})"
+        else "[backfill-kc-ids] applied $applied link(s) (skipped ${links.size - applied} already-linked)",
+    )
 }
 
 /**
@@ -110,6 +166,7 @@ fun main(args: Array<String>) {
         }
         "migrate-concept-refs" -> runMigrateConceptRefs()
         "migrate" -> runMigrate(args.getOrNull(1))
+        "backfill-kc-ids" -> runBackfillKcIds(args.drop(1))
         "trust-export" -> jarvis.tutor.verify.TrustSyncCli.runExport(args.drop(1))
         "trust-import" -> jarvis.tutor.verify.TrustSyncCli.runImport(args.drop(1))
         "seed-knowledge-meta" -> runSeedKnowledgeMeta(args.drop(1))
