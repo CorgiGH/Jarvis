@@ -4449,6 +4449,10 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
 
 ## Task 9 — `assertNoClip` helper + lesson-route Playwright suite (§4.7 + interaction smoke + import-ban test)
 
+> **PM RULINGS (2026-06-12, post-execution amendments — both committed in `16dc2f0`/`25a4f12`, ratified):**
+> **(A)** `AlgoStepperShell.tsx`'s aria-live element is ratified as an in-scope edit: the legacy `left:-9999` screen-reader-only positioning IS a viewport overflow under `assertNoClip` (r.left < -1) — the gate itself forces the fix; the committed `overflow:hidden + maxHeight:0 + width:1px` pattern is the standard sr-only equivalent. This is the no-clip gate working, not scope creep.
+> **(B)** the family-no-clip error-text assertion is SUBTREE-SCOPED to `graph-tree-root` (not page-wide as the canonical block below shows): the VizDemoPage gallery legitimately renders "HTTP 1400B" (OsiEncap's MTU label) which false-positives `/HTTP \d{3}/i`. The page-wide network-response assert (zero 4xx/5xx) stays page-wide — no false-positive risk there.
+
 Land the **no-clip e2e helper** (ported VERBATIM-logic from `audit.viz.mjs:76-125`, plan core §0.9H) into the suite — the standing cardinal-sin gate becomes suite-real here, BEFORE any visual baseline exists (council amendment (c)). Then the lesson-route spec (stub-backend pattern from `tutor-shell-api-contract.spec.ts`) asserts every §4.7 selector + interaction smoke + scrubber-back, the family-no-clip spec renders `GraphTreeFamily` at two viewport heights with the scrubber exercised, and the import-ban vitest (INV-5.4) greps the lesson-facing dirs for `three`/`webgl`/`webgpu`/canvas-figure imports → 0 hits.
 
 **Files:**
