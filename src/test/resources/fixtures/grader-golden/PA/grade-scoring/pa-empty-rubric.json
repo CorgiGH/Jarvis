@@ -1,0 +1,1 @@
+{ "grader": "grade-scoring", "subject": "PA", "id": "pa-empty-rubric", "input": { "rubric": {} }, "expected": { "score": 0.0, "correct": false } }

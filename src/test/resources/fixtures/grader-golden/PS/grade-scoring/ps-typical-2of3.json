@@ -1,0 +1,1 @@
+{ "grader": "grade-scoring", "subject": "PS", "id": "ps-typical-2of3", "input": { "rubric": { "G1": true, "G2": true, "G3": false } }, "expected": { "score": 0.6666666666666666, "correct": false } }
