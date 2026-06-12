@@ -68,3 +68,85 @@ object ProblemKcLinksTable : Table("problem_kc_links") {
     val kcId = varchar("kc_id", 64)
     override val primaryKey = PrimaryKey(problemId, kcId)
 }
+
+/** Spec §3.5 R-GRADEMODEL — one verified row per subject per model variant; seeded ONLY from the 2026-06-11 sweep. */
+object GradingModelsTable : Table("grading_models") {
+    val id = varchar("id", 64)
+    val subject = varchar("subject", 64)
+    /** Variant discriminator, e.g. "live-page" vs "fisa-2024-25-ro" vs "fisa-2025-26-en"; null = sole model. */
+    val variant = varchar("variant", 64).nullable()
+    /** The model the dashboard/scheduler consumes; at most one true per subject. */
+    val isPrimary = bool("is_primary").default(false)
+    /** Verbatim formula from the source, e.g. "Punctaj final = punctaj laborator + 10*nota test seminar + 40*nota test scris". */
+    val formula = text("formula")
+    val maxTotal = double("max_total").nullable()
+    /** Pass conditions — JSON, e.g. {"all":[{"component":"exam","min":3,"scale":10},{"total_min":360}]}. */
+    val passRuleJson = text("pass_rule_json")
+    /** Curve description — JSON; null = unknown (a gap, not a guess). */
+    val curveJson = text("curve_json").nullable()
+    /** "official-site" | "corpus-evidence" (spec §3.5 evidence tier). */
+    val evidenceTier = varchar("evidence_tier", 24)
+    val sourceUrl = varchar("source_url", 512)
+    /** Errata/gap annotations carried from the sweep — JSON list of strings. */
+    val notesJson = text("notes_json").nullable()
+    /** Anchor into the sweep doc, e.g. "verified-grade-models-exam-schedule.md#alo". */
+    val sweepRef = varchar("sweep_ref", 256)
+    val createdAt = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+    init { uniqueIndex("grading_models_subject_variant", subject, variant) }
+}
+
+/** Spec §3.5 — per-component rows under a grading model. */
+object GradeComponentsTable : Table("grade_components") {
+    val id = varchar("id", 64)
+    val modelId = varchar("model_id", 64).references(GradingModelsTable.id)
+    val name = varchar("name", 128)
+    val maxPoints = double("max_points").nullable()
+    val weight = double("weight").nullable()
+    /** Per-component minimum gate — JSON; null = none stated. */
+    val minGateJson = text("min_gate_json").nullable()
+    /** "yes" | "no" | "unknown" — never guess; unknown is honest (G1/G9). */
+    val reexamPolicy = varchar("reexam_policy", 12).nullable()
+    val evidenceTier = varchar("evidence_tier", 24)
+    val sourceUrl = varchar("source_url", 512).nullable()
+    /** Free detail (schedule week, duration, format facts) — JSON. */
+    val detailJson = text("detail_json").nullable()
+    val position = integer("position")
+    override val primaryKey = PrimaryKey(id)
+    init { index(false, modelId) }
+}
+
+/** Spec §3.5 — per-subject EN<->RO term pairs; language validator exemption list (§8.2). */
+object GlossaryTermsTable : Table("glossary_terms") {
+    val id = varchar("id", 64)
+    val subject = varchar("subject", 64)
+    val termEn = varchar("term_en", 256)
+    val termRo = varchar("term_ro", 256)
+    val sourceDoc = varchar("source_doc", 256).nullable()
+    val createdAt = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+    init { uniqueIndex("glossary_subject_term_en", subject, termEn) }
+}
+
+/**
+ * Spec §3.5 exam_dates seeding, LOCK-ROUTED (core §0.8 #1): the 12 verbatim IA12 sweep rows live HERE;
+ * the frozen exam_dates table keeps its one-row-per-(user,subject) contract untouched.
+ */
+object ExamScheduleRowsTable : Table("exam_schedule_rows") {
+    val id = varchar("id", 64)
+    /** Tutor subject code (ALO/SORC/POO/PA) or the raw discipline name when unmapped (EF, Pedagogie 1, Reverse Engineering — G13: NEVER map RE to SORC). */
+    val subject = varchar("subject", 64)
+    val rawDiscipline = varchar("raw_discipline", 128)
+    /** "examen" | "restanta" | "test-practic" | "examen-facultativ". */
+    val examType = varchar("exam_type", 24)
+    val startAt = timestamp("start_at")
+    val endAt = timestamp("end_at").nullable()
+    val room = varchar("room", 128).nullable()
+    /** "exact" | "vague" — dates may be vague ("session week"); scheduler consumes both (§3.5/§7.4). */
+    val datePrecision = varchar("date_precision", 12)
+    /** Trace to the verified sweep (INV-3.4). */
+    val sourceRef = varchar("source_ref", 256)
+    val createdAt = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+    init { index(false, subject, startAt) }
+}

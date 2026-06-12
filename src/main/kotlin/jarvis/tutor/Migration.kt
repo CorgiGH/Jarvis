@@ -74,6 +74,10 @@ internal val ALL_TABLES = arrayOf(
     ProblemsTable,
     ProblemRubricItemsTable,
     ProblemKcLinksTable,
+    GradingModelsTable,
+    GradeComponentsTable,
+    GlossaryTermsTable,
+    ExamScheduleRowsTable,
 )
 
 /**
