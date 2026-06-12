@@ -10,7 +10,13 @@
 - Worktree: `../jarvis-kotlin-lane-b`
 
 ## Commits (git log --oneline main..lane-b/plan4a)
+
+> **PM note:** this manifest is self-referential — the last manifest-update commit always
+> appears as HEAD after committing. Run `git log --oneline main..lane-b/plan4a` at merge time
+> for the live list. The full set through 0afe298 (final review-fix) is listed below.
+
 ```
+0afe298 (review fix) Task 6: update manifest to 14 commits (add 2429162 to inventory)
 2429162 (review fix) Task 6: restore dirty tracked tutor-dist files + fix manifest (13 commits, --3way note)
 3a2ddad (review fix) Task 6: fix MERGE-MANIFEST contradictions + stale spec comment
 a448f35 docs(plan4a): Task 6 re-verify — update manifest (patch --3way note + fresh gate results)
@@ -86,7 +92,7 @@ tutor-web/theme-ref.html
 verifiably do not touch it, Task 5 recon). `build-review/tmp/lane-b-patches/MERGE-MANIFEST.md`
 IS in this list (the manifest itself is a Lane-B deliverable; Plan-3 does not touch it).
 `.github/workflows/test.yml` is NOT in this list (it ships as a patch — see below).
-Zero post-cut intersection confirmed. **All 14 commits land on main at merge.**
+Zero post-cut intersection confirmed. **At least 15 commits land on main at merge (see ## Commits note above for the self-referential manifest caveat).**
 
 **PM RULING (2026-06-12) applied:** `themeRefHarness.tsx` is SELF-CONTAINED — zero imports
 from `src/door/DoorBrutalist|concept|figures`. Committed-state proof: moved those 3
