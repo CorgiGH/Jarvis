@@ -42,3 +42,10 @@ tutor-web/public/audio/
 
 # DB backup dumps (data, never committed)
 backups/
+
+# Alk interpreter — fetched at dev-time, NEVER committed (no-redistribution, license unclear)
+# PM ruling 2026-06-12: fetch-only path; tools/fetch-alk.mjs downloads + extracts.
+# Tracked: tools/alk/README.md, tools/alk/alki.cmd, tools/alk/alki.sh, tools/fetch-alk.mjs
+tools/alk/v4.3/
+tools/alk/*.zip
+tools/alk/_probe*.alk

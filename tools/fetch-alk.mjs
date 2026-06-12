@@ -1,39 +1,239 @@
 #!/usr/bin/env node
 /**
- * tools/fetch-alk.mjs — Alk interpreter pinned-release fetch script (R-6-Q2)
+ * tools/fetch-alk.mjs — Alk interpreter pinned-release fetch + wrapper emitter (R-6-Q2)
  *
- * STATUS: BLOCKED — see tools/alk/README.md for PM decisions required.
+ * PM RULING 2026-06-12: license = none published (null), no LICENSE file — fetch-only path,
+ * no redistribution (jar/zip NEVER committed). tools/alk/README.md records the status.
+ * CLI = verified classpath/wrapper form per §0.9-C (PM-amended).
  *
- * Two blockers prevent completing this script:
- * 1. License UNCLEAR (no LICENSE file in alk-language/java-semantics repo) — HALT per plan Step 6.
- * 2. CLI mismatch: plan §0.9-C assumes `java -jar alk.jar main.alk` but the real CLI requires
- *    a classpath launch with Z3 native libraries.
+ * What this script does:
+ *   1. Downloads alki-v4.3.zip from the pinned GitHub release URL.
+ *   2. Verifies sha256 against the pinned value.
+ *   3. Extracts v4.3/bin/ to tools/alk/v4.3/bin/ (git-ignored).
+ *   4. Emits tools/alk/alki.cmd (Windows) and tools/alk/alki.sh (Linux/macOS) wrappers.
+ *   5. Runs a 3-line Alk probe program to confirm the interpreter works.
  *
- * Once PM resolves both blockers, this script should:
- * - Download https://github.com/alk-language/java-semantics/releases/download/v4.3/alki-v4.3.zip
- * - Verify sha256 against the pinned value below
- * - Extract v4.3/bin/ to tools/alk/ (gitignored on the preferred path)
- * - Probe `java -Djava.library.path=tools/alk/lib -cp tools/alk/alk.jar:tools/alk/lib/com.microsoft.z3.jar main.ExecutionDriver -a <probe.alk>`
- * - Confirm output matches expected value
+ * Run from the repo root:
+ *   node tools/fetch-alk.mjs
  *
- * Pinned release information (verified 2026-06-12):
+ * After running, LanguageRunners.kt calls tools/alk/alki.cmd or tools/alk/alki.sh.
+ * The wrapper encapsulates the full classpath invocation — callers never need the raw form.
  */
+
+import { createHash } from "node:crypto";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, unlinkSync } from "node:fs";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
+
+const execAsync = promisify(exec);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, "..");
+
+// ── pinned release (verified 2026-06-12) ─────────────────────────────────────
 
 const RELEASE = {
   version: "v4.3",
   url: "https://github.com/alk-language/java-semantics/releases/download/v4.3/alki-v4.3.zip",
-  zipSize: 76211126,
-  // sha256 NOT yet recorded — requires PM license clearance before download+commit
-  sha256: "PENDING_PM_LICENSE_CLEARANCE",
-  mainJar: "v4.3/bin/alk.jar",
-  z3Jar: "v4.3/bin/lib/com.microsoft.z3.jar",
-  cli: {
-    windows: "java -Djava.library.path=tools/alk/lib -cp tools/alk/alk.jar;tools/alk/lib/com.microsoft.z3.jar main.ExecutionDriver -a <file>.alk",
-    linux:   "java -Djava.library.path=tools/alk/lib -cp tools/alk/alk.jar:tools/alk/lib/com.microsoft.z3.jar main.ExecutionDriver -a <file>.alk",
-  },
+  // sha256 of alki-v4.3.zip — computed on first download 2026-06-12
+  sha256: "1c6fe0778111faf4747a445342872eb69a1f17f098c1eefc94d7db39b66820da",
+  zipName: "alki-v4.3.zip",
 };
 
-console.error("BLOCKED: tools/alk/README.md lists two PM decisions required before this script can run.");
-console.error("1. License clearance for alk-language/java-semantics (currently: no LICENSE file)");
-console.error("2. Plan §0.9-C CLI amendment: real CLI is classpath-based, not java -jar");
-process.exit(1);
+// tools/alk/v4.3/bin/ is the bin directory after extraction (zip extracts a top-level v4.3/ dir)
+const ALK_DIR   = join(REPO_ROOT, "tools", "alk");
+const ZIP_PATH  = join(ALK_DIR, RELEASE.zipName);
+// Zip contains v4.3/bin/alk.jar — extract the zip directly to tools/alk/ → tools/alk/v4.3/bin/
+const BIN_DIR   = join(ALK_DIR, "v4.3", "bin");
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+async function fetchWithProgress(url, destPath) {
+  console.log(`Downloading ${url} ...`);
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+  const total = parseInt(res.headers.get("content-length") || "0");
+  let received = 0;
+  const chunks = [];
+  const reader = res.body.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (total > 0 && received % (1024 * 1024) < 8192) {
+      const pct = Math.round((received / total) * 100);
+      console.log(`  ${Math.round(received / 1024 / 1024)} MB / ${Math.round(total / 1024 / 1024)} MB (${pct}%)`);
+    }
+  }
+  const ws = createWriteStream(destPath);
+  for (const chunk of chunks) ws.write(chunk);
+  await new Promise((ok, fail) => { ws.on("finish", ok); ws.on("error", fail); ws.end(); });
+  console.log(`  Saved: ${destPath} (${received.toLocaleString()} bytes)`);
+}
+
+function sha256File(filePath) {
+  const hash = createHash("sha256");
+  hash.update(readFileSync(filePath));
+  return hash.digest("hex");
+}
+
+async function extractZip(zipPath, destDir) {
+  console.log(`Extracting ${zipPath} → ${destDir} ...`);
+  const isWindows = process.platform === "win32";
+  if (isWindows) {
+    await execAsync(
+      `powershell -Command "Expand-Archive -Path '${zipPath.replace(/'/g, "''")}' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force"`,
+      { timeout: 120000 }
+    );
+  } else {
+    await execAsync(`unzip -o "${zipPath}" -d "${destDir}"`, { timeout: 120000 });
+  }
+  console.log("  Extraction complete.");
+}
+
+function emitWrappers(binDir, alkDir) {
+  const isWindows = process.platform === "win32";
+
+  // Windows wrapper: alki.cmd
+  // Uses the absolute bin dir baked in at fetch time.
+  const cmdPath = join(alkDir, "alki.cmd");
+  // Forward slashes work in Windows java paths; backslash for SET PATH
+  const winBin = binDir.replace(/\//g, "\\");
+  const cmdContent =
+    `@echo off\r\n` +
+    `set ALKDIR=${winBin}\r\n` +
+    `set PATH=%PATH%;%ALKDIR%;%ALKDIR%\\lib\r\n` +
+    `java -Djava.library.path="%ALKDIR%\\lib" -cp "%ALKDIR%\\alk.jar;%ALKDIR%\\lib\\com.microsoft.z3.jar" main.ExecutionDriver -a %*\r\n`;
+  writeFileSync(cmdPath, cmdContent, "utf8");
+  console.log(`  Emitted ${cmdPath}`);
+
+  // Unix wrapper: alki.sh
+  const shPath = join(alkDir, "alki.sh");
+  const unixBin = binDir.replace(/\\/g, "/");
+  const shContent =
+    `#!/bin/sh\n` +
+    `ALKDIR="${unixBin}"\n` +
+    `export PATH="$PATH:$ALKDIR:$ALKDIR/lib"\n` +
+    `export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$ALKDIR:$ALKDIR/lib"\n` +
+    `export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:$ALKDIR:$ALKDIR/lib"\n` +
+    `exec java -Djava.library.path="$ALKDIR/lib" -cp "$ALKDIR/alk.jar:$ALKDIR/lib/com.microsoft.z3.jar" main.ExecutionDriver -a "$@"\n`;
+  writeFileSync(shPath, shContent, "utf8");
+  try { chmodSync(shPath, 0o755); } catch (_) { /* Windows — no-op */ }
+  console.log(`  Emitted ${shPath}`);
+}
+
+async function runProbe(binDir, alkDir) {
+  // 3-line Alk probe: gcd(12, 8) = 4
+  // Alk syntax: = for assignment, print() for output — verified 2026-06-12.
+  const probeFile = join(alkDir, "_probe.alk");
+  writeFileSync(probeFile,
+    "a = 12; b = 8;\n" +
+    "while (b != 0) { t = a % b; a = b; b = t; }\n" +
+    "print(a);\n",
+    "utf8"
+  );
+
+  const isWindows = process.platform === "win32";
+  const wrapper   = join(alkDir, isWindows ? "alki.cmd" : "alki.sh");
+  const cmd       = isWindows
+    ? `"${wrapper}" "${probeFile}"`
+    : `sh "${wrapper}" "${probeFile}"`;
+
+  try {
+    const { stdout, stderr } = await execAsync(cmd, { timeout: 15000, shell: true });
+    const output = (stdout + stderr).trim();
+    console.log(`  Probe output: "${output}"`);
+    if (!output.includes("4")) {
+      throw new Error(`Expected "4" in probe output, got: ${output}`);
+    }
+    console.log("  Probe PASSED — gcd(12,8) = 4 confirmed.");
+    return output;
+  } catch (err) {
+    // Fallback: try direct java invocation (useful if wrapper PATH resolution differs)
+    const sep = isWindows ? ";" : ":";
+    const sep2 = isWindows ? "\\" : "/";
+    const directCmd = `java "-Djava.library.path=${binDir}${sep2}lib" -cp "${binDir}${sep2}alk.jar${sep}${binDir}${sep2}lib${sep2}com.microsoft.z3.jar" main.ExecutionDriver -a "${probeFile}"`;
+    try {
+      const { stdout, stderr } = await execAsync(directCmd, { timeout: 15000, shell: true });
+      const output = (stdout + stderr).trim();
+      console.log(`  Direct probe output: "${output}"`);
+      if (!output.includes("4")) {
+        throw new Error(`Expected "4" in direct probe output, got: ${output}`);
+      }
+      console.log("  Probe PASSED (via direct invocation) — gcd(12,8) = 4 confirmed.");
+      return output;
+    } catch (err2) {
+      throw new Error(`Probe FAILED.\nWrapper error: ${err.message}\nDirect error: ${err2.message}`);
+    }
+  }
+}
+
+// ── main ─────────────────────────────────────────────────────────────────────
+
+async function main() {
+  console.log("=== fetch-alk.mjs (R-6-Q2, PM ruling 2026-06-12) ===");
+  console.log(`Alk version : ${RELEASE.version}`);
+  console.log(`Target dir  : ${ALK_DIR}`);
+  console.log(`Expected bin: ${BIN_DIR}`);
+
+  // 1. Java check
+  try {
+    const { stderr } = await execAsync("java -version", { timeout: 10000 });
+    console.log(`Java        : ${stderr.split("\n")[0].trim()}`);
+  } catch {
+    throw new Error("java is not on PATH — required to run Alk.");
+  }
+
+  // 2. Create dirs
+  mkdirSync(ALK_DIR, { recursive: true });
+
+  // 3. Download if not already present
+  if (!existsSync(ZIP_PATH)) {
+    await fetchWithProgress(RELEASE.url, ZIP_PATH);
+  } else {
+    console.log(`ZIP cached  : ${ZIP_PATH}`);
+  }
+
+  // 4. Verify sha256
+  const actualSha256 = sha256File(ZIP_PATH);
+  console.log(`SHA-256     : ${actualSha256}`);
+  if (actualSha256 !== RELEASE.sha256) {
+    throw new Error(
+      `SHA-256 MISMATCH!\n  Expected: ${RELEASE.sha256}\n  Actual:   ${actualSha256}\n` +
+      `Delete ${ZIP_PATH} and re-run, or update RELEASE.sha256 if the release was re-published.`
+    );
+  }
+  console.log("SHA-256     : OK");
+
+  // 5. Extract if not already done
+  const alkJar = join(BIN_DIR, "alk.jar");
+  if (!existsSync(alkJar)) {
+    // Extract zip directly into ALK_DIR → produces ALK_DIR/v4.3/bin/alk.jar
+    await extractZip(ZIP_PATH, ALK_DIR);
+    if (!existsSync(alkJar)) {
+      throw new Error(`Expected ${alkJar} after extraction — zip structure may have changed.`);
+    }
+  } else {
+    console.log(`Already extracted: ${alkJar}`);
+  }
+
+  // 6. Emit wrappers
+  emitWrappers(BIN_DIR, ALK_DIR);
+
+  // 7. Run probe
+  await runProbe(BIN_DIR, ALK_DIR);
+
+  console.log("\n=== fetch-alk.mjs COMPLETE ===");
+  console.log(`Alk ${RELEASE.version} ready at ${BIN_DIR}`);
+  console.log(`Wrappers emitted:`);
+  console.log(`  tools/alk/alki.cmd  (Windows)`);
+  console.log(`  tools/alk/alki.sh   (Linux/macOS)`);
+  console.log(`SHA-256 verified: ${RELEASE.sha256}`);
+}
+
+main().catch(err => {
+  console.error("\nFATAL:", err.message || err);
+  process.exit(1);
+});
