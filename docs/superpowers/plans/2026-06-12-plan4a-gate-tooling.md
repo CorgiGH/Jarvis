@@ -28,6 +28,9 @@
 - **D. Baselines:** `playwright.visual.config.ts` (workers:1, deviceScaleFactor:1, snapshotPathTemplate under `e2e/visual/__screenshots__/`), specs `e2e/visual/shell.visual.spec.ts` + `e2e/visual/viz-demo.visual.spec.ts` (toHaveScreenshot, fullPage, maxDiffPixelRatio 0); baselines GENERATED and committed in this plan (the human-recommit owner = the PM, per council (b)); INV-9.5 scope test `e2e/visual/baselineScope.test.ts`-style script asserting every file under `__screenshots__` traces to exactly those 2 specs; npm script `e2e:visual`.
 - **E. Grader harness:** `GraderGoldenHarness` JUnit 5 parameterized test over `fixtures/grader-golden/**/*.json` (shape: `{grader:"grade-scoring", subject, input:{rubric…}, expected:{score, correct}}`); ≥12 golden items for GradeScoring spanning PA/ALO/PS shapes incl. edge cases (empty rubric, all-false, all-or-nothing); runs inside `:check`; a seeded-violation test proves the harness reds on a changed expectation (fix-claim discipline).
 
+
+> **PM RULING (2026-06-12, Task-4 second stop):** `themeRefHarness.tsx` MUST be **SELF-CONTAINED** — a token-true LIGHT/DARK brutalist specimen built from `index.css` tokens only, with **ZERO imports from `src/door/DoorBrutalist|concept|figures`** (those are deliberately-untracked working-tree demos per the standing door rule; importing them makes the committed tree unresolvable on clean checkout — the verifier PROVED 2/3 baselines die when they're absent). The earlier canonical block prescribing DoorBrutalist imports is RETRACTED. The two theme PNGs must be regenerated from the self-contained harness, and the committed-state proof (move untracked door files aside → `npm run e2e:visual` 3/3 → restore) is a REQUIRED step. Also: the snapshotPathTemplate carries no `{platform}` token — baseline filenames have NO -win32 suffix; the manifest note should say so.
+
 ## Tasks
 
 | # | Task |
