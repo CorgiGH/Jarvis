@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Plan 4a §0.9B — generate the DESIGN.md token table from tutor-web/src/index.css.
  *

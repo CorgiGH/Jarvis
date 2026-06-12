@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Plan 4a §0.9C — Impeccable applicable-subset, applied as a POST-PROCESS FILTER.
  *

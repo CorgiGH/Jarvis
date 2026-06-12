@@ -20,7 +20,10 @@ function committedBlock(text: string): string {
 
 describe("DESIGN.md token block stays in sync with index.css (Plan 4a §0.9B)", () => {
   it("regenerated block equals the committed block (run `npm run design:check` to fix drift)", () => {
+    // Normalize CRLF: git autocrlf may check DESIGN.md out with \r\n while the generator
+    // emits \n — the gate is about TOKEN CONTENT drift, not checkout line endings.
+    const norm = (s: string) => s.replace(/\r\n/g, "\n").trim();
     const regenerated = generateBlock(css);
-    expect(committedBlock(design)).toBe(regenerated);
+    expect(norm(committedBlock(design))).toBe(norm(regenerated));
   });
 });
