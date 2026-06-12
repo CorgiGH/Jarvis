@@ -154,7 +154,7 @@ function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>) {
           const isHi = hi.has(n.id);
           const w = labelWidthFor(labelOf.get(n.id) ?? n.label);
           return (
-            <g key={n.id} transform={`translate(${pos.x},${pos.y})`}>
+            <g key={n.id} data-node-id={n.id} transform={`translate(${pos.x},${pos.y})`}>
               <rect
                 x={-w / 2}
                 y={-BOX_H / 2}
