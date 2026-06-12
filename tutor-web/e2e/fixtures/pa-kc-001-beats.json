@@ -5,9 +5,9 @@
   "concrete_question_ro": "Care dintre următoarele descrieri este un algoritm, conform definiției din curs?",
   "echo_source_ro": "An algorithm is a well-ordered collection of unambiguous and effectively computable operations that when executed produces a result and halts in a finite amount of time.",
   "prediction_options": [
-    "„Citește a și b, calculează s = a + b, afișează s și oprește-te."",
-    "„Fă-l să arate bine."",
-    "„Repetă pasul la nesfârșit, fără condiție de oprire.""
+    "„Citește a și b, calculează s = a + b, afișează s și oprește-te.”",
+    "„Fă-l să arate bine.”",
+    "„Repetă pasul la nesfârșit, fără condiție de oprire.”"
   ],
   "term_ro": "Algoritm",
   "definition_ro": "Algoritm = o colecție bine ordonată de operații neambigue și efectiv calculabile care, atunci când sunt executate, produc un rezultat și se opresc într-un timp finit.",
@@ -20,13 +20,13 @@
     "predict": {
       "prompt": "Care dintre următoarele descrieri este un algoritm, conform definiției din curs?",
       "options": [
-        { "text": "„Citește a și b, calculează s = a + b, afișează s și oprește-te."", "callback": "Exact — pașii sunt neambigui și efectiv calculabili, produce un rezultat și se oprește în timp finit (definiția p.4).", "correct": true },
-        { "text": "„Fă-l să arate bine."", "callback": "Nu — pasul nu este neambiguu; definiția cere operații neambigue și efectiv calculabile.", "correct": false },
-        { "text": "„Repetă pasul la nesfârșit, fără condiție de oprire."", "callback": "Nu — încalcă cerința ca execuția să se oprească într-un timp finit.", "correct": false }
+        { "text": "„Citește a și b, calculează s = a + b, afișează s și oprește-te.”", "callback": "Exact — pașii sunt neambigui și efectiv calculabili, produce un rezultat și se oprește în timp finit (definiția p.4).", "correct": true },
+        { "text": "„Fă-l să arate bine.”", "callback": "Nu — pasul nu este neambiguu; definiția cere operații neambigue și efectiv calculabile.", "correct": false },
+        { "text": "„Repetă pasul la nesfârșit, fără condiție de oprire.”", "callback": "Nu — încalcă cerința ca execuția să se oprească într-un timp finit.", "correct": false }
       ]
     },
     "attempt": {
-      "statement": "Secvența „cât timp x > 0, afișează x" (fără ca x să se modifice) este un algoritm?",
+      "statement": "Secvența „cât timp x > 0, afișează x” (fără ca x să se modifice) este un algoritm?",
       "choices": [
         { "text": "Da, este un algoritm", "correct": false, "feedback": "Nu chiar: dacă x nu se schimbă, execuția nu se oprește niciodată — se încalcă cerința de terminare în timp finit din definiția p.4." },
         { "text": "Nu, nu este un algoritm", "correct": true, "feedback": "Corect — fără terminare în timp finit nu îndeplinește definiția din curs, oricât de neambigui ar fi pașii." }

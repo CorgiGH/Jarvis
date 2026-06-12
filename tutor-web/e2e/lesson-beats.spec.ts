@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { assertNoClip } from "./helpers/assertNoClip";
-import fixture from "./fixtures/pa-kc-001-beats.json";
+import fixture from "./fixtures/pa-kc-001-beats.json" with { type: "json" };
 
 // VERBATIM-PIN (specTrust#3): the fixture's beats MUST be byte-identical to the Task-7 authored
 // content/PA/kcs/pa-kc-001.yaml beats.ro. If Task 7 edits the authored beats, re-sync this fixture.
@@ -11,7 +11,7 @@ test("fixture is the Task-7 authored pa-kc-001 content (verbatim pin)", () => {
     "Care dintre următoarele descrieri este un algoritm, conform definiției din curs?",
   );
   expect(fixture.beats.predict.options[0].text).toBe(
-    "„Citește a și b, calculează s = a + b, afișează s și oprește-te."",
+    "„Citește a și b, calculează s = a + b, afișează s și oprește-te.”",
   );
   expect(fixture.beats.check.item_stem).toBe(
     "O rețetă de bucătărie cu pași clari care se termină după ultimul pas îndeplinește definiția algoritmului din curs?",
