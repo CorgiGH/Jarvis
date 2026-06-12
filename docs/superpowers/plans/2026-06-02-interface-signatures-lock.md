@@ -613,12 +613,14 @@ data class ApiLessonReply(
     val explanation_ro: String?,           // KnowledgeConcept.explanation_ro
     val worked_example_ro: String?,        // KnowledgeConcept.worked_example_ro
     val provenance: DrillProvenanceDto,    // always {type="authored", hasBeenFaithfulChecked=true}
+    val beats: ApiLessonBeats? = null,     // Plan-3 ADDITIVE (spec §4): the served beat plan + content; null ⇒ legacy
 )
 ```
 
 **Field-mapping notes:**
-- `definition_ro` is ALWAYS `null` today — `KnowledgeConcept` has no dedicated `definition` field, and we do NOT duplicate `explanation_ro` into it (trust-first: never imply an authored definition that doesn't exist). Field kept nullable for forward-compat if a definition source is added.
-- `prediction_options` is always `emptyList()` — honest-degraded; DO NOT fabricate. Future: populate from a KC options source when one exists.
+- **Plan-3 amendment (2026-06-12):** `prediction_options` is populated from the served beats predict beat — `beats["ro"].predict.options[*].text`. `BeatPredict.options` IS the KC options source the original note anticipated ("populate from a KC options source when one exists"). Populated ONLY when the served BeatSelector plan carries ① PREDICT; a plan without ① keeps `emptyList()` (no fabrication).
+- **Plan-3 amendment (2026-06-12):** `definition_ro` is populated from `beats["ro"].name.definition` when the served plan carries ④ NAME and the definition is non-blank. `BeatName.definition` IS a dedicated definition field distinct from `explanation_ro` — populating it is honest, not a duplicate. STANDARD / MASTERED-REVISIT / RE-LESSON omit ④, so `definition_ro` stays `null` for those plans (the served plan carries no ④).
+- The 12th field `beats` carries the BeatSelector-chosen plan + the beat content; present only when `beats["ro"].isCompleteFor(concept_type)` (else the route is 404 `beats not complete`). The pre-beats honest-degraded shape (`prediction_options=[]`, `definition_ro=null`, `beats=null`) is still the legal legacy payload for any KC without complete beats — but in practice every served KC has complete beats post-Task 3 (incomplete ⇒ 404).
 - `provenance` is `{type="authored", hasBeenFaithfulChecked=true}` — the gate guarantees faithfulness before 200 is returned.
 
 **Consistency:** uses the same `VerifyAdmin.resolveStatus` + `ReportWrongQuery.hasOpenReportWrong` helpers as `GET /teaching/{kcId}` (same faithful-gate contract, §I.2 + D-RF2).

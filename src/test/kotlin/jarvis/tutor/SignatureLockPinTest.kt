@@ -98,14 +98,14 @@ class SignatureLockPinTest {
         )
     }
 
-    /** lock §NEW-L — the lesson reply field names IN ORDER (kotlinx-serialization descriptor). */
+    /** lock §NEW-L (Plan-3 amended) — the lesson reply field names IN ORDER; `beats` appended 12th. */
     @Test
     fun `ApiLessonReply wire field names match the NEW-L list in order`() {
         assertEquals(
             listOf(
                 "kcId", "kc_name_ro", "kc_name_en", "concrete_question_ro", "echo_source_ro",
                 "prediction_options", "term_ro", "definition_ro", "explanation_ro",
-                "worked_example_ro", "provenance",
+                "worked_example_ro", "provenance", "beats",
             ),
             wireFieldNames<ApiLessonReply>(),
         )

@@ -151,7 +151,48 @@ data class ApiLessonReply(
     val explanation_ro: String?,
     val worked_example_ro: String?,
     val provenance: jarvis.tutor.DrillProvenanceDto, // {authored, hasBeenFaithfulChecked=true}
+    // ===== Plan 3 §0.9B (spec §4) — ADDITIVE 12th field, appended LAST; lock §NEW-L + pin amended SAME commit.
+    // null ⇒ legacy payload (never served in practice post-Task 3: incomplete beats are 404). =====
+    val beats: ApiLessonBeats? = null,
 )
+
+/**
+ * Plan-3 §0.9B — the ADDITIVE beats payload on the lesson reply (spec §4). Present only when the KC's
+ * `beats["ro"]` is structurally complete for its concept_type (KcBeats.isCompleteFor). `plan` is the
+ * served BeatSelector plan as lowercase BeatType names, in order; a beat sub-object is present iff the
+ * plan contains that beat. `correct`/`callback`/`feedback` flags ride to the client for the gate/echo
+ * UX, but the SERVER is grading truth via POST /api/v1/lesson/{kcId}/beat — the reply is never trusted
+ * for writes (Task 4).
+ */
+@Serializable
+data class ApiLessonBeats(
+    val plan: List<String>,                  // BeatType lowercase names, in served order
+    val concept_type: String,                // the KC's wire literal
+    val predict: ApiBeatPredict? = null,     // present iff plan contains "predict"
+    val attempt: ApiBeatAttempt? = null,
+    val reveal: ApiBeatReveal? = null,
+    val name: ApiBeatName? = null,           // present iff plan contains "name"
+    val check: ApiBeatCheck? = null,
+)
+
+@Serializable data class ApiPredictOption(val text: String, val callback: String, val correct: Boolean)
+@Serializable data class ApiBeatPredict(val prompt: String, val options: List<ApiPredictOption>)
+@Serializable data class ApiAttemptChoice(val text: String, val correct: Boolean, val feedback: String)
+@Serializable data class ApiSkeletonRow(val label: String, val formula: String?, val is_decision_row: Boolean)
+@Serializable data class ApiTraceStep(val row_index: Int, val value: String, val callout: String?)
+@Serializable data class ApiBeatAttempt(
+    val statement: String,
+    val choices: List<ApiAttemptChoice> = emptyList(),
+    val skeleton_rows: List<ApiSkeletonRow> = emptyList(),
+    val trace_steps: List<ApiTraceStep> = emptyList(),
+    val input_schema: String? = null,
+    val feedback_correct: String,
+)
+@Serializable data class ApiRevealStep(val text: String, val callout: String)
+@Serializable data class ApiFigureBinding(val family_id: String, val instance_id: String)
+@Serializable data class ApiBeatReveal(val steps: List<ApiRevealStep>, val figure: ApiFigureBinding? = null)
+@Serializable data class ApiBeatName(val definition: String, val invariant_statement: String, val why_matters: String)
+@Serializable data class ApiBeatCheck(val item_stem: String, val choices: List<ApiAttemptChoice> = emptyList(), val numeric_answer: String? = null, val numeric_tolerance: Double? = null)
 
 fun Route.installQueueMasteryCalibrationRoutes() {
 
@@ -384,7 +425,7 @@ fun Route.installQueueMasteryCalibrationRoutes() {
     // disputed / unknown ⇒ 404 (OMIT, never a degraded payload). Maps KnowledgeConcept authored
     // fields to ApiLessonReply; prediction_options is honest-degraded empty list (no source yet).
     get("/api/v1/lesson/{kcId}") {
-        requireUser { _ ->
+        requireUser { userId ->
             val ctx = call.application.attributes.getOrNull(TutorContextKey)
                 ?: run { call.respond(HttpStatusCode.InternalServerError, "TutorContext missing"); return@requireUser }
             val db = ctx.db
@@ -405,6 +446,66 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                 call.respond(HttpStatusCode.NotFound, """{"error":"disputed"}"""); return@requireUser
             }
 
+            // ── Plan-3 beats guard (spec §4.1/§4.5) — INLINE after the faithful gate, NOT a gate-signature
+            //    change (§I.2 RF2 FROZEN). concept_type must parse; beats["ro"] must be structurally
+            //    complete for that type (KcBeats.isCompleteFor). Either failing ⇒ 404 (OMIT, fail-loud).
+            val conceptType = kc.concept_type?.let { jarvis.content.ConceptType.fromWire(it) }
+                ?: run { call.respond(HttpStatusCode.NotFound, """{"error":"concept_type invalid"}"""); return@requireUser }
+            val roBeats = kc.beats["ro"]
+            if (roBeats == null || !roBeats.isCompleteFor(conceptType)) {
+                call.respond(HttpStatusCode.NotFound, """{"error":"beats not complete"}"""); return@requireUser
+            }
+
+            // The served plan: BeatSelector chooses compression from concept_type + mastery (Task 2).
+            // No mastery row ⇒ first encounter ⇒ FULL/STANDARD only (INV-4.1). reLesson is never passed.
+            val mastery = readMastery(db, userId, kc.id)
+            val plan = jarvis.tutor.lesson.BeatSelector.planFor(
+                conceptType = conceptType,
+                phase = resolvePhase(mastery),
+                isFirstEncounter = mastery == null,
+            )
+            val planBeats = plan.beats.map { it.name.lowercase() }  // ["predict","attempt",...]
+            val carriesName = jarvis.tutor.lesson.BeatType.NAME in plan.beats
+
+            // Map ONLY the beats the served plan contains (a compressed plan omits ① and/or ④).
+            val apiBeats = ApiLessonBeats(
+                plan = planBeats,
+                concept_type = jarvis.content.ConceptType.wireOf(conceptType),
+                predict = if (jarvis.tutor.lesson.BeatType.PREDICT in plan.beats) roBeats.predict?.let { p ->
+                    ApiBeatPredict(
+                        prompt = p.prompt,
+                        options = p.options.map { ApiPredictOption(it.text, it.callback, it.correct) },
+                    )
+                } else null,
+                attempt = if (jarvis.tutor.lesson.BeatType.ATTEMPT in plan.beats) roBeats.attempt?.let { a ->
+                    ApiBeatAttempt(
+                        statement = a.statement,
+                        choices = a.choices.map { ApiAttemptChoice(it.text, it.correct, it.feedback) },
+                        skeleton_rows = a.skeleton_rows.map { ApiSkeletonRow(it.label, it.formula, it.is_decision_row) },
+                        trace_steps = a.trace_steps.map { ApiTraceStep(it.row_index, it.value, it.callout) },
+                        input_schema = a.input_schema,
+                        feedback_correct = a.feedback_correct,
+                    )
+                } else null,
+                reveal = if (jarvis.tutor.lesson.BeatType.REVEAL in plan.beats) roBeats.reveal?.let { r ->
+                    ApiBeatReveal(
+                        steps = r.steps.map { ApiRevealStep(it.text, it.callout) },
+                        figure = r.figure?.let { ApiFigureBinding(it.family_id, it.instance_id) },
+                    )
+                } else null,
+                name = if (carriesName) roBeats.name?.let { n ->
+                    ApiBeatName(n.definition, n.invariant_statement, n.why_matters)
+                } else null,
+                check = if (jarvis.tutor.lesson.BeatType.CHECK in plan.beats) roBeats.check?.let { c ->
+                    ApiBeatCheck(
+                        item_stem = c.item_stem,
+                        choices = c.choices.map { ApiAttemptChoice(it.text, it.correct, it.feedback) },
+                        numeric_answer = c.numeric_answer,
+                        numeric_tolerance = c.numeric_tolerance,
+                    )
+                } else null,
+            )
+
             call.respond(
                 HttpStatusCode.OK,
                 ApiLessonReply(
@@ -415,18 +516,22 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                     concrete_question_ro = kc.stem_template?.takeIf { it.isNotBlank() },
                     // First source quote → echo anchor (null if no source refs)
                     echo_source_ro = kc.source.firstOrNull()?.quote?.takeIf { it.isNotBlank() },
-                    // Honest degraded: no option source on KC yet — empty list, DO NOT fabricate
-                    prediction_options = emptyList(),
+                    // Plan-3 (lock §NEW-L amended): BeatPredict.options IS the KC options source. Populated
+                    // ONLY when the served plan carries ① PREDICT; a plan without it keeps the honest-empty
+                    // list (no fabrication). beats complete is already proven by the guard above.
+                    prediction_options = apiBeats.predict?.options?.map { it.text } ?: emptyList(),
                     // term = name_ro (primary Romanian label)
                     term_ro = kc.name_ro,
-                    // definition_ro: no dedicated KC field exists today. Honest-null rather than
-                    // duplicating explanation_ro (trust-first: never imply a definition was authored
-                    // when none was). Field kept nullable for forward-compat if a source is added.
-                    definition_ro = null,
+                    // Plan-3 (lock §NEW-L amended): BeatName.definition IS the dedicated definition field.
+                    // Populated ONLY when the served plan carries ④ NAME and the definition is non-blank —
+                    // STANDARD/MASTERED-REVISIT/RE-LESSON omit ④, so definition_ro stays null (the served
+                    // plan carries no ④; still NOT a duplicate of explanation_ro, trust-first).
+                    definition_ro = apiBeats.name?.definition?.takeIf { it.isNotBlank() },
                     explanation_ro = kc.explanation_ro?.takeIf { it.isNotBlank() },
                     worked_example_ro = kc.worked_example_ro?.takeIf { it.isNotBlank() },
                     // Served only behind the faithful gate ⇒ honest authored+checked provenance.
                     provenance = jarvis.tutor.DrillProvenanceDto(type = "authored", hasBeenFaithfulChecked = true),
+                    beats = apiBeats,
                 ),
             )
         }
