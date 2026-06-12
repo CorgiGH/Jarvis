@@ -11,6 +11,8 @@
 
 ## Commits (git log --oneline main..lane-b/plan4a)
 ```
+a448f35 docs(plan4a): Task 6 re-verify — update manifest (patch --3way note + fresh gate results)
+965e48a docs(plan4a): Lane B merge manifest — commits, changed files, CI patch, follow-ups, PM recipe
 42a3b3b fix(plan4a): regenerate impeccable CI patch with proper CRLF-aware unified diff (git apply --check passes)
 9892ceb feat(plan4a): grader-golden harness (deterministic leg) + 12 goldens + seeded-red proof
 3a26958 fix(plan4a): self-contained themeRefHarness (zero src/door/* imports) + regenerate DARK baseline
@@ -27,6 +29,7 @@ cc36118 feat(fonts): self-host JetBrains Mono/Fraunces/Nunito woff2 (gwfh static
 ```
 DESIGN.md
 build-review/impeccable-calibration-2026-06-12.json
+build-review/tmp/lane-b-patches/MERGE-MANIFEST.md
 build-review/tmp/lane-b-patches/test-yml-impeccable.patch
 build.gradle.kts
 src/test/kotlin/jarvis/tutor/GraderGoldenHarnessTest.kt
@@ -75,11 +78,13 @@ tutor-web/src/themeRefHarness.tsx
 tutor-web/theme-ref.html
 ```
 
-**Zero-intersection check (MERGE-time):** none of the above is a Plan-3 Tasks 8–11 file
+**Zero-intersection check (MERGE-time):** none of the above 49 files is a Plan-3 Tasks 8–11 file
 (re-verified at MERGE time against Plan-3's post-cut commits on main, 2026-06-12 Task 6).
 `build.gradle.kts` IS in this list — it is a PM-ratified DIRECT lane edit (Plan 3 8–11
-verifiably do not touch it, Task 5 recon). `.github/workflows/test.yml` is NOT in this
-list (it ships as a patch — see below). Zero post-cut intersection confirmed.
+verifiably do not touch it, Task 5 recon). `build-review/tmp/lane-b-patches/MERGE-MANIFEST.md`
+IS in this list (the manifest itself is a Lane-B deliverable; Plan-3 does not touch it).
+`.github/workflows/test.yml` is NOT in this list (it ships as a patch — see below).
+Zero post-cut intersection confirmed.
 
 **PM RULING (2026-06-12) applied:** `themeRefHarness.tsx` is SELF-CONTAINED — zero imports
 from `src/door/DoorBrutalist|concept|figures`. Committed-state proof: moved those 3
@@ -105,7 +110,7 @@ untracked files aside → `npm run e2e:visual` → 3/3 passed → files restored
   antipattern allow-list) + `tools/impeccable-filter.mjs` (the stdin filter) + the UNFILTERED calibrate
   output `build-review/impeccable-calibration-2026-06-12.json`. There is NO `impeccable.config.json`.
 - Verified `git apply --check --recount` clean against current `test.yml` at manifest time (Task 6 re-verification: `git apply --check` exits 0; `git apply --check --3way` fails with "patch failed: …:65" — `--3way` requires a 3-way index merge that is not available in the worktree; PM must use plain `git apply` or `git apply --recount`, not `--3way`).
-- Note: patch uses git's full-diff format (with index/hash header); PM applies with `git apply --3way`.
+- Note: patch uses git's full-diff format (with index/hash header); PM applies with plain `git apply` (NO `--3way` — verified to fail; see PM recipe step 2).
 
 ## Carried follow-ups (NOT done in Lane B — explicit hand-off)
 1. **theme.ts ⇄ DESIGN.md drift (recon §0 #3):** `tutor-web/src/components/viz/theme.ts` hardcodes
