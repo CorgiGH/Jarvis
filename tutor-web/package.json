@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "design:check": "node ../tools/generate-design-md.mjs --write"
   },
   "dependencies": {
     "@visx/group": "^3.12.0",

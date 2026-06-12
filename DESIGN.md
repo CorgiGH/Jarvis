@@ -165,3 +165,78 @@ Pre-flight = an ESLint scan + a regex for arbitrary colors + an axe `color-contr
 - **Every UI agent prompt** opens by reading this file and is forbidden from arbitrary values.
 - **The taste gate** (`grounded-ui-design`) scores renders against the two anchors above.
 - **References:** brand rationale + the full quality method → `docs/superpowers/research/2026-06-01-viz-ui-excellence-playbook.md`; the scored backlog + calibrated floor → `docs/superpowers/findings/2026-06-01-viz-score-backlog.md`.
+
+# Token mirror (machine-generated)
+
+The table below is generated from `tutor-web/src/index.css` and must not be hand-edited. It is the drift-gated mirror of the live CSS custom properties; the YAML front-matter above remains the human source of truth for prose/rationale. The CI frontend job reds if this block drifts from `index.css` (Plan 4a §0.9B).
+
+<!-- AUTOGEN:tokens BEGIN -->
+_Auto-generated from `tutor-web/src/index.css` by `tools/generate-design-md.mjs`. Do not edit by hand — run `npm run design:check`._
+
+### :root custom properties
+
+| Token | Value |
+|---|---|
+| `--color-accent` | `#fde047` |
+| `--color-accent-hover` | `#facc15` |
+| `--color-accent-rule` | `#eab308` |
+| `--color-accent-soft` | `#fefce8` |
+| `--color-border-strong` | `#000000` |
+| `--color-border-thin` | `rgba(0, 0, 0, 0.2)` |
+| `--color-danger-bg` | `#dc2626` |
+| `--color-danger-fg` | `#ffffff` |
+| `--color-danger-text` | `#991b1b` |
+| `--color-disabled-bg` | `#d1d5db` |
+| `--color-disabled-fg` | `#6b7280` |
+| `--color-info-bg` | `#bfdbfe` |
+| `--color-overlay-fg` | `#ffffff` |
+| `--color-page-bg` | `#ffffff` |
+| `--color-page-fg` | `#000000` |
+| `--color-panel-dark-bg` | `#000000` |
+| `--color-panel-dark-fg` | `#fde047` |
+| `--color-ring-focus` | `#facc15` |
+| `--color-surface-muted` | `#fafafa` |
+| `--delay-children` | `200ms` |
+| `--duration-base` | `300ms` |
+| `--duration-fast` | `200ms` |
+| `--duration-slow` | `450ms` |
+| `--ease-in` | `cubic-bezier(0.4, 0, 1, 1)` |
+| `--ease-landing` | `cubic-bezier(0.22, 1, 0.36, 1)` |
+| `--ease-out` | `cubic-bezier(0, 0, 0.2, 1)` |
+| `--ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` |
+| `--radius-none` | `0` |
+| `--shadow-hard` | `8px 8px 0 0 var(--color-border-strong)` |
+| `--stagger` | `70ms` |
+| `--type-body` | `clamp(14px, calc(13.5px + 0.1vw), 16px)` |
+| `--type-h2` | `20px` |
+| `--type-lg` | `18px` |
+| `--type-sm` | `12px` |
+
+### @theme utilities
+
+| Token | Value |
+|---|---|
+| `--color-accent` | `var(--color-accent)` |
+| `--color-accent-hover` | `var(--color-accent-hover)` |
+| `--color-accent-rule` | `var(--color-accent-rule)` |
+| `--color-accent-soft` | `var(--color-accent-soft)` |
+| `--color-border-strong` | `var(--color-border-strong)` |
+| `--color-border-thin` | `var(--color-border-thin)` |
+| `--color-danger-bg` | `var(--color-danger-bg)` |
+| `--color-danger-fg` | `var(--color-danger-fg)` |
+| `--color-danger-text` | `var(--color-danger-text)` |
+| `--color-disabled-bg` | `var(--color-disabled-bg)` |
+| `--color-disabled-fg` | `var(--color-disabled-fg)` |
+| `--color-info-bg` | `var(--color-info-bg)` |
+| `--color-overlay-fg` | `var(--color-overlay-fg)` |
+| `--color-page-bg` | `var(--color-page-bg)` |
+| `--color-page-fg` | `var(--color-page-fg)` |
+| `--color-panel-dark-bg` | `var(--color-panel-dark-bg)` |
+| `--color-panel-dark-fg` | `var(--color-panel-dark-fg)` |
+| `--color-ring-focus` | `var(--color-ring-focus)` |
+| `--color-surface-muted` | `var(--color-surface-muted)` |
+| `--ease-landing` | `var(--ease-landing)` |
+| `--ease-standard` | `var(--ease-standard)` |
+| `--shadow-hard` | `var(--shadow-hard)` |
+| `--tracking-mega` | `0.3em` |
+<!-- AUTOGEN:tokens END -->
