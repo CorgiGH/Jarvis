@@ -111,44 +111,46 @@ class LessonServeRouteTest {
             beats:
               ro:
                 predict:
-                  prompt: "Care dintre urmtoarele este un algoritm?"
+                  prompt: "Care dintre următoarele este un algoritm?"
                   options:
-                    - text: "O reteta de prajitura cu pasi clari"
-                      callback: "Corect — pasii sunt neambigui."
+                    - text: "O rețetă de prăjitură cu pași clari"
+                      callback: "Corect — pașii sunt neambigui și se termină."
                       correct: true
-                    - text: "Instructiunea fii fericit"
-                      callback: "Nu — nu este efectiv calculabila."
+                    - text: "Instrucțiunea „fii fericit”"
+                      callback: "Nu — nu este efectiv calculabilă."
                       correct: false
-                    - text: "O bucla care nu se opreste niciodata"
-                      callback: "Nu — un algoritm trebuie sa se opreasca."
+                    - text: "O buclă care nu se oprește niciodată"
+                      callback: "Nu — un algoritm trebuie să se oprească în timp finit."
                       correct: false
                 attempt:
-                  statement: "Clasifica exemplul: este sau nu un algoritm?"
-                  feedback_correct: "Da — indeplineste toate cele patru proprietati."
+                  statement: "Clasifică exemplul: este sau nu un algoritm?"
+                  feedback_correct: "Da — îndeplinește toate cele patru proprietăți."
                   choices:
                     - text: "Este un algoritm"
                       correct: true
                       feedback: "Corect: neambiguu, finit, efectiv, produce rezultat."
                     - text: "Nu este un algoritm"
                       correct: false
-                      feedback: "Reananlizeaza: pasii sunt neambigui si se opresc."
+                      feedback: "Reanalizează: pașii sunt neambigui și se opresc."
                 reveal:
                   steps:
-                    - text: "Un algoritm are operatii neambigue."
-                      callout: "Fiecare pas are un singur inteles."
+                    - text: "Un algoritm are operații neambigue."
+                      callout: "Fiecare pas are un singur înțeles."
+                    - text: "Un algoritm se oprește în timp finit."
+                      callout: "Nu există bucle infinite."
                 name:
-                  definition: "Un algoritm este o colectie bine ordonata de operatii neambigue."
-                  invariant_statement: "Orice algoritm se termina in timp finit."
-                  why_matters: "Distinge un algoritm de o procedura care nu se termina."
+                  definition: "Un algoritm este o colecție bine ordonată de operații neambigue și efectiv calculabile care se opresc în timp finit."
+                  invariant_statement: "Orice algoritm se termină în timp finit."
+                  why_matters: "Distinge un algoritm de o procedură care nu se termină."
                 check:
-                  item_stem: "Este aduna doua numere un algoritm?"
+                  item_stem: "Este „adună două numere” un algoritm?"
                   choices:
                     - text: "Da"
                       correct: true
-                      feedback: "Corect — pasi finiti, neambigui."
+                      feedback: "Corect — pași finiți, neambigui."
                     - text: "Nu"
                       correct: false
-                      feedback: "Gresit — indeplineste toate proprietatile."
+                      feedback: "Greșit — îndeplinește toate proprietățile."
             """.trimIndent(),
         )
     }
@@ -276,7 +278,7 @@ class LessonServeRouteTest {
                     - text: "O rețetă de prăjitură cu pași clari"
                       callback: "Corect — pașii sunt neambigui și se termină."
                       correct: true
-                    - text: "Instrucțiunea fii fericit"
+                    - text: "Instrucțiunea „fii fericit”"
                       callback: "Nu — nu este efectiv calculabilă."
                       correct: false
                     - text: "O buclă care nu se oprește niciodată"
@@ -303,7 +305,7 @@ class LessonServeRouteTest {
                   invariant_statement: "Orice algoritm se termină în timp finit."
                   why_matters: "Distinge un algoritm de o procedură care nu se termină."
                 check:
-                  item_stem: "Este aduna doua numere un algoritm?"
+                  item_stem: "Este „adună două numere” un algoritm?"
                   choices:
                     - text: "Da"
                       correct: true
