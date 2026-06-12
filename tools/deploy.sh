@@ -117,9 +117,19 @@ ssh "$VPS" "
 "
 
 # === VERIFY ===
+# Smoke over the REAL anonymous-reachable surfaces only. The old check curl'd the
+# app root `/` for `<div id="root"` — but `/` 302-redirects unauthenticated requests
+# to `/login` (WebMain.kt: the auth intercept), so curl (no -L) saw an empty 302 body
+# and the SPA-index assumption never held. The two public, server-rendered surfaces are
+# `/healthz` (returns the literal "ok") and `/login` (LOGIN_HTML, <title>Jarvis · login).
+# Plan-2 Task 12 confirmed both reachable anonymously; assets and `/` are auth-gated.
 echo "[deploy] verifying $HEALTH_URL"
-curl -s -m 10 "$HEALTH_URL" && echo
-curl -fsS "https://corgflix.duckdns.org/" | grep -q '<div id="root"' || { echo "SMOKE FAIL: SPA index did not serve"; exit 1; }
+HEALTH_CODE="$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$HEALTH_URL")"
+[[ "$HEALTH_CODE" == "200" ]] || { echo "SMOKE FAIL: healthz returned $HEALTH_CODE (expected 200)"; exit 1; }
+echo "[deploy] healthz 200 OK"
+LOGIN_URL="${JARVIS_LOGIN:-https://corgflix.duckdns.org/login}"
+curl -fsS -m 10 "$LOGIN_URL" | grep -q '<title>Jarvis · login' || { echo "SMOKE FAIL: /login did not serve the login page (expected <title>Jarvis · login)"; exit 1; }
+echo "[deploy] /login page OK"
 ssh "$VPS" "tail -25 /var/log/jarvis.log | grep -Ev '^SLF4J|^Picked up|^Jarvis web|^Auth required' | head -20"
 
 # === SURFACE X ADVISORY (opt-in, never blocks) ===
