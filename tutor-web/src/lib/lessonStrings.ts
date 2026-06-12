@@ -40,6 +40,8 @@ export const lessonStrings = {
   handoff: "Începe exercițiile",
   /** Honest-degraded fallback when the KC has no servable beats / 404. */
   unavailable: "Această lecție nu este încă disponibilă — revin mai târziu.",
+  /** Plan 4b Task 1 — RO fallback shown when a beat component throws on render (LessonErrorBoundary). */
+  beatError: "Ceva n-a mers la acest pas — încearcă să reîncarci lecția.",
 } as const;
 
 /** The five beat glyphs, indexed by beat ordinal in the served plan (NOT by beat kind). */

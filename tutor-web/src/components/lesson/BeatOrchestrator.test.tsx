@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { BeatOrchestrator } from "./BeatOrchestrator";
 import type { ApiLessonReply } from "../../lib/lesson";
 import type { ApiBeatGradeReply } from "../../lib/beatGrade";
+import * as PredictBeatModule from "./PredictBeat";
 
 function mockReducedMotion(reduced: boolean) {
   Object.defineProperty(window, "matchMedia", {
@@ -208,6 +209,33 @@ describe("BeatOrchestrator reveal echo + dwell", () => {
     // elapse the dwell floor
     await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
     expect(screen.getByTestId("beat-next-gate")).toBeEnabled();
+  });
+});
+
+describe("BeatOrchestrator error boundary integration", () => {
+  it("a crashed beat leaves lesson-beat-pips mounted", () => {
+    stubFetch();
+    // Spy on PredictBeat so we can make it throw
+    vi.spyOn(PredictBeatModule, "PredictBeat").mockImplementation(() => {
+      throw new Error("simulated crash");
+    });
+    renderOrch();
+    // Pips (outside the boundary) must remain in the document
+    expect(screen.getByTestId("lesson-beat-pips")).toBeInTheDocument();
+    // The error fallback must be visible
+    expect(screen.getByTestId("lesson-beat-error")).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it("the next-gate stays disabled while the beat-error fallback is showing", () => {
+    stubFetch();
+    vi.spyOn(PredictBeatModule, "PredictBeat").mockImplementation(() => {
+      throw new Error("simulated crash");
+    });
+    renderOrch();
+    // beat-next-gate must remain disabled (gate not cleared because the beat threw before any commit)
+    expect(screen.getByTestId("beat-next-gate")).toBeDisabled();
+    vi.restoreAllMocks();
   });
 });
 

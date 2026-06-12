@@ -7,6 +7,7 @@ import { AttemptBeat } from "./AttemptBeat";
 import { RevealBeat } from "./RevealBeat";
 import { NameBeat } from "./NameBeat";
 import { CheckBeat } from "./CheckBeat";
+import { LessonErrorBoundary } from "./LessonErrorBoundary";
 
 interface BeatOrchestratorProps {
   kcId: string;
@@ -146,33 +147,39 @@ export function BeatOrchestrator({ kcId, lesson, onComplete }: BeatOrchestratorP
         ))}
       </div>
 
-      {/* Active beat */}
+      {/* Active beat — wrapped in a per-beat error boundary (Plan 4b Task 1).
+          key={activeIdx} resets the boundary state when the learner advances to a new beat.
+          The boundary wraps ONLY the beat body; pips + gate controls stay outside so they
+          remain mounted even when a beat component throws. A crashed beat must not open the gate
+          (cleared[activeIdx] stays false while the fallback shows). */}
       <div data-testid="lesson-beat-active" className="flex flex-col gap-4 p-4 flex-1">
         <span className="font-bold uppercase tracking-widest text-[10px] text-page-fg/50">
           {BEAT_GLYPHS[activeIdx]} {beatKindLabel(kind)}
         </span>
 
-        {kind === "predict" && beats.predict && (
-          <PredictBeat predict={beats.predict} committedIndex={predictIndex} onCommit={commitPredict} />
-        )}
-        {kind === "attempt" && beats.attempt && (
-          <AttemptBeat attempt={beats.attempt} committedIndex={attemptIndex} onCommitChoice={commitAttempt} />
-        )}
-        {kind === "reveal" && beats.reveal && (
-          <RevealBeat reveal={beats.reveal} predictedOption={predictedOption} onGateClear={() => markCleared(activeIdx)} />
-        )}
-        {kind === "name" && beats.name && (
-          <NameBeat name={beats.name} onGateClear={() => markCleared(activeIdx)} />
-        )}
-        {kind === "check" && beats.check && (
-          <CheckBeat
-            check={beats.check}
-            submitted={checkSubmitted}
-            feedbackRo={checkFeedback}
-            onSubmitChoice={(i) => submitCheck({ selected_index: i })}
-            onSubmitNumeric={(v) => submitCheck({ free_input: v })}
-          />
-        )}
+        <LessonErrorBoundary key={activeIdx}>
+          {kind === "predict" && beats.predict && (
+            <PredictBeat predict={beats.predict} committedIndex={predictIndex} onCommit={commitPredict} />
+          )}
+          {kind === "attempt" && beats.attempt && (
+            <AttemptBeat attempt={beats.attempt} committedIndex={attemptIndex} onCommitChoice={commitAttempt} />
+          )}
+          {kind === "reveal" && beats.reveal && (
+            <RevealBeat reveal={beats.reveal} predictedOption={predictedOption} onGateClear={() => markCleared(activeIdx)} />
+          )}
+          {kind === "name" && beats.name && (
+            <NameBeat name={beats.name} onGateClear={() => markCleared(activeIdx)} />
+          )}
+          {kind === "check" && beats.check && (
+            <CheckBeat
+              check={beats.check}
+              submitted={checkSubmitted}
+              feedbackRo={checkFeedback}
+              onSubmitChoice={(i) => submitCheck({ selected_index: i })}
+              onSubmitNumeric={(v) => submitCheck({ free_input: v })}
+            />
+          )}
+        </LessonErrorBoundary>
       </div>
 
       {/* Gate controls */}
