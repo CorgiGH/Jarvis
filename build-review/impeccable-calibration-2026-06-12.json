@@ -1,0 +1,411 @@
+[
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\ChatPane.tsx",
+    "line": 274,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "ChatPaneEnvelopes.test.tsx",
+      "gapPersist.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\ConceptDrawer.tsx",
+    "line": 65,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "ConceptInline.tsx",
+      "ResourceRail.tsx",
+      "ConceptDrawer.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\DrillStack.tsx",
+    "line": 206,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "DrillContent.provenance.test.tsx",
+      "DrillStack.confidence.test.tsx",
+      "DrillStack.grounded.test.tsx",
+      "DrillStack.ladder.test.tsx",
+      "DrillStack.misconception.test.tsx",
+      "DrillStack.provenance.test.tsx",
+      "DrillStack.test.tsx",
+      "DrillStack.trustbadge.test.tsx",
+      "ProvenanceBadge.tsx",
+      "TutorWorkspace.tsx",
+      "lesson.ts",
+      "teaching.ts",
+      "axe.drillstack.test.tsx",
+      "DrillStack.mathtext.test.tsx",
+      "DrillStack.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\DrillStack.tsx",
+    "line": 240,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "DrillContent.provenance.test.tsx",
+      "DrillStack.confidence.test.tsx",
+      "DrillStack.grounded.test.tsx",
+      "DrillStack.ladder.test.tsx",
+      "DrillStack.misconception.test.tsx",
+      "DrillStack.provenance.test.tsx",
+      "DrillStack.test.tsx",
+      "DrillStack.trustbadge.test.tsx",
+      "ProvenanceBadge.tsx",
+      "TutorWorkspace.tsx",
+      "lesson.ts",
+      "teaching.ts",
+      "axe.drillstack.test.tsx",
+      "DrillStack.mathtext.test.tsx",
+      "DrillStack.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\InlineErrorCard.tsx",
+    "line": 17,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "InlineErrorCard.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\InvariantRule.tsx",
+    "line": 21,
+    "snippet": "borderLeft: \"4px solid",
+    "importedBy": [
+      "InvariantRule.test.tsx",
+      "LessonScreen.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\KnowledgeGapCard.tsx",
+    "line": 107,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "ChatPane.tsx",
+      "ResourceRail.tsx",
+      "cardActions.test.tsx",
+      "KnowledgeGapCard.test.tsx",
+      "showDocs.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\KnowledgeLedger.tsx",
+    "line": 90,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "KnowledgeLedger.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\LedgerDrawer.tsx",
+    "line": 102,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "App.tsx",
+      "LedgerDrawer.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\lesson\\AttemptBeat.tsx",
+    "line": 58,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "BeatOrchestrator.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\lesson\\CheckBeat.tsx",
+    "line": 62,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "BeatOrchestrator.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\lesson\\NameBeat.tsx",
+    "line": 32,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "BeatOrchestrator.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\lesson\\RevealBeat.tsx",
+    "line": 63,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "BeatOrchestrator.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\lesson\\RevealBeat.tsx",
+    "line": 73,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "BeatOrchestrator.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\PdfPane.tsx",
+    "line": 142,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "ResourceRail.tsx",
+      "pdfSelection.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\RailDrawer.tsx",
+    "line": 31,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "ResourceRail.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\ResourceRail.tsx",
+    "line": 153,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "TutorWorkspace.tsx",
+      "ResourceRail.test.tsx",
+      "TutorWorkspace.citationFlow.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\Sidekick.tsx",
+    "line": 75,
+    "snippet": "borderLeft: \"3px solid",
+    "importedBy": [
+      "TutorWorkspace.tsx",
+      "Sidekick.citations.test.tsx",
+      "Sidekick.mathtext.test.tsx",
+      "Sidekick.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "layout-transition",
+    "name": "Layout property animation",
+    "description": "Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\Sidekick.tsx",
+    "line": 64,
+    "snippet": "transition: max-height",
+    "importedBy": [
+      "TutorWorkspace.tsx",
+      "Sidekick.citations.test.tsx",
+      "Sidekick.mathtext.test.tsx",
+      "Sidekick.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\SuggestedEditCard.tsx",
+    "line": 83,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "ChatPane.tsx",
+      "cardActions.test.tsx",
+      "SuggestedEditCard.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\components\\TaskQuickStart.tsx",
+    "line": 100,
+    "snippet": "border-l-4",
+    "importedBy": [
+      "App.tsx",
+      "ActiveTaskDashboard.tsx",
+      "TaskQuickStart.test.tsx"
+    ]
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\door\\DoorWarm.tsx",
+    "line": 66,
+    "snippet": "font-family:'Fraunces"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\door\\DoorWarm.tsx",
+    "line": 81,
+    "snippet": "font-family:'Fraunces"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\door\\DoorWarm.tsx",
+    "line": 105,
+    "snippet": "font-family:'Fraunces"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\door\\DoorWarm.tsx",
+    "line": 112,
+    "snippet": "font-family:'Fraunces"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\door\\DoorWarm.tsx",
+    "line": 118,
+    "snippet": "font-family:'Fraunces"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\index.css",
+    "line": 131,
+    "snippet": "font-family: 'Fraunces"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\index.css",
+    "line": 138,
+    "snippet": "font-family: 'Fraunces"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\index.css",
+    "line": 145,
+    "snippet": "font-family: 'Fraunces"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\index.css",
+    "line": 152,
+    "snippet": "font-family: 'Fraunces"
+  },
+  {
+    "antipattern": "em-dash-overuse",
+    "name": "Em-dash overuse",
+    "description": "More than two em-dashes (— or --) in body copy is an AI cadence tell. Use commas, colons, periods, or parentheses instead.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\index.css",
+    "line": 0,
+    "snippet": "184 em-dashes in body text"
+  },
+  {
+    "antipattern": "em-dash-overuse",
+    "name": "Em-dash overuse",
+    "description": "More than two em-dashes (— or --) in body copy is an AI cadence tell. Use commas, colons, periods, or parentheses instead.",
+    "severity": "warning",
+    "file": "C:\\Users\\User\\jarvis-kotlin-lane-b\\tutor-web\\src\\theme\\applyTheme.ts",
+    "line": 0,
+    "snippet": "5 em-dashes in body text",
+    "importedBy": [
+      "NameBeat.tsx",
+      "RevealBeat.tsx",
+      "PlotlyEmbed.tsx",
+      "NumLineDirect.tsx",
+      "ThemeProvider.tsx",
+      "applyTheme.test.ts"
+    ]
+  }
+]
