@@ -39,3 +39,65 @@ self_explanation_prompt: >-
 far_transfer_stem: >-
   Ia un algoritm simplu pe care îl cunoști și descrie-l în pseudo-cod, evidențiind, conform cursului,
   ce parte a descrierii este notație formală și ce parte este informală.
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Plan-3 Task 7 — 5-beat teaching content (RO). concept_type=definition-taxonomy.
+# PROVENANCE: pa-lecture-01 p.8 — "There are various ways to describe an algorithm:" with the
+#   listed modes (informal: natural language; formal: mathematical notation / programming
+#   languages; semiformal: pseudo-code «combines a formal notation with a informal one»,
+#   graphical notation) + this KC's self_explanation_prompt / far_transfer_stem.
+# ZERO new subject facts (the mode names are listed verbatim on p.8). EN spans framed RO §8.1.
+# ─────────────────────────────────────────────────────────────────────────────
+beats:
+  ro:
+    predict:
+      # ① classify-an-example-first: place a concrete description into the p.8 taxonomy.
+      prompt: “Cursul enumeră mai multe moduri de a descrie un algoritm. În ce categorie intră o descriere în limbaj natural („mai întâi citești numărul, apoi îl afișezi”)?”
+      options:
+        - text: "Mod informal (limbaj natural)"
+          callback: "Exact — p.8 listează limbajul natural drept modul informal."
+          correct: true
+        - text: "Mod formal (notație matematică sau limbaj de programare)"
+          callback: "Nu — formal înseamnă notație matematică (mașini Turing, lambda-calcul) sau limbaje de programare cu sintaxă și semantică formale."
+          correct: false
+        - text: "Nu este niciun mod valid de descriere"
+          callback: "Ba da — limbajul natural este explicit modul informal din p.8."
+          correct: false
+    attempt:
+      # ② choice attempt: classify pseudo-code, both-path feedback from the p.8 pseudo-code quote.
+      statement: “Pseudo-codul, care „combină o notație formală cu una informală\”, în ce categorie din curs intră?”
+      choices:
+        - text: "Semiformal"
+          correct: true
+          feedback: "Corect — p.8 pune pseudo-codul la categoria semiformală, fiindcă îmbină formalul cu informalul."
+        - text: "Pur formal"
+          correct: false
+          feedback: "Nu chiar: pseudo-codul combină o notație formală CU una informală, deci este semiformal, nu pur formal."
+      feedback_correct: "Bun — ai prins de ce pseudo-codul stă între formal și informal."
+    reveal:
+      # ③ stepped reveal — the three categories of p.8, callouts frame the EN source spans.
+      steps:
+        - text: "Există mai multe moduri de a descrie un algoritm."
+          callout: "Cursul spune: «There are various ways to describe an algorithm»."
+        - text: "Modul informal folosește limbajul natural; modul formal folosește notație matematică sau limbaje de programare cu sintaxă și semantică formale."
+          callout: "p.8 listează: informal = natural language; formal = mathematical notation / programming languages."
+        - text: "Pseudo-codul este semiformal: combină o notație formală cu una informală."
+          callout: "«pseudo-code, combines a formal notation with a informal one» — de aceea e semiformal."
+      figure: null
+    name:
+      definition: "Un algoritm poate fi descris în mai multe moduri: informal (limbaj natural), formal (notație matematică sau limbaje de programare cu sintaxă și semantică formale) și semiformal (pseudo-cod, notație grafică)."
+      invariant_statement: "Pseudo-codul este semiformal pentru că îmbină o parte formală cu una informală — nu este nici pur formal, nici pur informal."
+      why_matters: "Alegi modul de descriere după cât de precis trebuie să fii: informal pentru intuiție, formal pentru demonstrații, pseudo-cod ca echilibru."
+    check:
+      # ⑤ different-instance: classify a programming-language description (a different mode than ①②).
+      item_stem: "O descriere a algoritmului scrisă într-un limbaj de programare cu sintaxă și semantică formale, în ce categorie din curs intră?"
+      choices:
+        - text: "Mod formal"
+          correct: true
+          feedback: "Corect — p.8 pune limbajele de programare (cu sintaxă și semantică formale) la categoria formală."
+        - text: "Mod informal"
+          correct: false
+          feedback: "Nu — informal înseamnă limbaj natural; un limbaj de programare cu sintaxă și semantică formale este formal."
+      numeric_answer: null
+      numeric_tolerance: null

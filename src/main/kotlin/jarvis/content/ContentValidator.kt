@@ -247,6 +247,38 @@ object ContentValidator {
     }
 
     /**
+     * Plan-3 Task 7 (spec §5.5 / INV-5.5) — every FigureBinding in a beat reveal must resolve to a
+     * known viz instance id. ADDITIVE author/audit check; vacuous-true when no beat binds a figure
+     * (the 4 Task-7 faithful KCs). [knownInstanceIds] returns the set of loaded viz instance ids for
+     * the subject (caller passes ContentRepo.loadVizInstances). The family-REGISTRY half (family_id
+     * registered in the frontend familyRegistry) is checked at the frontend layer (Task 8) — this is
+     * the content-side instance-existence leg. ZERO serve/sync/hash ripple (beats don't feed claimsFor).
+     */
+    fun checkFigureBindings(
+        sub: LoadedSubject,
+        knownInstanceIds: (String) -> Set<String>,
+    ): List<ValidationIssue> {
+        val issues = mutableListOf<ValidationIssue>()
+        val known = knownInstanceIds(sub.subject)
+        for (kc in sub.kcs) {
+            for ((lang, beats) in kc.beats) {
+                val fb = beats.reveal?.figure ?: continue
+                if (fb.instance_id !in known) {
+                    issues += ValidationIssue(
+                        severity = "error",
+                        rule = "figure_binding",
+                        subject = sub.subject,
+                        detail = "KC '${kc.id}' (beats[$lang]) binds figure family='${fb.family_id}' " +
+                            "instance_id='${fb.instance_id}', which is not a known viz instance " +
+                            "(known: ${known.sorted().joinToString(", ").ifEmpty { "<none>" }})",
+                    )
+                }
+            }
+        }
+        return issues
+    }
+
+    /**
      * Plan-2 Task 1 (spec §3.1) — concept_type load-time validation.
      *
      * When a KC's [KnowledgeConcept.concept_type] is non-null it MUST be a valid wire literal

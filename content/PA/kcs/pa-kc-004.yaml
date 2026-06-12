@@ -48,3 +48,68 @@ far_transfer_stem: >-
   Cursul afirmă că diferitele modele de calcul introduse pentru definiția formală a algoritmului sunt
   echivalente din punct de vedere computațional. Pornind de la această afirmație, argumentează de ce
   alegerea unui anumit model de calcul nu schimbă mulțimea problemelor care pot fi rezolvate algoritmic.
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Plan-3 Task 7 — 5-beat teaching content (RO). concept_type=proof (proof variant: ② supply
+#   the next named sub-step from choices; ③ proof-skeleton reveal, one named sub-step per step).
+# PROVENANCE: pa-lecture-01 p.10-11 — "To prove that there is no algorithm that solve this problem,
+#   we need a formal definition for algorithm!" + "The formal definition for an algorithm was
+#   introduced using various computational models:" + "All these models are computationally
+#   equivalent." + this KC's self_explanation_prompt / far_transfer_stem.
+# ZERO new subject facts. EN spans framed RO §8.1. (Reviewer: re-derive each claim.)
+# ─────────────────────────────────────────────────────────────────────────────
+beats:
+  ro:
+    predict:
+      # ① classify which step comes FIRST in the argument (proof-variant predict on the argument).
+      prompt: "Vrei să demonstrezi că NU există un algoritm care rezolvă o anumită problemă. Care este, conform cursului, primul lucru de care ai nevoie?"
+      options:
+        - text: "O definiție formală a algoritmului"
+          callback: "Exact — cursul spune că pentru a demonstra că nu există un algoritm ai nevoie întâi de o definiție formală."
+          correct: true
+        - text: "Un calculator mai rapid"
+          callback: "Nu — viteza nu are legătură; problema este că noțiunea intuitivă de algoritm nu permite o demonstrație."
+          correct: false
+        - text: "Un singur exemplu de algoritm care eșuează"
+          callback: "Nu — un exemplu nu demonstrează inexistența; ai nevoie de o definiție formală pentru a raționa despre TOȚI algoritmii."
+          correct: false
+    attempt:
+      # ② supply-the-next-named-sub-step (proof variant). Given "need a formal definition", what's next?
+      statement: "După ce admiți că ai nevoie de o definiție formală a algoritmului, care este următorul pas din argumentul cursului?"
+      choices:
+        - text: "Definiția formală se introduce prin diverse modele de calcul (recursive, lambda-calcul, mașini Turing)."
+          correct: true
+          feedback: "Corect — p.11: definiția formală «was introduced using various computational models»."
+        - text: "Se renunță la ideea de a demonstra ceva."
+          correct: false
+          feedback: "Nu — argumentul continuă: definiția formală se obține introducând modele de calcul, nu abandonând demonstrația."
+      feedback_correct: "Bun — ai trecut corect de la „avem nevoie de o definiție formală“ la „o introducem prin modele de calcul“."
+    reveal:
+      # ③ proof-skeleton reveal: need-formal-def -> models-introduced -> models-equivalent -> conclusion.
+      steps:
+        - text: "Pas 1 — Pentru a demonstra că NU există un algoritm care rezolvă o problemă, ai nevoie de o definiție formală a algoritmului."
+          callout: "Cursul spune: «To prove that there is no algorithm ... we need a formal definition for algorithm!» (intuiția nu permite o astfel de demonstrație)."
+        - text: "Pas 2 — Definiția formală a fost introdusă prin diverse modele de calcul (funcții recursive, lambda-calcul, mașini Turing)."
+          callout: "«The formal definition for an algorithm was introduced using various computational models»."
+        - text: "Pas 3 — Toate aceste modele sunt echivalente din punct de vedere computațional."
+          callout: "«All these models are computationally equivalent» — deci nu contează pe care îl alegi."
+        - text: "Concluzie — Având o definiție formală (și echivalentă între modele), poți raționa riguros despre existența sau inexistența unui algoritm."
+          callout: "Echivalența modelelor face concluzia independentă de modelul ales."
+      figure: null
+    name:
+      definition: "Pentru a demonstra că o problemă NU este rezolvabilă algoritmic, ai nevoie de o definiție formală a algoritmului; aceasta a fost introdusă prin mai multe modele de calcul, toate echivalente computațional."
+      invariant_statement: "Pentru că modelele de calcul sunt echivalente, concluzia despre rezolvabilitatea algoritmică nu depinde de modelul ales."
+      why_matters: "Doar cu o definiție formală poți demonstra riguros că ceva NU se poate calcula — intuiția singură nu ajunge."
+    check:
+      # ⑤ different-instance application of the far_transfer_stem (model choice doesn't change solvability).
+      item_stem: "Dacă demonstrezi cu mașini Turing că o problemă nu are algoritm, ce poți spune despre rezolvarea ei cu lambda-calcul?"
+      choices:
+        - text: "Tot nu are algoritm — modelele sunt echivalente computațional"
+          correct: true
+          feedback: "Corect — fiindcă toate modelele sunt echivalente computațional, inexistența se transferă la orice model."
+        - text: "Ar putea avea algoritm în lambda-calcul, e alt model"
+          correct: false
+          feedback: "Nu — cursul afirmă că toate modelele sunt echivalente computațional, deci mulțimea problemelor rezolvabile este aceeași."
+      numeric_answer: null
+      numeric_tolerance: null

@@ -66,3 +66,68 @@ worked_example_ro: >-
   avem de făcut) și efectiv calculabil (adunarea se poate executa), iar după pasul 4 execuția se
   oprește, deci produce un rezultat în timp finit. Conform definiției din curs, această secvență
   este un algoritm.
+# ─────────────────────────────────────────────────────────────────────────────
+# Plan-3 Task 7 — 5-beat teaching content (RO). concept_type=definition-taxonomy.
+# PROVENANCE: every claim derives from THIS KC's source quotes (pa-lecture-01 p.4:
+#   "An algorithm is a well-ordered collection of unambiguous and effectively computable
+#    operations that when executed produces a result and halts in a finite amount of time."
+#   + "guaranteed to solve a specific problem") and its own explanation_ro / worked_example_ro.
+# ZERO new subject facts. EN spans framed RO per spec §8.1. (Reviewer: re-derive each claim.)
+# ─────────────────────────────────────────────────────────────────────────────
+beats:
+  ro:
+    predict:
+      # ① classify-an-example-first (def-taxonomy variant) — the three options test the THREE
+      #    definitional clauses from the p.4 quote: neambiguu+efectiv calculabil, terminare în
+      #    timp finit, produce un rezultat. Correct = the one meeting all clauses.
+      prompt: "Care dintre următoarele descrieri este un algoritm, conform definiției din curs?"
+      options:
+        - text: "„Citește a și b, calculează s = a + b, afișează s și oprește-te.\""
+          callback: "Exact — pașii sunt neambigui și efectiv calculabili, produce un rezultat și se oprește în timp finit (definiția p.4)."
+          correct: true
+        - text: "„Fă-l să arate bine.\""
+          callback: "Nu — pasul nu este neambiguu; definiția cere operații neambigue și efectiv calculabile."
+          correct: false
+        - text: "„Repetă pasul la nesfârșit, fără condiție de oprire.\""
+          callback: "Nu — încalcă cerința ca execuția să se oprească într-un timp finit."
+          correct: false
+    attempt:
+      # ② choice attempt, both-path teaching feedback. Statement reuses the worked_example_ro
+      #    add-two-numbers example; wrong path TEACHES the violated clause (never just „greșit").
+      statement: "Secvența „cât timp x > 0, afișează x\" (fără ca x să se modifice) este un algoritm?"
+      choices:
+        - text: "Da, este un algoritm"
+          correct: false
+          feedback: "Nu chiar: dacă x nu se schimbă, execuția nu se oprește niciodată — se încalcă cerința de terminare în timp finit din definiția p.4."
+        - text: "Nu, nu este un algoritm"
+          correct: true
+          feedback: "Corect — fără terminare în timp finit nu îndeplinește definiția din curs, oricât de neambigui ar fi pașii."
+      feedback_correct: "Bun — ai folosit chiar condiția de terminare din definiția p.4."
+    reveal:
+      # ③ stepped reveal — each step restates ONE clause of the p.4 definition, callout fuses the
+      #    EN source span framed RO (§8.1). Mirrors explanation_ro almost verbatim.
+      steps:
+        - text: "Un algoritm este o colecție bine ordonată de operații."
+          callout: "Cursul spune: «a well-ordered collection of ... operations» — adică pașii au o ordine clară."
+        - text: "Operațiile sunt neambigue și efectiv calculabile."
+          callout: "«unambiguous and effectively computable operations» — fiecare pas e clar și poate fi efectiv executat."
+        - text: "Când este executat, produce un rezultat și se oprește într-un timp finit."
+          callout: "«produces a result and halts in a finite amount of time» — execuția nu continuă la nesfârșit."
+      figure: null
+    name:
+      # ④ formal definition (verbatim restatement of explanation_ro) + invariant + why.
+      definition: "Algoritm = o colecție bine ordonată de operații neambigue și efectiv calculabile care, atunci când sunt executate, produc un rezultat și se opresc într-un timp finit."
+      invariant_statement: "Dacă execuția nu se oprește într-un timp finit, secvența nu este un algoritm — oricât de clari ar fi pașii."
+      why_matters: "Fără terminare nu poți garanta că obții vreodată un rezultat, deci nu poți spune că ai rezolvat problema."
+    check:
+      # ⑤ different-instance classify (NOT the attempt instance). Uses the far_transfer recipe idea.
+      item_stem: "O rețetă de bucătărie cu pași clari care se termină după ultimul pas îndeplinește definiția algoritmului din curs?"
+      choices:
+        - text: "Da — pași neambigui, efectiv executabili, se termină în timp finit"
+          correct: true
+          feedback: "Corect — îndeplinește toate cele trei condiții din definiția p.4."
+        - text: "Nu — o rețetă nu poate fi niciodată un algoritm"
+          correct: false
+          feedback: "Ba da: dacă pașii sunt neambigui, efectiv executabili și se termină în timp finit, definiția din curs este îndeplinită."
+      numeric_answer: null
+      numeric_tolerance: null

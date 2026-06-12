@@ -41,3 +41,64 @@ far_transfer_stem: >-
   Pentru o problemă concretă (de exemplu sortarea unei liste de numere), descrie-o ca perechea
   (intrare, ieșire) și arată ce reprezintă, conform cursului, configurația de start și configurația
   finală în modelul de calcul.
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Plan-3 Task 7 — 5-beat teaching content (RO). concept_type=definition-taxonomy.
+# PROVENANCE: pa-lecture-01 p.7 — "computation model" + "An algorithm must solve a problem
+#   given by a pair (input,output), where the input is represented in the start configuration
+#   and the output in the final configuration." + this KC's self_explanation_prompt / far_transfer_stem.
+# ZERO new subject facts. EN spans framed RO per §8.1. (Reviewer: re-derive each claim.)
+# ─────────────────────────────────────────────────────────────────────────────
+beats:
+  ro:
+    predict:
+      # ① classify-an-example-first: which framing matches the (intrare, ieșire) pair from p.7?
+      prompt: "O problemă este dată, conform cursului, ca o pereche (intrare, ieșire). Care descriere se potrivește acestei perechi?"
+      options:
+        - text: "Intrarea = lista nesortată din configurația de start; ieșirea = lista sortată din configurația finală."
+          callback: "Exact — intrarea apare în configurația de start, ieșirea în configurația finală (p.7)."
+          correct: true
+        - text: "Intrarea și ieșirea sunt același lucru, nu contează ordinea."
+          callback: "Nu — cursul distinge configurația de start (intrarea) de cea finală (ieșirea)."
+          correct: false
+        - text: "O problemă nu are nicio legătură cu un model de calcul."
+          callback: "Nu — perechea (intrare, ieșire) se reprezintă tocmai în configurațiile modelului de calcul."
+          correct: false
+    attempt:
+      # ② choice attempt: map a concrete problem to start/final configuration (both-path feedback).
+      statement: "Pentru problema „dat un număr n, calculează n!“, ce reprezintă configurația de start?"
+      choices:
+        - text: "Valoarea n (intrarea)"
+          correct: true
+          feedback: "Corect — intrarea (n) este reprezentată în configurația de start, conform p.7."
+        - text: "Valoarea n! (rezultatul)"
+          correct: false
+          feedback: "Nu — n! este ieșirea, reprezentată în configurația finală; configurația de start conține intrarea n."
+      feedback_correct: "Bun — ai legat intrarea de configurația de start exact ca în curs."
+    reveal:
+      # ③ stepped reveal — computation model parts + the (input,output) pairing; callouts frame EN spans.
+      steps:
+        - text: "Descrierea formală generală a procesării datelor este modelul de calcul."
+          callout: "Cursul spune: «The general formal description of this is that of computation model»."
+        - text: "Un algoritm trebuie să rezolve o problemă dată ca pereche (intrare, ieșire)."
+          callout: "«An algorithm must solve a problem given by a pair (input,output)»."
+        - text: "Intrarea se reprezintă în configurația de start, iar ieșirea în configurația finală."
+          callout: "«the input is represented in the start configuration and the output in the final configuration»."
+      figure: null
+    name:
+      definition: "O problemă (pentru un algoritm) este dată de perechea (intrare, ieșire), unde intrarea se reprezintă în configurația de start a modelului de calcul, iar ieșirea în configurația finală."
+      invariant_statement: "Intrarea trăiește în configurația de start; ieșirea în configurația finală — niciodată invers."
+      why_matters: "Fără să fixezi ce e intrarea și ce e ieșirea, nu poți spune precis ce trebuie să calculeze algoritmul."
+    check:
+      # ⑤ different-instance: sorting (the far_transfer example), classify start vs final config.
+      item_stem: "Pentru problema „sortează o listă de numere“, ce conține configurația finală?"
+      choices:
+        - text: "Lista sortată (ieșirea)"
+          correct: true
+          feedback: "Corect — ieșirea (lista sortată) se reprezintă în configurația finală, conform p.7."
+        - text: "Lista nesortată inițială (intrarea)"
+          correct: false
+          feedback: "Nu — lista nesortată este intrarea, în configurația de start; configurația finală conține ieșirea sortată."
+      numeric_answer: null
+      numeric_tolerance: null
