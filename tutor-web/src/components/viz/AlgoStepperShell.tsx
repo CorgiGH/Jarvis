@@ -40,6 +40,17 @@ export interface ShellLayout {
   canvasBg?: string;
 }
 
+/** Plan-3 §8.2 — chrome labels, ADDITIVE. Omitted fields fall back to the current EN literals so
+ *  the demo gallery is unchanged; the lesson surface passes RO via lessonStrings. */
+export interface ShellLabels {
+  frame?: string;   // "Frame"
+  reset?: string;   // "reset"
+  share?: string;   // "🔗 share"
+  voiceOn?: string;  // "🔊 voice on"
+  voiceOff?: string; // "🔇 voice off"
+  predict?: string;  // "⚡ Predict"
+}
+
 export interface AlgoStepperShellProps<S> {
   title: string;
   desc: string;
@@ -49,6 +60,8 @@ export interface AlgoStepperShellProps<S> {
   voiceMap?: Record<number, string>;
   onShare?: (hashState: string) => void;
   testIdPrefix?: string;
+  /** Plan-3 ADDITIVE — chrome labels; omitted → current EN defaults (demos unchanged). */
+  labels?: ShellLabels;
   initialStep?: number;
   /** chrome/geometry overrides; omitted → original boxed look */
   layout?: ShellLayout;
@@ -80,6 +93,14 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     renderFrame,
     testIdPrefix = "stepper",
   } = props;
+  const L = {
+    frame: props.labels?.frame ?? "Frame",
+    reset: props.labels?.reset ?? "reset",
+    share: props.labels?.share ?? "🔗 share",
+    voiceOn: props.labels?.voiceOn ?? "🔊 voice on",
+    voiceOff: props.labels?.voiceOff ?? "🔇 voice off",
+    predict: props.labels?.predict ?? "⚡ Predict",
+  };
 
   const materializedFrames = useMemo<Frame<S>[]>(() => {
     if (typeof frames === "function") return Array.from(frames());
@@ -318,7 +339,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
               marginBottom: 4,
             }}
           >
-            Frame
+            {L.frame}
           </div>
           <div
             data-testid={`${testIdPrefix}-frame-counter`}
@@ -368,7 +389,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             aria-label="Reset to first frame"
             style={brutalistBtn(false, false)}
           >
-            reset
+            {L.reset}
           </button>
           <button
             onClick={onShareClick}
@@ -376,14 +397,14 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             aria-label="Copy share link to current frame"
             style={brutalistBtn(false, false)}
           >
-            🔗 share
+            {L.share}
           </button>
           <button
             onClick={() => setVoiceOn((v) => !v)}
             data-testid={`${testIdPrefix}-voice`}
             style={brutalistBtn(voiceOn, false)}
           >
-            {voiceOn ? "🔊 voice on" : "🔇 voice off"}
+            {voiceOn ? L.voiceOn : L.voiceOff}
           </button>
         </div>
         {gateLocked && activeGate && (
@@ -400,7 +421,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
                 marginBottom: 6,
               }}
             >
-              ⚡ Predict
+              {L.predict}
             </div>
             <div style={{ fontSize: 11, lineHeight: 1.5 }}>
               {activeGate.question}

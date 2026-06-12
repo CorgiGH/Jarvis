@@ -10,6 +10,7 @@ import { PageTableWalk } from "./PageTableWalk";
 import { Tls0RttReplay } from "./Tls0RttReplay";
 import { CppVTable } from "./CppVTable";
 import { MatrixTransform } from "./MatrixTransform";
+import { GraphTreeFamily } from "./families/GraphTreeFamily";
 import { NumLineDirect } from "./NumLineDirect";
 import { OsiEncap } from "./OsiEncap";
 import { ProcessFSM } from "./ProcessFSM";
@@ -41,6 +42,11 @@ const subheadingStyle: CSSProperties = {
   letterSpacing: "0.04em",
 };
 
+// The viz-pa-mergesort-001 instance data_json (verbatim from content/PA/viz/viz-pa-mergesort-001.yaml).
+// Keep byte-identical to the shipped YAML — the family-no-clip e2e drives THIS mount.
+const MERGESORT_DATA_JSON =
+  '{"nodes":[{"id":"n0","label":"5 2 8 1 9 3"},{"id":"n1","label":"5 2 8","parent":"n0"},{"id":"n2","label":"5","parent":"n1"},{"id":"n3","label":"2 8","parent":"n1"},{"id":"n4","label":"2","parent":"n3"},{"id":"n5","label":"8","parent":"n3"},{"id":"n6","label":"1 9 3","parent":"n0"},{"id":"n7","label":"1","parent":"n6"},{"id":"n8","label":"9 3","parent":"n6"},{"id":"n9","label":"9","parent":"n8"},{"id":"n10","label":"3","parent":"n8"}],"steps":[{"highlight":["n0"],"deltas":[],"callout":"vectorul întreg — încă nesortat"},{"highlight":["n1","n6"],"deltas":[],"callout":"↓ ÎMPARTE — fiecare rând nou taie în jumătate"},{"highlight":["n2","n3","n7","n8"],"deltas":[],"callout":"↓ ÎMPARTE — fiecare rând nou taie în jumătate"},{"highlight":["n2","n4","n5","n7","n9","n10"],"deltas":[],"callout":"↓ ÎMPARTE — fiecare rând nou taie în jumătate"},{"highlight":["n2","n4","n5","n7","n9","n10"],"deltas":[],"callout":"✋ numără nivelurile: 3 = log₂(6) — de-aici vine „log n\\""},{"highlight":["n2","n3","n7","n8"],"deltas":[{"node":"n3","label":"2 8"},{"node":"n8","label":"3 9"}],"callout":"↑ INTERCLASEAZĂ — atinge toate cele 6 elemente pe nivel → O(n)"},{"highlight":["n1","n6"],"deltas":[{"node":"n1","label":"2 5 8"},{"node":"n6","label":"1 3 9"}],"callout":"↑ INTERCLASEAZĂ — atinge toate cele 6 elemente pe nivel → O(n)"},{"highlight":["n0"],"deltas":[{"node":"n0","label":"1 2 3 5 8 9"}],"callout":"3 niveluri × O(n) = O(n log n) ✓ → [1 2 3 5 8 9]"}]}';
+
 export function VizDemoPage() {
   const [numLineMu, setNumLineMu] = useState(5);
   return (
@@ -62,6 +68,14 @@ export function VizDemoPage() {
           Brutalist mono · viz-foundation-demo branch · NOT a production drill flow
         </p>
       </header>
+
+      <section data-testid="viz-demo-graph-tree" style={tileStyle}>
+        <h2 style={headingStyle}>PA · MergeSort graph-tree family (viz-pa-mergesort-001)</h2>
+        <p style={subheadingStyle}>
+          Family verification vehicle (NOT lesson content, §0.6 #1). d3-hierarchy layout · 8 steps · no-clip by construction.
+        </p>
+        <GraphTreeFamily instanceId="viz-pa-mergesort-001" dataJson={MERGESORT_DATA_JSON} language="ro" />
+      </section>
 
       <section data-testid="viz-demo-matrix" style={tileStyle}>
         <h2 style={headingStyle}>ALO-3 · Eigenvector demo (MatrixTransform)</h2>
