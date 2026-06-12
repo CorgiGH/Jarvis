@@ -58,7 +58,7 @@ No versioned ledger. `TutorMigration.migrate` (`Migration.kt:94-206`) runs `Sche
 ### 0.8 Locked decisions + documented deviations (binding for every task)
 
 1. **exam-schedule lock-route:** spec §3.5 says "seed exam_dates with the 12 IA12 rows", but 12 rows include 2–3 per subject, violating lock §R's frozen "one row per (user, subject)". Lock is canonical-on-conflict (spec §13). Resolution: new additive table `exam_schedule_rows` carries all 12 verbatim sweep rows (type/room/precision/source); `exam_dates` additionally gets the 4 primary exam dates (ALO 03.06, SORC 06.06, POO 09.06, PA 10.06) via its existing one-row-per-subject upsert semantics. INV-3.4's count-12 assertion targets `exam_schedule_rows`.
-2. **kc_id backfill honesty:** mapping = card `source_ref` filename ⇄ KC `source[*].doc` confident match only (exact doc-stem match after normalization); zero matches today is the EXPECTED, correct result. No similarity scoring, no LLM guessing.
+2. **kc_id backfill honesty (PM-amended 2026-06-12):** mapping = card `source_ref` filename ⇄ KC `source[*].doc` confident match only — exact equality after normalization, where the SUBJECT marker is non-identifying on both sides (cards carry it as the `PA:` prefix, KC docs inside the name as `pa-…`; `kcDocStems` strips it). A stem claimed by two distinct KCs is AMBIGUOUS and links nothing (first-wins = a hidden guess). Zero matches today is the EXPECTED, correct result. No similarity scoring, no LLM guessing.
 3. **No `claimsFor()` / content-hash / D9 / VerificationGate changes.** Any task whose diff touches `ContentReconcile.claimsFor`, `kcContentHashOf`, `TrustSync.VerdictRow`, or `VerificationGate.gate` is out of bounds — stop and escalate.
 4. **`concept_type` verification deferral:** type/content-mismatch flagging in the faithful-check prompt (spec §3.1) is gate-2 coverage extension = Plans 4/5. Here: enum + YAML backfill + load-time validation + invariant only.
 5. **Beat-completeness serve-gating:** `KcBeats.isCompleteFor(conceptType, lang)` ships now (Task 2) and the trustInvariants check asserts zero beat-served KCs lack complete beats — vacuously green today (beat serving starts in Plan 3), loud-red the moment Plan 3 serves an incomplete KC.
@@ -2992,12 +2992,28 @@ class KcIdBackfillTest {
 
     @Test
     fun `exact normalized stem match links the card`() {
-        // card source_ref "PA:lecture-01.md" normalizes to "pa lecture 01" == KC doc "pa-lecture-01"
+        // card "PA:lecture-01.md" -> stem "lecture 01"; KC doc "pa-lecture-01" (subject PA) ->
+        // stems {"pa lecture 01", "lecture 01"} via kcDocStems — the subject marker is
+        // non-identifying on both sides (PM reconciliation 2026-06-12), so the link holds.
         val links = KcIdBackfill.computeLinks(
             cards = listOf(card("c1", "PA:lecture-01.md")),
             kcs = listOf(kc("pa-kc-001", "PA", listOf("pa-lecture-01"))),
         )
         assertEquals(listOf(KcIdBackfill.Link(cardId = "c1", kcId = "pa-kc-001", subject = "PA")), links)
+    }
+
+    @Test
+    fun `a stem claimed by TWO distinct KCs is ambiguous and links NOTHING`() {
+        // Both KCs cite the same doc -> the stem is ambiguous -> dropped (no forced guesses;
+        // a silent first-wins would be a hidden guess).
+        val links = KcIdBackfill.computeLinks(
+            cards = listOf(card("c1", "PA:lecture-01.md")),
+            kcs = listOf(
+                kc("pa-kc-001", "PA", listOf("pa-lecture-01")),
+                kc("pa-kc-002", "PA", listOf("pa-lecture-01")),
+            ),
+        )
+        assertEquals(emptyList(), links)
     }
 
     @Test
@@ -3161,9 +3177,9 @@ object KcIdBackfill {
      *   lowercase,
      *   collapse every run of [-_ ] into a single space, then trim.
      *
-     * Examples (§0.8 #2):
+     * Examples (§0.8 #2, PM-amended 2026-06-12):
      *   "PA:lecture11_en.md" -> "lecture11 en"
-     *   "pa-lecture-01"      -> "pa lecture 01"
+     *   "pa-lecture-01"      -> "pa lecture 01"   (see kcDocStems for the subject-stripped variant)
      */
     fun normalizeDocStem(raw: String): String {
         val afterPrefix = raw.substringAfter(':', raw) // no ':' -> unchanged
@@ -3173,31 +3189,57 @@ object KcIdBackfill {
             .trim()
     }
 
+    /**
+     * Normalized subject tokens whose LEADING occurrence in a KC doc stem is non-identifying:
+     * the whole normalized subject plus each dash-half. PA -> ["pa"]; SO-RC -> ["so rc","so","rc"].
+     */
+    fun subjectStripTokens(subject: String): List<String> {
+        val whole = subject.lowercase().replace(Regex("[-_ ]+"), " ").trim()
+        return (listOf(whole) + whole.split(' ')).distinct()
+    }
+
+    /**
+     * All comparable stems for one KC source doc: the raw normalized stem PLUS the
+     * subject-prefix-stripped variant. Rationale (PM reconciliation 2026-06-12): KC docs
+     * conventionally carry the subject INSIDE the name ("pa-lecture-01") while card source_refs
+     * carry it in the "PA:" prefix — the subject marker is non-identifying on both sides; the
+     * stem is the document identity. Still exact-match only; no fuzzy similarity.
+     */
+    fun kcDocStems(subject: String, doc: String): Set<String> {
+        val raw = normalizeDocStem(doc)
+        val stripped = subjectStripTokens(subject)
+            .sortedByDescending { it.length }
+            .firstOrNull { raw.startsWith("$it ") }
+            ?.let { raw.removePrefix("$it ").trim() }
+        return setOfNotNull(raw, stripped)
+    }
+
     /** The `SUBJECT` prefix of a card `source_ref` ("PA:lecture11_en.md" -> "PA"); "" if no ':'. */
     private fun prefixOf(sourceRef: String): String =
         if (':' in sourceRef) sourceRef.substringBefore(':') else ""
 
     /**
      * Pure. A link exists iff (a) the card's prefix maps to the KC's subject AND (b) the card's
-     * normalized source-doc stem equals one of the KC's normalized `source[*].doc` stems.
-     * Deterministic order: input-card order, then KC order. First matching KC per card wins (a card
-     * gets at most one link).
+     * normalized stem equals an UNAMBIGUOUS KC doc stem of that subject. A stem claimed by MORE
+     * THAN ONE distinct KC is dropped entirely — ambiguous = no link ("no forced guesses", §0.8 #2;
+     * silent first-wins would be a hidden guess). Deterministic: input-card order.
      */
     fun computeLinks(cards: List<CardRef>, kcs: List<KnowledgeConcept>): List<Link> {
-        // index normalized KC doc stems by subject -> stem -> kcId (first KC wins for a stem)
         data class Key(val subject: String, val stem: String)
-        val bySubjectStem = LinkedHashMap<Key, String>()
+        val claims = HashMap<Key, MutableSet<String>>()
         for (kc in kcs) {
             for (ref in kc.source) {
-                val key = Key(kc.subject, normalizeDocStem(ref.doc))
-                bySubjectStem.putIfAbsent(key, kc.id)
+                for (stem in kcDocStems(kc.subject, ref.doc)) {
+                    claims.getOrPut(Key(kc.subject, stem)) { LinkedHashSet() }.add(kc.id)
+                }
             }
         }
+        val unambiguous = claims.filterValues { it.size == 1 }.mapValues { (_, v) -> v.single() }
         val links = ArrayList<Link>()
         for (card in cards) {
             val subject = subjectOfPrefix(prefixOf(card.sourceRef))
             val stem = normalizeDocStem(card.sourceRef)
-            val kcId = bySubjectStem[Key(subject, stem)] ?: continue
+            val kcId = unambiguous[Key(subject, stem)] ?: continue
             links += Link(cardId = card.id, kcId = kcId, subject = subject)
         }
         return links
@@ -3238,7 +3280,7 @@ Required imports for `applyLinks`: `org.jetbrains.exposed.sql.update`, `org.jetb
 gradle --no-daemon :test --tests "jarvis.tutor.KcIdBackfillTest"
 ```
 
-Expected: `BUILD SUCCESSFUL`, 6 tests passed.
+Expected: `BUILD SUCCESSFUL`, 7 tests passed (incl. the ambiguity-drop test).
 
 - [ ] **Step 5: Wire the `backfill-kc-ids` CLI subcommand into `Main.kt`.**
 
@@ -3718,8 +3760,9 @@ only when `faithfulRows` is non-empty; load the corpus independently here so the
             for ((subject, subjectKcs) in kcsBySubject) {
                 val subjectCards = cardsBySubject[subject].orEmpty()
                 if (subjectCards.isEmpty()) continue
-                val kcStems = subjectKcs.flatMap { it.source }
-                    .map { jarvis.tutor.KcIdBackfill.normalizeDocStem(it.doc) }.toSet()
+                val kcStems = subjectKcs.flatMap { kcRow ->
+                    kcRow.source.flatMap { jarvis.tutor.KcIdBackfill.kcDocStems(kcRow.subject, it.doc) }
+                }.toSet()
                 val anyOverlap = subjectCards.any {
                     jarvis.tutor.KcIdBackfill.normalizeDocStem(it.sourceRef) in kcStems
                 }
