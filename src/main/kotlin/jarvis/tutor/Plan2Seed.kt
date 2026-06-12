@@ -224,12 +224,16 @@ object Plan2Seed {
         var inserted = 0
         var updated = 0
         transaction(db) {
-            // sole user (exam_dates is user-scoped); abort if not exactly one
-            val userIds = UsersTable.selectAll().map { it[UsersTable.id] }
-            require(userIds.size == 1) {
-                "seedKnowledgeMeta expects exactly ONE user, found ${userIds.size} — refusing (exam_dates is user-scoped)"
+            // exam_dates is user-scoped: target the single OWNER-scope user. The live DB also
+            // carries FRIEND-scope test users (rg2/rg3, 2026-05-20) — those are legitimate rows
+            // and must NOT receive seeded exam dates. Refuse unless exactly one OWNER exists.
+            val ownerIds = UsersTable.selectAll()
+                .where { UsersTable.scope eq "OWNER" }
+                .map { it[UsersTable.id] }
+            require(ownerIds.size == 1) {
+                "seedKnowledgeMeta expects exactly ONE OWNER-scope user, found ${ownerIds.size} — refusing (exam_dates is user-scoped)"
             }
-            val userId = userIds.single()
+            val userId = ownerIds.single()
 
             // ── grade models ──
             for (m in MODELS) {

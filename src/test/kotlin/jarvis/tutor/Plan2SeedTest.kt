@@ -42,6 +42,48 @@ class Plan2SeedTest {
         transaction(db) { table.selectAll().count() }
 
     @Test
+    fun `FRIEND-scope users may coexist - seeder targets the single OWNER`(@TempDir tmp: Path) {
+        // The LIVE DB carries FRIEND test users (rg2/rg3, 2026-05-20) alongside the owner.
+        // The 2026-06-12 rehearsal caught the old exactly-one-user-total guard refusing on them.
+        val db = migratedDbWithUser(tmp)
+        transaction(db) {
+            for (n in listOf("rg2", "rg3")) {
+                UsersTable.insert {
+                    it[id] = "01HFRIEND${n.uppercase()}0000000000000".take(26)
+                    it[name] = n
+                    it[scope] = "FRIEND"
+                    it[createdAt] = Instant.now()
+                    it[lastSeenAt] = Instant.now()
+                    it[email] = "$n@example.com"
+                }
+            }
+        }
+        Plan2Seed.seedKnowledgeMeta(db, Instant.parse("2026-06-11T10:00:00Z"))
+        transaction(db) {
+            val examDateUsers = ExamDatesTable.selectAll().map { it[ExamDatesTable.userId] }.toSet()
+            assertEquals(setOf("01HSEEDUSER000000000000000"), examDateUsers, "only the OWNER gets exam dates")
+        }
+    }
+
+    @Test
+    fun `two OWNER-scope users = refuse (exam_dates target would be ambiguous)`(@TempDir tmp: Path) {
+        val db = migratedDbWithUser(tmp)
+        transaction(db) {
+            UsersTable.insert {
+                it[id] = "01HSECONDOWNER000000000000"
+                it[name] = "owner2"
+                it[scope] = "OWNER"
+                it[createdAt] = Instant.now()
+                it[lastSeenAt] = Instant.now()
+            }
+        }
+        val e = kotlin.test.assertFailsWith<IllegalArgumentException> {
+            Plan2Seed.seedKnowledgeMeta(db, Instant.parse("2026-06-11T10:00:00Z"))
+        }
+        assertTrue(e.message!!.contains("OWNER"), e.message)
+    }
+
+    @Test
     fun `seeding twice yields identical row counts (idempotent upsert-by-id)`(@TempDir tmp: Path) {
         val db = migratedDbWithUser(tmp)
         val now = Instant.parse("2026-06-11T10:00:00Z")
