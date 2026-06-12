@@ -456,11 +456,14 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             </div>
           </div>
         )}
+        {/* aria-live region: position:absolute + overflow:hidden + width:1px + maxHeight:0 keeps
+            getBoundingClientRect h=0 (visible()=false → no-clip gate skip) while screen readers
+            still announce aria-live changes (DOM content is present). */}
         <div
           aria-live="polite"
           role="status"
           data-testid={`${testIdPrefix}-live`}
-          style={{ position: "absolute", left: -9999 }}
+          style={{ position: "absolute", overflow: "hidden", width: 1, maxHeight: 0 }}
         >
           {currentFrame?.aria ?? ""}
         </div>
