@@ -10,7 +10,7 @@
 
 ---
 
-## Section 0 — Verified ground truth (recon 2026-06-12, workflow wf_00e9fe95; all file:lines re-verified against HEAD `dfe7d5c`)
+## Section 0 — Verified ground truth (recon 2026-06-12, workflow wf_00e9fe95; all file:lines re-verified against HEAD `dfe7d5c`; plan committed as docs-only `0c05807` — no src/test/content files changed, all §0 anchors still valid — Task 0 Step 1 updated accordingly)
 
 ### 0.1 The surface being replaced (audited dead ends — what "done" must kill)
 
@@ -242,7 +242,7 @@ Contract (spec §4.1/§4.7): consumes `lesson.beats.plan[]`; ONE active beat; **
 
 ## Task 0 — Preconditions probe (read-only, no commit)
 
-Verify the working tree, the live PC DB, the corpus state, and the baseline backend suite are exactly what Plan 3 builds on **before** any edit. Every check is a command + the expected output + a STOP instruction. This task makes no edits and no commit. Plan 2 is already committed on `main` (`ConceptType`, `KcBeats`, the 7 Plan-2 tables, `SignatureLockPinTest`) — Plan 3 is additive on top of HEAD `dfe7d5c`.
+Verify the working tree, the live PC DB, the corpus state, and the baseline backend suite are exactly what Plan 3 builds on **before** any edit. Every check is a command + the expected output + a STOP instruction. This task makes no edits and no commit. Plan 2 is already committed on `main` (`ConceptType`, `KcBeats`, the 7 Plan-2 tables, `SignatureLockPinTest`) — Plan 3 is additive on top of HEAD `0c058079eea3cd40d6c07d2af516f5ba8850faaa` (the plan file commit, docs-only on top of recon SHA `dfe7d5c`; all §0 file:line anchors remain valid because the intervening commit touched only `docs/superpowers/plans/2026-06-12-plan3-lesson-engine.md`).
 
 **Files:** none (read-only).
 
@@ -254,7 +254,7 @@ git rev-parse HEAD
 git status --short
 ```
 
-Expected: branch `main`; HEAD `dfe7d5c090037b6c0850dba668f2dfa571b3da21` (the recon SHA all §0 file:lines were verified against). `git status --short` shows ONLY the known working-tree noise: door demos under `src/main/resources/tutor-dist/` (`doors-v2.html`, `doors-v3.html`, `doors-lab/`, `roadmap.html`, `work-so-far.html`, `jarvis-roadmap*`, `work/`), the deleted/rebuilt `index-*.js/.css` bundle assets + `index.html`, `build-review/` artifacts (incl. `build-review/tmp/`), `.claude/council-cache/council-*.md`, `.claude/active-constraints.md`, the plan docs (`docs/superpowers/plans/2026-06-12-plan3-lesson-engine.md` is itself untracked), `*.json` probe files (`door-probe-*`, `probe-*`, `trust-verdicts.json`), `tools/audit_kc_quotes.py`, `tools/build_rc_ghid.py`, `tutor-web/audit.viz*.mjs`, `tutor-web/*.html`, `tutor-web/public/doors-*`. There must be **no staged changes** and **no modifications** to any file under `src/main/kotlin/`, `src/test/kotlin/`, `tutor-web/src/`, `tutor-web/e2e/`, or any `content/PA/kcs/*.yaml`. **STOP if** HEAD is not `dfe7d5c…` (the recon anchors will not line up — re-run recon), or any source/test/content file is already modified/staged (a prior task did not finish — re-assess). Do **not** `git add -A`, `git clean`, switch branches, or merge `door-compare` (Section 0.6 #7 — the untracked door files must stay untouched).
+Expected: branch `main`; HEAD `0c058079eea3cd40d6c07d2af516f5ba8850faaa` (the plan-file commit; the recon anchors in §0 were verified against the parent `dfe7d5c` — the intervening commit was docs-only, touching only `docs/superpowers/plans/2026-06-12-plan3-lesson-engine.md`, so all §0 file:line anchors remain valid without re-running recon). `git status --short` shows ONLY the known working-tree noise: door demos under `src/main/resources/tutor-dist/` (`doors-v2.html`, `doors-v3.html`, `doors-lab/`, `roadmap.html`, `work-so-far.html`, `jarvis-roadmap*`, `work/`), the deleted/rebuilt `index-*.js/.css` bundle assets + `index.html`, `build-review/` artifacts (incl. `build-review/tmp/`), `.claude/council-cache/council-*.md`, `.claude/active-constraints.md`, `*.json` probe files (`door-probe-*`, `probe-*`, `trust-verdicts.json`), `tools/audit_kc_quotes.py`, `tools/build_rc_ghid.py`, `tutor-web/audit.viz*.mjs`, `tutor-web/*.html`, `tutor-web/public/doors-*`. Note: `docs/superpowers/plans/2026-06-12-plan3-lesson-engine.md` is now **tracked** (committed at HEAD — no longer in the untracked noise list). There must be **no staged changes** and **no modifications** to any file under `src/main/kotlin/`, `src/test/kotlin/`, `tutor-web/src/`, `tutor-web/e2e/`, or any `content/PA/kcs/*.yaml`. **STOP if** HEAD is not `0c058079eea3cd40d6c07d2af516f5ba8850faaa` AND the diff `<actual-HEAD>..0c058079` for src/main/kotlin/, src/test/kotlin/, tutor-web/src/, tutor-web/e2e/, content/PA/kcs/ is non-empty (recon anchors displaced — re-run recon before proceeding), or any source/test/content file is already modified/staged (a prior task did not finish — re-assess). Do **not** `git add -A`, `git clean`, switch branches, or merge `door-compare` (Section 0.6 #7 — the untracked door files must stay untouched).
 
 - [ ] **Step 2: Confirm the new Plan-3 files do NOT exist yet** (each is created by a later task; a pre-existing one means another task already ran):
 
