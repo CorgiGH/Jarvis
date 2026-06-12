@@ -443,7 +443,7 @@ object ExamScheduleRowsTable : Table("exam_schedule_rows") {
 
 ### F. Seed data constants (verbatim from `docs/superpowers/findings/2026-06-11-verified-grade-models-exam-schedule.md` — the ONLY permitted source; the taxonomy doc is NEVER read by seeders)
 
-**Grade models (8 rows):**
+**Grade models (7 rows):** _(corrected 2026-06-12: the 8th row in the original table was a components-note, not a model row; ratified 7L — see Task 7 review fix)_
 
 | id | subject | variant | primary | tier | source URL |
 |---|---|---|---|---|---|
@@ -2275,7 +2275,7 @@ Spec §3.5 / INV-3.4. This task creates `src/main/kotlin/jarvis/tutor/Plan2Seed.
 `sweepRef` constant for all schedule rows = `docs/superpowers/findings/2026-06-11-verified-grade-models-exam-schedule.md#ia12-schedule`.
 `sweepRef` for grade models = `docs/superpowers/findings/2026-06-11-verified-grade-models-exam-schedule.md#<subject-anchor>` (anchors: `alo`, `ps`, `poo`, `pa`, `sorc`).
 
-**8 grading_models rows** (ids stable; `evidenceTier="official-site"` for all 8 model rows; corpus-evidence lives on COMPONENT rows only):
+**7 grading_models rows** _(corrected 2026-06-12; see §0.9F note)_ (ids stable; `evidenceTier="official-site"` for all 7 model rows; corpus-evidence lives on COMPONENT rows only):
 
 | id | subject | variant | isPrimary | formula (verbatim) | maxTotal | sourceUrl |
 |---|---|---|---|---|---|---|
@@ -2415,7 +2415,7 @@ class Plan2SeedTest {
         ).associateWith { count(db, it) }
 
         assertEquals(countsAfterFirst, countsAfterSecond, "re-seed must not duplicate rows")
-        assertEquals(8L, countsAfterFirst[GradingModelsTable])
+        assertEquals(7L, countsAfterFirst[GradingModelsTable])  // 7 model rows (corrected 2026-06-12: §0.9F 8th row was a note)
         assertEquals(12L, countsAfterFirst[ExamScheduleRowsTable])
         assertEquals(4L, countsAfterFirst[ExamDatesTable])
         // first run inserts everything; second inserts nothing (all updated)
@@ -4199,7 +4199,7 @@ Expected: `[migrate] SUCCESS — fsrs_cards before=828 after=828`
 gradle --no-daemon run --args="seed-knowledge-meta --db $env:USERPROFILE\plan2-rehearsal\tutor-copy.db"
 ```
 
-Expected (shape; exact counts from Task 7's seeder): a success line reporting `grading_models=8 grade_components=N grading rows; exam_schedule_rows=12; exam_dates primaries=4; glossary=...`. Non-zero exit = STOP.
+Expected (shape; exact counts from Task 7's seeder): a success line reporting `grading_models=7 grade_components=N grading rows; exam_schedule_rows=12; exam_dates primaries=4; glossary=...`. Non-zero exit = STOP.
 
 - [ ] **Step 7: Backfill kc_id on the copy in DRY-RUN mode (no writes, honest match report):**
 
@@ -4232,7 +4232,7 @@ Expected EXACTLY:
 
 ```
 new tables present: True (all 7 present)
-grading_models: 8
+grading_models: 7
 exam_schedule_rows: 12
 exam_dates: 4
 fsrs_cards: 828
@@ -4288,7 +4288,7 @@ Expected: `[migrate] SUCCESS — fsrs_cards before=828 after=828`
 gradle --no-daemon run --args="seed-knowledge-meta --db $env:USERPROFILE\.jarvis\tutor.db"
 ```
 
-Expected: the same success shape as 11a Step 6 (`grading_models=8 ... exam_schedule_rows=12; exam_dates primaries=4`). The seeder is idempotent (Task 7) — re-running is a no-op; a non-zero exit = STOP.
+Expected: the same success shape as 11a Step 6 (`grading_models=7 ... exam_schedule_rows=12; exam_dates primaries=4`). The seeder is idempotent (Task 7) — re-running is a no-op; a non-zero exit = STOP.
 
 - [ ] **Step 4: Run the REAL kc_id backfill on the LIVE DB (not dry-run):**
 
@@ -4321,7 +4321,7 @@ If ANY line FAILs: STOP. Do NOT proceed to the VPS. If a SCHEMA / INV-3.2 / INV-
 
 ```
 new tables present: True (all 7 present)
-grading_models: 8
+grading_models: 7
 exam_schedule_rows: 12
 exam_dates: 4
 fsrs_cards: 828
@@ -4409,7 +4409,7 @@ Expected: `[migrate] SUCCESS — fsrs_cards before=871 after=871`. If `before=0`
 ssh root@46.247.109.91 'set -a; . /opt/jarvis/.env; set +a; /opt/jarvis/jarvis-kotlin/bin/jarvis-kotlin seed-knowledge-meta --db /opt/jarvis/.jarvis/tutor.db'
 ```
 
-Expected: the success shape `grading_models=8 ... exam_schedule_rows=12; exam_dates primaries=4`. Idempotent — safe to re-run; non-zero exit = STOP.
+Expected: the success shape `grading_models=7 ... exam_schedule_rows=12; exam_dates primaries=4`. Idempotent — safe to re-run; non-zero exit = STOP.
 
 - [ ] **Step 5: Remote read-only asserts (tables present, seed counts, 871 cards survive, faithful badges unchanged).** The query uses no string-literal SQL with quotes that would fight the ssh layer — it reads via a heredoc-free python `-c` over the explicit path:
 
@@ -4421,7 +4421,7 @@ Expected EXACTLY:
 
 ```
 new tables present: True
-grading_models: 8
+grading_models: 7
 exam_schedule_rows: 12
 exam_dates: 4
 fsrs_cards: 871
