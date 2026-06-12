@@ -4,7 +4,7 @@ import jarvis.web.runWeb
 import kotlinx.coroutines.runBlocking
 import kotlin.system.exitProcess
 
-private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web | reindex | import-anki <subject> <path> | google-auth-bootstrap | seed-fsrs [opts]]
+private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | sub [name] [query...] | subs | web | reindex | import-anki <subject> <path> | google-auth-bootstrap | seed-fsrs [opts] | seed-knowledge-meta]
 
   chat                       Start interactive chat REPL (default).
   logger                     Always-on activity logger (5-min interval).
@@ -21,6 +21,9 @@ private const val USAGE = """Usage: jarvis [chat | logger [--once] | reflect | s
                              (frozen allowlist) to JSON for VPS import.
   trust-import <in.json>     D9 VPS-side: surgical, idempotent upsert of a verdict
                              dump into kc_verification_status. Never report_wrong.
+  seed-knowledge-meta [--db PATH]
+                             Plan-2: seed grade-model registry + exam schedule + exam_dates
+                             primaries from the 2026-06-11 verified sweep (idempotent).
   seed-fsrs [opts]           Walk one or more corpus dirs and generate FSRS cards via
                              the claude CLI (free OAuth, NOT paid API). Run
                              'jarvis seed-fsrs --help' for the flag list.
@@ -58,6 +61,34 @@ private fun runMigrate(pathArg: String?) {
     println("[migrate] SUCCESS — fsrs_cards before=$before after=$after")
 }
 
+/**
+ * Plan-2 operator tool: seed the course-meta tables (grade models, components, exam schedule,
+ * exam_dates primaries) from the 2026-06-11 verified sweep. Idempotent (upsert-by-id). Applies
+ * TutorMigration first so the Plan-2 tables exist. DB path: `--db PATH`, else $JARVIS_TUTOR_DB,
+ * else ~/.jarvis/tutor.db. Prints the SeedReport. NOTE on the live DB: migrate() over the 828-card
+ * corpus fires the INV-3.1 backup gate (pending Plan-2 DDL) — run `python tools/db-backup.py` first.
+ */
+private fun runSeedKnowledgeMeta(args: List<String>) {
+    val dbIdx = args.indexOf("--db")
+    val dbPath = (if (dbIdx >= 0) args.getOrNull(dbIdx + 1) else null)
+        ?: System.getenv("JARVIS_TUTOR_DB")
+        ?: System.getProperty("JARVIS_TUTOR_DB")
+        ?: jarvis.Config.tutorDbPath
+    System.err.println("[seed-knowledge-meta] target DB = $dbPath")
+    val db = jarvis.tutor.TutorDb.connect(dbPath)
+    try {
+        jarvis.tutor.TutorMigration.migrate(db)
+    } catch (e: jarvis.tutor.MigrationException) {
+        System.err.println("[seed-knowledge-meta] migration FAILED: ${e.message}")
+        exitProcess(1)
+    }
+    val report = jarvis.tutor.Plan2Seed.seedKnowledgeMeta(db, java.time.Instant.now())
+    println(
+        "[seed-knowledge-meta] inserted=${report.inserted} updated=${report.updated} " +
+            "skipped=${report.skipped} (applied=${report.applied})",
+    )
+}
+
 fun main(args: Array<String>) {
     when (args.firstOrNull()) {
         null, "chat" -> runBlocking { runChat() }
@@ -81,6 +112,7 @@ fun main(args: Array<String>) {
         "migrate" -> runMigrate(args.getOrNull(1))
         "trust-export" -> jarvis.tutor.verify.TrustSyncCli.runExport(args.drop(1))
         "trust-import" -> jarvis.tutor.verify.TrustSyncCli.runImport(args.drop(1))
+        "seed-knowledge-meta" -> runSeedKnowledgeMeta(args.drop(1))
         "seed-fsrs" -> runSeedFsrs(args.drop(1).toList())
         "import-anki" -> {
             val subject = args.getOrNull(1)
