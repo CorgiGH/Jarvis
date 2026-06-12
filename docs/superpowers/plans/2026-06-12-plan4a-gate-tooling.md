@@ -1283,7 +1283,8 @@ test("AppShell fixed shell at /tutor/ matches the baseline", async ({ page }) =>
 
   // Anchor: the shell actually mounted (not a /login redirect) before we snapshot.
   await expect(page.getByTestId("app-shell")).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("JARVIS · TUTOR")).toBeVisible();
+  // PM AMENDMENT 2026-06-12: "JARVIS · TUTOR" lives in TutorWorkspace, which only renders with an
+  // active task — the no-task stubs paint ActiveTaskDashboard. app-shell + header-ledger-btn suffice.
   await expect(page.getByTestId("header-ledger-btn")).toBeVisible();
 
   await expect(page).toHaveScreenshot("shell.png", { fullPage: true });
@@ -1304,7 +1305,7 @@ import { test, expect } from "@playwright/test";
  * fonts (Task 1) → a 0-tolerance full-page shot is deterministic on the reference OS.
  */
 test("DARK theme reference page matches the baseline", async ({ page }) => {
-  await page.goto("/theme-ref.html?surface=dark");
+  await page.goto("/tutor/theme-ref.html?surface=dark"); // PM AMENDMENT: Vite base "/tutor/"
   await expect(page.getByTestId("theme-ref-dark")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId("door-brutalist")).toBeVisible();
   await expect(page).toHaveScreenshot("theme-dark.png", { fullPage: true });
@@ -1324,7 +1325,7 @@ import { test, expect } from "@playwright/test";
  * (theme-ref.html?surface=light), driven entirely by index.css tokens. No /api, no emoji, deterministic.
  */
 test("LIGHT theme reference page matches the baseline", async ({ page }) => {
-  await page.goto("/theme-ref.html?surface=light");
+  await page.goto("/tutor/theme-ref.html?surface=light"); // PM AMENDMENT: Vite base "/tutor/"
   await expect(page.getByTestId("theme-ref-light")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByTestId("theme-ref-light-begin")).toBeVisible();
   await expect(page).toHaveScreenshot("theme-light.png", { fullPage: true });
