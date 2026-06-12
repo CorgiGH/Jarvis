@@ -10,6 +10,7 @@ import { LessonScreen } from "./components/LessonScreen"; // deleted in Plan-3 T
 import { BeatOrchestrator } from "./components/lesson/BeatOrchestrator";
 import { getLesson } from "./lib/lesson";
 import type { ApiLessonReply } from "./lib/lesson";
+import { lessonStrings } from "./lib/lessonStrings";
 import { MockExamShell } from "./components/MockExamShell";
 import { DayOfShell } from "./components/DayOfShell";
 import { OnboardingShell } from "./components/OnboardingShell";
@@ -35,13 +36,13 @@ function BeatOrchestratorRoute() {
   }, [id]);
 
   if (lesson === undefined) {
-    return <div data-testid="lesson-screen" className="flex-1 p-6 font-mono text-xs text-page-fg/50 tracking-widest">Se încarcă…</div>;
+    return <div data-testid="lesson-screen" className="flex-1 p-6 font-mono text-xs text-page-fg/50 tracking-widest">{lessonStrings.loading}</div>;
   }
   if (lesson === null || !lesson.beats) {
     return (
       <div data-testid="lesson-screen" className="flex-1 p-6 font-mono">
         <div data-testid="lesson-unavailable" className="border-2 border-border-strong p-4 text-xs text-page-fg/60 tracking-wide">
-          KC nu este încă verificat — revin mai târziu.
+          {lessonStrings.unavailable}
         </div>
       </div>
     );
