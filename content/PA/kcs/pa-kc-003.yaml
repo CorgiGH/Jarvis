@@ -39,8 +39,6 @@ self_explanation_prompt: >-
 far_transfer_stem: >-
   Ia un algoritm simplu pe care îl cunoști și descrie-l în pseudo-cod, evidențiind, conform cursului,
   ce parte a descrierii este notație formală și ce parte este informală.
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Plan-3 Task 7 — 5-beat teaching content (RO). concept_type=definition-taxonomy.
 # PROVENANCE: pa-lecture-01 p.8 — "There are various ways to describe an algorithm:" with the
@@ -53,7 +51,7 @@ beats:
   ro:
     predict:
       # ① classify-an-example-first: place a concrete description into the p.8 taxonomy.
-      prompt: “Cursul enumeră mai multe moduri de a descrie un algoritm. În ce categorie intră o descriere în limbaj natural („mai întâi citești numărul, apoi îl afișezi”)?”
+      prompt: "Cursul enumeră mai multe moduri de a descrie un algoritm. În ce categorie intră o descriere în limbaj natural („mai întâi citești numărul, apoi îl afișezi”)?"
       options:
         - text: "Mod informal (limbaj natural)"
           callback: "Exact — p.8 listează limbajul natural drept modul informal."
@@ -66,7 +64,7 @@ beats:
           correct: false
     attempt:
       # ② choice attempt: classify pseudo-code, both-path feedback from the p.8 pseudo-code quote.
-      statement: “Pseudo-codul, care „combină o notație formală cu una informală\”, în ce categorie din curs intră?”
+      statement: "Pseudo-codul, care „combină o notație formală cu una informală”, în ce categorie din curs intră?"
       choices:
         - text: "Semiformal"
           correct: true

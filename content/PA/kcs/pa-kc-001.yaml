@@ -82,19 +82,19 @@ beats:
       #    timp finit, produce un rezultat. Correct = the one meeting all clauses.
       prompt: "Care dintre următoarele descrieri este un algoritm, conform definiției din curs?"
       options:
-        - text: "„Citește a și b, calculează s = a + b, afișează s și oprește-te.\""
+        - text: "„Citește a și b, calculează s = a + b, afișează s și oprește-te.”"
           callback: "Exact — pașii sunt neambigui și efectiv calculabili, produce un rezultat și se oprește în timp finit (definiția p.4)."
           correct: true
-        - text: "„Fă-l să arate bine.\""
+        - text: "„Fă-l să arate bine.”"
           callback: "Nu — pasul nu este neambiguu; definiția cere operații neambigue și efectiv calculabile."
           correct: false
-        - text: "„Repetă pasul la nesfârșit, fără condiție de oprire.\""
+        - text: "„Repetă pasul la nesfârșit, fără condiție de oprire.”"
           callback: "Nu — încalcă cerința ca execuția să se oprească într-un timp finit."
           correct: false
     attempt:
       # ② choice attempt, both-path teaching feedback. Statement reuses the worked_example_ro
       #    add-two-numbers example; wrong path TEACHES the violated clause (never just „greșit").
-      statement: "Secvența „cât timp x > 0, afișează x\" (fără ca x să se modifice) este un algoritm?"
+      statement: "Secvența „cât timp x > 0, afișează x” (fără ca x să se modifice) este un algoritm?"
       choices:
         - text: "Da, este un algoritm"
           correct: false

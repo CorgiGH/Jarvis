@@ -47,11 +47,11 @@ class FigureBindingValidationTest {
             setOf("viz-pa-mergesort-001")
         }
         assertEquals(1, issues.size)
-        val issue = issues.single()
-        assertEquals("error", issue.severity)
-        assertEquals("figure_binding", issue.rule)
-        assertTrue(issue.detail.contains("k1"), "names the KC: ${issue.detail}")
-        assertTrue(issue.detail.contains("viz-does-not-exist"), "names the missing instance: ${issue.detail}")
+        val it = issues.single()
+        assertEquals("error", it.severity)
+        assertEquals("figure_binding", it.rule)
+        assertTrue(it.detail.contains("k1"), "names the KC: ${it.detail}")
+        assertTrue(it.detail.contains("viz-does-not-exist"), "names the missing instance: ${it.detail}")
     }
 
     @Test fun `the 4 authored PA beat sets resolve (vacuous-green on the real corpus)`() {

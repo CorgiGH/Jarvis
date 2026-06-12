@@ -41,8 +41,6 @@ far_transfer_stem: >-
   Pentru o problemă concretă (de exemplu sortarea unei liste de numere), descrie-o ca perechea
   (intrare, ieșire) și arată ce reprezintă, conform cursului, configurația de start și configurația
   finală în modelul de calcul.
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Plan-3 Task 7 — 5-beat teaching content (RO). concept_type=definition-taxonomy.
 # PROVENANCE: pa-lecture-01 p.7 — "computation model" + "An algorithm must solve a problem
