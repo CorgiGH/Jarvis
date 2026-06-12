@@ -71,10 +71,22 @@ test('App shell mounts under /tutor and first-paint /api contract returns zero 4
   // Sanity: we are actually under the base, not the off-base routeless page.
   expect(page.url()).toContain('/tutor');
 
-  // ── Assert the App shell painted (real, always-rendered shell surface) ──
-  // The header brand + nav render on every route regardless of body state.
-  await expect(page.getByText('JARVIS · TUTOR')).toBeVisible({ timeout: 10000 });
+  // ── Assert the App shell painted (real, always-rendered shell surfaces) ──
+  // STRUCTURAL ANCHORS for the no-task state (Plan 4a amendment ruling): the brand text
+  // "JARVIS · TUTOR" lives ONLY in TutorWorkspace (TutorWorkspace.tsx:151), which renders solely
+  // when a task is pinned. These stubs serve a no-task state (last-task taskId:null + empty tasks),
+  // so the body is ActiveTaskDashboard and the brand text is legitimately absent — asserting it was a
+  // stale anchor. Anchor instead on the shell chrome that DOES paint in the no-task state:
+  //   • app-shell        — AppShell.tsx:18, the always-mounted shell wrapper
+  //   • header-ledger-btn — App.tsx:318, header chrome on every route/body state
+  //   • active-task-dashboard — ActiveTaskDashboard.tsx:77, the no-task body that replaced the workspace
+  //   • bottom-tab-bar   — BottomTabBar.tsx:42, the mobile nav. It is ALWAYS mounted but CSS-gated
+  //     `md:hidden`, so at the default ≥md viewport it is attached-not-visible by design → assert
+  //     attached (a visibility assert here would be a false claim about a desktop-hidden element).
+  await expect(page.getByTestId('app-shell')).toBeVisible({ timeout: 10000 });
   await expect(page.getByTestId('header-ledger-btn')).toBeVisible();
+  await expect(page.getByTestId('active-task-dashboard')).toBeVisible();
+  await expect(page.getByTestId('bottom-tab-bar')).toBeAttached();
 
   // ── Assert no error text on first paint ──
   await expect(page.getByText(/404|HTTP \d{3}|not found|error/i)).toHaveCount(0);

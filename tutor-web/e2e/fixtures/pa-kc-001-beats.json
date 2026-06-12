@@ -31,6 +31,9 @@
         { "text": "Da, este un algoritm", "correct": false, "feedback": "Nu chiar: dacă x nu se schimbă, execuția nu se oprește niciodată — se încalcă cerința de terminare în timp finit din definiția p.4." },
         { "text": "Nu, nu este un algoritm", "correct": true, "feedback": "Corect — fără terminare în timp finit nu îndeplinește definiția din curs, oricât de neambigui ar fi pașii." }
       ],
+      "skeleton_rows": [],
+      "trace_steps": [],
+      "input_schema": null,
       "feedback_correct": "Bun — ai folosit chiar condiția de terminare din definiția p.4."
     },
     "reveal": {

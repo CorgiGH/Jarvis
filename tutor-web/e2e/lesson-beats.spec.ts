@@ -45,6 +45,15 @@ test("lesson route: §4.7 beats render, gate, scrub-back, complete — zero 4xx/
   page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200)); });
   page.on("pageerror", (e) => consoleErrors.push(String(e.message).slice(0, 200)));
 
+  // Force reduced motion at RUNTIME (not via playwright.config's `use.reducedMotion`, which silently
+  // does NOT flip window.matchMedia in this Playwright version — verified probe: matchMedia stayed
+  // false under the config flag, true under emulateMedia). RevealBeat/NameBeat read
+  // `prefersReducedMotionNow()` = matchMedia("(prefers-reduced-motion: reduce)") to zero their per-step
+  // dwell FLOOR (readMs caps at 5500ms — every authored reveal step here is 24-29 words = the 5500ms
+  // cap). Without reduced motion the reveal gate only clears at ~5.5s, past the default 5s
+  // expect timeout — the traversal would red on dwell, NOT on the gate mechanics it means to test.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
   await page.route("**/api/v1/lesson/pa-kc-001/beat", (r) => {
     const body = r.request().postDataJSON() as { beat_type: string };
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(gradeReply(body.beat_type)) });
@@ -95,8 +104,19 @@ test("lesson route: §4.7 beats render, gate, scrub-back, complete — zero 4xx/
   await back.click();
   const counterAfterBack = await page.getByTestId("scrubber-step-counter").textContent();
   expect(counterAfterBack, "BACK must move the step counter (one-shot animation is a gate violation)").not.toBe(counterAfterFwd);
-  // step to the final to clear the reveal gate, then advance
-  await fwd.click();
+  // The reveal gate clears ONLY once the learner reaches the FINAL step (RevealBeat: reachedEnd &&
+  // dwell). The fixture's reveal has N>2 steps, so a single fwd after the back lands mid-way (e.g.
+  // "pas 2/3"), NOT the last step — step forward until the counter shows "pas N/N", driven by the
+  // fixture's reveal length so the walk stays honest if the authored reveal grows/shrinks.
+  const stepCount = fixture.beats.reveal.steps.length;
+  const finalCounter = new RegExp(`pas\\s+${stepCount}/${stepCount}`);
+  // before reaching the final step the gate must still be CLOSED (gate honesty).
+  await expect(page.getByTestId("beat-next-gate")).toBeDisabled();
+  for (let i = 0; i < stepCount - 1; i++) {
+    if (finalCounter.test((await page.getByTestId("scrubber-step-counter").textContent()) ?? "")) break;
+    await fwd.click();
+  }
+  await expect(page.getByTestId("scrubber-step-counter")).toContainText(finalCounter);
   await expect(page.getByTestId("beat-next-gate")).toBeEnabled();
   await page.getByTestId("beat-next-gate").click();
 
