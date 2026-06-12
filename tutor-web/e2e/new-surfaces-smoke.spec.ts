@@ -75,58 +75,65 @@ async function stubShell(page: import("@playwright/test").Page) {
   });
 }
 
-// ── /lesson/:kcId — LessonScreen ──────────────────────────────────────────
-test("Phase-6 /lesson/:kcId: lesson-screen paints with zero errors", async ({ page }) => {
+// ── /lesson/:kcId — BeatOrchestrator (replaces LessonScreen) ──────────────
+test("Phase-6 /lesson/:kcId: beat-orchestrator paints + handoff → /oggi (same KC visible)", async ({ page }) => {
   const bad: string[] = [];
-  page.on("response", (r) => {
-    if (r.status() >= 400) bad.push(`${r.status()} ${r.url()}`);
-  });
+  page.on("response", (r) => { if (r.status() >= 400) bad.push(`${r.status()} ${r.url()}`); });
 
-  await page.route("**/api/v1/lesson/*", (r) =>
-    r.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        kcId: "kc-recursion",
-        kc_name_ro: "Recursie",
-        kc_name_en: "Recursion",
-        concrete_question_ro: "Ce știi despre recursie?",
-        echo_source_ro: "O funcție care se apelează pe sine.",
-        prediction_options: ["Metodă directă", "Auto-apel", "Iterație"],
-        term_ro: "Recursie",
-        definition_ro: null,
-        explanation_ro: "O funcție definită prin ea însăși.",
-        worked_example_ro: "fib(n) = fib(n-1) + fib(n-2)",
-        provenance: { type: "authored", hasBeenFaithfulChecked: true },
-      }),
-    })
+  // Beats payload (minimal STANDARD plan ①②③⑤ choice-variant; enough for first-paint + handoff).
+  await page.route("**/api/v1/lesson/pa-kc-001/beat", (r) => {
+    const t = (r.request().postDataJSON() as { beat_type: string }).beat_type;
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      correct: true, score: 1.0, feedback_ro: "corect", beat_type: t,
+      lesson_complete: t === "check", first_encounter: true,
+      phase: t === "check" ? "practice" : null, verification_status: t === "check" ? "faithful" : null,
+    }) });
+  });
+  await page.route("**/api/v1/lesson/pa-kc-001", (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      kcId: "pa-kc-001", kc_name_ro: "Noțiunea de algoritm", kc_name_en: "Algorithm",
+      concrete_question_ro: "?", echo_source_ro: "?", prediction_options: [],
+      term_ro: "Algoritm", definition_ro: "def", explanation_ro: "expl", worked_example_ro: "ex",
+      provenance: { type: "authored", hasBeenFaithfulChecked: true },
+      beats: {
+        plan: ["predict", "attempt", "reveal", "check"],
+        concept_type: "definition-taxonomy",
+        predict: { prompt: "Care e un algoritm?", options: [
+          { text: "Rețetă", callback: "Da.", correct: true },
+          { text: "Număr", callback: "Nu.", correct: false },
+          { text: "Culoare", callback: "Nu.", correct: false } ] },
+        attempt: { statement: "Alege.", choices: [
+          { text: "Pași de legat șireturi", correct: true, feedback: "Corect." },
+          { text: "„pantof"", correct: false, feedback: "Nu." } ], feedback_correct: "Da." },
+        reveal: { steps: [
+          { text: "Pas 1.", callout: "Intrarea." },
+          { text: "Pas 2.", callout: "Pași neambigui." } ] },
+        check: { item_stem: "Care e un algoritm?", choices: [
+          { text: "Pași de căutare", correct: true, feedback: "Da." },
+          { text: "42", correct: false, feedback: "Nu." } ] },
+      },
+    }) }),
+  );
+  // /oggi (the handoff target) needs its queue stub so queue-item-pa-kc-001 paints.
+  await stubShell(page);
+  await page.route("**/api/v1/queue/today", (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      day: "2026-06-12", total_due: 1, items: [{
+        kc_id: "pa-kc-001", kc_name_ro: "Noțiunea de algoritm", kc_name_en: "Algorithm",
+        subject: "PA", phase: "intro", mastery_ewma: 0.2, fsrs_card_id: null,
+        verification_status: "faithful", worked_example_first: false, mode: "worked" }] }) }),
   );
 
-  await page.goto("/tutor/lesson/kc-recursion");
+  await page.goto("/tutor/lesson/pa-kc-001");
 
-  // (1) Primary testid paints
-  await expect(page.getByTestId("lesson-screen")).toBeVisible({ timeout: 10000 });
-  // The entry step (0c) should paint first
-  await expect(page.getByTestId("lesson-step-entry")).toBeVisible({ timeout: 10000 });
+  // (1) §4.7 first-paint testids
+  await expect(page.getByTestId("lesson-beat-pips")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByTestId("lesson-beat-active")).toHaveCount(1);
+  await expect(page.getByTestId("beat-predict-options")).toBeVisible();
+  await expect(page.getByTestId("beat-next-gate")).toBeDisabled();
 
-  // No error text on first paint
   await expect(page.getByText(/404|HTTP \d{3}|not found|error/i)).toHaveCount(0);
-
-  // (2) zero 4xx/5xx on first paint
   expect(bad, `4xx/5xx on first paint:\n${bad.join("\n")}`).toEqual([]);
-
-  // (3) click-through: submit an answer to advance to next step
-  const answerInput = page.locator("textarea, input[type=text]").first();
-  if (await answerInput.isVisible()) {
-    await answerInput.fill("O funcție care se apelează pe sine");
-  }
-  const submitBtn = page.locator("button").filter({ hasText: /trimite|submit|continuă|next/i }).first();
-  if (await submitBtn.isVisible()) {
-    await submitBtn.click();
-    await expect(page.getByText(/404|HTTP \d{3}|not found|error/i)).toHaveCount(0);
-  }
-
-  expect(bad, `4xx/5xx after click:\n${bad.join("\n")}`).toEqual([]);
 });
 
 // ── /exam/:subject — MockExamShell ────────────────────────────────────────

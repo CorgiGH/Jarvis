@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { OggiScreen } from "./OggiScreen";
 import * as taskPrep from "../lib/taskPrep";
 import type { QueueItem } from "../lib/taskPrep";
@@ -55,7 +56,7 @@ describe("OggiScreen", () => {
       day: "2026-06-09",
     });
 
-    render(<OggiScreen />);
+    render(<MemoryRouter><OggiScreen /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByTestId("oggi-screen")).toBeInTheDocument();
@@ -76,7 +77,7 @@ describe("OggiScreen", () => {
       day: "2026-06-09",
     });
 
-    render(<OggiScreen />);
+    render(<MemoryRouter><OggiScreen /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByTestId("oggi-empty")).toBeInTheDocument();
@@ -89,7 +90,7 @@ describe("OggiScreen", () => {
   it("renders oggi-error when getQueueToday throws", async () => {
     vi.spyOn(taskPrep, "getQueueToday").mockRejectedValue(new Error("network fail"));
 
-    render(<OggiScreen />);
+    render(<MemoryRouter><OggiScreen /></MemoryRouter>);
 
     await waitFor(() => {
       expect(screen.getByTestId("oggi-error")).toBeInTheDocument();
@@ -100,7 +101,7 @@ describe("OggiScreen", () => {
 
   it("shows oggi-screen testid on first paint (loading state)", () => {
     vi.spyOn(taskPrep, "getQueueToday").mockReturnValue(new Promise(() => {})); // never resolves
-    render(<OggiScreen />);
+    render(<MemoryRouter><OggiScreen /></MemoryRouter>);
     expect(screen.getByTestId("oggi-screen")).toBeInTheDocument();
   });
 });

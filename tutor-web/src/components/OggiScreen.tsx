@@ -7,6 +7,7 @@
  *           oggi-empty (empty queue) · oggi-error (getQueueToday threw)
  */
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getQueueToday } from "../lib/taskPrep";
 import type { QueueItem } from "../lib/taskPrep";
 import { LearnerQueueList } from "./LearnerQueueList";
@@ -19,6 +20,7 @@ type State =
   | { status: "error"; message: string };
 
 export function OggiScreen() {
+  const navigate = useNavigate();
   const [state, setState] = useState<State>({ status: "loading" });
   const [selected, setSelected] = useState<QueueItem | null>(null);
 
@@ -48,7 +50,12 @@ export function OggiScreen() {
 
   function handleSelect(item: QueueItem) {
     setSelected(item);
-    // Future: navigate to drill for this KC. For now just track selection.
+  }
+
+  /** E10 fix: the Începe button launches the gated lesson for this KC. The route is
+   *  /lesson/:kcId under the /tutor basename; useNavigate keeps SPA history intact. */
+  function handleBegin(item: QueueItem) {
+    navigate(`/lesson/${encodeURIComponent(item.kc_id)}`);
   }
 
   return (
@@ -113,7 +120,7 @@ export function OggiScreen() {
             {(selected ?? topItem) && (
               <NextKcPanel
                 item={(selected ?? topItem)!}
-                onBegin={() => handleSelect((selected ?? topItem)!)}
+                onBegin={() => handleBegin((selected ?? topItem)!)}
               />
             )}
           </div>

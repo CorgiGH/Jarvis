@@ -2,11 +2,10 @@ import "katex/dist/katex.min.css";
 import "./index.css";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from "react-router-dom";
 import { App } from "./App";
 import { VizDemoPage } from "./components/viz/VizDemoPage";
 import { ThemeProvider } from "./theme/ThemeProvider";
-import { LessonScreen } from "./components/LessonScreen"; // deleted in Plan-3 Task 10
 import { BeatOrchestrator } from "./components/lesson/BeatOrchestrator";
 import { getLesson } from "./lib/lesson";
 import type { ApiLessonReply } from "./lib/lesson";
@@ -23,6 +22,7 @@ import { PlacementShell } from "./components/PlacementShell";
  */
 function BeatOrchestratorRoute() {
   const { kcId } = useParams<{ kcId: string }>();
+  const navigate = useNavigate();
   const id = kcId ?? "";
   const [lesson, setLesson] = useState<ApiLessonReply | null | undefined>(undefined);
 
@@ -48,7 +48,7 @@ function BeatOrchestratorRoute() {
     );
   }
   // Task 10 replaces the fallback nav with the verified drill route.
-  return <BeatOrchestrator kcId={id} lesson={lesson} onComplete={() => { window.location.href = "/tutor/oggi"; }} />;
+  return <BeatOrchestrator kcId={id} lesson={lesson} onComplete={() => navigate("/oggi")} />;
 }
 
 function ExamRoute() {
