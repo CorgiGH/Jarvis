@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { OggiScreen } from "./OggiScreen";
 import * as taskPrep from "../lib/taskPrep";
 import type { QueueItem } from "../lib/taskPrep";
+
+/** Renders the current pathname so navigate-behaviour tests can assert routing. */
+function LocationProbe() {
+  const loc = useLocation();
+  return <div data-testid="loc">{loc.pathname}</div>;
+}
 
 const ITEMS: QueueItem[] = [
   {
@@ -103,5 +109,33 @@ describe("OggiScreen", () => {
     vi.spyOn(taskPrep, "getQueueToday").mockReturnValue(new Promise(() => {})); // never resolves
     render(<MemoryRouter><OggiScreen /></MemoryRouter>);
     expect(screen.getByTestId("oggi-screen")).toBeInTheDocument();
+  });
+
+  it("Începe button navigates to /lesson/{kc_id} (E10 wire-up)", async () => {
+    vi.spyOn(taskPrep, "getQueueToday").mockResolvedValue({
+      items: ITEMS,
+      total_due: 3,
+      day: "2026-06-12",
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/oggi"]}>
+        <Routes>
+          <Route path="/oggi" element={<><OggiScreen /><LocationProbe /></>} />
+          <Route path="/lesson/:kcId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // Wait for queue to load and the panel to render
+    await waitFor(() => expect(screen.getByTestId("oggi-next-kc-panel")).toBeInTheDocument());
+
+    // Click Începe (the button inside NextKcPanel)
+    fireEvent.click(screen.getByRole("button", { name: /Începe/i }));
+
+    // Top item is ITEMS[0] with kc_id "kc-1"
+    await waitFor(() =>
+      expect(screen.getByTestId("loc").textContent).toBe("/lesson/kc-1"),
+    );
   });
 });
