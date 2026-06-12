@@ -1,5 +1,5 @@
 #!/bin/sh
-ALKDIR="C:/Users/User/jarvis-kotlin-lane-b/tools/alk/v4.3/bin"
+ALKDIR="$(cd "$(dirname "$0")" && pwd)/v4.3/bin"
 export PATH="$PATH:$ALKDIR:$ALKDIR/lib"
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$ALKDIR:$ALKDIR/lib"
 export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:$ALKDIR:$ALKDIR/lib"

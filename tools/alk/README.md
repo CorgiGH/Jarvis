@@ -91,8 +91,12 @@ tools/alk/_probe*.alk  ← temporary probe files
 ## Tracked files (committed)
 
 ```
-tools/fetch-alk.mjs    ← download + verify + extract + wrapper emitter
+tools/fetch-alk.mjs    ← download + verify sha256 + extract (does NOT emit wrappers)
 tools/alk/README.md    ← this file
-tools/alk/alki.cmd     ← Windows wrapper (emitted by fetch-alk.mjs)
-tools/alk/alki.sh      ← Linux/macOS wrapper (emitted by fetch-alk.mjs)
+tools/alk/alki.cmd     ← Windows wrapper (STATIC TRACKED — portable, %~dp0 relative path)
+tools/alk/alki.sh      ← Linux/macOS wrapper (STATIC TRACKED — portable, dirname-relative path)
 ```
+
+**PM RULING 2026-06-13 (amendment):** the wrapper scripts are static tracked files with portable
+relative paths — they do NOT contain absolute machine paths. `fetch-alk.mjs` does NOT emit them.
+Everything under `tools/alk/v4.3/` (the extracted interpreter) and `tools/alk/*.zip` are git-ignored.

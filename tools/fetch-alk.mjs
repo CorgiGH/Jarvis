@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 /**
- * tools/fetch-alk.mjs — Alk interpreter pinned-release fetch + wrapper emitter (R-6-Q2)
+ * tools/fetch-alk.mjs — Alk interpreter pinned-release fetch (R-6-Q2)
  *
  * PM RULING 2026-06-12: license = none published (null), no LICENSE file — fetch-only path,
  * no redistribution (jar/zip NEVER committed). tools/alk/README.md records the status.
  * CLI = verified classpath/wrapper form per §0.9-C (PM-amended).
  *
+ * PM RULING 2026-06-13 (amended): wrapper scripts are STATIC TRACKED files (alki.cmd / alki.sh)
+ * — portable, relative-path form. This script does NOT emit them.
+ *
  * What this script does:
  *   1. Downloads alki-v4.3.zip from the pinned GitHub release URL.
  *   2. Verifies sha256 against the pinned value.
  *   3. Extracts v4.3/bin/ to tools/alk/v4.3/bin/ (git-ignored).
- *   4. Emits tools/alk/alki.cmd (Windows) and tools/alk/alki.sh (Linux/macOS) wrappers.
- *   5. Runs a 3-line Alk probe program to confirm the interpreter works.
+ *   4. Runs a 3-line Alk probe program to confirm the interpreter works.
  *
  * Run from the repo root:
  *   node tools/fetch-alk.mjs
@@ -21,7 +23,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, unlinkSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exec } from "node:child_process";
@@ -93,36 +95,6 @@ async function extractZip(zipPath, destDir) {
   console.log("  Extraction complete.");
 }
 
-function emitWrappers(binDir, alkDir) {
-  const isWindows = process.platform === "win32";
-
-  // Windows wrapper: alki.cmd
-  // Uses the absolute bin dir baked in at fetch time.
-  const cmdPath = join(alkDir, "alki.cmd");
-  // Forward slashes work in Windows java paths; backslash for SET PATH
-  const winBin = binDir.replace(/\//g, "\\");
-  const cmdContent =
-    `@echo off\r\n` +
-    `set ALKDIR=${winBin}\r\n` +
-    `set PATH=%PATH%;%ALKDIR%;%ALKDIR%\\lib\r\n` +
-    `java -Djava.library.path="%ALKDIR%\\lib" -cp "%ALKDIR%\\alk.jar;%ALKDIR%\\lib\\com.microsoft.z3.jar" main.ExecutionDriver -a %*\r\n`;
-  writeFileSync(cmdPath, cmdContent, "utf8");
-  console.log(`  Emitted ${cmdPath}`);
-
-  // Unix wrapper: alki.sh
-  const shPath = join(alkDir, "alki.sh");
-  const unixBin = binDir.replace(/\\/g, "/");
-  const shContent =
-    `#!/bin/sh\n` +
-    `ALKDIR="${unixBin}"\n` +
-    `export PATH="$PATH:$ALKDIR:$ALKDIR/lib"\n` +
-    `export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$ALKDIR:$ALKDIR/lib"\n` +
-    `export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:$ALKDIR:$ALKDIR/lib"\n` +
-    `exec java -Djava.library.path="$ALKDIR/lib" -cp "$ALKDIR/alk.jar:$ALKDIR/lib/com.microsoft.z3.jar" main.ExecutionDriver -a "$@"\n`;
-  writeFileSync(shPath, shContent, "utf8");
-  try { chmodSync(shPath, 0o755); } catch (_) { /* Windows — no-op */ }
-  console.log(`  Emitted ${shPath}`);
-}
 
 async function runProbe(binDir, alkDir) {
   // 3-line Alk probe: gcd(12, 8) = 4
@@ -219,17 +191,12 @@ async function main() {
     console.log(`Already extracted: ${alkJar}`);
   }
 
-  // 6. Emit wrappers
-  emitWrappers(BIN_DIR, ALK_DIR);
-
-  // 7. Run probe
+  // 6. Run probe
   await runProbe(BIN_DIR, ALK_DIR);
 
   console.log("\n=== fetch-alk.mjs COMPLETE ===");
   console.log(`Alk ${RELEASE.version} ready at ${BIN_DIR}`);
-  console.log(`Wrappers emitted:`);
-  console.log(`  tools/alk/alki.cmd  (Windows)`);
-  console.log(`  tools/alk/alki.sh   (Linux/macOS)`);
+  console.log(`Wrappers are static tracked files: tools/alk/alki.cmd / tools/alk/alki.sh`);
   console.log(`SHA-256 verified: ${RELEASE.sha256}`);
 }
 
