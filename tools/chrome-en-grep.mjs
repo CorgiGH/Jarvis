@@ -42,6 +42,8 @@ export const EN_WORDS = new Set([
   "send", "grant", "revoke", "close", "open", "cancel", "back", "next",
   "search", "filter", "refresh", "submit", "apply", "create", "delete",
   "error", "warning", "success", "info", "ok",
+  // chat/message surface (finding 4 fix: "Chat messages", "Message Jarvis" class)
+  "chat", "message",
   // EN vocabulary from the tutor surface
   "skeleton", "heap", "array", "loop", "stack", "string", "pointer",
   "queue", "tree", "graph", "node", "edge", "sort", "merge", "insert",
@@ -66,13 +68,18 @@ const STRINGS_FILE_PATTERNS = ["chromeStrings", "practiceStrings", "lessonString
 /**
  * Allow patterns applied to full LINE context.
  * If any pattern matches the line, the line is skipped wholesale.
+ *
+ * NOTE: `className` is intentionally NOT here — a line with className="sr-only"
+ * can still contain a learner-visible JSX text node on the same line (e.g.
+ * `<label className="sr-only">Message Jarvis</label>` — finding-3 fix).
+ * CSS utility class values (kebab-case tokens) do not trigger EN_WORDS or
+ * stopword-ratio legs, so no false positives arise from removing className.
  */
 const ALLOW_LINE_REGEX = [
   /^\s*import\s+/,                               // import statements
   /^\s*\/\//,                                    // comment lines
   /^\s*\*/,                                      // JSDoc lines
   /data-testid\s*=\s*["'][^"']*["']/,            // data-testid="..."
-  /className\s*=\s*["'][^"']*["']/,              // className="..."
   /console\.(log|error|warn|info|debug)/,         // console calls
   /aria-label\s*=\s*\{/,                         // aria-label={expr} (dynamic)
   /aria-labelledby\s*=/,                         // aria-labelledby
@@ -95,7 +102,16 @@ const ALLOW_LITERAL_REGEX = [
 
 /**
  * Returns true if the file source imports from a strings file AND the literal
- * appears NOT as a bare hardcoded string (only consumed via S.key access).
+ * appears as a bare quoted string (which would be defined there, not hardcoded inline).
+ *
+ * NOTE: This function is kept for use in tests but is NO LONGER called from
+ * flagEnLiterals. The original logic was inverted: it returned true (clean/skip)
+ * when the literal was NOT a quoted string in source, which silently suppressed
+ * JSX text nodes (e.g. `>Save changes<`) in any file that imported chromeStrings.
+ * The fix: flagEnLiterals does not call isFromStringsImport. JSX text nodes that
+ * are hardcoded in the component are bugs regardless of whether the file has a
+ * strings import. S.key expressions are already filtered by trimmed.startsWith("{").
+ * (finding-2 fix, §0.9G bounded-fix-round 2026-06-13)
  */
 export function isFromStringsImport(src, literal) {
   const hasStringsImport = STRINGS_FILE_PATTERNS.some(p => src.includes(p));
@@ -150,11 +166,16 @@ function isEnLiteral(str) {
 /**
  * Scan TSX/TS source for learner-visible EN literals.
  * Returns an array of { file, line, literal } hits.
+ *
+ * Design note: isFromStringsImport is NOT called here. A hardcoded JSX text node
+ * or attribute literal is a bug regardless of whether the file imports chromeStrings —
+ * that is precisely the post-sweep scenario this tool guards against. S.key accesses
+ * (`{S.sendButton}`) are filtered by the `trimmed.startsWith("{")` check below.
+ * (finding-2 fix, §0.9G bounded-fix-round 2026-06-13)
  */
 export function flagEnLiterals(src, filepath) {
   const hits = [];
   const lines = src.split("\n");
-  const hasStringsImport = STRINGS_FILE_PATTERNS.some(p => src.includes(p));
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -184,9 +205,6 @@ export function flagEnLiterals(src, filepath) {
       const trimmed = literal.trim();
       if (!trimmed || trimmed.length < 2) continue;
       if (trimmed.startsWith("{") || trimmed.startsWith("$")) continue;
-
-      // If the file uses a strings import, check if this literal is a bare hardcoded string
-      if (hasStringsImport && isFromStringsImport(src, trimmed)) continue;
 
       if (isEnLiteral(trimmed)) {
         hits.push({ file: filepath, line: lineNum, literal: trimmed });

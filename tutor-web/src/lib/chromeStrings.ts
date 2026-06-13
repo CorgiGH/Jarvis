@@ -107,6 +107,10 @@ export const chatPane = {
   refreshing: "se reîmprospătează…",
   previouslyFlagged: (count: number) => `MARCATE ANTERIOR (${count})`,
   headingPrefix: "ASISTENT · SARCINA",
+  /** aria-label for the chat message log region (WCAG landmark). */
+  chatMessages: "Mesaje de chat",
+  /** Screen-reader label for the chat input (sr-only label, AT-visible). */
+  chatInputLabel: "Mesaj Jarvis",
 } as const;
 
 /** TrustSettings (TrustSettings.tsx) */

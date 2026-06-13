@@ -201,7 +201,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
       <div className="prose-clamp flex-1 min-h-0 overflow-auto p-4 space-y-3"
            tabIndex={0}
            role="log"
-           aria-label="Chat messages">
+           aria-label={S.chatMessages}>
         {(() => {
           const openGaps = historicalGaps.filter(g => g.resolvedBy == null);
           return openGaps.length > 0 && (
@@ -261,7 +261,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
         ))}
       </div>
       <div className="flex border-t-4 border-border-strong">
-        <label htmlFor="chat-input" className="sr-only">Message Jarvis</label>
+        <label htmlFor="chat-input" className="sr-only">{S.chatInputLabel}</label>
         <input
           id="chat-input"
           ref={inputRef}
