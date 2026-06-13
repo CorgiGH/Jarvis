@@ -1,0 +1,85 @@
+id: pa-prob-001
+subject: PA
+archetype: NP-completeness proof
+# Surface archetype-class: proof
+# Covers: §0.9-K proof sub-schema — fill-in frame with named substeps + structural matchers
+
+statement_ro: |
+  Demonstrați că HAM-PATH (problema drumului hamiltonian) este NP-completă.
+  Structura dovezii urmează rețeta standard:
+  1. Arătați că HAM-PATH ∈ NP (construiți algoritmul nondeterminist de guess+verify).
+  2. Reduceți HAM-CYCLE ∝ HAM-PATH (construiți G' din G și demonstrați echivalența).
+
+solution_present: true
+
+# proof_frame per §0.9-K: template_ro is the fill-in frame; substeps carry structural matchers
+solution:
+  proof_frame:
+    template_ro: |
+      Pasul 1 (HAM-PATH ∈ NP): {{step-np-guess}}. Verificarea durează {{step-np-verify}}.
+      Pasul 2 (NP-hardness via HAM-CYCLE ∝ HAM-PATH):
+        Construcție G': {{step-construction}}.
+        Direcția (⇒): {{step-forward}}.
+        Direcția (⇐): {{step-backward}}.
+    substeps:
+      - id: step-np-guess
+        label_ro: "Pasul de ghicire (guess) în algoritmul nondeterminist"
+        matcher:
+          kind: contains
+          value: "permutare"
+      - id: step-np-verify
+        label_ro: "Complexitatea pasului de verificare"
+        matcher:
+          kind: regex
+          value: "O\\(n"
+      - id: step-construction
+        label_ro: "Construcția grafului G' din G (adăugare noduri s, t, u')"
+        matcher:
+          kind: contains
+          value: "s"
+      - id: step-forward
+        label_ro: "Direcția ⇒: ciclu hamiltonian în G ⟹ drum hamiltonian în G'"
+        matcher:
+          kind: contains
+          value: "s →"
+      - id: step-backward
+        label_ro: "Direcția ⇐: drum hamiltonian în G' ⟹ ciclu hamiltonian în G"
+        matcher:
+          kind: contains
+          value: "ciclu"
+
+  reference_solution: |
+    HAM-PATH ∈ NP: Ghicim o permutare v[0..n-1] a nodurilor (n·⌈log n⌉ biți), verificăm că
+    (v[i], v[i+1]) ∈ E pentru toți i < n-1 în O(n²). Deci HAM-PATH ∈ NP. ✓
+
+    NP-hardness (HAM-CYCLE ∝ HAM-PATH): Dat G=(V,E) pentru HAM-CYCLE, construim G':
+    luăm un nod u ∈ V, adăugăm copie u' cu aceiași vecini, adăugăm s (conectat doar la u)
+    și t (conectat doar la u'). G are ciclu hamiltonian ⟺ G' are drum hamiltonian s→t.
+    (⇒) Ciclul u→x₁→…→xₙ₋₁→u devine drumul s→u→x₁→…→xₙ₋₁→u'→t.
+    (⇐) Un drum hamiltonian în G' trebuie să înceapă în s și să se termine în t (grad 1).
+    Ștergem s și t, înlocuim u' cu u → ciclu hamiltonian prin u în G.
+    Reducerea este O(|V|+|E|). ✓
+
+exam_language: null
+
+rubric_items:
+  - id: pa-prob-001-g1
+    label: G1
+    points: 2.0
+    kind: AP
+    all_or_nothing: false
+    position: 1
+  - id: pa-prob-001-g2
+    label: G2
+    points: 3.0
+    kind: AP
+    all_or_nothing: false
+    position: 2
+
+kc_links:
+  - pa-kc-004
+
+source:
+  doc: pa-np-complete-course-notes
+  page: null
+  quote: "Students flip the arrow constantly. Remember: *you reduce **from** the known-hard problem **to** the new problem*."

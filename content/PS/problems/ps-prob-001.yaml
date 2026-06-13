@@ -1,0 +1,55 @@
+id: ps-prob-001
+subject: PS
+archetype: Confidence interval computation in R
+# Surface archetype-class: code
+# Covers: §0.9-K code sub-schema — reference_source (R program) + expected_stdout
+
+statement_ro: |
+  Scrieți o funcție R numită `interval_z` care calculează intervalul de încredere bilateral
+  (1-alfa)·100% pentru media populației, cu dispersia (sigma) cunoscută (distribuție normală).
+
+  Funcția primește: n (dimensiunea eșantionului), sample_mean (media eșantionului),
+  sigma (abaterea standard a populației), alfa (nivelul de semnificație).
+  Returnează un vector de două elemente [limita_inf, limita_sup].
+
+  Apoi apelați funcția cu: n=25, sample_mean=67.53, sigma=10, alfa=0.1
+  și afișați rezultatul folosind print().
+
+solution_present: true
+
+# code sub-schema per §0.9-K: reference_source + expected_stdout
+solution:
+  reference_source: |
+    interval_z = function(n, sample_mean, sigma, alfa) {
+      z = qnorm(1 - alfa/2, 0, 1)
+      margine = z * sigma / sqrt(n)
+      a = c(sample_mean - margine, sample_mean + margine)
+      return(a)
+    }
+    result = interval_z(25, 67.53, 10, 0.1)
+    print(result)
+
+  expected_stdout: "[1] 64.24029 70.81971"
+
+exam_language: "r"
+
+rubric_items:
+  - id: ps-prob-001-g1
+    label: G1
+    points: 2.0
+    kind: AP
+    all_or_nothing: false
+    position: 1
+  - id: ps-prob-001-g2
+    label: G2
+    points: 3.0
+    kind: AP
+    all_or_nothing: false
+    position: 2
+
+kc_links: []
+
+source:
+  doc: ps-lab-confidence-intervals
+  page: null
+  quote: "interval_z = function(n, sample_mean, sigma, alfa)"
