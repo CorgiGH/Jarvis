@@ -626,3 +626,36 @@ data class ApiLessonReply(
 **Consistency:** uses the same `VerifyAdmin.resolveStatus` + `ReportWrongQuery.hasOpenReportWrong` helpers as `GET /teaching/{kcId}` (same faithful-gate contract, §I.2 + D-RF2).
 
 > **DURABLE RULE (P1-4, applies to ALL of this lock + the data-model-lock + the master-plan freeze tables):** any forced deviation from a frozen lock — a renamed wire field, a newly-frozen inner shape, a changed server formula — **MUST amend the lock doc in the SAME commit** that lands the code, so code and lock never silently contradict (the failure mode P1-4 caught). If amending would weaken a Phase-2 trust guarantee, STOP and escalate to the owner instead of carving out a silent exception. Build-log decisions (`build-review/*-build-log.md`) are a journal, NOT a lock — promote the decision here (or cross-link its id) before claiming the contract frozen.
+
+---
+
+## §NEW-V. `GET /api/v1/viz/{instanceId}` — viz instance serve route (Plan 4b Task 3, 2026-06-13)
+
+**Gate:** `jarvis_session` cookie required — resolved via `SessionRepo.findUserId`. No session ⇒ 401. Unknown `instanceId` ⇒ 404 (OMIT, no information leak). Read-only: no DB write, no LLM.
+
+**Route:** `GET /api/v1/viz/{instanceId}` (implemented in `VizInstanceRoutes.kt`, Lane A; mounted via `TutorRoutes.kt` `installTutorRoutes` ONE-LINE patch `tutor-routes-viz-mount.patch`, PM-applied at CP-1).
+
+**One-consumer note:** the TS fetch lives inside `FigureReveal.tsx` via `jarvisFetch` (one consumer; promote to a lib module only when a second consumer appears — §0.9B).
+
+**Reply shape (`ApiVizInstanceReply`):**
+```kotlin
+@Serializable
+data class ApiVizInstanceReply(
+    val id: String,        // VizInstance.id
+    val subject: String,   // VizInstance.subject
+    val family_id: String, // VizInstance.family_id — snake_case, backend casing wins (§0.9B)
+    val language: String,  // VizInstance.language
+    val data_json: String, // VizInstance.instance.data_json (parse-validated at load; stored as String)
+)
+```
+
+**Wire encoding:** snake_case (`family_id`, `data_json`) — backend casing wins, consistent with §NEW-L.
+
+**Semantics:** enumerates the corpus via `ContentRepo.loadAllVizInstances()` (loops per-subject `loadVizInstances`; parse-validates `data_json` at load). First match by `id` wins (subjects sorted deterministically). Corpus is O(10) instances; request-scoped load matches the existing curator / queue route pattern.
+
+**HTTP contract:**
+- 200 + `ApiVizInstanceReply` JSON for a known `instanceId`.
+- 404 `{"error":"not found"}` for an unknown `instanceId`.
+- 401 `{"error":"not authenticated"}` for a missing/invalid session.
+
+**Lock check status:** zero `api/v1/viz` entries existed at plan-write (grep confirmed). This is a NEW freeze, not a deviation. Ships in the SAME commit as `VizInstanceRoutes.kt` per the DURABLE RULE.

@@ -250,6 +250,9 @@ fun Application.installTutorRoutes() {
             call.respondText("""{"ok":true}""", ContentType.Application.Json)
         }
 
+        // Plan 4b Task 3 — viz instance serve route (§0.9B; GET /api/v1/viz/{instanceId}).
+        installVizInstanceRoutes()
+
         // Gate 3: content-authoring curator routes (read + validate only).
         installCuratorRoutes()
 
