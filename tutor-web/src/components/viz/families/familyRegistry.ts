@@ -16,6 +16,13 @@ export type FamilyRendererProps = {
   language: string;
   /** RO chrome strings on the lesson surface; omitted → the shell's EN demo defaults. */
   labels?: import("../AlgoStepperShell").ShellLabels;
+  /**
+   * Plan-4b Task 4 — ADDITIVE. Called on every frame change (including mount).
+   * `idx` is 0-based; `lastIdx` is the index of the final frame.
+   * FigureReveal uses this to fire the gate when the final frame is first reached.
+   * Wrap in useCallback to avoid spurious re-fires.
+   */
+  onStep?: (idx: number, lastIdx: number) => void;
 };
 export type FamilyRenderer = (props: FamilyRendererProps) => ReactNode;
 

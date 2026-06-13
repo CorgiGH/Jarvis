@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { hierarchy, tree as d3tree } from "d3-hierarchy";
 import { AlgoStepperShell, type Frame, type ShellLabels } from "../AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "../theme";
@@ -200,15 +200,24 @@ function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>) {
   };
 }
 
-export function GraphTreeFamily({ instanceId, dataJson, language, labels }: FamilyRendererProps): ReactNode {
+export function GraphTreeFamily({ instanceId, dataJson, language, labels, onStep }: FamilyRendererProps): ReactNode {
   const data = useMemo(() => parseGraphTreeData(dataJson, instanceId), [dataJson, instanceId]);
   const frames = useMemo(() => framesFromGraphTree(data), [data]);
   const layout = useMemo(() => layoutGraphTree(data), [data]);
+  const lastIdx = Math.max(0, frames.length - 1);
   // labelOf evolves with deltas; recompute the final-per-node map so renderFrame shows live labels.
   const labelOf = useMemo(() => {
     const m = new Map(data.nodes.map((n) => [n.id, n.label]));
     return m;
   }, [data]);
+  // Plan-4b Task 4 — thread onStep: the shell's idx callback becomes (idx, lastIdx) for the parent.
+  // MUST be a STABLE reference (useCallback): the shell's onStep effect deps on props.onStep, so a
+  // fresh arrow every render would re-fire the effect on every render → setStepDisplay → re-render →
+  // new arrow → infinite render loop (the busy-loop). Stable ref breaks the cycle.
+  const shellOnStep = useCallback(
+    onStep ? (idx: number) => onStep(idx, lastIdx) : () => {},
+    [onStep, lastIdx],
+  );
   return (
     <AlgoStepperShell<GraphTreeState>
       title={`Graph/tree · ${instanceId}`}
@@ -217,6 +226,7 @@ export function GraphTreeFamily({ instanceId, dataJson, language, labels }: Fami
       renderFrame={renderFrame(layout, labelOf)}
       testIdPrefix="graph-tree"
       labels={labels}
+      onStep={onStep ? shellOnStep : undefined}
     />
   );
 }

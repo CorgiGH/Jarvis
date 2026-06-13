@@ -3,6 +3,7 @@ import type { ApiBeatReveal, ApiPredictOption } from "../../lib/lesson";
 import { lessonStrings } from "../../lib/lessonStrings";
 import { readMs } from "../../lib/dwell";
 import { prefersReducedMotionNow } from "../../theme/applyTheme";
+import { FigureReveal } from "./FigureReveal";
 
 interface RevealBeatProps {
   reveal: ApiBeatReveal;
@@ -13,9 +14,10 @@ interface RevealBeatProps {
 }
 
 /**
- * REVEAL beat — stepped reveal with back/forward + "pas k/N". Figure path (Task 8) when reveal.figure
- * is set; the 4 authored KCs carry NO figure, so the stepped-TEXT path is what ships + is tested here.
- * Gate clears when the learner reached the FINAL step at least once AND that step's dwell floor elapsed.
+ * REVEAL beat — stepped reveal with back/forward + "pas k/N".
+ * Plan-4b Task 4: when reveal.figure is set, FigureReveal IS the reveal (§0.9A).
+ * The predict echo banner renders above BOTH paths (moved above the branch).
+ * The stepped-text path is byte-identical to Plan-3 (its existing tests pass unchanged).
  */
 export function RevealBeat({ reveal, predictedOption, onGateClear }: RevealBeatProps) {
   const steps = reveal.steps;
@@ -45,28 +47,38 @@ export function RevealBeat({ reveal, predictedOption, onGateClear }: RevealBeatP
   const back = useCallback(() => setIdx((i) => Math.max(0, i - 1)), []);
   const fwd = useCallback(() => setIdx((i) => Math.min(n - 1, i + 1)), [n]);
 
-  // Figure path: Task 8 fills FigureReveal. Until then the authored KCs never bind a figure, so this
-  // branch is unreachable for served content; the seam is typed, not a 404 stub.
+  // --- Predict echo banner (§4.1): renders above BOTH figure and stepped-text paths ---
+  const echoBanner = predictedOption && (
+    <p data-testid="reveal-echo" className="border-l-4 border-accent pl-3 text-xs text-page-fg/70 leading-relaxed">
+      <span className="font-bold tracking-widest uppercase text-[10px] text-accent block mb-1">
+        {lessonStrings.echoPrefix}
+      </span>
+      {predictedOption.callback}
+    </p>
+  );
+
+  // --- Figure path (Plan-4b Task 4): FigureReveal when reveal.figure is set ---
+  // §0.9A: the figure IS the reveal; onGateClear fires when the final frame is reached.
+  // The stepped-text path below is the fallback (boundary degrades to it on fetch/render failure).
   if (reveal.figure) {
     return (
-      <div data-testid="beat-figure-scrubber" className="font-mono text-xs text-page-fg/60">
-        {/* Task 8: <FigureReveal figure={reveal.figure} onGateClear={onGateClear} /> */}
-        <span data-testid="scrubber-step-counter">{lessonStrings.step} 1/1</span>
+      <div className="flex flex-col gap-3 font-mono">
+        {echoBanner}
+        <FigureReveal
+          figure={reveal.figure}
+          steps={steps}
+          predictedOption={predictedOption}
+          onGateClear={onGateClear}
+        />
       </div>
     );
   }
 
+  // --- Stepped-text path (byte-identical to Plan-3 behavior) ---
   const step = steps[idx];
   return (
     <div className="flex flex-col gap-3 font-mono">
-      {predictedOption && (
-        <p data-testid="reveal-echo" className="border-l-4 border-accent pl-3 text-xs text-page-fg/70 leading-relaxed">
-          <span className="font-bold tracking-widest uppercase text-[10px] text-accent block mb-1">
-            {lessonStrings.echoPrefix}
-          </span>
-          {predictedOption.callback}
-        </p>
-      )}
+      {echoBanner}
 
       <div className="border-2 border-border-strong p-4 flex flex-col gap-2 shadow-hard">
         <p className="text-sm text-page-fg leading-relaxed">{step.text}</p>

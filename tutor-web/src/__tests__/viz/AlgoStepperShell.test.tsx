@@ -149,7 +149,7 @@ describe("AlgoStepperShell — manual advance + reset", () => {
     expect(screen.getByTestId("counter-readout")).toHaveTextContent("0");
   });
 
-  test("no play button rendered", () => {
+  test("play button rendered (Plan-4b Task 4 additive — toggles autoplay)", () => {
     render(
       <AlgoStepperShell
         title="Counter"
@@ -158,7 +158,8 @@ describe("AlgoStepperShell — manual advance + reset", () => {
         renderFrame={renderCounter}
       />
     );
-    expect(screen.queryByTestId("stepper-play")).toBeNull();
+    // Plan-4b Task 4: the play button is now always rendered (additive).
+    expect(screen.getByTestId("stepper-play")).toBeInTheDocument();
   });
 
   test("R resets to frame 0", () => {
@@ -354,13 +355,14 @@ describe("AlgoStepperShell — hash deep-link clamped to gate ceiling", () => {
 });
 
 describe("AlgoStepperShell — V2 manual-advance-only", () => {
-  test("V2: no play button; Space advances exactly one frame", () => {
+  test("V2: play button present; Space advances exactly one frame", () => {
     const frames = Array.from({ length: 5 }, (_, i) => ({ state: i, aria: `f${i}` }));
     render(
       <AlgoStepperShell title="t" desc="d" frames={frames}
         renderFrame={(f) => <text>{String(f.state)}</text>} testIdPrefix="ap" />
     );
-    expect(screen.queryByTestId("ap-play")).toBeNull();
+    // Plan-4b Task 4: play button is now rendered (additive).
+    expect(screen.getByTestId("ap-play")).toBeInTheDocument();
     const svg = screen.getByRole("img");
     fireEvent.keyDown(svg, { key: " " });
     expect(screen.getByTestId("ap-frame-counter").textContent).toContain("2 / 5");

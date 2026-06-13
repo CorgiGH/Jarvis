@@ -9,6 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
+// Plan-4b Task 4: play/autoplay state uses an interval ref
 import { MotionConfig } from "motion/react";
 import { ACCENT, FONT_FAMILY, INK, PAPER } from "./theme";
 import { HatchDefs } from "./HatchDefs";
@@ -41,7 +42,8 @@ export interface ShellLayout {
 }
 
 /** Plan-3 §8.2 — chrome labels, ADDITIVE. Omitted fields fall back to the current EN literals so
- *  the demo gallery is unchanged; the lesson surface passes RO via lessonStrings. */
+ *  the demo gallery is unchanged; the lesson surface passes RO via lessonStrings.
+ *  Plan-4b Task 4 adds `play` (additive). */
 export interface ShellLabels {
   frame?: string;   // "Frame"
   reset?: string;   // "reset"
@@ -49,6 +51,8 @@ export interface ShellLabels {
   voiceOn?: string;  // "🔊 voice on"
   voiceOff?: string; // "🔇 voice off"
   predict?: string;  // "⚡ Predict"
+  /** Plan-4b Task 4 — autoplay toggle label (RO: "▶ redă"). EN default: "▶ play". */
+  play?: string;
 }
 
 export interface AlgoStepperShellProps<S> {
@@ -100,6 +104,8 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     voiceOn: props.labels?.voiceOn ?? "🔊 voice on",
     voiceOff: props.labels?.voiceOff ?? "🔇 voice off",
     predict: props.labels?.predict ?? "⚡ Predict",
+    /** Plan-4b Task 4 additive. EN default so demo gallery is unchanged. */
+    play: props.labels?.play ?? "▶ play",
   };
 
   const materializedFrames = useMemo<Frame<S>[]>(() => {
@@ -125,6 +131,9 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const [idx, setIdx] = useState(initialIdx);
   const [answeredGates, setAnsweredGates] = useState<Set<number>>(new Set());
   const [voiceOn, setVoiceOn] = useState(false);
+  /** Plan-4b Task 4 — autoplay state. Bounded: stops at lastIdx. */
+  const [isPlaying, setIsPlaying] = useState(false);
+  const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const maxReachable = useMemo(() => {
     if (!props.predictionGates) return lastIdx;
@@ -207,6 +216,42 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
       }
     };
   }, [voiceOn]);
+
+  /** Plan-4b Task 4 — autoplay: bounded interval stepping to lastIdx then auto-stops.
+   *  Honors reduced motion: steps still advance (MotionConfig already suppresses animation);
+   *  the gate logic is identical whether animated or not. */
+  useEffect(() => {
+    if (!isPlaying) {
+      if (playIntervalRef.current) {
+        clearInterval(playIntervalRef.current);
+        playIntervalRef.current = null;
+      }
+      return;
+    }
+    playIntervalRef.current = setInterval(() => {
+      setIdx((prev) => {
+        if (prev >= maxReachable) {
+          // Auto-stop at the final reachable frame
+          setIsPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 600);
+    return () => {
+      if (playIntervalRef.current) {
+        clearInterval(playIntervalRef.current);
+        playIntervalRef.current = null;
+      }
+    };
+  }, [isPlaying, maxReachable]);
+
+  // Stop play when idx reaches maxReachable
+  useEffect(() => {
+    if (isPlaying && idx >= maxReachable) {
+      setIsPlaying(false);
+    }
+  }, [idx, maxReachable, isPlaying]);
 
   const onPredict = useCallback(
     (isCorrect: boolean) => {
@@ -405,6 +450,16 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             style={brutalistBtn(voiceOn, false)}
           >
             {voiceOn ? L.voiceOn : L.voiceOff}
+          </button>
+          {/** Plan-4b Task 4 — additive play/autoplay button. Toggles bounded interval
+               stepping; honors reduced motion (steps advance, MotionConfig omits animation). */}
+          <button
+            onClick={() => setIsPlaying((p) => !p)}
+            data-testid={`${testIdPrefix}-play`}
+            aria-label={isPlaying ? "Pause autoplay" : "Start autoplay"}
+            style={brutalistBtn(isPlaying, false)}
+          >
+            {L.play}
           </button>
         </div>
         {gateLocked && activeGate && (
