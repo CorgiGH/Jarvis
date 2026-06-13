@@ -204,11 +204,15 @@ describe("CodePractice", () => {
     render(<CodePractice problem={CODE_PROBLEM_R} />);
 
     fireEvent.click(screen.getByTestId("code-practice-run"));
-    await waitFor(() => expect(mockRunCode).toHaveBeenCalled());
 
-    // The banner text appears in the container; getAllByText returns all matching elements.
-    const bannerElements = screen.getAllByText(practiceStrings.codePracticeDegradedBanner);
-    expect(bannerElements.length).toBeGreaterThan(0);
+    // Wait for the banner to PAINT (not just for the mock to be called) — the reply
+    // resolves async and the banner renders on a later React flush. Asserting right
+    // after the mock call races the re-render and flakes on slower CI runners.
+    await waitFor(() =>
+      expect(
+        screen.getAllByText(practiceStrings.codePracticeDegradedBanner).length,
+      ).toBeGreaterThan(0),
+    );
   });
 
   // ── strings come from practiceStrings (INV-8.3) ──────────────────────────────

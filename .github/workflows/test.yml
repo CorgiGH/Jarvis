@@ -115,7 +115,7 @@ jobs:
         working-directory: tutor-web
     env:
       # ENV-GATE: set here (and ONLY here) so the five practice specs boot the backend.
-      # The existing frontend job's Playwright run NEVER sets this — practice specs self-skip there.
+      # The existing frontend job's Playwright run NEVER sets this ï¿½ practice specs self-skip there.
       JARVIS_PRACTICE_E2E: "1"
       JARVIS_AUTH_TOKEN: practice-e2e-token
     steps:
@@ -142,8 +142,14 @@ jobs:
         run: npm run build
       - name: Install Playwright browsers (chromium only)
         run: npx playwright install --with-deps chromium
+      - name: Pre-compile backend (so per-spec gradle :run boots without compiling under contention)
+        working-directory: .
+        run: ./gradlew --no-daemon :classes
+      # --workers=1: each practice spec boots its OWN Kotlin backend; running them in parallel
+      # starves JVM boot on the 2-core runner (4/7 timed out at 90s). Serial boot + the raised
+      # 180s health timeout in practiceServer.ts keeps it green. Job timeout is 30 min.
       - name: Practice e2e (5 surfaces + phase5-core-loop)
-        run: npx playwright test e2e/practice e2e/phase5-core-loop.spec.ts --config playwright.config.ts
+        run: npx playwright test e2e/practice e2e/phase5-core-loop.spec.ts --config playwright.config.ts --workers=1
       - name: Upload practice e2e reports on failure
         if: failure()
         uses: actions/upload-artifact@v4

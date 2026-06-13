@@ -44,7 +44,7 @@ function pickPort(): number {
 }
 
 /** Poll the health endpoint until it returns 200, or time out. */
-async function waitForHealth(url: string, timeoutMs = 90_000): Promise<void> {
+async function waitForHealth(url: string, timeoutMs = 180_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
