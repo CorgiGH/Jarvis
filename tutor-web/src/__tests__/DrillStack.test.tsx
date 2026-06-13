@@ -70,7 +70,7 @@ describe("DrillStack initial render", () => {
 
     // Drill input textarea and submit button present
     expect(screen.getByTestId("drill-attempt-input")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /check answer/i })).toBeInTheDocument();
+    expect(screen.getByTestId("drill-check-btn")).toBeInTheDocument();
   });
 
   test("DRILL content text appears in first open card", () => {
@@ -99,7 +99,7 @@ describe("DrillStack initial render", () => {
       </MemoryRouter>
     );
     expect(
-      screen.getByRole("button", { name: /give up/i })
+      screen.getByTestId("drill-giveup-btn")
     ).toBeInTheDocument();
   });
 });
@@ -137,7 +137,7 @@ describe("DrillStack correct-answer path", () => {
     fireEvent.change(screen.getByTestId("drill-attempt-input"), {
       target: { value: "μ̂ = 8, the sample median" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /check answer/i }));
+    fireEvent.click(screen.getByTestId("drill-check-btn"));
 
     await waitFor(() =>
       expect(screen.queryAllByTestId("card-lock-message")).toHaveLength(0)
@@ -181,7 +181,7 @@ describe("DrillStack correct-answer path", () => {
     fireEvent.change(screen.getByTestId("drill-attempt-input"), {
       target: { value: "median = 8" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /check answer/i }));
+    fireEvent.click(screen.getByTestId("drill-check-btn"));
     await waitFor(() =>
       expect(screen.queryAllByTestId("card-lock-message")).toHaveLength(0)
     );
@@ -224,7 +224,7 @@ describe("DrillStack misconception path", () => {
     fireEvent.change(screen.getByTestId("drill-attempt-input"), {
       target: { value: "μ̂ = 8.2 (sum / n)" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /check answer/i }));
+    fireEvent.click(screen.getByTestId("drill-check-btn"));
 
     await waitFor(() =>
       expect(screen.getByTestId("grade-feedback")).toBeInTheDocument()
@@ -267,7 +267,7 @@ describe("DrillStack giveUp path", () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /give up/i }));
+    fireEvent.click(screen.getByTestId("drill-giveup-btn"));
 
     await waitFor(() =>
       expect(screen.queryAllByTestId("card-lock-message")).toHaveLength(0)
@@ -289,7 +289,7 @@ describe("DrillStack giveUp path", () => {
 });
 
 describe("DrillStack CHECK completion", () => {
-  test("clicking Mark CHECK Done fires onProblemComplete", async () => {
+  test("submitting a graded CHECK attempt fires onProblemComplete (REQ-29, E8)", async () => {
     const correctResult: GradeResult = {
       correct: true,
       score: 1.0,
@@ -319,17 +319,67 @@ describe("DrillStack CHECK completion", () => {
       </MemoryRouter>
     );
 
-    // Grade drill first
+    // Grade drill first to unlock the CHECK card
     fireEvent.change(screen.getByTestId("drill-attempt-input"), {
       target: { value: "median = 8" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /check answer/i }));
+    fireEvent.click(screen.getByTestId("drill-check-btn"));
     await waitFor(() =>
       expect(screen.queryAllByTestId("card-lock-message")).toHaveLength(0)
     );
 
-    // Now complete the CHECK card
-    fireEvent.click(screen.getByRole("button", { name: /mark check done/i }));
-    expect(onComplete).toHaveBeenCalledWith("A3");
+    // onProblemComplete should NOT fire yet (CHECK card not yet graded)
+    expect(onComplete).not.toHaveBeenCalled();
+
+    // Complete the CHECK card via the graded check input (REQ-29: no no-engagement path)
+    await waitFor(() => expect(screen.getByTestId("check-attempt-input")).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId("check-attempt-input"), {
+      target: { value: "10" },
+    });
+    fireEvent.click(screen.getByTestId("check-submit-btn"));
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith("A3"));
+  });
+
+  test("no-engagement MARK CHECK DONE button is absent (REQ-29 enforcement)", async () => {
+    const correctResult: GradeResult = {
+      correct: true,
+      score: 1.0,
+      rubric: { numeric: true, mechanism: true, justification: true },
+      misconception: null,
+      elaboratedFeedback: "✓ correct.",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (typeof url === "string" && url.includes("/api/v1/drill/grade")) {
+          return makeGradeOkResponse(correctResult);
+        }
+        return new Response("{}", { status: 200 });
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <DrillStack
+          taskId="T1"
+          problemId="A3"
+          content={DRILL_CONTENT}
+          onProblemComplete={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    fireEvent.change(screen.getByTestId("drill-attempt-input"), {
+      target: { value: "median = 8" },
+    });
+    fireEvent.click(screen.getByTestId("drill-check-btn"));
+    await waitFor(() =>
+      expect(screen.queryAllByTestId("card-lock-message")).toHaveLength(0)
+    );
+
+    // The old no-engagement button must be gone
+    expect(screen.queryByText(/MARK CHECK DONE/i)).not.toBeInTheDocument();
+    // The check-giveup-btn (honest give-up) is present instead
+    expect(screen.getByTestId("check-giveup-btn")).toBeInTheDocument();
   });
 });

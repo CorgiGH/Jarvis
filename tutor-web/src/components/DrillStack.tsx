@@ -11,6 +11,7 @@ import { MisconceptionRibbon } from "./MisconceptionRibbon";
 import { TrustBadge } from "./TrustBadge";
 import { GroundedExplanationCard } from "./GroundedExplanationCard";
 import { ProvenanceBadge } from "./ProvenanceBadge";
+import { practiceStrings as s } from "../lib/practiceStrings";
 
 /** Provenance of the prose in `worked`/`definition` (DrillProvenanceDto, sibling backend plan Task 5).
  *  CI invariant: hasBeenFaithfulChecked may be true ONLY when type === "authored". */
@@ -68,8 +69,10 @@ type StackPhase =
  *   grading   → API responds correct   → correct  (WORKED/DEF/CHECK unlock, stagger 80ms)
  *   grading   → API responds incorrect → incorrect (cards stay locked, misconception banner)
  *   idle      → user clicks "GIVE UP"  → given-up  (POST giveUp=true, unlock all)
- *   correct   → user clicks "MARK CHECK DONE" → check-done → onProblemComplete fires
- *   given-up  → user clicks "MARK CHECK DONE" → check-done → onProblemComplete fires
+ *   correct   → user submits check attempt → grading-check → check-done → onProblemComplete fires
+ *   correct   → user clicks "GIVE UP CHECK" → check-done → onProblemComplete fires
+ *   given-up  → user submits check attempt → grading-check → check-done → onProblemComplete fires
+ *   given-up  → user clicks "GIVE UP CHECK" → check-done → onProblemComplete fires
  *
  * Animation #1 (unlock stagger) is driven by data-stagger-index + CSS
  * `animation-delay` set in DrillCard. No JS timers needed — CSS handles the 80ms cascade.
@@ -87,6 +90,11 @@ export function DrillStack({
   const [phase, setPhase] = useState<StackPhase>("idle");
   const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // CHECK card state (REQ-29, E8) — graded input, not a no-engagement button
+  const [checkAttempt, setCheckAttempt] = useState("");
+  const [checkGradeResult, setCheckGradeResult] = useState<GradeResult | null>(null);
+  const [checkGrading, setCheckGrading] = useState(false);
 
   const unlocked = phase === "correct" || phase === "given-up" || phase === "check-done";
 
@@ -129,7 +137,7 @@ export function DrillStack({
       setGradeResult(result);
       setPhase(result.correct ? "correct" : "incorrect");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Network error — please retry.");
+      setError(e instanceof Error ? e.message : s.drillNetworkError);
       setPhase("idle");
     }
   }
@@ -155,12 +163,34 @@ export function DrillStack({
       setGradeResult(result);
       setPhase("given-up");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Network error — please retry.");
+      setError(e instanceof Error ? e.message : s.drillNetworkError);
       setPhase("idle");
     }
   }
 
-  function handleCheckDone() {
+  /** REQ-29, E8: CHECK card graded attempt — posts through the existing gradeDrill path. */
+  async function handleCheckSubmit() {
+    if (checkGrading || checkAttempt.trim().length === 0) return;
+    setCheckGrading(true);
+    try {
+      const result = await gradeDrill({
+        taskId,
+        problemId,
+        problemStatement: content.check,
+        userAttempt: checkAttempt,
+        expectedAnswerHint: content.expectedAnswerHint,
+      });
+      setCheckGradeResult(result);
+      setPhase("check-done");
+      onProblemComplete(problemId);
+    } catch (e) {
+      // on error: remain in unlocked state, surface the error briefly
+      setCheckGrading(false);
+    }
+  }
+
+  /** Honest give-up on the CHECK card — transitions to check-done without grading. */
+  function handleCheckGiveUp() {
     setPhase("check-done");
     onProblemComplete(problemId);
   }
@@ -173,7 +203,7 @@ export function DrillStack({
       {/* 1. DRILL card — always open */}
       <DrillCard
         cardType="DRILL"
-        title="③ DRILL · YOUR TURN"
+        title={s.drillCardTitle}
         state={drillState()}
         staggerIndex={0}
       >
@@ -184,7 +214,7 @@ export function DrillStack({
             data-testid="drill-prediction-label"
             className="block mb-1 font-mono text-[10px] uppercase tracking-widest text-page-fg/70"
           >
-            predict in plain language (optional) — what should the answer look like, before you write it?
+            {s.drillPredictionLabel}
           </label>
           <textarea
             id="drill-prediction-input"
@@ -197,7 +227,7 @@ export function DrillStack({
             className="w-full border-2 border-border-thin bg-page-bg font-mono text-xs p-2 resize-none focus:outline-none focus:border-accent disabled:opacity-50"
           />
           <div className="mt-1 text-[11px] uppercase tracking-widest text-page-fg/75">
-            generation-effect: even a wrong guess BEFORE attempting locks in better than passive reading (Slamecka 1978).
+            {s.drillPredictionHint}
           </div>
         </div>
         {isCode && content.rubricItems && content.rubricItems.length > 0 && (
@@ -226,7 +256,7 @@ export function DrillStack({
           placeholder={
             isCode
               ? `# ${content.language?.toUpperCase()} code — write a complete script, no execution server-side`
-              : "Type your answer here…"
+              : s.drillAttemptPlaceholder
           }
           className={
             isCode
@@ -298,7 +328,7 @@ export function DrillStack({
             className="mt-3 flex flex-wrap gap-2"
           >
             <span className="font-mono text-[10px] uppercase tracking-widest text-page-fg/70 self-center">
-              cât de sigur ești?
+              {s.drillConfidenceLabel}
             </span>
             {(["DEFINITELY", "MAYBE", "GUESS", "IDK"] as StudentConfidence[]).map((c) => (
               <button
@@ -328,7 +358,7 @@ export function DrillStack({
               disabled={phase === "grading" || attempt.trim().length === 0}
               className="px-4 py-1.5 bg-accent text-page-fg font-mono text-xs font-bold tracking-widest border-2 border-border-strong hover:bg-accent-hover disabled:opacity-40 transition-all duration-[280ms] ease-in-out active:scale-95"
             >
-              {phase === "grading" ? "GRADING…" : "CHECK ANSWER"}
+              {phase === "grading" ? s.drillGradingBtn : s.drillCheckAnswerBtn}
             </button>
             <button
               onClick={handleGiveUp}
@@ -336,7 +366,7 @@ export function DrillStack({
               disabled={phase === "grading"}
               className="px-4 py-1.5 text-page-fg/80 font-mono text-xs tracking-widest border-2 border-border-thin hover:text-page-fg hover:border-border-strong disabled:opacity-40"
             >
-              give up — show solution
+              {s.drillGiveUpBtn}
             </button>
           </div>
         )}
@@ -345,7 +375,7 @@ export function DrillStack({
       {/* 2. WORKED EXAMPLE card — locked until drill graded */}
       <DrillCard
         cardType="WORKED"
-        title="② WORKED EXAMPLE"
+        title={s.workedCardTitle}
         state={secondaryState()}
         staggerIndex={1}
       >
@@ -362,7 +392,7 @@ export function DrillStack({
       {/* 3. DEFINITION card — locked until drill graded */}
       <DrillCard
         cardType="DEFINITION"
-        title="① DEFINITION"
+        title={s.definitionCardTitle}
         state={secondaryState()}
         staggerIndex={2}
       >
@@ -372,21 +402,61 @@ export function DrillStack({
         )}
       </DrillCard>
 
-      {/* 4. CHECK card — locked until drill graded */}
+      {/* 4. CHECK card — locked until drill graded; now a REAL GRADED INPUT (REQ-29, E8).
+           No-engagement "MARK CHECK DONE" path REMOVED. phase → check-done only via:
+           (a) graded attempt through gradeDrill, or (b) explicit give-up button. */}
       <DrillCard
         cardType="CHECK"
-        title="④ CHECK · TRANSFER"
+        title={s.checkCardTitleFull}
         state={checkState()}
         staggerIndex={3}
       >
         <MathText text={content.check} className="mb-4 text-sm" />
         {unlocked && phase !== "check-done" && (
-          <button
-            onClick={handleCheckDone}
-            className="px-4 py-1.5 bg-accent text-page-fg font-mono text-xs font-bold tracking-widest border-2 border-border-strong hover:bg-accent-hover transition-all duration-[280ms] ease-in-out active:scale-95"
+          <>
+            <textarea
+              data-testid="check-attempt-input"
+              value={checkAttempt}
+              onChange={(e) => setCheckAttempt(e.target.value)}
+              disabled={checkGrading}
+              rows={3}
+              placeholder={s.checkAttemptPlaceholder}
+              className="w-full border-2 border-border-strong bg-page-bg font-mono text-xs p-2 resize-none focus:outline-none focus:border-accent disabled:opacity-50"
+            />
+            <div className="mt-2 flex gap-2">
+              <button
+                data-testid="check-submit-btn"
+                onClick={handleCheckSubmit}
+                disabled={checkGrading || checkAttempt.trim().length === 0}
+                className="px-4 py-1.5 bg-accent text-page-fg font-mono text-xs font-bold tracking-widest border-2 border-border-strong hover:bg-accent-hover disabled:opacity-40 transition-all duration-[280ms] ease-in-out active:scale-95"
+              >
+                {checkGrading ? s.drillGradingBtn : s.checkSubmitBtn}
+              </button>
+              <button
+                data-testid="check-giveup-btn"
+                onClick={handleCheckGiveUp}
+                disabled={checkGrading}
+                className="px-4 py-1.5 text-page-fg/80 font-mono text-xs tracking-widest border-2 border-border-thin hover:text-page-fg hover:border-border-strong disabled:opacity-40"
+              >
+                {s.checkGiveUpBtn}
+              </button>
+            </div>
+          </>
+        )}
+        {checkGradeResult && (
+          <div
+            data-testid="check-verdict"
+            className={`mt-3 px-3 py-2 border-l-4 font-mono text-xs leading-relaxed ${
+              checkGradeResult.correct
+                ? "border-accent bg-accent/10 text-page-fg"
+                : "border-danger-text bg-danger-text/10 text-page-fg"
+            }`}
           >
-            MARK CHECK DONE
-          </button>
+            <span className="font-bold mr-2">
+              {checkGradeResult.correct ? s.checkVerdictCorrect : s.checkVerdictIncorrect}
+            </span>
+            {checkGradeResult.elaboratedFeedback}
+          </div>
         )}
       </DrillCard>
     </div>

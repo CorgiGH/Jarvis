@@ -67,4 +67,18 @@ export const practiceStrings = {
   checkGiveUpBtn: "Arată răspunsul",
   checkVerdictCorrect: "Corect!",
   checkVerdictIncorrect: "Incorect.",
+
+  // ── DrillStack chrome (card titles + button copy moved from inline, Task 12) ──
+  drillCardTitle: "③ DRILL · YOUR TURN",
+  workedCardTitle: "② WORKED EXAMPLE",
+  definitionCardTitle: "① DEFINITION",
+  checkCardTitleFull: "④ CHECK · TRANSFER",
+  drillCheckAnswerBtn: "VERIFICĂ RĂSPUNSUL",
+  drillGradingBtn: "EVALUARE…",
+  drillGiveUpBtn: "renunț — arată soluția",
+  drillAttemptPlaceholder: "Scrie răspunsul tău…",
+  drillNetworkError: "Eroare de rețea — încearcă din nou.",
+  drillConfidenceLabel: "cât de sigur ești?",
+  drillPredictionLabel: "prezice în limbaj simplu (opțional) — cum ar trebui să arate răspunsul, înainte de a-l scrie?",
+  drillPredictionHint: "efect de generare: chiar și o presupunere greșită ÎNAINTE de a încerca fixează mai bine decât citirea pasivă (Slamecka 1978).",
 } as const;
