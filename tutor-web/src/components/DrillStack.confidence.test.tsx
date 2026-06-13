@@ -36,3 +36,76 @@ describe("DrillStack confidence row (H16)", () => {
     await waitFor(() => expect(lastBody?.studentConfidence).toBe("MAYBE"));
   });
 });
+
+describe("DrillStack CHECK card (REQ-29, E8)", () => {
+  /** Helper: get the drill through to unlocked state so the CHECK card activates. */
+  async function unlockDrillStack() {
+    render(<DrillStack taskId="t1" problemId="p1" content={content} onProblemComplete={() => {}} />);
+    fireEvent.change(screen.getByTestId("drill-attempt-input"), { target: { value: "5" } });
+    fireEvent.click(screen.getByTestId("drill-check-btn"));
+    await waitFor(() => expect(screen.getByTestId("check-attempt-input")).toBeInTheDocument());
+  }
+
+  it("renders check-attempt-input textarea when the CHECK card is unlocked", async () => {
+    await unlockDrillStack();
+    expect(screen.getByTestId("check-attempt-input")).toBeInTheDocument();
+  });
+
+  it("renders check-submit-btn when the CHECK card is unlocked", async () => {
+    await unlockDrillStack();
+    expect(screen.getByTestId("check-submit-btn")).toBeInTheDocument();
+  });
+
+  it("renders check-giveup-btn when the CHECK card is unlocked", async () => {
+    await unlockDrillStack();
+    expect(screen.getByTestId("check-giveup-btn")).toBeInTheDocument();
+  });
+
+  it("MARK CHECK DONE button no longer exists (no-engagement path removed)", async () => {
+    await unlockDrillStack();
+    expect(screen.queryByText(/MARK CHECK DONE/i)).not.toBeInTheDocument();
+  });
+
+  it("phase → check-done ONLY after a graded check attempt", async () => {
+    const onComplete = vi.fn();
+    render(<DrillStack taskId="t1" problemId="p1" content={content} onProblemComplete={onComplete} />);
+    fireEvent.change(screen.getByTestId("drill-attempt-input"), { target: { value: "5" } });
+    fireEvent.click(screen.getByTestId("drill-check-btn"));
+    await waitFor(() => expect(screen.getByTestId("check-attempt-input")).toBeInTheDocument());
+    // onComplete should NOT fire yet (just unlocked, no check attempt submitted)
+    expect(onComplete).not.toHaveBeenCalled();
+    // Submit the check attempt
+    fireEvent.change(screen.getByTestId("check-attempt-input"), { target: { value: "3" } });
+    fireEvent.click(screen.getByTestId("check-submit-btn"));
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith("p1"));
+  });
+
+  it("check verdict renders after graded check attempt", async () => {
+    await unlockDrillStack();
+    fireEvent.change(screen.getByTestId("check-attempt-input"), { target: { value: "3" } });
+    fireEvent.click(screen.getByTestId("check-submit-btn"));
+    await waitFor(() => expect(screen.getByTestId("check-verdict")).toBeInTheDocument());
+  });
+
+  it("check-giveup-btn transitions to check-done without grading", async () => {
+    const onComplete = vi.fn();
+    render(<DrillStack taskId="t1" problemId="p1" content={content} onProblemComplete={onComplete} />);
+    fireEvent.change(screen.getByTestId("drill-attempt-input"), { target: { value: "5" } });
+    fireEvent.click(screen.getByTestId("drill-check-btn"));
+    await waitFor(() => expect(screen.getByTestId("check-giveup-btn")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("check-giveup-btn"));
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith("p1"));
+  });
+
+  it("check submission posts the CHECK stem as problemStatement via gradeDrill", async () => {
+    await unlockDrillStack();
+    fireEvent.change(screen.getByTestId("check-attempt-input"), { target: { value: "3" } });
+    fireEvent.click(screen.getByTestId("check-submit-btn"));
+    await waitFor(() => expect(lastBody?.problemStatement).toBe("c"));
+  });
+
+  it("check submit button is disabled when check-attempt-input is empty", async () => {
+    await unlockDrillStack();
+    expect(screen.getByTestId("check-submit-btn")).toBeDisabled();
+  });
+});

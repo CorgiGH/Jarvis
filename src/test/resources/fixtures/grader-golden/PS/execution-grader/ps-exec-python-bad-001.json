@@ -1,0 +1,13 @@
+{
+  "grader": "execution",
+  "subject": "PS",
+  "id": "ps-exec-python-bad-001",
+  "language": "python",
+  "input": {
+    "source": "import math\n\ndef interval_z(n, sample_mean, sigma, alfa):\n    z = math.sqrt(2.0) * _erfinv(2.0 * (1 - alfa) - 1.0)\n    margine = z * sigma / math.sqrt(n)\n    return (sample_mean - margine, sample_mean + margine)\n\ndef _erfinv(y):\n    x = 0.0\n    for _ in range(100):\n        x = x - (math.erf(x) - y) / (2 / math.sqrt(math.pi) * math.exp(-x * x))\n    return x\n\nlo, hi = interval_z(25, 67.53, 10, 0.1)\nprint(f\"[1] {lo:.5f} {hi:.5f}\")\n",
+    "stdin": null,
+    "expected_stdout": "[1] 64.24029 70.81971"
+  },
+  "expected": { "pass": false },
+  "corpus_note": "known-bad mutant of ps-exec-python-good-001: omits the /2 in the quantile (1 - alfa instead of 1 - alfa/2) — the same one-sided-vs-two-sided error as the R mutant — printing [1] 64.96690 70.09310. The execution leg must FAIL it. LANGUAGE != SUBJECT-EXAM-LANGUAGE (PS exam language is r; this exercises the Python runner)."
+}

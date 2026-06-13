@@ -1,0 +1,15 @@
+{
+  "grader": "llm-judge",
+  "subject": "PA",
+  "id": "pa-llm-clean-correct",
+  "input": {
+    "raw_llm_output": "{\"correct\": true, \"rubric\": {\"direction\": true, \"reduction_target\": true, \"formal_proof\": true}, \"score\": 1.0, \"misconception\": null, \"elaborated_feedback\": \"Studentul a demonstrat corect că problema aparține NP-greu prin reducerea polinom-time a 3-SAT la aceasta. Direcția reducerii este corectă, ținta reducerii este identificată precis, iar demonstrația formală este completă.\"}"
+  },
+  "expected": {
+    "parsed": true,
+    "score": 1.0,
+    "correct": true,
+    "misconception": null,
+    "confident": true
+  }
+}

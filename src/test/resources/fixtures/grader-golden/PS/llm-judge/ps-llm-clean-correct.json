@@ -1,0 +1,15 @@
+{
+  "grader": "llm-judge",
+  "subject": "PS",
+  "id": "ps-llm-clean-correct",
+  "input": {
+    "raw_llm_output": "{\"correct\": true, \"rubric\": {\"numeric\": true, \"mechanism\": true, \"justification\": true}, \"score\": 1.0, \"misconception\": null, \"elaborated_feedback\": \"Răspunsul este corect. Estimatorul de medie are varianță minimă în clasa estimatorilor liniari nebiasați, iar justificarea prin Teorema Gauss-Markov este completă.\"}"
+  },
+  "expected": {
+    "parsed": true,
+    "score": 1.0,
+    "correct": true,
+    "misconception": null,
+    "confident": true
+  }
+}

@@ -235,6 +235,82 @@ class LessonBeatGradeRouteTest {
         )
     }
 
+    /**
+     * formula-application KC whose ATTEMPT beat carries a numeric_answer + tolerance (the
+     * carried follow-up target — a real numeric ATTEMPT grade path, mirroring the numeric CHECK).
+     * The trace's final value (`3*t`) is INSTANCE/teaching data, deliberately NOT the numeric
+     * answer, so the legacy exact-string fallback would grade a real numeric answer incorrect.
+     */
+    private fun seedNumericAttemptKc(content: Path, kcId: String) {
+        content.createDirectories()
+        content.resolve("subjects.yaml").writeText(
+            "version: 1\nsubjects:\n  - id: PA\n    name_ro: \"Proiectarea Algoritmilor\"\n    name_en: \"Algorithm Design\"\n",
+        )
+        val pa = content.resolve("PA"); pa.resolve("kcs").createDirectories()
+        pa.resolve("kcs/$kcId.yaml").writeText(
+            """
+            id: $kcId
+            subject: PA
+            name_ro: "Costul de timp"
+            name_en: "Time cost"
+            cluster: "Eficiența algoritmilor"
+            bloom_level: apply
+            difficulty: 3
+            time_minutes: 30
+            exam_weight: 0.13
+            tier: 3
+            version: 1
+            concept_type: formula-application
+            beats:
+              ro:
+                predict:
+                  prompt: "Care este costul total?"
+                  options:
+                    - text: "3*t"
+                      callback: "Corect — trei operații de cost t."
+                      correct: true
+                    - text: "t"
+                      callback: "Nu — sunt trei operații."
+                      correct: false
+                    - text: "0"
+                      callback: "Nu — fiecare operație costă t."
+                      correct: false
+                attempt:
+                  statement: "Dacă t=3.14, calculează costul total al unei singure operații."
+                  feedback_correct: "Corect — 3.14."
+                  input_schema: "{\"type\":\"number\"}"
+                  numeric_answer: "3.14"
+                  numeric_tolerance: 0.01
+                  skeleton_rows:
+                    - label: "op 1"
+                      formula: "t"
+                      is_decision_row: false
+                    - label: "total"
+                      formula: "3*t"
+                      is_decision_row: true
+                  trace_steps:
+                    - row_index: 0
+                      value: "t"
+                      callout: "Prima operație."
+                    - row_index: 1
+                      value: "3*t"
+                      callout: "Suma."
+                reveal:
+                  steps:
+                    - text: "Fiecare operație costă t."
+                      callout: "Trei operații → 3*t."
+                name:
+                  definition: "Costul de timp este suma costurilor operațiilor."
+                  invariant_statement: "t + t + t = 3*t."
+                  why_matters: "Modelează eficiența."
+                check:
+                  item_stem: "Dacă t=2, care este costul total?"
+                  numeric_answer: "6"
+                  numeric_tolerance: 0.01
+            """.trimIndent(),
+        )
+    }
+
     private fun attemptsFor(db: org.jetbrains.exposed.sql.Database, userId: String, kcId: String) =
         transaction(db) {
             AttemptsTable.selectAll()
@@ -377,6 +453,90 @@ class LessonBeatGradeRouteTest {
             header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
             contentType(ContentType.Application.Json)
             setBody("""{"beat_type":"check","free_input":"7"}""")        // outside tolerance
+        }
+        assertEquals(HttpStatusCode.OK, fail.status, fail.bodyAsText())
+        assertTrue(fail.bodyAsText().contains("\"correct\":false"), fail.bodyAsText())
+    }
+
+    // ── Task 4 (carried follow-up #1): numeric-ATTEMPT tolerance via the single oracle source.
+
+    @Test fun `numeric attempt within tolerance grades correct`() = testApplication {
+        val dir = Path.of(System.getProperty("java.io.tmpdir"), "beat-${TutorTypes.ulid()}")
+        val content = dir.resolve("content"); System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        seedNumericAttemptKc(content, "pa-kc-007")
+        val db = freshDb(dir); val (_, sid) = seedUser(db); seedB8(db, content, "pa-kc-007", VerificationStatus.faithful)
+        application { installRoutes(db, dir) }
+        val r = client.post("/api/v1/lesson/pa-kc-007/beat") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("""{"beat_type":"attempt","free_input":"3.141"}""")   // within 0.01 of 3.14
+        }
+        assertEquals(HttpStatusCode.OK, r.status, r.bodyAsText())
+        assertTrue(r.bodyAsText().contains("\"correct\":true"), r.bodyAsText())
+    }
+
+    @Test fun `numeric attempt outside tolerance grades incorrect with RO feedback`() = testApplication {
+        val dir = Path.of(System.getProperty("java.io.tmpdir"), "beat-${TutorTypes.ulid()}")
+        val content = dir.resolve("content"); System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        seedNumericAttemptKc(content, "pa-kc-007")
+        val db = freshDb(dir); val (_, sid) = seedUser(db); seedB8(db, content, "pa-kc-007", VerificationStatus.faithful)
+        application { installRoutes(db, dir) }
+        val r = client.post("/api/v1/lesson/pa-kc-007/beat") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("""{"beat_type":"attempt","free_input":"5"}""")        // outside tolerance
+        }
+        assertEquals(HttpStatusCode.OK, r.status, r.bodyAsText())
+        val body = r.bodyAsText()
+        assertTrue(body.contains("\"correct\":false"), body)
+        // the existing RO wrong-path attempt feedback survives byte-for-byte.
+        assertTrue(body.contains("Reanalizează pașii din schelet."), "served RO attempt feedback echoed: $body")
+    }
+
+    @Test fun `legacy numeric attempt with no numeric_answer keeps the exact-string trace-final fallback`() = testApplication {
+        val dir = Path.of(System.getProperty("java.io.tmpdir"), "beat-${TutorTypes.ulid()}")
+        val content = dir.resolve("content"); System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        seedNumericKc(content, "pa-kc-006")   // attempt carries NO numeric_answer (the legacy shape)
+        val db = freshDb(dir); val (_, sid) = seedUser(db); seedB8(db, content, "pa-kc-006", VerificationStatus.faithful)
+        application { installRoutes(db, dir) }
+        // legacy behavior: exact-string match against the trace's final value ("3*t") → correct.
+        val pass = client.post("/api/v1/lesson/pa-kc-006/beat") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("""{"beat_type":"attempt","free_input":"3*t"}""")
+        }
+        assertEquals(HttpStatusCode.OK, pass.status, pass.bodyAsText())
+        assertTrue(pass.bodyAsText().contains("\"correct\":true"), pass.bodyAsText())
+        // anything else → incorrect with the unchanged legacy RO fallback.
+        val fail = client.post("/api/v1/lesson/pa-kc-006/beat") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("""{"beat_type":"attempt","free_input":"6"}""")
+        }
+        assertEquals(HttpStatusCode.OK, fail.status, fail.bodyAsText())
+        assertTrue(fail.bodyAsText().contains("\"correct\":false"), fail.bodyAsText())
+        assertTrue(fail.bodyAsText().contains("Reanalizează pașii din schelet."), fail.bodyAsText())
+    }
+
+    @Test fun `numeric check behavior is unchanged after the tolerance fold (regression pin)`() = testApplication {
+        val dir = Path.of(System.getProperty("java.io.tmpdir"), "beat-${TutorTypes.ulid()}")
+        val content = dir.resolve("content"); System.setProperty("JARVIS_CONTENT_DIR", content.toString())
+        seedNumericKc(content, "pa-kc-006")
+        val db = freshDb(dir); val (_, sid) = seedUser(db); seedB8(db, content, "pa-kc-006", VerificationStatus.faithful)
+        application { installRoutes(db, dir) }
+        // within tol 0.01 of 6 → correct (tol ?: 0.0 per-site default preserved).
+        val pass = client.post("/api/v1/lesson/pa-kc-006/beat") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("""{"beat_type":"check","free_input":"6.001"}""")
+        }
+        assertEquals(HttpStatusCode.OK, pass.status, pass.bodyAsText())
+        assertTrue(pass.bodyAsText().contains("\"correct\":true"), pass.bodyAsText())
+        // outside tol → incorrect.
+        val fail = client.post("/api/v1/lesson/pa-kc-006/beat") {
+            header("Cookie", "jarvis_session=$sid; csrf=c"); header("X-CSRF-Token", "c")
+            contentType(ContentType.Application.Json)
+            setBody("""{"beat_type":"check","free_input":"6.5"}""")
         }
         assertEquals(HttpStatusCode.OK, fail.status, fail.bodyAsText())
         assertTrue(fail.bodyAsText().contains("\"correct\":false"), fail.bodyAsText())

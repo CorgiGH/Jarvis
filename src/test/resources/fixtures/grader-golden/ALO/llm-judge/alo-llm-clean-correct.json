@@ -1,0 +1,15 @@
+{
+  "grader": "llm-judge",
+  "subject": "ALO",
+  "id": "alo-llm-clean-correct",
+  "input": {
+    "raw_llm_output": "{\"correct\": true, \"rubric\": {\"complexity_analysis\": true, \"algorithm_correctness\": true, \"justification\": true}, \"score\": 1.0, \"misconception\": null, \"elaborated_feedback\": \"Analiza de complexitate este corectă și bine justificată. Algoritmul respectă toate condițiile problemei, iar argumentarea este coerentă și completă.\"}"
+  },
+  "expected": {
+    "parsed": true,
+    "score": 1.0,
+    "correct": true,
+    "misconception": null,
+    "confident": true
+  }
+}

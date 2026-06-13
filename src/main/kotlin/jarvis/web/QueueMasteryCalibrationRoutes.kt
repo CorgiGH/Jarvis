@@ -190,6 +190,9 @@ data class ApiLessonBeats(
     val skeleton_rows: List<ApiSkeletonRow> = emptyList(),
     val trace_steps: List<ApiTraceStep> = emptyList(),
     val input_schema: String? = null,
+    // Plan-6 ADDITIVE (lock §NEW-L additive-amendment): numeric-variant ATTEMPT answer + tolerance.
+    val numeric_answer: String? = null,
+    val numeric_tolerance: Double? = null,
     val feedback_correct: String,
 )
 @Serializable data class ApiRevealStep(val text: String, val callout: String)
@@ -516,6 +519,8 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                         skeleton_rows = a.skeleton_rows.map { ApiSkeletonRow(it.label, it.formula, it.is_decision_row) },
                         trace_steps = a.trace_steps.map { ApiTraceStep(it.row_index, it.value, it.callout) },
                         input_schema = a.input_schema,
+                        numeric_answer = a.numeric_answer,
+                        numeric_tolerance = a.numeric_tolerance,
                         feedback_correct = a.feedback_correct,
                     )
                 } else null,
@@ -635,18 +640,22 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                                 ?: run { call.respond(HttpStatusCode.BadRequest, """{"error":"selected_index out of range"}"""); return@csrfProtect }
                             correct = a.choices[sel].correct
                             feedbackRo = if (correct) a.feedback_correct else a.choices[sel].feedback
+                        } else if (a.numeric_answer != null) {
+                            // Numeric attempt: parse free_input as double, compare to numeric_answer within
+                            // tolerance via the single-source comparator (NumericOracleGrader.matches, §0.9-B).
+                            // Mirrors the numeric CHECK path below; resolves the carried follow-up
+                            // (docs/superpowers/plans/2026-06-12-plan6-practice-graders.md Task 4).
+                            val answer = a.numeric_answer.toDoubleOrNull()
+                            val got = req.free_input?.trim()?.toDoubleOrNull()
+                            correct = answer != null && got != null &&
+                                jarvis.tutor.grader.NumericOracleGrader.matches(answer, got, a.numeric_tolerance ?: 0.0)
+                            feedbackRo = if (correct) a.feedback_correct else "Reanalizează pașii din schelet."
                         } else {
-                            // Numeric attempt variant: compare free_input to the trace's final value.
-                            // DELIBERATE PLACEHOLDER (consistency#5 — PM-accepted mechanism, NOT served in
-                            // Plan 3). The 4 faithful KCs Plan 3 serves (pa-kc-001..004) are ALL choice-variant
-                            // (a.choices non-empty), so this branch is DEAD on the served corpus. trace_steps[].value
-                            // is INSTANCE/teaching data (e.g. a formula string like "3*t"), NOT the numeric a learner
-                            // would type, and the last trace step is not guaranteed to be the answer — so exact-string
-                            // match here would essentially always grade a real numeric answer incorrect. It exists only
-                            // so the code compiles for FORMULA_APPLICATION/PROCEDURE/PROBABILISTIC numerical variants.
-                            // CARRIED FOLLOW-UP: when a numerical-variant KC is actually served, grade numeric ATTEMPT
-                            // against a real expected value (add an attempt.numeric_answer + tolerance, mirror the
-                            // numeric CHECK path below) and add a LessonBeatGradeRouteTest case pinning the match.
+                            // Legacy numeric-attempt fallback (no numeric_answer authored): exact-string match
+                            // against the trace's final value. trace_steps[].value is INSTANCE/teaching data
+                            // (e.g. "3*t"), NOT the numeric a learner types — so this essentially always grades a
+                            // real numeric answer incorrect. It exists only so the code compiles for the
+                            // FORMULA_APPLICATION/PROCEDURE/PROBABILISTIC numerical variants that omit numeric_answer.
                             val expected = a.trace_steps.lastOrNull()?.value
                             val got = req.free_input?.trim()
                             correct = expected != null && got != null && got == expected
@@ -662,11 +671,13 @@ fun Route.installQueueMasteryCalibrationRoutes() {
                             correct = c.choices[sel].correct
                             feedbackRo = c.choices[sel].feedback
                         } else {
-                            // Numeric check: parse free_input as double, compare to numeric_answer within tolerance.
+                            // Numeric check: parse free_input as double, compare to numeric_answer within tolerance
+                            // via the single-source comparator (NumericOracleGrader.matches, §0.9-B). Per-site
+                            // default tol ?: 0.0 preserved (behavior pinned).
                             val answer = c.numeric_answer?.toDoubleOrNull()
-                            val tol = c.numeric_tolerance ?: 0.0
                             val got = req.free_input?.trim()?.toDoubleOrNull()
-                            correct = answer != null && got != null && kotlin.math.abs(got - answer) <= tol
+                            correct = answer != null && got != null &&
+                                jarvis.tutor.grader.NumericOracleGrader.matches(answer, got, c.numeric_tolerance ?: 0.0)
                             feedbackRo = if (correct) "Corect." else "Reanalizează: răspunsul numeric nu se potrivește."
                         }
                     }

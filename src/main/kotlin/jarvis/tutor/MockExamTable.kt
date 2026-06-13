@@ -29,6 +29,28 @@ object MockExamsTable : Table("mock_exams") {
     val narrative = text("narrative").nullable()
     val createdAt = timestamp("created_at")
     val submittedAt = timestamp("submitted_at").nullable()
+
+    // ── Plan-6 Task 11 (§6.2.4, R-6-Q7) — ADDITIVE nullable columns ───────────────────────────────────
+    // All five are ADDITIVE NULLABLE columns on this already-registered table. Migration.kt is NOT
+    // touched: Exposed `createMissingTablesAndColumns` adds nullable columns to a registered table on
+    // first boot. Legacy rows (pre-plan6) decode unchanged — every column below is nullable and absent on
+    // legacy rows; the existing start/submit/result wire shapes stay byte-compatible (regression-pinned in
+    // MockExamAdditiveRouteTest). The SYNC-200 freeze (MockExamRoutes.kt:37) is preserved: these columns
+    // carry no job status, no poll cursor; a row is still either un-submitted or fully graded.
+    /** The chosen paper FORMAT structure (serialized; phases, sub-part ordering, point brackets,
+     *  multiselect flags) from mock-exam-formats.json; NULL on legacy / format-less exams. */
+    val formatJson = text("format_json").nullable()
+    /** The timer anchor — when the exam clock started; NULL on legacy exams. */
+    val startedAt = timestamp("started_at").nullable()
+    /** The current permitted-materials phase index (REQ-15); NULL on legacy exams. */
+    val phaseIndex = integer("phase_index").nullable()
+    /** Per-G-item rubric breakdown (serialized ItemVerdict list) for bank-problem rubric-scored items
+     *  (REQ-16/17); NULL until `submit` on a rubric-bearing exam. */
+    val rubricResultsJson = text("rubric_results_json").nullable()
+    /** Honesty flag (REQ-12): true until a real past paper is digested — every item built from a
+     *  lecture/seminar-derived seed is synthetic. NULL on legacy exams. */
+    val syntheticTag = bool("synthetic_tag").nullable()
+
     override val primaryKey = PrimaryKey(id)
     init { index(false, userId, createdAt) }
 }

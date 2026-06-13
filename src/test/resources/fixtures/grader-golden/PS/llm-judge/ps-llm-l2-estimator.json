@@ -1,0 +1,15 @@
+{
+  "grader": "llm-judge",
+  "subject": "PS",
+  "id": "ps-llm-l2-estimator",
+  "input": {
+    "raw_llm_output": "Here is my assessment of the student's answer:\n\n{\"correct\": false, \"rubric\": {\"numeric\": false, \"mechanism\": false, \"justification\": true}, \"score\": 0.333, \"misconception\": \"L2_ESTIMATOR_CONFUSION\", \"elaborated_feedback\": \"Studentul a confundat estimatorul L2 (minimizare sumă pătrate) cu estimatorul de medie minimă în sens bayesian. Valoarea numerică este incorectă (0.72 față de 0.85 corect), iar mecanismul de derivare nu folosește formula BLUE. Doar justificarea formală este prezentă.\"}"
+  },
+  "expected": {
+    "parsed": true,
+    "score": 0.3333333333333333,
+    "correct": false,
+    "misconception": "L2_ESTIMATOR_CONFUSION",
+    "confident": true
+  }
+}

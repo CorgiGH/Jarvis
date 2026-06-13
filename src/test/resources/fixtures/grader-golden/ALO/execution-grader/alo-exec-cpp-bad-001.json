@@ -1,0 +1,13 @@
+{
+  "grader": "execution",
+  "subject": "ALO",
+  "id": "alo-exec-cpp-bad-001",
+  "language": "cpp",
+  "input": {
+    "source": "#include <cstdio>\nint main() {\n    double x3 = -7.0 / -8.0;\n    double x2 = (1.0 + (-3.0) * x3) / 2.0;\n    double x1 = 2.0 + x2 - 3.0 * x3;\n    printf(\"x1=%.4f x2=%.4f x3=%.4f\\n\", x1, x2, x3);\n    return 0;\n}\n",
+    "stdin": null,
+    "expected_stdout": "x1=1.1875 x2=1.8125 x3=0.8750"
+  },
+  "expected": { "pass": false },
+  "corpus_note": "known-bad mutant of alo-exec-cpp-good-001: a sign error in the back-substitution of x2 (1.0 + (-3.0)*x3 instead of 1.0 - (-3.0)*x3) — the classic Gaussian-elimination sign slip — printing x1=-1.4375 x2=-0.8125 x3=0.8750. The execution leg must FAIL it. LANGUAGE != SUBJECT-EXAM-LANGUAGE (ALO exam_language is null; this exercises the C++ runner)."
+}

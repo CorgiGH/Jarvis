@@ -22,6 +22,16 @@ import kotlinx.serialization.Serializable
  */
 
 /**
+ * Plan-6 Task 7 — the shared per-item verdict wire type that rides on the `/drill/grade` reply's
+ * additive `item_verdicts` field (§0.9-F) AND on the §0.9-G practice endpoints. The CANONICAL
+ * definition is `jarvis.tutor.grader.ItemVerdict` (frozen in §0.9-A, created by Task 3); this
+ * served-teaching module re-exports it under the same name so the reply DTO + practice routes
+ * share ONE `@Serializable` shape (`{id, label, passed, points_earned, points_max}`, snake_case
+ * on the wire) — no duplicate type, no late codemod.
+ */
+typealias ItemVerdict = jarvis.tutor.grader.ItemVerdict
+
+/**
  * The misconception payload that rides INLINE on the `/drill/grade` reply (gap C, DECIDED #1 —
  * INLINE-only; the standalone `GET /misconception/{id}` endpoint is DROPPED as a no-consumer orphan).
  *

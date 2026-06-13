@@ -85,6 +85,13 @@ object TasksTable : Table("tasks") {
     val scratchpadText = text("scratchpad_text").nullable()
     val materialPaths = text("material_paths").nullable()
     val problemRefsJson = text("problem_refs_json").nullable()
+    /**
+     * Plan-6 Task 10 — deliverable metadata for the DeliverableTracker surface (§0.9-I).
+     * Additive nullable column — auto-added by createMissingTablesAndColumns; Migration.kt untouched.
+     * JSON: { sub_problems:[{label_ro,points}], prep_drill_ids:[String], source_doc:String,
+     *         source_quote:String }
+     */
+    val deliverableJson = text("deliverable_json").nullable()
     override val primaryKey = PrimaryKey(id)
     init {
         // Closes the Phase-6 deferred unique-index gap. Two concurrent

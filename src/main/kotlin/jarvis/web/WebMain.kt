@@ -117,7 +117,13 @@ internal suspend fun runWeb() {
                 // real-backend run-through 2026-06-13). FigureReveal needs it to fetch instance data.
                 path.startsWith("/api/v1/viz/") ||
                 // Gate 3: curator routes — self-authenticate via jarvis_session + requireOwner
-                path.startsWith("/api/v1/curator/")) return@intercept
+                path.startsWith("/api/v1/curator/") ||
+                // Plan-6 Task 13: practice + mock-exam routes — session-authed via requireUser
+                // inside the routes (same pattern as /api/v1/drill/). Without this bypass the
+                // outer bearer-token intercept would 401 before requireUser runs, making the
+                // practice e2e server unreachable with only a session cookie.
+                path.startsWith("/api/v1/practice/") ||
+                path.startsWith("/api/v1/mock-exam/")) return@intercept
 
             val header = call.request.headers["Authorization"]?.removePrefix("Bearer ")?.trim()
             val cookieToken = call.request.cookies[AUTH_COOKIE]
@@ -713,10 +719,77 @@ internal suspend fun runWeb() {
         )
         installTutorRoutes()
         installGraderProviderRoutes()
+        installPracticeRoutes()   // Plan-6 Task 8: practice surfaces (proof/trace/code/deliverables), §0.9-G.
         // Wire per-user grader provider routing ONLY in production startup. Tests leave
         // drillGraderLlmResolver = null so the overridable drillGraderLlmFactory seam holds.
         drillGraderLlmResolver = ::productionGraderResolver
+        // Plan-6 Task 13 — practice e2e seed-on-boot flag. When JARVIS_SEED_PRACTICE=1 the server
+        // seeds the real-corpus problem bank + creates a known test user+session and prints the raw
+        // session token to stdout so practiceServer.ts can inject it as a cookie. NEVER set in
+        // production; only used by the practice-e2e CI job and local Task-13/14 runs.
+        if (System.getenv("JARVIS_SEED_PRACTICE") == "1") {
+            seedPracticeOnBoot(this.attributes)
+        }
     }.start(wait = true)
+}
+
+/**
+ * Plan-6 Task 13 — seed the practice DB and create a known e2e test session, then print the
+ * raw session token so `practiceServer.ts` can inject it as a `jarvis_session` cookie.
+ *
+ * Only runs when `JARVIS_SEED_PRACTICE=1` is set (Task-13 / CI practice-e2e job). Never
+ * called in production (`drillGraderLlmResolver` wiring runs in the same `start` callback,
+ * after this call, so the order is: context → seed → routes ready → requests served).
+ */
+private fun seedPracticeOnBoot(attrs: io.ktor.util.Attributes) {
+    val ctx = attrs.getOrNull(jarvis.tutor.TutorContextKey)
+    if (ctx == null) {
+        System.err.println("[seedPracticeOnBoot] ERROR: TutorContext not installed — skipping seed")
+        return
+    }
+    val db = ctx.db
+    // Seed real-corpus problems (idempotent upsert).
+    try {
+        val seedResult = jarvis.tutor.ProblemSeed.seed(db)
+        println("[practice-e2e] Problems seeded: ${seedResult.inserted} inserted, ${seedResult.updated} updated")
+    } catch (e: Exception) {
+        System.err.println("[practice-e2e] Problem seed WARN: ${e.message?.take(200)}")
+    }
+    // Create (or reuse) the e2e practice test user.
+    val e2eUserId = "practice-e2e-user"
+    val now = java.time.Instant.now()
+    try {
+        if (jarvis.tutor.UserRepo(db).findById(e2eUserId) == null) {
+            jarvis.tutor.UserRepo(db).insert(
+                jarvis.tutor.User(
+                    id = e2eUserId,
+                    name = "Practice E2E",
+                    scope = jarvis.tutor.UserScope.FRIEND,
+                    createdAt = now,
+                    lastSeenAt = now,
+                ),
+            )
+        }
+    } catch (e: Exception) {
+        System.err.println("[practice-e2e] User create WARN: ${e.message?.take(200)}")
+    }
+    // Seed deliverables for the e2e user (idempotent).
+    try {
+        jarvis.tutor.ProblemSeed.seedDeliverables(db, e2eUserId)
+        println("[practice-e2e] Deliverables seeded for $e2eUserId")
+    } catch (e: Exception) {
+        System.err.println("[practice-e2e] Deliverable seed WARN: ${e.message?.take(200)}")
+    }
+    // Mint a long-lived e2e session and print it so practiceServer.ts can capture it.
+    val rawSession = try {
+        jarvis.tutor.SessionRepo(db).create(e2eUserId, ttlSeconds = 60L * 60 * 24) // 24 h
+    } catch (e: Exception) {
+        System.err.println("[practice-e2e] Session create FAIL: ${e.message?.take(200)}")
+        return
+    }
+    // Print on its own line for easy parsing.
+    println("PRACTICE_E2E_SESSION=$rawSession")
+    println("[practice-e2e] E2E seed complete — server ready to accept practice requests")
 }
 
 /**

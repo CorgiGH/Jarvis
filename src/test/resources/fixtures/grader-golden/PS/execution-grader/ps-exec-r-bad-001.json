@@ -1,0 +1,13 @@
+{
+  "grader": "execution",
+  "subject": "PS",
+  "id": "ps-exec-r-bad-001",
+  "language": "r",
+  "input": {
+    "source": "interval_z = function(n, sample_mean, sigma, alfa) {\n  z = qnorm(1 - alfa, 0, 1)\n  margine = z * sigma / sqrt(n)\n  a = c(sample_mean - margine, sample_mean + margine)\n  return(a)\n}\nresult = interval_z(25, 67.53, 10, 0.1)\nprint(result)\n",
+    "stdin": null,
+    "expected_stdout": "[1] 64.24029 70.81971"
+  },
+  "expected": { "pass": false },
+  "corpus_note": "known-bad mutant of ps-exec-r-good-001: uses qnorm(1 - alfa) instead of qnorm(1 - alfa/2) — the common two-sided-vs-one-sided confidence-interval error — so it prints [1] 64.9669 70.0931, not the expected interval. The execution leg must FAIL it. language == subject-exam-language (r)."
+}

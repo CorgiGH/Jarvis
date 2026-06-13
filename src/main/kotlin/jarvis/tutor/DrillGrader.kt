@@ -40,32 +40,54 @@ data class GradeAttempt(
 )
 
 object DrillGrader {
-    private const val GRADE_PROMPT_TEXT = """You are grading a student's one-line answer to a homework problem.
+
+    /**
+     * Renders the misconception-code block from the registry for a given subject.
+     * Unknown/null subject → OTHER only (per §0.9-D).
+     * Plan 5 mines R-ERRORS breadth into grader/misconception-codes.json.
+     */
+    private fun buildMisconceptionBlock(subject: String?): String {
+        val codes = MisconceptionTaxonomy.codesFor(subject ?: "")
+        val codeEnum = codes.joinToString(" | ") { "\"${it.code}\"" }
+        val lines = codes.joinToString("\n") { "- ${it.code}: ${it.judge_hint_en}" }
+        return """
+Misconception codes (use only when the answer is wrong AND matches the pattern):
+$lines
+
+misconception field must be one of: $codeEnum""".trimIndent()
+    }
+
+    /**
+     * Text-grading prompt builder — misconception block rendered from registry.
+     * subject null → OTHER only (preserves all existing call-sites).
+     */
+    private fun buildGradePromptText(subject: String?): String {
+        val miscBlock = buildMisconceptionBlock(subject)
+        return """You are grading a student's one-line answer to a homework problem.
 
 Return STRICT JSON of this shape:
   {
     "correct": true|false,
     "rubric": {"numeric": true|false, "mechanism": true|false, "justification": true|false},
     "score": 0.0..1.0,
-    "misconception": null | "L2_ESTIMATOR_CONFUSION" | "MINIMAX_CONFUSION" | "MODE_CONFUSION" | "OTHER",
+    "misconception": null | "<code from list below>",
     "elaborated_feedback": "short explanation"
   }
 
-Misconception codes (use only when the answer is wrong AND matches the pattern):
-- L2_ESTIMATOR_CONFUSION: student computed the mean (Σx/n) when median was expected
-- MINIMAX_CONFUSION: student used midrange ((min+max)/2)
-- MODE_CONFUSION: student gave the mode when median was expected
-- OTHER: wrong but unclassified
+$miscBlock
 
 correct=true requires the numeric answer is correct. score reflects the rubric (1/3 per dimension).
 Output ONLY the JSON object. No code fences."""
+    }
 
     /**
-     * Code-grading prompt for R / Python / C++. Score = fraction of rubric items
-     * satisfied. correct=true ⟺ all items pass. NO EXECUTION: judge from code
-     * alone — read the user's code against the reference + statement + rubric.
+     * Code-grading prompt builder for R / Python / C++ / Alk. Score = fraction of
+     * rubric items satisfied. correct=true ⟺ all items pass. NO EXECUTION: judge
+     * from code alone — read the user's code against the reference + statement + rubric.
      */
-    private const val GRADE_PROMPT_CODE = """You are grading a student's code answer to a homework problem.
+    private fun buildGradePromptCode(subject: String?): String {
+        val miscBlock = buildMisconceptionBlock(subject)
+        return """You are grading a student's code answer to a homework problem.
 
 You do NOT execute the code. Judge from reading the code: would it compile/run
 correctly, and does it satisfy each rubric item?
@@ -75,14 +97,17 @@ Return STRICT JSON of this shape:
     "correct": true|false,
     "rubric": {"<rubric_item_name>": true|false, ...},
     "score": 0.0..1.0,
-    "misconception": null | "<short_code_like_OFF_BY_ONE>" | "OTHER",
+    "misconception": null | "<code from list below>",
     "elaborated_feedback": "1-3 short paragraphs — name what works, what doesn't, what to fix next"
   }
+
+$miscBlock
 
 The rubric keys MUST match exactly the rubric item names supplied in the user
 message. score = (# rubric items true) / (# rubric items total). correct=true
 iff every rubric item is true AND the code is free of syntax errors that would
 prevent it from running. Output ONLY the JSON object. No code fences."""
+    }
 
     fun parseGradeJson(raw: String): GradeResult? {
         // Attempt 1: existing strip-fence path. Preserves all prior happy-path tests.
@@ -163,6 +188,7 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         rubricItems: List<String>? = null,
         prediction: String? = null,
         giveUp: Boolean = false,
+        subject: String? = null,
     ): GradeAttempt {
         val isCode = !language.isNullOrBlank() && language.lowercase() != "text"
         // Sentinel auto-detection: legacy frontend callers may post the sentinel
@@ -172,7 +198,7 @@ prevent it from running. Output ONLY the JSON object. No code fences."""
         val effectiveAttempt = if (effectiveGiveUp) {
             "(no attempt submitted — student gave up before answering)"
         } else userAttempt
-        val systemPrompt = if (isCode) GRADE_PROMPT_CODE else GRADE_PROMPT_TEXT
+        val systemPrompt = if (isCode) buildGradePromptCode(subject) else buildGradePromptText(subject)
         val userMsg = if (isCode) buildCodeUserMessage(
             language = language!!,
             problemStatement = problemStatement,

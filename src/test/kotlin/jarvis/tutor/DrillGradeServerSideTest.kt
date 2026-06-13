@@ -49,8 +49,26 @@ class DrillGradeServerSideTest {
             json to "fake-grader-model"
     }
 
+    /** A resolver/factory that THROWS an Error if the handler ever CALLS the LLM — proves the oracle
+     *  short-circuit path never touches the LLM (Plan-6 Task 7 Step 2 (a)). AssertionError (not Exception)
+     *  so the handler's `catch (Exception)` degraded path can NEVER mask it as UNGRADED. */
+    private class ThrowingLlm : Llm {
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> =
+            throw AssertionError("LLM must NOT be constructed/called on the oracle short-circuit path")
+        override fun close() {}
+    }
+
+    /** A fake LLM that fails like a transient transport error (a normal Exception) — drives the handler's
+     *  graceful UNGRADED degraded path (Plan-6 Task 7 Step 2 (b)). */
+    private class FailingLlm : Llm {
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> =
+            throw java.io.IOException("simulated transient LLM failure")
+        override fun close() {}
+    }
+
     @AfterEach fun resetSeam() {
         drillGraderLlmFactory = { jarvis.OpenRouterChatLlm() }
+        jarvis.web.drillGraderLlmResolver = null
         System.clearProperty("JARVIS_CONTENT_DIR")
     }
 
@@ -160,5 +178,157 @@ class DrillGradeServerSideTest {
         assertEquals(HttpStatusCode.OK, resp.status)
         assertTrue(resp.bodyAsText().contains("\"recorded\":false"), "no server kcIds → not recorded; body=${resp.bodyAsText()}")
         assertNull(KcMasteryRepo(ctx!!.db).get(userId, "pa-kc-001"), "client conceptIds must not record")
+    }
+
+    // ── Plan-6 Task 7 — grader-CHAIN integration route tests ──────────────────────────────────
+
+    /** (a) A numeric problem grades through the ORACLE leg: decided_by="numeric-oracle" and the LLM is
+     *  NEVER constructed (a throwing resolver + throwing factory would AssertionError if it were). */
+    @Test
+    fun `numeric problem decided by oracle leg without constructing the LLM`(@TempDir tmp: Path) = testApplication {
+        // Throwing seams: if the handler resolves/constructs an LLM, the test fails loudly.
+        jarvis.web.drillGraderLlmResolver = { _, _ -> ThrowingLlm() }
+        drillGraderLlmFactory = { ThrowingLlm() }
+        var ctx: TutorContext? = null
+        application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        TaskPrepRepo(ctx!!.db).upsert(TaskPrep(
+            taskId = "task-1", generatedAt = Instant.now(), version = 1,
+            problemsJson = Json.encodeToString(ListSerializer(Problem.serializer()),
+                listOf(Problem(problemId = "d1", page = 1, statement = "6*7?",
+                    kcIds = emptyList(), canonicalAnswer = "42"))),
+            drillsJson = "{}", railJson = "[]",
+        ))
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies); install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val resp = client.post("/api/v1/drill/grade") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"taskId":"task-1","problemId":"d1","userAttempt":"42","problemStatement":"6*7?","expectedAnswerHint":"42"}""")
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        assertTrue(body.contains("\"decided_by\":\"numeric-oracle\""), "oracle decided; body=$body")
+        assertTrue(body.contains("\"correct\":true"), "42 == 42; body=$body")
+    }
+
+    /** (b) LLM failure on a PROSE problem → the existing UNGRADED degraded reply still ships (regression
+     *  pin): the non-LLM legs defer, the LLM throws, the 200/UNGRADED body is byte-compatible. */
+    @Test
+    fun `LLM failure on prose problem still yields the UNGRADED degraded reply`(@TempDir tmp: Path) = testApplication {
+        drillGraderLlmFactory = { FailingLlm() } // simulate transient LLM failure (normal Exception)
+        var ctx: TutorContext? = null
+        application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies); install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        // Prose: no canonical answer, no language → chain [RUBRIC, LLM_JUDGE]; rubric defers (label-only),
+        // LLM throws → UNGRADED.
+        val resp = client.post("/api/v1/drill/grade") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"taskId":"task-1","problemId":"d1","userAttempt":"some prose","problemStatement":"explain","expectedAnswerHint":"h"}""")
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        assertTrue(body.contains("\"misconception\":\"UNGRADED\""), "UNGRADED preserved; body=$body")
+        assertTrue(body.contains("\"recorded\":false"), "nothing recorded on UNGRADED; body=$body")
+    }
+
+    /** (c) The reply JSON carries the three additive chain fields with correct shapes on the LLM path. */
+    @Test
+    fun `reply carries the additive chain fields decided_by degraded_legs_ro item_verdicts`(@TempDir tmp: Path) = testApplication {
+        drillGraderLlmFactory = { FakeGraderLlm(COHERENT) }
+        var ctx: TutorContext? = null
+        application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies); install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val resp = client.post("/api/v1/drill/grade") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"taskId":"task-1","problemId":"d1","userAttempt":"x","problemStatement":"p","expectedAnswerHint":"h"}""")
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        // LLM decided this prose drill → decided_by="llm-judge"; the additive fields are present.
+        assertTrue(body.contains("\"decided_by\":\"llm-judge\""), "LLM-judge decided; body=$body")
+        assertTrue(body.contains("\"degraded_legs_ro\":["), "degraded_legs_ro present; body=$body")
+        assertTrue(body.contains("\"item_verdicts\":["), "item_verdicts present; body=$body")
+    }
+
+    /** (d) A degraded chain serves non-empty degraded_legs_ro whose copy is RO (diacritic-bearing). The
+     *  rubric leg deferred (label-only items) → its RO degraded copy rides the LLM-decided reply. */
+    @Test
+    fun `degraded chain serves RO degraded leg copy`(@TempDir tmp: Path) = testApplication {
+        drillGraderLlmFactory = { FakeGraderLlm(COHERENT) }
+        var ctx: TutorContext? = null
+        application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies); install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        // Rubric items ride the request (label-only) → the rubric leg defers → its RO copy surfaces.
+        val resp = client.post("/api/v1/drill/grade") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"taskId":"task-1","problemId":"d1","userAttempt":"x","problemStatement":"p","expectedAnswerHint":"h","rubricItems":["criteriu unu","criteriu doi"]}""")
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        assertTrue(body.contains("\"decided_by\":\"llm-judge\""), "LLM decided after rubric deferral; body=$body")
+        // RO diacritic-bearing degraded copy for the deferred rubric leg.
+        assertTrue(
+            body.contains("evaluat de corectorul lingvistic") && body.contains("verificabil"),
+            "degraded_legs_ro carries RO rubric-deferral copy; body=$body",
+        )
+    }
+
+    /** (e) Anti-vacuity: the dominant task_prep shape — request-borne rubricItems (no bank row) — NEVER
+     *  builds [LLM_JUDGE] alone. With no machine-checkable item the rubric leg defers and the reply
+     *  honestly names the LLM decision + the deferral (REQ-26 / INV-6.3 on real traffic). */
+    @Test
+    fun `request-rubric task_prep drill is never LLM-alone and reports honest deferral`(@TempDir tmp: Path) = testApplication {
+        drillGraderLlmFactory = { FakeGraderLlm(COHERENT) }
+        var ctx: TutorContext? = null
+        application { installFreshTutor(tmp); ctx = attributes[TutorContextKey] }
+        startApplication()
+        val (_, sid) = seedSession(ctx!!)
+        // A real task_prep code drill: rubricItems ride the request, NO bank problem row, language=cpp.
+        TaskPrepRepo(ctx!!.db).upsert(TaskPrep(
+            taskId = "task-1", generatedAt = Instant.now(), version = 1,
+            problemsJson = Json.encodeToString(ListSerializer(Problem.serializer()),
+                listOf(Problem(problemId = "d1", page = 1, statement = "write a function",
+                    kcIds = emptyList(), rubricItems = listOf("compiles", "returns the right value")))),
+            drillsJson = "{}", railJson = "[]",
+        ))
+        val csrf = "test-csrf-12345"
+        val client = createClient {
+            install(HttpCookies); install(ClientContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val resp = client.post("/api/v1/drill/grade") {
+            cookie("jarvis_session", sid); cookie("csrf", csrf); header("X-CSRF-Token", csrf)
+            contentType(ContentType.Application.Json)
+            setBody("""{"taskId":"task-1","problemId":"d1","userAttempt":"int f(){return 1;}","problemStatement":"write a function","expectedAnswerHint":"h","language":"cpp","rubricItems":["compiles","returns the right value"]}""")
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        // The execution leg has no runnable source on /drill/grade → defers; rubric (label-only) defers →
+        // the LLM decides, and BOTH deferrals surface in degraded_legs_ro. Never [LLM_JUDGE] alone.
+        assertTrue(body.contains("\"decided_by\":\"llm-judge\""), "LLM decided after non-LLM deferral; body=$body")
+        assertTrue(body.contains("\"degraded_legs_ro\":["), "deferrals named; body=$body")
+        assertTrue(body.contains("verificabil") || body.contains("indisponibil"),
+            "RO deferral copy present (rubric and/or execution); body=$body")
     }
 }

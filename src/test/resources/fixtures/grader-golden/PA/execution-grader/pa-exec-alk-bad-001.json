@@ -1,0 +1,13 @@
+{
+  "grader": "execution",
+  "subject": "PA",
+  "id": "pa-exec-alk-bad-001",
+  "language": "alk",
+  "input": {
+    "source": "n = 5;\nsum = 0;\ni = 1;\nwhile (i < n) { sum = sum + i; i = i + 1; }\nprint(sum);\n",
+    "stdin": null,
+    "expected_stdout": "15"
+  },
+  "expected": { "pass": false },
+  "corpus_note": "known-bad mutant of pa-exec-alk-good-001: the loop guard is `i < n` instead of `i <= n` (the classic off-by-one), so it prints 10 not 15 — the execution leg must FAIL it. language == subject-exam-language (alk)."
+}
