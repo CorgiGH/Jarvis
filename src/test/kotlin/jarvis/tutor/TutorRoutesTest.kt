@@ -57,13 +57,27 @@ class TutorRoutesTest {
         }
     }
 
-    private fun readSharedEventLogLines(): List<String> {
+    // TutorEventLog.GLOBAL.append() is ASYNC: it enqueues onto a Channel that a
+    // single background GlobalScope/Dispatchers.IO coroutine drains to disk. The
+    // HTTP response returns before that drain completes, so the envelope for THIS
+    // test's session may not be on disk yet when we read. Because the log is SHARED
+    // across every test in this class (and frozen JVM-wide), the file is already
+    // non-empty from prior tests — so a "wait until the file is non-empty" poll
+    // exits immediately on stale lines and never waits for OUR session's line.
+    // Under the full suite on CI (slower/contended IO) that surfaces as an
+    // intermittent "no envelope for session_id=… in shared log" failure. Fix:
+    // poll until a line carrying THIS test's session_id lands (or the deadline).
+    private fun readSharedEventLogLines(sessionId: String? = null): List<String> {
         val today = java.time.LocalDate.now().toString()
         val dir = System.getProperty("jarvis.tutor.event_log.dir")
             ?.let { Path.of(it) } ?: sharedEventLogDir
         val logFile = dir.resolve("tutor_events.$today.jsonl").toFile()
+        val needle = sessionId?.let { "\"session_id\":\"$it\"" }
         val deadline = System.currentTimeMillis() + 2000
-        while (System.currentTimeMillis() < deadline && (!logFile.exists() || logFile.readLines().isEmpty())) {
+        while (System.currentTimeMillis() < deadline) {
+            val lines = if (logFile.exists()) logFile.readLines() else emptyList()
+            val ready = if (needle != null) lines.any { it.contains(needle) } else lines.isNotEmpty()
+            if (ready) return lines
             Thread.sleep(50)
         }
         return if (logFile.exists()) logFile.readLines() else emptyList()
@@ -161,7 +175,7 @@ class TutorRoutesTest {
         assertEquals(HttpStatusCode.OK, resp.status)
 
         // Filter the shared log by this test's session_id.
-        val mine = readSharedEventLogLines().filter { it.contains("\"session_id\":\"$sid\"") }
+        val mine = readSharedEventLogLines(sid).filter { it.contains("\"session_id\":\"$sid\"") }
         assertTrue(mine.isNotEmpty(), "no envelope for session_id=$sid in shared log")
         val tail = mine.last()
         assertTrue(tail.contains("\"event_type\":\"drill_grade\""), "missing event_type: $tail")
@@ -215,7 +229,7 @@ class TutorRoutesTest {
         }
         assertEquals(HttpStatusCode.OK, resp.status)
 
-        val mine = readSharedEventLogLines().filter { it.contains("\"session_id\":\"$sid\"") }
+        val mine = readSharedEventLogLines(sid).filter { it.contains("\"session_id\":\"$sid\"") }
         assertTrue(mine.isNotEmpty(), "no envelope for session_id=$sid in shared log")
         val tail = mine.last()
         assertTrue(tail.contains("\"event_type\":\"sidekick_ask\""), "missing event_type: $tail")
@@ -249,7 +263,7 @@ class TutorRoutesTest {
             setBody("""{"name":"ledger.opened","ts":"2026-05-17T08:30:00Z"}""")
         }
         assertEquals(HttpStatusCode.NoContent, resp.status)
-        val mine = readSharedEventLogLines().filter { it.contains("\"session_id\":\"$sidCookie\"") }
+        val mine = readSharedEventLogLines(sidCookie).filter { it.contains("\"session_id\":\"$sidCookie\"") }
         assertTrue(mine.isNotEmpty(), "no envelope for session_id=$sidCookie")
         val tail = mine.last()
         assertTrue(tail.contains("\"event_type\":\"ui_telemetry\""), "missing event_type: $tail")
@@ -327,7 +341,7 @@ class TutorRoutesTest {
         }
         assertEquals(HttpStatusCode.OK, resp.status)
 
-        val mine = readSharedEventLogLines().filter { it.contains("\"session_id\":\"$sid\"") }
+        val mine = readSharedEventLogLines(sid).filter { it.contains("\"session_id\":\"$sid\"") }
         assertTrue(mine.isNotEmpty(), "no envelope for session_id=$sid in shared log")
         val tail = mine.last()
         assertTrue(tail.contains("\"event_type\":\"sidekick_ask\""), "missing event_type: $tail")
