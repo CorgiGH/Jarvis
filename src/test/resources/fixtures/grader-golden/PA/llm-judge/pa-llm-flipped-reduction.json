@@ -1,0 +1,15 @@
+{
+  "grader": "llm-judge",
+  "subject": "PA",
+  "id": "pa-llm-flipped-reduction",
+  "input": {
+    "raw_llm_output": "{\"correct\": false, \"rubric\": {\"direction\": false, \"reduction_target\": true, \"formal_proof\": false}, \"score\": 0.333, \"misconception\": \"REDUCTION_DIRECTION_FLIPPED\", \"elaborated_feedback\": \"Studentul a redus o instanță a problemei NP-grele la problema nouă, inversând direcția reducerii. Reducerea corectă presupune transformarea problemei noi într-o instanță a celei NP-grele cunoscute. Restul raționamentului este corect, dar direcția greșită invalidează demonstrația.\"}"
+  },
+  "expected": {
+    "parsed": true,
+    "score": 0.3333333333333333,
+    "correct": false,
+    "misconception": "REDUCTION_DIRECTION_FLIPPED",
+    "confident": true
+  }
+}

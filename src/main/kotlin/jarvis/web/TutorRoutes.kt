@@ -190,12 +190,12 @@ internal fun productionGraderResolver(userId: String, db: org.jetbrains.exposed.
     when (jarvis.tutor.GraderProviderSettingRepo(db).get(userId)) {
         jarvis.tutor.GraderProvider.free        -> jarvis.OpenRouterChatLlm()
         jarvis.tutor.GraderProvider.claude      -> jarvis.ClaudeMaxLlm()
-        jarvis.tutor.GraderProvider.freellmapi  -> jarvis.FreeLlmApiLlm()
+        jarvis.tutor.GraderProvider.freellmapi  -> jarvis.RetryingLlm(jarvis.FreeLlmApiLlm())
     }
 
 /** E3 test seams. Production: generator = free OpenRouter Llama; critic = Claude via relay (DEC-1 relay-only). */
 internal var drillGeneratorLlmFactory: () -> jarvis.Llm = { jarvis.OpenRouterChatLlm() }
-internal var drillCriticLlmFactory: () -> jarvis.Llm = { jarvis.RelayLlm() }
+internal var drillCriticLlmFactory: () -> jarvis.Llm = { jarvis.RetryingLlm(jarvis.RelayLlm()) }
 /** E3: resolve a KC for generation grounding. Default loads from the content corpus. Overridden in tests. */
 internal var drillKcLookup: (subject: String, kcId: String) -> jarvis.content.KnowledgeConcept? = { subject, kcId ->
     try {

@@ -1,0 +1,15 @@
+{
+  "grader": "llm-judge",
+  "subject": "ALO",
+  "id": "alo-llm-adversarial-fenced",
+  "input": {
+    "raw_llm_output": "Am analizat răspunsul studentului. Iată evaluarea:\n\n```json\n{\"correct\": false, \"rubric\": {\"complexity_analysis\": true, \"algorithm_correctness\": false, \"justification\": true}, \"score\": 0.667, \"misconception\": \"OTHER\", \"elaborated_feedback\": \"Analiza de complexitate este corectă (O(n log n)), dar algoritmul nu tratează cazul limită când vectorul este deja sortat. Justificarea teoretică este prezentă, dar implementarea are o eroare logică în condiția de terminare.\"}\n```"
+  },
+  "expected": {
+    "parsed": true,
+    "score": 0.6666666666666666,
+    "correct": false,
+    "misconception": "OTHER",
+    "confident": true
+  }
+}
