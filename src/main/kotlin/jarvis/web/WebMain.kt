@@ -708,6 +708,7 @@ internal suspend fun runWeb() {
         )
         installTutorRoutes()
         installGraderProviderRoutes()
+        installPracticeRoutes()   // Plan-6 Task 8: practice surfaces (proof/trace/code/deliverables), §0.9-G.
         // Wire per-user grader provider routing ONLY in production startup. Tests leave
         // drillGraderLlmResolver = null so the overridable drillGraderLlmFactory seam holds.
         drillGraderLlmResolver = ::productionGraderResolver
