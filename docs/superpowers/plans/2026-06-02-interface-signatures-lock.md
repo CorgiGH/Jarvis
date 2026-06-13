@@ -659,3 +659,75 @@ data class ApiVizInstanceReply(
 - 401 `{"error":"not authenticated"}` for a missing/invalid session.
 
 **Lock check status:** zero `api/v1/viz` entries existed at plan-write (grep confirmed). This is a NEW freeze, not a deviation. Ships in the SAME commit as `VizInstanceRoutes.kt` per the DURABLE RULE.
+
+---
+
+## §NEW-L AMENDMENT — `ApiBeatAttempt` additive fields (Plan 6, Task 4)
+
+**Filed by:** Plan-6 lane-b, Task 4. Applied to the lock in the PM merge commit (same-merge, per the plan's lock-amendment note).
+
+`ApiBeatAttempt` (`QueueMasteryCalibrationRoutes.kt`) gains two ADDITIVE NULLABLE fields:
+
+```kotlin
+@Serializable
+data class ApiBeatAttempt(
+    // ... existing fields unchanged ...
+    val numeric_answer: String? = null,     // NEW — Plan 6 Task 4
+    val numeric_tolerance: Double? = null,  // NEW — Plan 6 Task 4
+)
+```
+
+**Containment chain:** `ApiBeatAttempt` is a member of `ApiLessonBeats` (its `beats` field at line :160), which is the 12th field of `ApiLessonReply` frozen at lock `:616`. Adding optional-nullable fields to `ApiBeatAttempt` is an ADDITIVE AMENDMENT to the frozen `GET /api/v1/lesson/{kcId}` wire — sanctioned under the §O AMENDMENT precedent (`source: SourceRef?` + `provenance`). Legacy payloads decode unchanged (null defaults). No rename/retype.
+
+**Single-source invariant:** `NumericOracleGrader.matches(expected, got, tol)` is the only numeric comparator; `GradeScoring.answerMatches` and the lesson CHECK + ATTEMPT branches all delegate to it (per-site default preserved: CHECK uses `tol ?: 0.0`, ATTEMPT uses `tol ?: 0.0`).
+
+---
+
+## §NEW-P — Practice surfaces contracts (Plan 6, Tasks 7/8/11)
+
+**Frozen by:** Plan-6 §0.9-F/G/H/A. Applied to the lock in the PM merge commit.
+
+### §NEW-P.1 — `ApiDrillGradeReply` additive fields (§0.9-F)
+
+The following fields are ADDITIVE to the existing frozen `ApiDrillGradeReply` (lock §O):
+
+```kotlin
+// ADDITIVE fields — null/empty defaults; legacy decoders unaffected
+val decided_by: String? = null              // "numeric-oracle"|"execution"|"rubric"|"llm-judge"
+val degraded_legs_ro: List<String> = emptyList()  // RO copy, e.g. "Rularea codului indisponibilă..."
+val item_verdicts: List<ItemVerdict> = emptyList() // per-substep/step/G-item verdicts
+```
+
+The `ItemVerdict` wire type:
+
+```kotlin
+@Serializable
+data class ItemVerdict(
+    val id: String,
+    val label: String,
+    val passed: Boolean,
+    val points_earned: Double? = null,
+    val points_max: Double? = null,
+)
+```
+
+Frozen fields `misconception: String?`, `misconception_payload`, `ladder_rungs`, `self_explanation_prompt` are NOT renamed/retyped.
+
+### §NEW-P.2 — Practice endpoints (§0.9-G, additive — no frozen route touched)
+
+All session-auth + csrfProtect; installed by `installPracticeRoutes()` registered in `WebMain.kt`:
+
+- `GET  /api/v1/practice/problems?subject={s}&surface={proof|trace|code}` → `{ problems: [ApiPracticeProblem] }` — NEVER includes reference solution (INV-6.6 server-enforced)
+- `POST /api/v1/practice/proof/{problemId}/grade` body `{ substeps: [{id, text}] }` → `{ item_verdicts, score, correct, decided_by, feedback_ro }`
+- `POST /api/v1/practice/trace/{problemId}/step` body `{ step_index, value }` → `{ verdict: ItemVerdict, feedback_ro }`
+- `POST /api/v1/practice/code/{problemId}/run` body `{ source }` → `{ compiled, stdout_trunc, stderr_trunc, timed_out, degraded_legs_ro }`
+- `POST /api/v1/practice/code/{problemId}/grade` body `{ source }` → full chain reply **+ `reference_solution_ro: String?`** (the ONLY payload carrying the reference — attempt-gated, INV-6.6)
+- `GET  /api/v1/practice/deliverables` → `{ deliverables: [{ id, subject, title_ro, deadline: String?, sub_problems, prep_drill_ids, source_doc, synthetic }] }`
+
+### §NEW-P.3 — Mock-exam ADDITIVE fields (§0.9-H; Task 11 P2-5 reconciliation)
+
+`MockExamsTable` gains nullable columns `format_json`, `started_at`, `phase_index`, `rubric_results_json`, `synthetic_tag`. Existing columns/DTOs untouched. Additive endpoint `POST /api/v1/mock-exam/{id}/phase` advances `phase_index`.
+
+**P2-5 reconciliation (lock `:237`):** the rubric-leg grading in Task 11 applies ONLY to G-item rubric-scored items sourced from BANK problems with AUTHORED rubrics (`format_json`-driven, Task-2 seeds) — never to KC-invariant-derived questions. The `kind:"deterministic"|"open"` wire field stays untouched (KC questions still emit only `"open"`); `kc_results`/`verification_status` serialization is unchanged. Lock `:236`/`:237` pins preserved.
+
+---

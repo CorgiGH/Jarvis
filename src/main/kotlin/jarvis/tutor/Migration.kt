@@ -78,6 +78,10 @@ internal val ALL_TABLES = arrayOf(
     GradeComponentsTable,
     GlossaryTermsTable,
     ExamScheduleRowsTable,
+    // Plan-4b Task 6 — language-check admission records (INV-8.1).
+    // Applied CP-3 behind the INV-3.1 backup gate on BOTH DBs (fresh off-box dumps 2026-06-12).
+    // Live INV-8.1 is vacuously 0-row until the trust-net flip (live DB has 0 kc_verification_status rows).
+    LanguageCheckTable,
 )
 
 /**

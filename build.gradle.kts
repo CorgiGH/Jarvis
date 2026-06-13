@@ -234,3 +234,19 @@ tasks.register<JavaExec>("trustInvariants") {
     args = (project.findProperty("invariantsArgs") as String?)?.split(" ")?.filter { it.isNotEmpty() } ?: listOf()
     jvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
 }
+
+// Plan 4b Task 9 (§0.9J / R-4b-Q2 option (a)) — the real-backend CI seeder. Builds a fresh SQLite DB
+// from the REAL content/ corpus via the REAL admission path (validate -> reconcile), promotes every
+// beat-complete KC to faithful with the REAL recomputed hashes (zero LLM), and seeds one user +
+// session so the boot-up Ktor server serves the faithful-gated lesson route. The lesson-gates.spec.ts
+// rendered gates (4a-4d) drive against this DB. NOT part of check (it writes a throwaway build/e2e DB).
+// Env: E2E_SEED_DB (default build/e2e/tutor.db), E2E_SEED_CONTENT (default content),
+// E2E_SEED_JSON (default build/e2e/seed.json).
+tasks.register<JavaExec>("seedE2eDb") {
+    group = "verification"
+    description = "Seed a fresh build/e2e SQLite DB from the real content/ corpus (real admission path, " +
+        "deterministic faithful stamp, zero LLM) for the lesson-gates real-backend e2e job. NOT part of check."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("jarvis.tutor.e2e.E2eSeedKt")
+    jvmArgs = listOf("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8")
+}
