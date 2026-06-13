@@ -8,10 +8,10 @@
 import { describe, expect, test } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { SchedulerGantt } from "../../components/viz/SchedulerGantt";
-import { ACCENT, INK, HATCH_LIGHT, HATCH_DENSE, HATCH_CROSS } from "../../components/viz/theme";
+import { ACCENT, INK, PAPER, HATCH_LIGHT, HATCH_DENSE, HATCH_CROSS } from "../../components/viz/theme";
 
 const ACCENT_HEX = "#facc15";
-const PAPER_HEX = "#f5f5f0";
+const PAPER_HEX = PAPER; // sourced from theme.ts (drift-proof; §0 #11)
 const ALLOWED_JOB_FILLS = new Set([INK, HATCH_LIGHT, HATCH_DENSE, HATCH_CROSS, ACCENT]);
 
 /** Advance to a frame by clicking the step-fwd button N times. */

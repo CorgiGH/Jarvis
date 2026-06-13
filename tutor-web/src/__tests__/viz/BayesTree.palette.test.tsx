@@ -26,9 +26,10 @@
 import { describe, expect, test, beforeEach } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { BayesTree } from "../../components/viz/BayesTree";
+import { PAPER } from "../../components/viz/theme";
 
 const ACCENT_HEX = "#facc15";
-const PAPER_HEX = "#f5f5f0";
+const PAPER_HEX = PAPER; // sourced from theme.ts (drift-proof; §0 #11)
 const HATCH_DENSE_FILL = "url(#hatch-dense)";
 
 /** Advance to a frame by clicking the step-fwd button N times. */
@@ -135,8 +136,8 @@ function diseaseRects(svg: Element): Element[] {
   return rects.filter((el) => {
     const fill = el.getAttribute("fill") ?? "";
     const width = parseFloat(el.getAttribute("width") ?? "0");
-    // Background is fill=PAPER (or "#f5f5f0"), width=200
-    if ((fill === PAPER_HEX || fill === "#f5f5f0") && width >= 190) return false;
+    // Background is fill=PAPER, width=200
+    if (fill === PAPER_HEX && width >= 190) return false;
     return true;
   });
 }

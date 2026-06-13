@@ -27,10 +27,11 @@
 import { describe, expect, test, beforeEach } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { ProcessFSM } from "../../components/viz/ProcessFSM";
+import { INK, PAPER } from "../../components/viz/theme";
 
 const ACCENT_HEX = "#facc15";
-const INK_HEX = "#0a0a0a";
-const PAPER_HEX = "#f5f5f0";
+const INK_HEX = INK;   // sourced from theme.ts (drift-proof; §0 #11)
+const PAPER_HEX = PAPER; // sourced from theme.ts (drift-proof; §0 #11)
 
 /** Advance to a frame by clicking the step-fwd button N times. */
 function advanceTo(container: HTMLElement, steps: number) {

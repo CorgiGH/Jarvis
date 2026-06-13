@@ -2,8 +2,8 @@
 // Source of truth for ink + paper + accent.
 // Any viz importing from elsewhere is non-compliant per spec §6.4.
 
-export const INK = "#0a0a0a";
-export const PAPER = "#f5f5f0";
+export const INK = "#000000";
+export const PAPER = "#ffffff";
 export const ACCENT = "#facc15";
 
 export const STROKE_DEFAULT = 1;

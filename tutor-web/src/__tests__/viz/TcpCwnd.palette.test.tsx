@@ -20,9 +20,10 @@
 import { describe, expect, test, beforeEach } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { TcpCwnd } from "../../components/viz/TcpCwnd";
+import { INK } from "../../components/viz/theme";
 
 const ACCENT_HEX = "#facc15";
-const INK_HEX = "#0a0a0a";
+const INK_HEX = INK; // sourced from theme.ts (drift-proof; §0 #11)
 
 /** Advance to a frame by clicking the step-fwd button N times. */
 function advanceTo(container: HTMLElement, steps: number) {
