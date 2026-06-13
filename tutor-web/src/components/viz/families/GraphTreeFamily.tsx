@@ -114,6 +114,58 @@ const BOX_PAD_X = 8;
 const BOX_H = 26;
 const LEVEL_GAP = 64;
 
+// ── Callout geometry (Plan-4b Task 9 PM amendment — no-clip-by-construction on the REAL figure) ──
+// The callout `<text>` is `textAnchor="middle"`, so its rendered box spans [cx - w/2, cx + w/2].
+// The old code clamped only cx into [8, SVG_W-8], IGNORING the text's own width — a wide callout
+// anchored to a left-side node overflowed to NEGATIVE x (the assertNoClip viewport-overflow red:
+// "↓ ÎMPARTE …" rendered left=-27). The fix below measures each callout, wraps the over-wide ones
+// to ≥2 lines (and shrinks font as a last resort), then clamps the center-x by HALF the widest
+// line so the FULL text stays inside [CALLOUT_PAD, SVG_W - CALLOUT_PAD] (§5.3 no-clip contract).
+const CALLOUT_FONT = 10;
+const CALLOUT_MIN_FONT = 8; // legibility floor (gate 4b still applies — never shrink below this)
+const CALLOUT_PAD = 8;
+const CALLOUT_LINE_H = 12; // line advance for wrapped tspans
+const CALLOUT_MAX_W = SVG_W - CALLOUT_PAD * 2; // the widest a single callout line may render
+
+/**
+ * Lay out a callout so it never clips: word-wrap to lines each ≤ [CALLOUT_MAX_W] at the largest font
+ * (down to [CALLOUT_MIN_FONT]) that fits, then return the lines + the chosen font + the widest line's
+ * width. A single un-splittable token wider than the box at the min font is left on its own line
+ * (degrades gracefully; the clamp below still keeps its center honest — it cannot be made narrower).
+ */
+function layoutCallout(text: string): { lines: string[]; font: number; maxLineW: number } {
+  for (let font = CALLOUT_FONT; font >= CALLOUT_MIN_FONT; font--) {
+    const lines = wrapToWidth(text, CALLOUT_MAX_W, font);
+    const maxLineW = Math.max(...lines.map((l) => measureLabelWidth(l, font)), 1);
+    // Accept the first font where every line fits, OR the min font (best effort at the floor).
+    if (maxLineW <= CALLOUT_MAX_W || font === CALLOUT_MIN_FONT) {
+      return { lines, font, maxLineW };
+    }
+  }
+  // Unreachable (the loop returns at CALLOUT_MIN_FONT), but keep the type total.
+  const lines = wrapToWidth(text, CALLOUT_MAX_W, CALLOUT_MIN_FONT);
+  return { lines, font: CALLOUT_MIN_FONT, maxLineW: Math.max(...lines.map((l) => measureLabelWidth(l, CALLOUT_MIN_FONT)), 1) };
+}
+
+/** Greedy word-wrap on whitespace so each line's measured width stays ≤ [maxW] (best effort). */
+function wrapToWidth(text: string, maxW: number, font: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [""];
+  const lines: string[] = [];
+  let cur = words[0];
+  for (let i = 1; i < words.length; i++) {
+    const cand = `${cur} ${words[i]}`;
+    if (measureLabelWidth(cand, font) <= maxW) {
+      cur = cand;
+    } else {
+      lines.push(cur);
+      cur = words[i];
+    }
+  }
+  lines.push(cur);
+  return lines;
+}
+
 type Laid = { id: string; x: number; y: number; w: number };
 
 function layoutGraphTree(data: GraphTreeData): Map<string, Laid> {
@@ -178,19 +230,38 @@ function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>) {
             </g>
           );
         })}
-        {/* Callout ANCHORED to the first highlighted node's box (§5.3 — never a detached footer). */}
-        {calloutAnchor && (
-          <text
-            x={Math.max(8, Math.min(SVG_W - 8, calloutAnchor.x))}
-            y={Math.min(SVG_H - 10, calloutAnchor.y + BOX_H / 2 + 16)}
-            textAnchor="middle"
-            fontFamily={FONT_FAMILY}
-            fontSize={10}
-            fill={INK}
-          >
-            {frame.state.callout}
-          </text>
-        )}
+        {/* Callout ANCHORED to the first highlighted node's box (§5.3 — never a detached footer).
+            No-clip by construction (Plan-4b Task 9 PM amendment): measure → wrap/shrink → clamp the
+            center-x by HALF the widest line so the FULL text stays inside [CALLOUT_PAD, SVG_W-PAD]. */}
+        {calloutAnchor && (() => {
+          const { lines, font, maxLineW } = layoutCallout(frame.state.callout);
+          // Clamp center-x so [cx - maxLineW/2, cx + maxLineW/2] ⊆ [CALLOUT_PAD, SVG_W - CALLOUT_PAD].
+          // Each line is ≤ CALLOUT_MAX_W = SVG_W - 2·PAD, so this range is always non-empty.
+          const half = maxLineW / 2;
+          const loBound = CALLOUT_PAD + half;
+          const hiBound = SVG_W - CALLOUT_PAD - half;
+          const cx = Math.max(loBound, Math.min(hiBound, calloutAnchor.x));
+          // Vertical: start below the node box; clamp the LAST line within [, SVG_H - PAD].
+          const wantTop = calloutAnchor.y + BOX_H / 2 + 14;
+          const blockH = (lines.length - 1) * CALLOUT_LINE_H;
+          const top = Math.min(wantTop, SVG_H - CALLOUT_PAD - blockH);
+          return (
+            <text
+              x={cx}
+              y={top}
+              textAnchor="middle"
+              fontFamily={FONT_FAMILY}
+              fontSize={font}
+              fill={INK}
+            >
+              {lines.map((ln, i) => (
+                <tspan key={i} x={cx} dy={i === 0 ? 0 : CALLOUT_LINE_H}>
+                  {ln}
+                </tspan>
+              ))}
+            </text>
+          );
+        })()}
       </>
     );
 

@@ -1,0 +1,97 @@
+diff --git a/.github/workflows/test.yml b/.github/workflows/test.yml
+index a2ebb29..037ff43 100644
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -65,6 +65,13 @@ jobs:
+         run: npm ci
+       - name: vitest run
+         run: npm test
++      # Plan 4b Task 7 / §0.9G (INV-8.3) — chrome EN-literal grep, BLOCKING. Calibrated by
++      # construction (Task 7 swept all 8 scoped components to chromeStrings.ts before this patch was
++      # delivered, so green is achieved at landing). Runs from the repo root (the tool resolves the
++      # scope file + component paths relative to repo root; the frontend job otherwise cwd's tutor-web).
++      - name: Chrome EN-literal grep (INV-8.3)
++        working-directory: .
++        run: node tools/chrome-en-grep.mjs
+       # Plan 4a §0.9C — Impeccable design-quality gate, FAIL-OPEN (council-1781132987 amendment).
+       # Pinned impeccable@2.3.2; applicable-subset applied as a POST-PROCESS FILTER (no --config
+       # flag exists). The `|| true` keeps it non-blocking until calibrate+subset are landed AND
+@@ -151,3 +158,78 @@ jobs:
+           test "$code" -ne 0
+           grep -q "JARVIS_PYTHON3" loudred-one.log
+           test ! -e /tmp/loudred-one.db
++
++  lesson-gates:
++    # Plan 4b Task 9 / §0.9J (R-4b-Q2 option (a)) — rendered gates 4a–4d on the REAL lesson route over
++    # the REAL corpus, served by a boot-up Ktor server against a seeded SQLite DB (real admission path,
++    # deterministic faithful stamp, zero LLM). The seed manifest's kcIds/figureKcIds are DERIVED from
++    # the corpus, so coverage grows with zero edits when Plan 5/6 admits a new beat-complete KC or
++    # figure binding. The default frontend job's `npm run e2e` honestly SKIPS lesson-gates (no JVM); it
++    # runs here with REAL_BACKEND=1 against the live backend (vite proxies /api → :8080, no config edit).
++    name: lesson-gates (real backend, seeded corpus)
++    runs-on: ubuntu-latest
++    timeout-minutes: 20
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-java@v4
++        with:
++          distribution: temurin
++          java-version: 21
++      - uses: gradle/actions/setup-gradle@v4
++        with:
++          gradle-version: "8.10"
++      - uses: actions/setup-node@v4
++        with:
++          node-version: 20
++          cache: npm
++          cache-dependency-path: tutor-web/package-lock.json
++      - name: npm ci (tutor-web)
++        working-directory: tutor-web
++        run: npm ci
++      - name: Install Playwright browsers (chromium only)
++        working-directory: tutor-web
++        run: npx playwright install --with-deps chromium
++      - name: Seed the e2e DB from the real corpus (real admission path, zero LLM)
++        run: gradle --no-daemon :seedE2eDb --stacktrace
++      - name: Boot the real Ktor server against the seeded DB (background)
++        env:
++          # The web server requires a bearer token to boot (WebMain.kt). A throwaway random value is
++          # fine — the lesson-gates spec authenticates via the seeded jarvis_session cookie, not the
++          # bearer; the token only unlocks server startup.
++          JARVIS_AUTH_TOKEN: ci-lesson-gates-throwaway-token-0123456789abcdef
++          JARVIS_TUTOR_DB: ${{ github.workspace }}/build/e2e/tutor.db
++          JARVIS_CONTENT_DIR: ${{ github.workspace }}/content
++          JARVIS_PORT: "8080"
++        run: |
++          nohup gradle --no-daemon run --args=web > build/e2e/server.log 2>&1 &
++          echo "server-pid=$!"
++      - name: Wait for server readiness (60×2s; any HTTP status = up)
++        run: |
++          up=""
++          for i in $(seq 1 60); do
++            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/v1/tutor/auto-session || true)
++            if [ -n "$code" ] && [ "$code" != "000" ]; then
++              echo "server up after ${i} tries — HTTP ${code}"
++              up=1
++              break
++            fi
++            sleep 2
++          done
++          if [ -z "$up" ]; then
++            echo "::error::server never became ready"
++            cat build/e2e/server.log || true
++            exit 1
++          fi
++      - name: Run lesson-gates against the real backend
++        working-directory: tutor-web
++        env:
++          REAL_BACKEND: "1"
++        run: npx playwright test e2e/lesson-gates.spec.ts
++      - name: Upload server log + playwright report on failure
++        if: failure()
++        uses: actions/upload-artifact@v4
++        with:
++          name: lesson-gates-artifacts
++          path: |
++            build/e2e/server.log
++            tutor-web/playwright-report/
