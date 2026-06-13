@@ -1,0 +1,155 @@
+{
+  "_doc": "Plan-6 Task 11 (§0.9-H, REQ-13/14) — mock-exam paper FORMATS. Each format encodes a real-paper structure the mock-exam mode reproduces (taxonomy spec §2 / §6.2.4). Learner-visible copy (titles, labels, notes) is RO; identifiers/keys are EN. self_assessment=true formats are NEVER auto-graded by the app — the honest RO note says so (REQ-12/REQ-16 honesty). synthetic_default=true until a real past paper is digested (REQ-12). Phases encode permitted-materials switches (REQ-15).",
+  "formats": {
+    "PA-standard": {
+      "subject": "PA",
+      "title_ro": "Examen PA — 3 probleme (Greedy / DP / NP) cu sub-puncte a–d",
+      "duration_seconds": 7200,
+      "synthetic_default": true,
+      "self_assessment": false,
+      "partial_credit_step": 0.5,
+      "phases": [
+        { "index": 0, "label_ro": "Fără materiale", "materials_allowed_ro": "Niciun material permis", "duration_seconds": 7200 }
+      ],
+      "questions": [
+        {
+          "id": "Q1", "label_ro": "Problema 1 — Greedy", "kind": "structured",
+          "sub_parts": [
+            { "label": "a", "label_ro": "1a", "points": 1.0, "point_bracket_ro": "[1p]" },
+            { "label": "b", "label_ro": "1b", "points": 1.0, "point_bracket_ro": "[1p]", "depends_on": "a" },
+            { "label": "c", "label_ro": "1c", "points": 1.5, "point_bracket_ro": "[1.5p]", "depends_on": "b" },
+            { "label": "d", "label_ro": "1d", "points": 1.5, "point_bracket_ro": "[1.5p]", "depends_on": "c" }
+          ]
+        },
+        {
+          "id": "Q2", "label_ro": "Problema 2 — Programare dinamică", "kind": "structured",
+          "sub_parts": [
+            { "label": "a", "label_ro": "2a", "points": 1.0, "point_bracket_ro": "[1p]" },
+            { "label": "b", "label_ro": "2b", "points": 1.0, "point_bracket_ro": "[1p]", "depends_on": "a" },
+            { "label": "c", "label_ro": "2c", "points": 1.5, "point_bracket_ro": "[1.5p]", "depends_on": "b" },
+            { "label": "d", "label_ro": "2d", "points": 1.5, "point_bracket_ro": "[1.5p]", "depends_on": "c" }
+          ]
+        },
+        {
+          "id": "Q3", "label_ro": "Problema 3 — NP-completitudine", "kind": "structured",
+          "sub_parts": [
+            { "label": "a", "label_ro": "3a", "points": 1.0, "point_bracket_ro": "[1p]" },
+            { "label": "b", "label_ro": "3b", "points": 1.0, "point_bracket_ro": "[1p]", "depends_on": "a" },
+            { "label": "c", "label_ro": "3c", "points": 1.5, "point_bracket_ro": "[1.5p]", "depends_on": "b" },
+            { "label": "d", "label_ro": "3d", "points": 1.5, "point_bracket_ro": "[1.5p]", "depends_on": "c" }
+          ]
+        }
+      ]
+    },
+    "POO-course-exam": {
+      "subject": "POO",
+      "title_ro": "Examen POO (curs) — grilă „ce se întâmplă la execuția următorului program?”",
+      "duration_seconds": 5400,
+      "synthetic_default": true,
+      "self_assessment": false,
+      "phases": [
+        { "index": 0, "label_ro": "Fără materiale", "materials_allowed_ro": "Niciun material permis", "duration_seconds": 5400 }
+      ],
+      "questions": [
+        {
+          "id": "Q1", "label_ro": "Grilă 1 — execuția programului", "kind": "mcq",
+          "execution_trace_reveal": true,
+          "reveal_note_ro": "După răspuns: baremul arată urmărirea pas-cu-pas a execuției.",
+          "options": [
+            { "key": "A", "label_ro": "Varianta A" },
+            { "key": "B", "label_ro": "Varianta B" },
+            { "key": "C", "label_ro": "Varianta C" },
+            { "key": "D", "label_ro": "Varianta D" }
+          ]
+        }
+      ]
+    },
+    "SO-theory-grid": {
+      "subject": "SO",
+      "title_ro": "Examen SO (teorie) — grilă de 18 itemi",
+      "duration_seconds": 5400,
+      "synthetic_default": true,
+      "self_assessment": false,
+      "phases": [
+        { "index": 0, "label_ro": "Fără materiale", "materials_allowed_ro": "Niciun material permis", "duration_seconds": 5400 }
+      ],
+      "grid": {
+        "item_count": 18,
+        "items": [
+          { "id": "G1", "label_ro": "Item 1 (radio)", "kind": "radio", "points": 0.5, "multiselect": false },
+          { "id": "G2", "label_ro": "Item 2 (radio)", "kind": "radio", "points": 0.5, "multiselect": false },
+          { "id": "G3", "label_ro": "Item 3 — bifați TOATE", "kind": "multiselect", "points": 1.0, "multiselect": true, "instruction_ro": "Bifați TOATE răspunsurile corecte." }
+        ]
+      },
+      "note_ro": "Grilă mixtă: itemi radio (0.5p) și itemi „bifați TOATE” (1p, R-MULTISELECT)."
+    },
+    "SO-TP-practical": {
+      "subject": "SO",
+      "title_ro": "Test practic SO (TP) — auto-evaluare după barem",
+      "duration_seconds": 5400,
+      "synthetic_default": true,
+      "self_assessment": true,
+      "self_assessment_note_ro": "Aplicația NU poate evalua automat acest test practic — este o auto-evaluare după barem; profesorul notează predarea reală.",
+      "phases": [
+        { "index": 0, "label_ro": "Cod la calculator", "materials_allowed_ro": "Mediu de dezvoltare", "duration_seconds": 5400 }
+      ],
+      "rubric": {
+        "all_or_nothing": true,
+        "score_halving_penalty": true,
+        "penalty_note_ro": "Sub-itemii sunt all-or-nothing; penalizările înjumătățesc punctajul itemului.",
+        "items": [
+          { "id": "R1", "label_ro": "Compilează și rulează", "points": 1.0, "all_or_nothing": true },
+          { "id": "R2", "label_ro": "Funcționalitate corectă", "points": 2.0, "all_or_nothing": true }
+        ]
+      }
+    },
+    "POO-T1-T2-practical": {
+      "subject": "POO",
+      "title_ro": "Teste practice POO (T1/T2) — auto-evaluare după barem",
+      "duration_seconds": 5400,
+      "synthetic_default": true,
+      "self_assessment": true,
+      "self_assessment_note_ro": "Aplicația NU poate evalua automat aceste teste practice — auto-evaluare după barem; profesorul notează predarea reală.",
+      "phases": [
+        { "index": 0, "label_ro": "Cod la calculator", "materials_allowed_ro": "Mediu de dezvoltare", "duration_seconds": 5400 }
+      ],
+      "rubric": {
+        "all_or_nothing": true,
+        "score_halving_penalty": true,
+        "penalty_note_ro": "Sub-itemii sunt all-or-nothing; penalizările înjumătățesc punctajul itemului.",
+        "items": [
+          { "id": "R1", "label_ro": "Design corect al claselor", "points": 2.0, "all_or_nothing": true },
+          { "id": "R2", "label_ro": "Implementare funcțională", "points": 3.0, "all_or_nothing": true }
+        ]
+      }
+    },
+    "PS-mini-test": {
+      "subject": "PS",
+      "title_ro": "Mini-test PS — simulare de 15 minute (format de seminar)",
+      "duration_seconds": 900,
+      "synthetic_default": true,
+      "self_assessment": false,
+      "format_note_ro": "Format de seminar: 6 mini-teste de câte 15 minute, ținute la fața locului (erată E3 — formatul ESTE cunoscut, nu există gap-record).",
+      "phases": [
+        { "index": 0, "label_ro": "Mini-test 15 min", "materials_allowed_ro": "Niciun material permis", "duration_seconds": 900 }
+      ],
+      "questions": [
+        { "id": "Q1", "label_ro": "Întrebarea 1", "kind": "open", "points": 10.0 }
+      ]
+    },
+    "ALO-docs-allowed": {
+      "subject": "ALO",
+      "title_ro": "Examen ALO — fază cu materiale permise",
+      "duration_seconds": 7200,
+      "synthetic_default": true,
+      "self_assessment": false,
+      "phases": [
+        { "index": 0, "label_ro": "Fără materiale", "materials_allowed_ro": "Niciun material permis", "duration_seconds": 5400 },
+        { "index": 1, "label_ro": "Materiale permise (30 min)", "materials_allowed_ro": "Documentație permisă", "duration_seconds": 1800 }
+      ],
+      "questions": [
+        { "id": "Q1", "label_ro": "Problema 1", "kind": "structured", "points": 5.0 }
+      ]
+    }
+  }
+}

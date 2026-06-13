@@ -50,6 +50,16 @@ export const practiceStrings = {
   deliverableHonestyLine:
     "Aplicația te pregătește pentru predare — nu notează predările reale; profesorul o face.",
 
+  // ── MockExam additive (REQ-11..17, Task 11) ──────────────────────────────────
+  mockExamPhaseLabel: "Faza curentă:",
+  mockExamPhaseMaterialsLabel: "Materiale permise:",
+  mockExamPhaseProgress: "din",
+  mockExamRubricResultTitle: "Barem pe puncte",
+  mockExamRubricPointsOf: "din",
+  mockExamSyntheticTag: "Subiect generat — nu provine dintr-un examen real",
+  mockExamSubQuestionOrderHint: "Sub-întrebările se rezolvă în ordine (b folosește rezultatul de la a).",
+  mockExamPhaseAdvanceBtn: "Faza următoare",
+
   // ── DrillStack CHECK card (REQ-29, E8) ────────────────────────────────────────
   checkCardTitle: "VERIFICĂ",
   checkAttemptPlaceholder: "Răspunsul tău…",
