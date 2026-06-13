@@ -11,14 +11,10 @@
     "tutor-web/src/components/TrustSettings.tsx",
     "tutor-web/src/components/lesson/*.tsx",
     "tutor-web/src/components/OggiScreen.tsx",
-    "tutor-web/src/components/practice/*.tsx"
+    "tutor-web/src/components/practice/*.tsx",
+    "tutor-web/src/components/DrillStack.tsx"
   ],
-  "excluded": [
-    {
-      "path": "tutor-web/src/components/DrillStack.tsx",
-      "reason": "Lane B sweeps it in Plan 6 (practiceStrings.ts); PM widens files to include it at Lane B merge per PM-APPLY-MANIFEST.md"
-    }
-  ],
+  "excluded": [],
   "enWords": [
     "definitely", "maybe", "guess", "idk", "save", "reset", "loading", "share",
     "play", "frame", "voice",

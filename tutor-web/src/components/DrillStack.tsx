@@ -223,7 +223,7 @@ export function DrillStack({
             onChange={(e) => setPrediction(e.target.value)}
             disabled={unlocked || phase === "grading"}
             rows={2}
-            placeholder="e.g., the histogram should look symmetric around 0, peaked, with heavier tails as b grows"
+            placeholder={s.drillPredictionPlaceholder}
             className="w-full border-2 border-border-thin bg-page-bg font-mono text-xs p-2 resize-none focus:outline-none focus:border-accent disabled:opacity-50"
           />
           <div className="mt-1 text-[11px] uppercase tracking-widest text-page-fg/75">

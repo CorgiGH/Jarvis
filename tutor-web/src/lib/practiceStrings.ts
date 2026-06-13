@@ -81,4 +81,5 @@ export const practiceStrings = {
   drillConfidenceLabel: "cât de sigur ești?",
   drillPredictionLabel: "prezice în limbaj simplu (opțional) — cum ar trebui să arate răspunsul, înainte de a-l scrie?",
   drillPredictionHint: "efect de generare: chiar și o presupunere greșită ÎNAINTE de a încerca fixează mai bine decât citirea pasivă (Slamecka 1978).",
+  drillPredictionPlaceholder: "ex.: histograma ar trebui să fie simetrică în jurul lui 0, ascuțită, cu cozi mai grele pe măsură ce b crește",
 } as const;
