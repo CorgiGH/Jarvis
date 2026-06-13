@@ -43,6 +43,20 @@ export interface MisconceptionPayload {
 
 export type NextPhaseAction = "advance" | "hold" | "remediate";
 
+/** Plan-6 Task 7 — which grader leg produced the verdict (REQ-26 audit trail). Mirrors
+ *  jarvis/web/TutorRoutes.kt DrillGradeChain.wireId 1:1. */
+export type DecidedBy = "numeric-oracle" | "execution" | "rubric" | "llm-judge";
+
+/** §0.9-A ItemVerdict — one per-item structural verdict (rubric G-item / oracle).
+ *  Mirrors jarvis.tutor.grader.ItemVerdict (snake_case on the wire). */
+export interface ItemVerdict {
+  id: string;
+  label: string;
+  passed: boolean;
+  points_earned: number | null;
+  points_max: number | null;
+}
+
 export interface GradeResult {
   correct: boolean;
   score: number;
@@ -61,6 +75,13 @@ export interface GradeResult {
   phase?: string | null;
   next_phase_action?: NextPhaseAction | null;
   cross_checked?: boolean;
+  // Plan-6 Task 7 — grader-chain integration fields (§0.9-F). ADDITIVE, snake_case 1:1.
+  // decided_by = the deciding leg ("numeric-oracle"|"execution"|"rubric"|"llm-judge").
+  // degraded_legs_ro = RO copy for each non-LLM leg that degraded before the deciding leg.
+  // item_verdicts = per-item structural verdicts (rubric G-items / oracle).
+  decided_by?: DecidedBy | null;
+  degraded_legs_ro?: string[];
+  item_verdicts?: ItemVerdict[];
 }
 
 export interface GradeDrillArgs {

@@ -1,5 +1,8 @@
 import { describe, it, expectTypeOf } from "vitest";
-import type { GradeResult, LadderRung, MisconceptionPayload, StudentConfidence } from "./drillGrader";
+import type {
+  GradeResult, LadderRung, MisconceptionPayload, StudentConfidence,
+  DecidedBy, ItemVerdict,
+} from "./drillGrader";
 
 describe("T0 trust wire types", () => {
   it("GradeResult carries the served-but-formerly-ignored trust fields", () => {
@@ -27,5 +30,21 @@ describe("T0 trust wire types", () => {
     const c: StudentConfidence = "DEFINITELY";
     expectTypeOf<StudentConfidence>().toEqualTypeOf<"DEFINITELY" | "MAYBE" | "GUESS" | "IDK">();
     void c;
+  });
+
+  it("GradeResult carries the Plan-6 grader-chain fields (decided_by / degraded_legs_ro / item_verdicts)", () => {
+    expectTypeOf<GradeResult>().toHaveProperty("decided_by");
+    expectTypeOf<GradeResult>().toHaveProperty("degraded_legs_ro").toEqualTypeOf<string[] | undefined>();
+    expectTypeOf<GradeResult>().toHaveProperty("item_verdicts").toEqualTypeOf<ItemVerdict[] | undefined>();
+  });
+
+  it("DecidedBy is the four-leg id union", () => {
+    expectTypeOf<DecidedBy>().toEqualTypeOf<"numeric-oracle" | "execution" | "rubric" | "llm-judge">();
+  });
+
+  it("ItemVerdict mirrors the Kotlin §0.9-A wire 1:1 (snake_case points_*)", () => {
+    const v: ItemVerdict = { id: "G1", label: "criteriu", passed: true, points_earned: 1, points_max: 1 };
+    expectTypeOf(v.points_earned).toEqualTypeOf<number | null>();
+    expectTypeOf(v.points_max).toEqualTypeOf<number | null>();
   });
 });

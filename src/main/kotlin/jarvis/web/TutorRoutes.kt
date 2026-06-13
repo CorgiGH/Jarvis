@@ -193,6 +193,123 @@ internal fun productionGraderResolver(userId: String, db: org.jetbrains.exposed.
         jarvis.tutor.GraderProvider.freellmapi  -> jarvis.RetryingLlm(jarvis.FreeLlmApiLlm())
     }
 
+/**
+ * Plan-6 Task 7 — the grader-CHAIN integration seam for `/drill/grade`.
+ *
+ * Resolves the routing chain for the graded problem and runs ONLY the non-LLM prefix legs
+ * (everything before the first `LLM_JUDGE`). When a non-LLM leg DECIDES, the handler serves
+ * that verdict and NEVER constructs an LLM (oracle/execution/rubric short-circuit). When every
+ * non-LLM leg DEFERS, the handler falls through to the existing LLM-judge path — INV-6.3 holds
+ * non-vacuously on real traffic because the chain builder never sees `[LLM_JUDGE]` alone, and the
+ * deferred legs surface honestly in `degraded_legs_ro` / `decided_by="llm-judge"`.
+ */
+internal object DrillGradeChain {
+
+    /** The wire id for a leg kind (mirrors §0.9-F: "numeric-oracle"|"execution"|"rubric"|"llm-judge"). */
+    fun wireId(kind: jarvis.tutor.grader.GraderLegKind): String = when (kind) {
+        jarvis.tutor.grader.GraderLegKind.NUMERIC_ORACLE -> "numeric-oracle"
+        jarvis.tutor.grader.GraderLegKind.EXECUTION -> "execution"
+        jarvis.tutor.grader.GraderLegKind.RUBRIC -> "rubric"
+        jarvis.tutor.grader.GraderLegKind.LLM_JUDGE -> "llm-judge"
+    }
+
+    /** RO copy for a non-LLM leg that degraded (skipped) before the deciding leg (R-6-Q1 honesty). */
+    fun degradedRo(kind: jarvis.tutor.grader.GraderLegKind): String = when (kind) {
+        jarvis.tutor.grader.GraderLegKind.NUMERIC_ORACLE ->
+            "Verificarea numerică nu se aplică acestui răspuns — evaluat prin alt corector."
+        jarvis.tutor.grader.GraderLegKind.EXECUTION ->
+            "Rularea codului indisponibilă pe acest server — verificat structural."
+        jarvis.tutor.grader.GraderLegKind.RUBRIC ->
+            "Niciun criteriu verificabil automat — evaluat de corectorul lingvistic."
+        jarvis.tutor.grader.GraderLegKind.LLM_JUDGE -> ""
+    }
+
+    /**
+     * Map a drill-grade request + server-resolved problem to a routing archetype-class.
+     *
+     * NUMERIC (the oracle-leads, LLM-bypassing chain) fires ONLY for a bare numeric problem with NO
+     * server-resolved KC obligation ([hasKcObligation] == false). A KC-bearing drill keeps the
+     * established LLM-served-teaching path (PROSE/CODE → `[RUBRIC, LLM_JUDGE]`) so the served
+     * misconception/ladder payload + atomic mastery recording stay byte-identical — bank-problem
+     * NUMERIC/TRACE archetypes route through the oracle via PracticeRoutes (Task 8), not /drill/grade.
+     */
+    fun archetypeClassFor(
+        language: String?,
+        canonicalAnswer: String?,
+        shape: String?,
+        hasKcObligation: Boolean,
+    ): jarvis.tutor.grader.ArchetypeClass {
+        val lang = language?.trim()?.lowercase()?.takeIf { it.isNotBlank() && it != "text" }
+        // A real code language → CODE (execution leg may still defer when no source/expected ride
+        // the request, falling through to rubric/LLM honestly).
+        if (lang != null) return jarvis.tutor.grader.ArchetypeClass.CODE
+        // A numeric canonical answer with no code language AND no KC obligation → NUMERIC (oracle leads,
+        // no LLM). A KC-bearing numeric drill stays on the served-teaching LLM path (classify below).
+        if (!hasKcObligation && canonicalAnswer?.trim()?.toDoubleOrNull() != null) {
+            return jarvis.tutor.grader.ArchetypeClass.NUMERIC
+        }
+        // Otherwise classify off the descriptive shape; default PROSE → [RUBRIC, LLM_JUDGE].
+        return jarvis.tutor.grader.GraderRouting.classify(shape ?: "", lang)
+    }
+
+    /** A concrete non-LLM leg for a routing kind, or null for LLM_JUDGE (resolved by the handler). */
+    fun legFor(kind: jarvis.tutor.grader.GraderLegKind): jarvis.tutor.grader.GraderLeg? = when (kind) {
+        jarvis.tutor.grader.GraderLegKind.NUMERIC_ORACLE -> jarvis.tutor.grader.NumericOracleGrader()
+        jarvis.tutor.grader.GraderLegKind.EXECUTION -> jarvis.tutor.grader.ExecutionGrader()
+        jarvis.tutor.grader.GraderLegKind.RUBRIC -> jarvis.tutor.grader.RubricGrader()
+        jarvis.tutor.grader.GraderLegKind.LLM_JUDGE -> null
+    }
+
+    /** Outcome of running the non-LLM prefix: either a leg DECIDED, or all deferred (→ LLM decides). */
+    sealed interface PrefixResult {
+        data class Decided(
+            val decidedBy: jarvis.tutor.grader.GraderLegKind,
+            val correct: Boolean,
+            val score: Double,
+            val itemVerdicts: List<jarvis.tutor.grader.ItemVerdict>,
+            val feedbackRo: String,
+            val degradedRo: List<String>,
+        ) : PrefixResult
+
+        /** Every non-LLM leg deferred; [degradedRo] is the RO copy the LLM reply surfaces. */
+        data class AllDeferred(
+            val degradedKinds: List<jarvis.tutor.grader.GraderLegKind>,
+            val degradedRo: List<String>,
+        ) : PrefixResult
+    }
+
+    /**
+     * Run the non-LLM prefix of [chainKinds] against [input]. Returns [PrefixResult.Decided] the moment
+     * a non-LLM leg decides (NO LLM constructed by the caller in that case), or [PrefixResult.AllDeferred]
+     * when every non-LLM leg defers (the caller then runs the existing LLM path).
+     */
+    suspend fun runPrefix(
+        chainKinds: List<jarvis.tutor.grader.GraderLegKind>,
+        input: jarvis.tutor.grader.GradeInput,
+    ): PrefixResult {
+        val degradedKinds = mutableListOf<jarvis.tutor.grader.GraderLegKind>()
+        for (kind in chainKinds) {
+            if (kind == jarvis.tutor.grader.GraderLegKind.LLM_JUDGE) break // LLM tail — caller owns it.
+            val leg = legFor(kind) ?: continue
+            when (val outcome = leg.grade(input)) {
+                is jarvis.tutor.grader.LegOutcome.Decided -> return PrefixResult.Decided(
+                    decidedBy = kind,
+                    correct = outcome.correct,
+                    score = outcome.score,
+                    itemVerdicts = outcome.itemVerdicts,
+                    feedbackRo = outcome.feedbackRo,
+                    degradedRo = degradedKinds.map { degradedRo(it) },
+                )
+                is jarvis.tutor.grader.LegOutcome.Defer -> degradedKinds.add(kind)
+            }
+        }
+        return PrefixResult.AllDeferred(
+            degradedKinds = degradedKinds.toList(),
+            degradedRo = degradedKinds.map { degradedRo(it) },
+        )
+    }
+}
+
 /** E3 test seams. Production: generator = free OpenRouter Llama; critic = Claude via relay (DEC-1 relay-only). */
 internal var drillGeneratorLlmFactory: () -> jarvis.Llm = { jarvis.OpenRouterChatLlm() }
 internal var drillCriticLlmFactory: () -> jarvis.Llm = { jarvis.RetryingLlm(jarvis.RelayLlm()) }
@@ -2074,10 +2191,82 @@ fun Application.installTutorRoutes() {
                 val isSynthetic = call.request.headers["X-Standin-Run"] == "1"
                 val sessionId: String = sid ?: "anon"
 
+                // ── Plan-6 Task 7 — grader-CHAIN integration. Resolve the routing chain for this
+                //    problem and run its NON-LLM prefix FIRST. canonical (server-resolved Problem,
+                //    client fallback) feeds the numeric-oracle leg; the request rubric items (label-only,
+                //    no machine-checkable matchers on the dominant task_prep traffic) feed the rubric leg
+                //    (it DEFERS them → LLM decides). When a non-LLM leg DECIDES we serve that verdict and
+                //    NEVER construct an LLM; when all defer we fall through to the existing LLM path with
+                //    decided_by="llm-judge" + the degraded RO copy (INV-6.3 non-vacuous on real traffic).
+                val canonicalForChain = serverProblem?.canonicalAnswer ?: req.canonicalAnswer
+                val chainKinds = jarvis.tutor.grader.GraderRouting.chainFor(
+                    subject = null,
+                    examLanguage = req.language,
+                    archetypeClass = DrillGradeChain.archetypeClassFor(
+                        language = req.language,
+                        canonicalAnswer = canonicalForChain,
+                        shape = serverProblem?.shape,
+                        // A KC-bearing drill stays on the LLM served-teaching + atomic-recording path; only a
+                        // bare numeric (no KC obligation) routes to the oracle-leads/LLM-bypass chain.
+                        hasKcObligation = !serverProblem?.kcIds.isNullOrEmpty(),
+                    ),
+                )
+                val chainInput = jarvis.tutor.grader.GradeInput(
+                    problemStatement = req.problemStatement,
+                    attempt = req.userAttempt,
+                    expected = canonicalForChain,
+                    rubricItems = req.rubricItems.orEmpty().map { label ->
+                        // Request rubric items are LABEL-ONLY (no matcher) — the rubric leg defers them
+                        // to the LLM pairing (the dominant prose/task_prep path; structural matchers ride
+                        // only bank-problem rows, Task 8). Carrying them keeps the deferral honest.
+                        jarvis.tutor.grader.RubricInput(id = label, label = label, points = 1.0)
+                    },
+                    // No runnable student source rides /drill/grade (the request carries the REFERENCE
+                    // solution, not the student's program), so the execution leg always DEFERS here and
+                    // its degradation surfaces honestly in degraded_legs_ro / decided_by.
+                    source = null,
+                    language = req.language,
+                )
+                val prefix = kotlinx.coroutines.runBlocking {
+                    DrillGradeChain.runPrefix(chainKinds, chainInput)
+                }
+
+                // The chain's audit trail for the served reply. decided_by + item_verdicts + degraded copy
+                // ride EVERY reply path below (the LLM `else` branch sets decided_by="llm-judge" itself).
+                val chainDecided = prefix as? DrillGradeChain.PrefixResult.Decided
+                val decidedByForReply: String? = chainDecided?.let { DrillGradeChain.wireId(it.decidedBy) }
+                val itemVerdictsForReply: List<jarvis.tutor.ItemVerdict> = chainDecided?.itemVerdicts ?: emptyList()
+                val chainDegradedRo: List<String> = when (prefix) {
+                    is DrillGradeChain.PrefixResult.Decided -> prefix.degradedRo
+                    is DrillGradeChain.PrefixResult.AllDeferred -> prefix.degradedRo
+                }
+
                 // Compute reply + status across all three code paths. A.2 plan:
                 // grader now returns GradeAttempt carrying raw LLM output so
                 // A.3 can populate envelope llm_output_raw_truncated below.
-                val attempt: jarvis.tutor.GradeAttempt? = try {
+                //
+                // Plan-6 Task 7 — when a NON-LLM chain leg DECIDED (oracle/execution/rubric), synthesize a
+                // GradeAttempt from that verdict and NEVER construct an LLM (test (a): a throwing resolver
+                // proves the oracle path never touches the LLM). The synthetic rubric ({"<leg>": correct})
+                // makes the EXISTING deterministic GradeScoring layer record mastery exactly as it would
+                // for an LLM grade — so a numeric-correct oracle decision still records, unchanged. Only
+                // when every non-LLM leg defers do we resolve + call the LLM judge.
+                val attempt: jarvis.tutor.GradeAttempt? = if (chainDecided != null) {
+                    val legKey = DrillGradeChain.wireId(chainDecided.decidedBy).replace('-', '_')
+                    jarvis.tutor.GradeAttempt(
+                        parsed = jarvis.tutor.GradeResult(
+                            correct = chainDecided.correct,
+                            // Single-item rubric coherent with `correct` ⇒ GradeScoring.isConfident is true,
+                            // so a confident chain verdict records mastery (or records a confident wrong=0).
+                            rubric = mapOf(legKey to chainDecided.correct),
+                            score = chainDecided.score,
+                            misconception = null,
+                            elaboratedFeedback = chainDecided.feedbackRo,
+                        ),
+                        rawOutput = "",
+                        modelResolved = DrillGradeChain.wireId(chainDecided.decidedBy),
+                    )
+                } else try {
                     (drillGraderLlmResolver?.invoke(userId, ctx.db) ?: drillGraderLlmFactory()).use { llm ->
                         kotlinx.coroutines.runBlocking {
                             jarvis.tutor.DrillGrader.grade(
@@ -2342,6 +2531,13 @@ fun Application.installTutorRoutes() {
                             phase = served.phase,
                             next_phase_action = served.nextAction,
                             cross_checked = crossChecked,
+                            // Plan-6 Task 7 — the chain audit trail. decided_by = the deciding leg's id when
+                            // a non-LLM leg decided (oracle/execution/rubric), else "llm-judge" (every non-LLM
+                            // leg deferred). degraded_legs_ro names the legs that degraded first; item_verdicts
+                            // carries the structural per-item verdicts. (R-6-Q1 honesty / REQ-26 audit.)
+                            decided_by = decidedByForReply ?: "llm-judge",
+                            degraded_legs_ro = chainDegradedRo,
+                            item_verdicts = itemVerdictsForReply,
                         ) to replyStatus
                     }
                 }
@@ -2911,6 +3107,17 @@ private data class ApiDrillGradeReply(
     // cross_checked = the grade went through the deterministic cross-check layer (answerMatch agreed
     // with the rubric) — true only on a confident, recorded, agreement grade. NOT a trust upgrade.
     val cross_checked: Boolean = false,
+    // ── Plan-6 Task 7 — grader-CHAIN integration (§0.9-F). ADDITIVE, all defaulted so the frozen
+    //    G2 reply shape + the §O served-teaching fields are byte-identical for legacy callers.
+    //    decided_by = which leg produced the verdict (REQ-26 audit trail); the value is the
+    //    routing-leg id, "numeric-oracle"|"execution"|"rubric"|"llm-judge". null on the legacy
+    //    UNGRADED/parse_error degraded replies (no chain ran). degraded_legs_ro = RO copy for each
+    //    non-LLM leg that was SKIPPED (disabled/unavailable/non-applicable) before the deciding leg
+    //    (R-6-Q1 honesty — the reply says which legs degraded). item_verdicts = per-item structural
+    //    verdicts (rubric G-items / oracle), empty when the deciding leg emits none.
+    val decided_by: String? = null,
+    val degraded_legs_ro: List<String> = emptyList(),
+    val item_verdicts: List<jarvis.tutor.ItemVerdict> = emptyList(),
 )
 
 /**
