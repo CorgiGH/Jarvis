@@ -1,0 +1,15 @@
+# INV-9.4 gate-3 seed: seeded wrong-trace fixture for the chart-dist family.
+# NEVER placed under content/ — ContentRepo.loadVizInstances globs content/{subject}/viz/ only,
+# and the trace-match harness globs content/*/viz/*.yaml — keeping this here makes it invisible to
+# both, so it is exercised ONLY by seededWrongChartDist.test.tsx.
+#
+# Mutation: the declared probability is 0.95, but ∫curve over [-1,1] = 0.64 (the SAME curve as the
+# shipped viz-ps-normal-area-001). The chart oracle re-integrates the curve and throws naming the
+# annotation step (reveal 4 = step 3, 0-indexed) because the annotation would teach a WRONG number.
+id: viz-ps-normal-area-001-WRONG
+subject: PS
+family_id: chart-dist
+language: ro
+instance:
+  method_kc_id: ps-kc-fixture-distributions
+  data_json: '{"points":[{"x":-4,"y":0.0001},{"x":-3,"y":0.0044},{"x":-2,"y":0.054},{"x":-1,"y":0.242},{"x":0,"y":0.399},{"x":1,"y":0.242},{"x":2,"y":0.054},{"x":3,"y":0.0044},{"x":4,"y":0.0001}],"interval":{"a":-1,"b":1},"probability":0.95,"xLabel":"X","steps":[{"reveal":1,"callout":"densitate"},{"reveal":2,"callout":"interval [a,b]"},{"reveal":3,"callout":"aria"},{"reveal":4,"callout":"P(-1<=X<=1) = 0.95 (WRONG: actual area is 0.64)"}]}'

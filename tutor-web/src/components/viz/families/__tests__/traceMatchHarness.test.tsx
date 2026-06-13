@@ -1,16 +1,18 @@
 /**
- * Plan 4b Task 2 — Trace-match harness totality (INV-5.1/5.2), §0.9C.
+ * Plan 4b Task 2 (+ Plan-V family-4 generalization) — Trace-match harness totality (INV-5.1/5.2),
+ * §0.9C.
  *
  * Enumerates EVERY viz instance in content/‌*‌/viz/*.yaml (via import.meta.glob raw import),
  * asserts ≥1 instance found (totality self-check — if the glob yields 0 the test REDS),
  * and for each instance:
- *   - Dispatches {referenceExecutor, invariants} from a harness-local registry keyed by family_id.
- *   - Unregistered family_id or missing executor/invariants = explicit RED (never silent pass).
- *   - Trace-match (INV-5.1): every rendered frame's labels+highlight equal the reference.
- *   - Semantic invariants (INV-5.2): each invariant holds for every rendered step.
+ *   - Dispatches a per-FAMILY assertion from a harness-local registry keyed by family_id.
+ *   - Unregistered family_id (or missing renderer) = explicit RED (never silent pass).
+ *   - Trace-match (INV-5.1): every rendered frame's state equals the family's independent reference.
+ *   - Semantic invariants (INV-5.2): each invariant holds for every rendered step (rendered DOM).
  *
- * The invariants operate on the mounted family DOM via data-node-id + SVG transform attributes
- * (the family computes real geometry; jsdom reads it back).
+ * Each family owns its OWN trace model (graph-tree compares node-label sets; chart-dist compares
+ * the per-step reveal level + an independent area-under-curve probability check). The harness no
+ * longer hardcodes the graph-tree parser — it dispatches `runAssertion` per family.
  *
  * See §0.9C for the authoritative contract.
  */
@@ -21,40 +23,118 @@ import { parse as parseYaml } from "yaml";
 import {
   parseGraphTreeData,
   framesFromGraphTree,
-  type GraphTreeState,
 } from "../GraphTreeFamily";
+import {
+  parseChartData,
+  framesFromChartData,
+} from "../ChartDistributionFamily";
 import { familyRegistry } from "../familyRegistry";
-import type { Frame } from "../../AlgoStepperShell";
-import { mergesortReference, type RefStep } from "./mergesortTrace";
-import { GRAPH_TREE_INVARIANTS, type GraphTreeInvariant } from "../graphTreeInvariants";
+import { mergesortReference } from "./mergesortTrace";
+import { chartDistributionReference } from "./chartTrace";
+import { GRAPH_TREE_INVARIANTS } from "../graphTreeInvariants";
+import { CHART_DIST_INVARIANTS } from "../chartDistributionInvariants";
 
 // ─── HARNESS REGISTRY ────────────────────────────────────────────────────────
-// Keyed by family_id.  An unregistered family_id → the harness REDs.
-
-type ReferenceExecutor = (dataJson: string) => RefStep[];
+// Keyed by family_id. Each entry owns the FULL per-instance assertion (parse → frames → trace →
+// rendered-DOM invariants), throwing a descriptive message on any failure. An unregistered
+// family_id → the harness REDs at dispatch time below.
 type HarnessEntry = {
-  referenceExecutor: ReferenceExecutor;
-  invariants: GraphTreeInvariant[];
+  /** Runs trace-match + invariants for ONE instance. Throws on any failure. */
+  runAssertion: (dataJson: string, instanceId: string) => void;
 };
+
 const HARNESS_REGISTRY: Record<string, HarnessEntry> = {
   "graph-tree": {
-    /**
-     * Derive reference from the INSTANCE's root node label (the initial unsorted list).
-     * This generalises the existing pin: any graph-tree instance whose root is a
-     * space-separated list of integers is exercised by the real mergesort oracle.
-     */
-    referenceExecutor: (dataJson: string): RefStep[] => {
-      const parsed = parseGraphTreeData(dataJson, "harness-instance");
+    runAssertion: (dataJson, instanceId) => {
+      // ── TRACE-MATCH (INV-5.1) — node-label sets vs the independent mergesort oracle ──
+      const parsed = parseGraphTreeData(dataJson, instanceId);
+      const frames = framesFromGraphTree(parsed);
       const root = parsed.nodes.find((n) => !n.parent);
-      if (!root) throw new Error("graph-tree: no root node found in data_json");
+      if (!root) throw new Error(`${instanceId}: graph-tree has no root node`);
       const input = root.label.split(/\s+/).map((s) => {
         const n = parseInt(s, 10);
-        if (isNaN(n)) throw new Error(`graph-tree: root label contains non-integer token "${s}"`);
+        if (isNaN(n)) throw new Error(`${instanceId}: graph-tree root label contains non-integer token "${s}"`);
         return n;
       });
-      return mergesortReference(input);
+      const ref = mergesortReference(input);
+
+      if (frames.length !== ref.length) {
+        throw new Error(
+          `${instanceId}: step count mismatch — rendered ${frames.length} steps, reference has ${ref.length}`,
+        );
+      }
+      for (let i = 0; i < ref.length; i++) {
+        const renderedLabels = frames[i].state.activeNodes.map((n) => n.label).sort();
+        const renderedHi = [...frames[i].state.highlight].sort();
+        const refLabels = [...ref[i].labels].sort();
+        const refHi = [...ref[i].highlight].sort();
+        if (JSON.stringify(renderedLabels) !== JSON.stringify(refLabels)) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} — ` +
+              `rendered labels [${renderedLabels.join(", ")}] ≠ reference [${refLabels.join(", ")}]`,
+          );
+        }
+        if (JSON.stringify(renderedHi) !== JSON.stringify(refHi)) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} (highlight) — ` +
+              `rendered [${renderedHi.join(", ")}] ≠ reference [${refHi.join(", ")}]`,
+          );
+        }
+      }
+
+      // ── SEMANTIC INVARIANTS (INV-5.2) — rendered DOM ──
+      const Renderer = familyRegistry["graph-tree"];
+      const { container } = render(
+        <Renderer instanceId={instanceId} dataJson={dataJson} language="ro" />,
+      );
+      const stepFwdBtn = container.querySelector('[data-testid="graph-tree-step-fwd"]');
+      for (let i = 0; i < frames.length; i++) {
+        for (const invariant of GRAPH_TREE_INVARIANTS) {
+          const result = invariant(container, frames[i], i, frames);
+          if (!result.ok) throw new Error(`${instanceId}: ${result.message}`);
+        }
+        if (i < frames.length - 1 && stepFwdBtn) fireEvent.click(stepFwdBtn);
+      }
     },
-    invariants: GRAPH_TREE_INVARIANTS,
+  },
+
+  "chart-dist": {
+    runAssertion: (dataJson, instanceId) => {
+      // ── TRACE-MATCH (INV-5.1) — per-step reveal vs the independent chart oracle, which ALSO
+      //    re-derives P(a≤X≤b) by integrating the supplied curve and throws naming the step on
+      //    any drift. ──
+      const parsed = parseChartData(dataJson, instanceId);
+      const frames = framesFromChartData(parsed);
+      const ref = chartDistributionReference(dataJson); // may throw (area/reveal mismatch) — names the step
+
+      if (frames.length !== ref.length) {
+        throw new Error(
+          `${instanceId}: step count mismatch — rendered ${frames.length} steps, reference has ${ref.length}`,
+        );
+      }
+      for (let i = 0; i < ref.length; i++) {
+        const rendered = `reveal-${frames[i].state.reveal}`;
+        if (rendered !== ref[i].label) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} — rendered ${rendered} ≠ reference ${ref[i].label}`,
+          );
+        }
+      }
+
+      // ── SEMANTIC INVARIANTS (INV-5.2) — rendered DOM ──
+      const Renderer = familyRegistry["chart-dist"];
+      const { container } = render(
+        <Renderer instanceId={instanceId} dataJson={dataJson} language="ro" />,
+      );
+      const stepFwdBtn = container.querySelector('[data-testid="chart-dist-step-fwd"]');
+      for (let i = 0; i < frames.length; i++) {
+        for (const invariant of CHART_DIST_INVARIANTS) {
+          const result = invariant(container, frames[i], i, frames);
+          if (!result.ok) throw new Error(`${instanceId}: ${result.message}`);
+        }
+        if (i < frames.length - 1 && stepFwdBtn) fireEvent.click(stepFwdBtn);
+      }
+    },
   },
 };
 
@@ -67,12 +147,11 @@ const rawInstances = import.meta.glob(
   { query: "?raw", import: "default", eager: true },
 ) as Record<string, string>;
 
-// ─── ASSERTION HELPER (exported for seededWrongTrace.test.tsx) ───────────────
-
+// ─── ASSERTION HELPER (exported for the seeded-wrong-trace tests) ───────────
 /**
- * Runs the full harness assertion (trace-match + invariants) for a single parsed YAML doc.
- * Throws with a descriptive message on any failure.
- * Used by both this test (expects no throw) and seededWrongTrace.test.tsx (expects throw).
+ * Runs the full harness assertion (trace-match + invariants) for a single parsed YAML doc by
+ * dispatching to the family's HARNESS_REGISTRY entry. Throws with a descriptive message on any
+ * failure. Used by this test (expects no throw) and the seeded-wrong-trace tests (expect throw).
  */
 export function assertHarnessForInstance(yamlRaw: string, instancePath = "<unknown>"): void {
   const doc = parseYaml(yamlRaw) as {
@@ -92,82 +171,17 @@ export function assertHarnessForInstance(yamlRaw: string, instancePath = "<unkno
   if (!entry) {
     throw new Error(
       `${instanceId}: family_id "${familyId}" has no harness entry — ` +
-        `add a referenceExecutor + invariants list to HARNESS_REGISTRY`,
+        `add a runAssertion to HARNESS_REGISTRY`,
     );
   }
-
   // (b) Family must also be in the familyRegistry (renderer exists)
   if (!familyRegistry[familyId]) {
     throw new Error(
       `${instanceId}: family_id "${familyId}" is in the harness registry but has no renderer in familyRegistry`,
     );
   }
-
-  // (c) Reference executor and invariants must be truthy arrays/functions
-  if (typeof entry.referenceExecutor !== "function") {
-    throw new Error(`${instanceId}: harness entry for "${familyId}" missing referenceExecutor`);
-  }
-  if (!Array.isArray(entry.invariants) || entry.invariants.length === 0) {
-    throw new Error(`${instanceId}: harness entry for "${familyId}" has empty/missing invariants list`);
-  }
-
-  // ── TRACE-MATCH (INV-5.1) ──────────────────────────────────────────────────
-  const parsed = parseGraphTreeData(dataJson, instanceId);
-  const frames = framesFromGraphTree(parsed);
-  const ref = entry.referenceExecutor(dataJson);
-
-  if (frames.length !== ref.length) {
-    throw new Error(
-      `${instanceId}: step count mismatch — rendered ${frames.length} steps, reference has ${ref.length}`,
-    );
-  }
-
-  for (let i = 0; i < ref.length; i++) {
-    const renderedLabels = frames[i].state.activeNodes.map((n) => n.label).sort();
-    const renderedHi = [...frames[i].state.highlight].sort();
-    const refLabels = [...ref[i].labels].sort();
-    const refHi = [...ref[i].highlight].sort();
-
-    if (JSON.stringify(renderedLabels) !== JSON.stringify(refLabels)) {
-      throw new Error(
-        `${instanceId}: trace mismatch at step ${i} — ` +
-          `rendered labels [${renderedLabels.join(", ")}] ≠ reference [${refLabels.join(", ")}]`,
-      );
-    }
-    if (JSON.stringify(renderedHi) !== JSON.stringify(refHi)) {
-      throw new Error(
-        `${instanceId}: trace mismatch at step ${i} (highlight) — ` +
-          `rendered [${renderedHi.join(", ")}] ≠ reference [${refHi.join(", ")}]`,
-      );
-    }
-  }
-
-  // ── SEMANTIC INVARIANTS (INV-5.2) — rendered DOM ──────────────────────────
-  // Render the family component (mounts step 0). Then advance through all frames,
-  // checking each invariant at each step via data-node-id DOM attributes.
-  const Renderer = familyRegistry[familyId];
-  const { container, getByTestId } = render(
-    <Renderer instanceId={instanceId} dataJson={dataJson} language="ro" />,
-  );
-
-  // The shell root is `{prefix}-root`; we use `container` (the jsdom wrapper) for queries.
-  // Step through every frame (starting at 0 which is already rendered).
-  const stepFwdTestId = `${familyId === "graph-tree" ? "graph-tree" : familyId}-step-fwd`;
-  const stepFwdBtn = container.querySelector(`[data-testid="${stepFwdTestId}"]`);
-
-  for (let i = 0; i < frames.length; i++) {
-    // At this point idx=i is rendered. Run all invariants.
-    for (const invariant of entry.invariants) {
-      const result = invariant(container, frames[i], i, frames);
-      if (!result.ok) {
-        throw new Error(`${instanceId}: ${result.message}`);
-      }
-    }
-    // Advance to next frame (unless at last)
-    if (i < frames.length - 1 && stepFwdBtn) {
-      fireEvent.click(stepFwdBtn);
-    }
-  }
+  // (c) Dispatch
+  entry.runAssertion(dataJson, instanceId);
 }
 
 // ─── TESTS ───────────────────────────────────────────────────────────────────
@@ -182,19 +196,15 @@ describe("traceMatchHarness — totality (INV-5.1/5.2, §0.9C)", () => {
     ).toBeGreaterThanOrEqual(1);
   });
 
-  it("every instance in the glob has a registered family + executor + invariants", () => {
+  it("every instance in the glob has a registered family + harness entry", () => {
     const paths = Object.keys(rawInstances);
     for (const path of paths) {
       const doc = parseYaml(rawInstances[path]) as { id?: string; family_id?: string };
       const familyId = doc?.family_id;
-      expect(
-        familyId,
-        `Instance at ${path}: missing family_id`,
-      ).toBeTruthy();
+      expect(familyId, `Instance at ${path}: missing family_id`).toBeTruthy();
       expect(
         HARNESS_REGISTRY[familyId!],
-        `Instance at ${path}: family_id "${familyId}" not in HARNESS_REGISTRY — ` +
-          `add a referenceExecutor + invariants`,
+        `Instance at ${path}: family_id "${familyId}" not in HARNESS_REGISTRY — add a runAssertion`,
       ).toBeTruthy();
       expect(
         familyRegistry[familyId!],

@@ -11,6 +11,7 @@ import { Tls0RttReplay } from "./Tls0RttReplay";
 import { CppVTable } from "./CppVTable";
 import { MatrixTransform } from "./MatrixTransform";
 import { GraphTreeFamily } from "./families/GraphTreeFamily";
+import { ChartDistributionFamily } from "./families/ChartDistributionFamily";
 import { NumLineDirect } from "./NumLineDirect";
 import { OsiEncap } from "./OsiEncap";
 import { ProcessFSM } from "./ProcessFSM";
@@ -47,6 +48,11 @@ const subheadingStyle: CSSProperties = {
 const MERGESORT_DATA_JSON =
   '{"nodes":[{"id":"n0","label":"5 2 8 1 9 3"},{"id":"n1","label":"5 2 8","parent":"n0"},{"id":"n2","label":"5","parent":"n1"},{"id":"n3","label":"2 8","parent":"n1"},{"id":"n4","label":"2","parent":"n3"},{"id":"n5","label":"8","parent":"n3"},{"id":"n6","label":"1 9 3","parent":"n0"},{"id":"n7","label":"1","parent":"n6"},{"id":"n8","label":"9 3","parent":"n6"},{"id":"n9","label":"9","parent":"n8"},{"id":"n10","label":"3","parent":"n8"}],"steps":[{"highlight":["n0"],"deltas":[],"callout":"vectorul întreg — încă nesortat"},{"highlight":["n1","n6"],"deltas":[],"callout":"↓ ÎMPARTE — fiecare rând nou taie în jumătate"},{"highlight":["n2","n3","n7","n8"],"deltas":[],"callout":"↓ ÎMPARTE — fiecare rând nou taie în jumătate"},{"highlight":["n2","n4","n5","n7","n9","n10"],"deltas":[],"callout":"↓ ÎMPARTE — fiecare rând nou taie în jumătate"},{"highlight":["n2","n4","n5","n7","n9","n10"],"deltas":[],"callout":"✋ numără nivelurile: 3 = log₂(6) — de-aici vine „log n\\""},{"highlight":["n2","n3","n7","n8"],"deltas":[{"node":"n3","label":"2 8"},{"node":"n8","label":"3 9"}],"callout":"↑ INTERCLASEAZĂ — atinge toate cele 6 elemente pe nivel → O(n)"},{"highlight":["n1","n6"],"deltas":[{"node":"n1","label":"2 5 8"},{"node":"n6","label":"1 3 9"}],"callout":"↑ INTERCLASEAZĂ — atinge toate cele 6 elemente pe nivel → O(n)"},{"highlight":["n0"],"deltas":[{"node":"n0","label":"1 2 3 5 8 9"}],"callout":"3 niveluri × O(n) = O(n log n) ✓ → [1 2 3 5 8 9]"}]}';
 
+// The viz-ps-normal-area-001 instance data_json (verbatim from content/PS/viz/viz-ps-normal-area-001.yaml).
+// Keep byte-identical to the shipped YAML — the family-no-clip e2e drives THIS mount.
+const NORMAL_AREA_DATA_JSON =
+  '{"points":[{"x":-4,"y":0.0001},{"x":-3.8841,"y":0.0002},{"x":-3.7681,"y":0.0003},{"x":-3.6522,"y":0.0005},{"x":-3.5362,"y":0.0008},{"x":-3.4203,"y":0.0011},{"x":-3.3043,"y":0.0017},{"x":-3.1884,"y":0.0025},{"x":-3.0725,"y":0.0036},{"x":-2.9565,"y":0.005},{"x":-2.8406,"y":0.0071},{"x":-2.7246,"y":0.0097},{"x":-2.6087,"y":0.0133},{"x":-2.4928,"y":0.0178},{"x":-2.3768,"y":0.0237},{"x":-2.2609,"y":0.031},{"x":-2.1449,"y":0.04},{"x":-2.029,"y":0.0509},{"x":-1.913,"y":0.064},{"x":-1.7971,"y":0.0794},{"x":-1.6812,"y":0.0971},{"x":-1.5652,"y":0.1172},{"x":-1.4493,"y":0.1396},{"x":-1.3333,"y":0.164},{"x":-1.2174,"y":0.1901},{"x":-1.1014,"y":0.2175},{"x":-0.9855,"y":0.2455},{"x":-0.8696,"y":0.2733},{"x":-0.7536,"y":0.3003},{"x":-0.6377,"y":0.3255},{"x":-0.5217,"y":0.3482},{"x":-0.4058,"y":0.3674},{"x":-0.2899,"y":0.3825},{"x":-0.1739,"y":0.393},{"x":-0.058,"y":0.3983},{"x":0.058,"y":0.3983},{"x":0.1739,"y":0.393},{"x":0.2899,"y":0.3825},{"x":0.4058,"y":0.3674},{"x":0.5217,"y":0.3482},{"x":0.6377,"y":0.3255},{"x":0.7536,"y":0.3003},{"x":0.8696,"y":0.2733},{"x":0.9855,"y":0.2455},{"x":1.1014,"y":0.2175},{"x":1.2174,"y":0.1901},{"x":1.3333,"y":0.164},{"x":1.4493,"y":0.1396},{"x":1.5652,"y":0.1172},{"x":1.6812,"y":0.0971},{"x":1.7971,"y":0.0794},{"x":1.913,"y":0.064},{"x":2.029,"y":0.0509},{"x":2.1449,"y":0.04},{"x":2.2609,"y":0.031},{"x":2.3768,"y":0.0237},{"x":2.4928,"y":0.0178},{"x":2.6087,"y":0.0133},{"x":2.7246,"y":0.0097},{"x":2.8406,"y":0.0071},{"x":2.9565,"y":0.005},{"x":3.0725,"y":0.0036},{"x":3.1884,"y":0.0025},{"x":3.3043,"y":0.0017},{"x":3.4203,"y":0.0011},{"x":3.5362,"y":0.0008},{"x":3.6522,"y":0.0005},{"x":3.7681,"y":0.0003},{"x":3.8841,"y":0.0002},{"x":4,"y":0.0001}],"interval":{"a":-1,"b":1},"probability":0.68,"xLabel":"X","steps":[{"reveal":1,"callout":"densitatea de probabilitate — aria totală de sub curbă = 1"},{"reveal":2,"callout":"marcăm intervalul [a, b] = [-1, 1] pe axa X"},{"reveal":3,"callout":"aria de sub curbă între a și b = P(a ≤ X ≤ b)"},{"reveal":4,"callout":"P(-1 ≤ X ≤ 1) = 0.68 — aproximativ 68% din masă"}]}';
+
 export function VizDemoPage() {
   const [numLineMu, setNumLineMu] = useState(5);
   return (
@@ -75,6 +81,14 @@ export function VizDemoPage() {
           Family verification vehicle (NOT lesson content, §0.6 #1). d3-hierarchy layout · 8 steps · no-clip by construction.
         </p>
         <GraphTreeFamily instanceId="viz-pa-mergesort-001" dataJson={MERGESORT_DATA_JSON} language="ro" />
+      </section>
+
+      <section data-testid="viz-demo-chart-dist" style={tileStyle}>
+        <h2 style={headingStyle}>PS · Normal-area chart-dist family (viz-ps-normal-area-001)</h2>
+        <p style={subheadingStyle}>
+          Family verification vehicle (NOT lesson content). Measured-label no-clip layout · 4-beat reveal (curbă → interval → arie → P) · paints data-testid="chart-dist-root".
+        </p>
+        <ChartDistributionFamily instanceId="viz-ps-normal-area-001" dataJson={NORMAL_AREA_DATA_JSON} language="ro" />
       </section>
 
       <section data-testid="viz-demo-matrix" style={tileStyle}>
