@@ -1,0 +1,13 @@
+{
+  "grader": "execution",
+  "subject": "PA",
+  "id": "pa-exec-alk-good-001",
+  "language": "alk",
+  "input": {
+    "source": "n = 5;\nsum = 0;\ni = 1;\nwhile (i <= n) { sum = sum + i; i = i + 1; }\nprint(sum);\n",
+    "stdin": null,
+    "expected_stdout": "15"
+  },
+  "expected": { "pass": true },
+  "corpus_note": "derived from content/PA/problems/pa-prob-001.yaml (real corpus, exam_language=alk; the PA problem itself is a proof archetype, so this is a small deterministic Alk algorithm — sum 1..n — exercising the Alk runner against the PA exam language, NOT the proof grading. language == subject-exam-language here."
+}

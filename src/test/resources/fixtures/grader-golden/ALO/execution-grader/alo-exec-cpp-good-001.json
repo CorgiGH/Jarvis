@@ -1,0 +1,13 @@
+{
+  "grader": "execution",
+  "subject": "ALO",
+  "id": "alo-exec-cpp-good-001",
+  "language": "cpp",
+  "input": {
+    "source": "#include <cstdio>\nint main() {\n    // System: x1 - x2 + 3x3 = 2 ; 3x1 - 3x2 + x3 = -1 ; x1 + x2 = 3\n    // Gaussian elimination with partial pivoting (swap E2/E3), then back-substitute.\n    double x3 = -7.0 / -8.0;\n    double x2 = (1.0 - (-3.0) * x3) / 2.0;\n    double x1 = 2.0 + x2 - 3.0 * x3;\n    printf(\"x1=%.4f x2=%.4f x3=%.4f\\n\", x1, x2, x3);\n    return 0;\n}\n",
+    "stdin": null,
+    "expected_stdout": "x1=1.1875 x2=1.8125 x3=0.8750"
+  },
+  "expected": { "pass": true },
+  "corpus_note": "the Gaussian-elimination solution of content/ALO/problems/alo-prob-001.yaml (real corpus; the YAML is a TRACE archetype with x3=0.875, x2=1.8125, x1=1.1875) re-expressed in C++ to exercise the g++/MinGW runner. LANGUAGE != SUBJECT-EXAM-LANGUAGE: the ALO problem's exam_language is null; this tests the C++ runner, not the routing (routing truth is Task 3's)."
+}

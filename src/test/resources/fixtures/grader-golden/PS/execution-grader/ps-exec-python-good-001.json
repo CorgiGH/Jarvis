@@ -1,0 +1,13 @@
+{
+  "grader": "execution",
+  "subject": "PS",
+  "id": "ps-exec-python-good-001",
+  "language": "python",
+  "input": {
+    "source": "import math\n\ndef interval_z(n, sample_mean, sigma, alfa):\n    z = math.sqrt(2.0) * _erfinv(2.0 * (1 - alfa/2) - 1.0)\n    margine = z * sigma / math.sqrt(n)\n    return (sample_mean - margine, sample_mean + margine)\n\ndef _erfinv(y):\n    x = 0.0\n    for _ in range(100):\n        x = x - (math.erf(x) - y) / (2 / math.sqrt(math.pi) * math.exp(-x * x))\n    return x\n\nlo, hi = interval_z(25, 67.53, 10, 0.1)\nprint(f\"[1] {lo:.5f} {hi:.5f}\")\n",
+    "stdin": null,
+    "expected_stdout": "[1] 64.24029 70.81971"
+  },
+  "expected": { "pass": true },
+  "corpus_note": "the SAME confidence-interval computation as content/PS/problems/ps-prob-001.yaml, re-expressed in PYTHON to exercise the Python runner. LANGUAGE != SUBJECT-EXAM-LANGUAGE: the PS exam language is r; this fixture tests the runner, not the routing (routing truth is Task 3's). erfinv is Newton-refined on math.erf to avoid a scipy dependency; output is formatted to match R's print()."
+}
