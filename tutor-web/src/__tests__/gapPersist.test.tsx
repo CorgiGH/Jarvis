@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { ChatPane } from "../components/ChatPane";
+import { chatPane as S } from "../lib/chromeStrings";
 
 beforeEach(() => {
   Object.defineProperty(document, "cookie", { value: "csrf=zzz", configurable: true, writable: true });
@@ -39,8 +40,8 @@ test("ChatPane POSTs each gap parsed from assistant reply with the active taskId
     return new Response("{}", { status: 200 });
   }));
   render(<ChatPane taskId="T2" />);
-  fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: "explain laplace" } });
-  fireEvent.click(screen.getByRole("button", { name: /send/i }));
+  fireEvent.change(screen.getByPlaceholderText(S.inputPlaceholder), { target: { value: "explain laplace" } });
+  fireEvent.click(screen.getByRole("button", { name: S.sendButton }));
   await waitFor(() => {
     const calls = (globalThis.fetch as any).mock.calls.filter((c: any) =>
       typeof c[0] === "string" && c[0] === "/api/v1/gap" && c[1]?.method === "POST");

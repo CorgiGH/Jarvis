@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { ChatPane } from "../components/ChatPane";
+import { chatPane as S } from "../lib/chromeStrings";
 
 beforeEach(() => {
   Object.defineProperty(document, "cookie", { value: "csrf=zzz", configurable: true, writable: true });
@@ -20,8 +21,8 @@ test("ChatPane renders <concept> envelope as ConceptInline button", async () => 
     return new Response("{}", { status: 200 });
   }));
   render(<ChatPane taskId="T-c" />);
-  fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: "go" } });
-  fireEvent.click(screen.getByRole("button", { name: /send/i }));
+  fireEvent.change(screen.getByPlaceholderText(S.inputPlaceholder), { target: { value: "go" } });
+  fireEvent.click(screen.getByRole("button", { name: S.sendButton }));
   await waitFor(() => {
     const btn = screen.getByTestId("concept-inline");
     expect(btn).toHaveAttribute("data-concept", "laplace");
@@ -41,7 +42,7 @@ test("ChatPane renders ```plotly fenced block as PlotlyEmbed", async () => {
     return new Response("{}", { status: 200 });
   }));
   render(<ChatPane taskId="T-p" />);
-  fireEvent.change(screen.getByPlaceholderText(/message/i), { target: { value: "plot" } });
-  fireEvent.click(screen.getByRole("button", { name: /send/i }));
+  fireEvent.change(screen.getByPlaceholderText(S.inputPlaceholder), { target: { value: "plot" } });
+  fireEvent.click(screen.getByRole("button", { name: S.sendButton }));
   await waitFor(() => expect(screen.getByTestId("plotly-embed")).toBeInTheDocument());
 });

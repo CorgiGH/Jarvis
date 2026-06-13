@@ -5,7 +5,8 @@
  *   - `shellLabels`: the AlgoStepperShell chrome labels passed from FigureReveal
  *   - `figureFallback`: the honest-degraded message when a figure cannot load
  *
- * Task 7 extends this file with the swept chrome of the 8 lesson-surface components.
+ * Plan-4b Task 7 extends this file with the swept chrome of the 8 lesson-surface
+ * components (§0.9G; INV-8.3). Each section is tagged with the originating component.
  *
  * INV-8.3: all learner-visible literals in scoped components must be imported from
  * chromeStrings / practiceStrings / lessonStrings — never hardcoded in the component.
@@ -35,3 +36,93 @@ export const shellLabels: ShellLabels = {
  */
 export const figureFallback =
   "Figura nu s-a putut încărca — pașii sunt afișați ca text.";
+
+// ---------------------------------------------------------------------------
+// Task 7 sweep — 8 lesson-surface components
+// ---------------------------------------------------------------------------
+
+/** Scratchpad (Scratchpad.tsx) */
+export const scratchpad = {
+  heading: "SCRATCHPAD",
+  ariaLabel: "Notițe de lucru — salvate local în browser",
+  placeholder: "răspunsuri, fragmente inserate ajung aici…",
+  statusSaving: "se salvează…",
+  statusSaved: "salvat",
+  statusError: "salvare eșuată",
+  /** Used in the save-error tooltip title when status=error. */
+  saveFailedDefault: "salvare eșuată",
+} as const;
+
+/** TaskQuickStart (TaskQuickStart.tsx) */
+export const taskQuickStart = {
+  loading: "se încarcă spațiul de lucru…",
+  sectionQuickStart: "START RAPID",
+  noTasksHint: "Nicio sarcină încă. Alege una pentru a începe — Jarvis adaugă context per conversație.",
+  tasksHint: (count: number) =>
+    `Ai ${count} sarcin${count === 1 ? "ă activă" : "i active"}. Alege una sau începe un subiect nou.`,
+  sectionYourTasks: "SARCINILE TALE",
+  sectionPresets: "SARCINI PREDEFINITE",
+  creating: "se creează…",
+  footerHint: "Sarcină personalizată?",
+  footerLink: "/tutor/tasks",
+} as const;
+
+/** ConceptDrawer (ConceptDrawer.tsx) */
+export const conceptDrawer = {
+  closeAriaLabel: "Închide detaliile conceptului",
+  loading: "se încarcă…",
+  empty: "Nicio referință trecută pentru acest concept",
+  loadErrorPrefix: "referințe indisponibile — ",
+} as const;
+
+/** KnowledgeLedger (KnowledgeLedger.tsx) */
+export const knowledgeLedger = {
+  heading: "REGISTRU CUNOȘTINȚE",
+  closeAriaLabel: "Închide registrul",
+  loading: "se încarcă…",
+  empty: "nicio lacună înregistrată",
+  loadErrorPrefix: "imposibil de încărcat lacunele — ",
+  openTaskAriaLabel: (topic: string) => `Deschide sarcina pentru lacuna: ${topic}`,
+  capNotice: (top: number, total: number, hidden: number) =>
+    `afișez primele ${top} din ${total} după reutilizare · ${hidden} ascunse`,
+} as const;
+
+/** Sidekick (Sidekick.tsx) */
+export const sidekick = {
+  heading: "ASISTENT",
+  expandAriaLabel: "Extinde asistentul",
+  collapseAriaLabel: "Restrânge asistentul",
+  idleHint:
+    "Selectează orice text din spațiul de lucru — apare un buton mic <?> lângă selecție; apasă-l pentru a întreba asistentul.",
+  loading: "se gândește…",
+  error: "(LLM indisponibil; limită de rată?)",
+  quotedPrefix: "> citat: ",
+} as const;
+
+/** ChatPane (ChatPane.tsx) */
+export const chatPane = {
+  inputPlaceholder: "mesaj · ctrl+enter trimite",
+  sendButton: "TRIMITE",
+  readOnlyBadge: "MOD CITIRE",
+  refreshing: "se reîmprospătează…",
+  previouslyFlagged: (count: number) => `MARCATE ANTERIOR (${count})`,
+  headingPrefix: "ASISTENT · SARCINA",
+} as const;
+
+/** TrustSettings (TrustSettings.tsx) */
+export const trustSettings = {
+  pageHeading: "GRANTURI DE ÎNCREDERE",
+  pageDescription:
+    "Fiecare grant permite daemonului să scrie în una sau mai multe căi pentru un timp limitat + număr de apeluri. Implicit 1h / 10 apeluri. Limită 8h. Revocare oricând.",
+  sectionNewGrant: "GRANT NOU",
+  scopeLabel: "Domeniu (glob file://)",
+  ttlLabel: "Minute TTL (max 480 = 8h)",
+  maxCallsLabel: "Apeluri max",
+  grantButton: "ACORDĂ",
+  granting: "se acordă…",
+  activeSection: (count: number) => `ACTIVE (${count})`,
+  loading: "se încarcă…",
+  empty: "niciun grant — completează formularul de mai sus pentru a adăuga unul",
+  revokeButton: "REVOCĂ",
+  revokedBadge: "REVOCAT",
+} as const;

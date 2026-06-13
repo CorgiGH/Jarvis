@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { test, expect, vi, describe, beforeEach } from "vitest";
 import { Sidekick } from "../components/Sidekick";
 import type { SidekickEnvelope } from "../lib/inlineAsk";
+import { sidekick as S } from "../lib/chromeStrings";
 
 vi.mock("../lib/sidekickContext", () => ({
   askSidekick: vi.fn(),
@@ -61,7 +62,7 @@ describe("Sidekick", () => {
     render(<Sidekick envelope={baseEnv} />);
 
     const quote = await screen.findByTestId("sidekick-quote");
-    expect(quote.textContent).toMatch(/quoted:.*MLE/i);
+    expect(quote.textContent).toMatch(/citat:.*MLE/i);
     expect(quote.classList.contains("sidekick-quote-pop-in")).toBe(true);
   });
 
@@ -70,7 +71,7 @@ describe("Sidekick", () => {
 
     render(<Sidekick envelope={baseEnv} />);
 
-    expect(await screen.findByText(/LLM unavailable/i)).toBeInTheDocument();
+    expect(await screen.findByText(S.error)).toBeInTheDocument();
   });
 
   test("toggle button collapses an expanded panel", async () => {
@@ -83,7 +84,7 @@ describe("Sidekick", () => {
     render(<Sidekick envelope={baseEnv} />);
     await screen.findByText("Answer text.");
 
-    const toggle = screen.getByRole("button", { name: /collapse sidekick/i });
+    const toggle = screen.getByRole("button", { name: S.collapseAriaLabel });
     await userEvent.click(toggle);
 
     const panel = screen.getByTestId("sidekick-panel");

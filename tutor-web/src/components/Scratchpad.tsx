@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { scratchpad as S } from "../lib/chromeStrings";
 
 export type ScratchpadSaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -39,20 +40,20 @@ export function Scratchpad({ value, onChange, status, errorMessage }: Scratchpad
   return (
     <div data-testid="scratchpad" className="border-t-4 border-border-strong bg-page-bg">
       <div className="flex items-center justify-between bg-panel-dark-bg text-panel-dark-fg px-3 py-1 text-xs tracking-widest font-bold">
-        <h2 id="scratchpad-heading" className="text-xs">SCRATCHPAD</h2>
+        <h2 id="scratchpad-heading" className="text-xs">{S.heading}</h2>
         {status && status !== "idle" && (
           <span
             data-testid="scratchpad-status"
             data-status={status}
             aria-live="polite"
-            title={status === "error" ? (errorMessage ?? "save failed") : undefined}
+            title={status === "error" ? (errorMessage ?? S.saveFailedDefault) : undefined}
             className={
               status === "saving" ? "text-page-bg/70 font-normal"
               : status === "saved" ? "text-page-bg/70 font-normal"
               : "text-danger-text font-bold"
             }
           >
-            {status === "saving" ? "saving…" : status === "saved" ? "saved" : "save failed"}
+            {status === "saving" ? S.statusSaving : status === "saved" ? S.statusSaved : S.statusError}
           </span>
         )}
       </div>
@@ -60,11 +61,11 @@ export function Scratchpad({ value, onChange, status, errorMessage }: Scratchpad
         ref={ref}
         data-testid="scratchpad-input"
         aria-labelledby="scratchpad-heading"
-        aria-label="Task scratchpad — local notes; auto-saved per browser"
+        aria-label={S.ariaLabel}
         maxLength={SCRATCHPAD_MAX_CHARS}
         value={value}
         onChange={e => onChange(e.target.value)}
-        placeholder="draft answers / inserted snippets land here…"
+        placeholder={S.placeholder}
         className="w-full min-h-[6rem] max-h-[40vh] p-3 outline-none text-sm font-mono resize-y"
       />
       <div data-testid="scratchpad-counter"

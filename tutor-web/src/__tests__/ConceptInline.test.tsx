@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { ConceptInline } from "../components/ConceptInline";
+import { conceptDrawer as S } from "../lib/chromeStrings";
 
 beforeEach(() => {
   Object.defineProperty(document, "cookie", { value: "csrf=zzz", configurable: true, writable: true });
@@ -14,7 +15,7 @@ test("ConceptInline opens drawer on click + closes on ×", async () => {
   render(<ConceptInline name="laplace" />);
   fireEvent.click(screen.getByTestId("concept-inline"));
   await waitFor(() => expect(screen.getByTestId("concept-drawer")).toBeInTheDocument());
-  fireEvent.click(screen.getByLabelText(/close concept drawer/i));
+  fireEvent.click(screen.getByLabelText(S.closeAriaLabel));
   await waitFor(() => expect(screen.queryByTestId("concept-drawer")).toBeNull());
 });
 

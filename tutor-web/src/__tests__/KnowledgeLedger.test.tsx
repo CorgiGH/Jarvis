@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { KnowledgeLedger } from "../components/KnowledgeLedger";
+import { knowledgeLedger as S } from "../lib/chromeStrings";
 
 beforeEach(() => {
   Object.defineProperty(document, "cookie", { value: "csrf=zzz", configurable: true, writable: true });
@@ -55,7 +56,7 @@ test("backdrop click closes the ledger", async () => {
 test("close button is auto-focused on mount", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ gaps: [] }), { status: 200 })));
   render(<MemoryRouter><KnowledgeLedger onClose={() => {}} /></MemoryRouter>);
-  const closeBtn = screen.getByLabelText("Close ledger");
+  const closeBtn = screen.getByLabelText(S.closeAriaLabel);
   expect(document.activeElement).toBe(closeBtn);
 });
 

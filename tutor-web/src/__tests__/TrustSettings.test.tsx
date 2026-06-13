@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { TrustSettings } from "../components/TrustSettings";
+import { trustSettings as S } from "../lib/chromeStrings";
 
 const sampleGrant = {
   id: "G1", scope: ["file:///c/work/**"], ops: ["APPLY_EDIT"],
@@ -85,4 +86,13 @@ test("surfaces server error on create failure", async () => {
   await waitFor(() => {
     expect(screen.getByTestId("trust-error").textContent).toMatch(/HTTP 429/);
   });
+});
+
+test("empty state shows RO message from chromeStrings", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () =>
+    new Response(JSON.stringify({ grants: [] }), { status: 200 }),
+  ));
+  render(<TrustSettings />);
+  await waitFor(() => expect(screen.getByTestId("trust-grants-empty")).toBeInTheDocument());
+  expect(screen.getByTestId("trust-grants-empty").textContent).toBe(S.empty);
 });

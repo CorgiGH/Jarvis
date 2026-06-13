@@ -1,0 +1,40 @@
+{
+  "comment": "Plan-4b Task 7 / §0.9G R-4b-Q7 — explicit scope for chrome-en-grep.mjs (INV-8.3).",
+  "files": [
+    "tutor-web/src/components/Scratchpad.tsx",
+    "tutor-web/src/components/ScratchpadDrawer.tsx",
+    "tutor-web/src/components/TaskQuickStart.tsx",
+    "tutor-web/src/components/ConceptDrawer.tsx",
+    "tutor-web/src/components/KnowledgeLedger.tsx",
+    "tutor-web/src/components/Sidekick.tsx",
+    "tutor-web/src/components/ChatPane.tsx",
+    "tutor-web/src/components/TrustSettings.tsx",
+    "tutor-web/src/components/lesson/*.tsx",
+    "tutor-web/src/components/OggiScreen.tsx",
+    "tutor-web/src/components/practice/*.tsx"
+  ],
+  "excluded": [
+    {
+      "path": "tutor-web/src/components/DrillStack.tsx",
+      "reason": "Lane B sweeps it in Plan 6 (practiceStrings.ts); PM widens files to include it at Lane B merge per PM-APPLY-MANIFEST.md"
+    }
+  ],
+  "enWords": [
+    "definitely", "maybe", "guess", "idk", "save", "reset", "loading", "share",
+    "play", "frame", "voice",
+    "send", "grant", "revoke", "close", "open", "cancel", "back", "next",
+    "search", "filter", "refresh", "submit", "apply", "create", "delete",
+    "error", "warning", "success", "info", "ok",
+    "skeleton", "heap", "array", "loop", "stack", "string", "pointer",
+    "queue", "tree", "graph", "node", "edge", "sort", "merge", "insert",
+    "traversal", "algorithm", "data", "structure"
+  ],
+  "allowPatterns": [
+    "data-testid values",
+    "className strings",
+    "import paths",
+    "console/error strings not learner-visible",
+    "code identifiers",
+    "aria-label={...} (dynamic expression blocks)"
+  ]
+}

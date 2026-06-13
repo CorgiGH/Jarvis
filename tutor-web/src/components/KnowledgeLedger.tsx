@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { jarvisFetch } from "../lib/api";
 import { formatEnum } from "../lib/formatEnum";
+import { knowledgeLedger as S } from "../lib/chromeStrings";
 
 interface Gap {
   id: string;
@@ -89,10 +90,10 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
            aria-labelledby="ledger-heading"
            className="fixed top-0 right-0 h-full w-96 bg-page-bg border-l-4 border-border-strong p-4 font-mono text-xs overflow-auto z-20">
       <div className="flex justify-between items-center mb-3">
-        <h2 id="ledger-heading" data-testid="ledger-heading" className="font-bold tracking-widest text-xs">KNOWLEDGE LEDGER</h2>
+        <h2 id="ledger-heading" data-testid="ledger-heading" className="font-bold tracking-widest text-xs">{S.heading}</h2>
         <button ref={closeBtnRef}
                 onClick={onClose}
-                aria-label="Close ledger"
+                aria-label={S.closeAriaLabel}
                 className="bg-accent text-page-fg px-2 py-2 sm:py-1">×</button>
       </div>
       <div className="flex gap-1 mb-3">
@@ -106,13 +107,13 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
         ))}
       </div>
       {!loaded ? (
-        <div className="text-page-fg/80">loading…</div>
+        <div className="text-page-fg/80">{S.loading}</div>
       ) : loadError ? (
         <div data-testid="ledger-load-error" className="text-danger-text">
-          couldn't load gaps — {loadError}
+          {S.loadErrorPrefix}{loadError}
         </div>
       ) : filtered.length === 0 ? (
-        <div data-testid="ledger-empty" className="text-page-fg/80">no gaps yet</div>
+        <div data-testid="ledger-empty" className="text-page-fg/80">{S.empty}</div>
       ) : (
         <>
           <ul role="list" className="space-y-2">
@@ -131,7 +132,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
                     <button
                       data-testid="ledger-row-open"
                       onClick={() => { navigate(`/?taskId=${g.taskId}`); onClose(); }}
-                      aria-label={`Open source task for gap ${g.topic}`}
+                      aria-label={S.openTaskAriaLabel(g.topic)}
                       className="w-full text-left p-2 hover:bg-accent-soft border border-border-thin"
                     >
                       {inner}
@@ -143,7 +144,7 @@ export function KnowledgeLedger({ onClose }: { onClose: () => void }) {
           </ul>
           {hiddenCount > 0 && (
             <div data-testid="ledger-cap-notice" className="mt-3 text-page-fg/80 italic">
-              showing top {LEDGER_VISIBLE_CAP} of {filtered.length} by reuse count · {hiddenCount} more hidden
+              {S.capNotice(LEDGER_VISIBLE_CAP, filtered.length, hiddenCount)}
             </div>
           )}
         </>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { jarvisFetch } from "../lib/api";
+import { conceptDrawer as S } from "../lib/chromeStrings";
 
 interface DrawerHit { filename: string; snippet: string; }
 
@@ -67,17 +68,17 @@ export function ConceptDrawer({ concept, onClose }: { concept: string; onClose: 
         <h2 id="concept-drawer-heading" data-testid="concept-drawer-heading" className="font-bold tracking-widest text-xs">CONCEPT · {concept}</h2>
         <button ref={closeBtnRef}
                 onClick={onClose}
-                aria-label="Close concept drawer"
+                aria-label={S.closeAriaLabel}
                 className="bg-accent text-page-fg px-2 py-2 sm:py-1">×</button>
       </div>
       {hits == null ? (
-        <div className="text-page-fg/80">loading…</div>
+        <div className="text-page-fg/80">{S.loading}</div>
       ) : loadError ? (
         <div data-testid="concept-drawer-load-error" className="text-danger-text">
-          couldn't load references — {loadError}
+          {S.loadErrorPrefix}{loadError}
         </div>
       ) : hits.length === 0 ? (
-        <div className="text-page-fg/80">no past gaps mention this concept yet</div>
+        <div className="text-page-fg/80">{S.empty}</div>
       ) : (
         <ul role="list" className="space-y-2">
           {hits.map((h, i) => (

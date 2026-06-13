@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { jarvisFetch } from "../lib/api";
+import { taskQuickStart as S } from "../lib/chromeStrings";
 
 interface TaskView {
   id: string;
@@ -92,23 +93,23 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
   }
 
   if (!loaded) {
-    return <div className="p-6 font-mono text-sm text-page-fg/80">loading workspace…</div>;
+    return <div className="p-6 font-mono text-sm text-page-fg/80">{S.loading}</div>;
   }
 
   return (
     <div data-testid="task-quickstart" className="p-6 font-mono text-sm">
       <div className="bg-accent-soft border-l-4 border-accent-rule p-4 mb-4">
-        <div className="text-xs font-bold tracking-widest mb-1">QUICK START</div>
+        <div className="text-xs font-bold tracking-widest mb-1">{S.sectionQuickStart}</div>
         <div className="text-sm text-page-fg/80">
           {tasks.length === 0
-            ? "No real tasks yet. Pick one to get going — Jarvis pulls subject + deadline + weak-concept context per chat turn."
-            : `You have ${tasks.length} active task${tasks.length === 1 ? "" : "s"}. Pick one or jump into a fresh subject.`}
+            ? S.noTasksHint
+            : S.tasksHint(tasks.length)}
         </div>
       </div>
 
       {tasks.length > 0 && (
         <div className="mb-6">
-          <div className="text-xs font-bold tracking-widest mb-2">YOUR TASKS</div>
+          <div className="text-xs font-bold tracking-widest mb-2">{S.sectionYourTasks}</div>
           <ul className="space-y-2">
             {tasks.map(t => {
               const days = Math.round((new Date(t.deadline).getTime() - Date.now()) / 86400000);
@@ -133,7 +134,7 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
         </div>
       )}
 
-      <div className="text-xs font-bold tracking-widest mb-2">NEW TASK PRESETS</div>
+      <div className="text-xs font-bold tracking-widest mb-2">{S.sectionPresets}</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
         {PRESETS.map(p => {
           const id = `${p.subject}-${p.title}`;
@@ -149,15 +150,14 @@ export function TaskQuickStart({ onCreated }: { onCreated?: (taskId: string) => 
                 + {p.subject} · {p.daysFromNow}d
               </div>
               <div className="text-sm">{p.title}</div>
-              {busy === id && <div className="text-xs text-page-fg/80 mt-1">creating…</div>}
+              {busy === id && <div className="text-xs text-page-fg/80 mt-1">{S.creating}</div>}
             </button>
           );
         })}
       </div>
 
       <div className="text-xs text-page-fg/80">
-        Custom task? <a className="underline" href="/tutor/tasks">/tasks page</a>.
-        Don't want this panel? Pick any task above.
+        {S.footerHint} <a className="underline" href={S.footerLink}>{S.footerLink}</a>.
       </div>
 
       {error && (

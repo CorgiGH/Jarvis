@@ -12,6 +12,7 @@ import { parseConcepts, type ConceptRef } from "../lib/conceptEnvelope";
 import { ConceptInline } from "./ConceptInline";
 import { parsePlotly, type PlotlyBlock } from "../lib/plotlyParse";
 import { PlotlyEmbed } from "./PlotlyEmbed";
+import { chatPane as S } from "../lib/chromeStrings";
 
 interface Msg {
   role: "you" | "jarvis" | "sensor";
@@ -187,12 +188,12 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
   return (
     <div data-testid="chat-pane" className="h-full flex flex-col bg-page-bg font-mono min-w-0">
       <div className="bg-panel-dark-bg text-panel-dark-fg px-4 py-2 text-sm tracking-widest font-bold flex items-center justify-between">
-        <span>JARVIS · TASK {taskId}</span>
+        <span>{S.headingPrefix} {taskId}</span>
         {readOnly && (
           <span data-testid="read-only-badge"
                 className="bg-danger-bg text-danger-fg px-2 py-0.5 text-xs"
                 title={readOnlyReason}>
-            READ-ONLY MODE
+            {S.readOnlyBadge}
           </span>
         )}
       </div>
@@ -206,9 +207,9 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
           return openGaps.length > 0 && (
             <div data-testid="historical-gaps" className={`mb-2 ${historicalGapsRefreshing ? "opacity-60" : ""}`}>
               <div className="text-xs font-bold tracking-widest text-page-fg/80 mb-1 flex items-center gap-2">
-                <span>PREVIOUSLY FLAGGED ({openGaps.length})</span>
+                <span>{S.previouslyFlagged(openGaps.length)}</span>
                 {historicalGapsRefreshing && (
-                  <span data-testid="historical-gaps-refreshing" className="text-page-fg/80 font-normal" aria-live="polite">refreshing…</span>
+                  <span data-testid="historical-gaps-refreshing" className="text-page-fg/80 font-normal" aria-live="polite">{S.refreshing}</span>
                 )}
               </div>
               {openGaps.map(g => (
@@ -265,7 +266,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
           id="chat-input"
           ref={inputRef}
           className="flex-1 px-3 py-2 outline-none text-sm font-mono"
-          placeholder="message · ctrl+enter sends"
+          placeholder={S.inputPlaceholder}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.ctrlKey && e.key === "Enter") send(); }}
@@ -275,7 +276,7 @@ export function ChatPane({ taskId, onScratchpadInsert }: ChatPaneProps) {
           onClick={send}
           disabled={sending}
         >
-          SEND
+          {S.sendButton}
         </button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, beforeEach, afterEach, test, expect } from "vitest";
 import { ConceptDrawer } from "../components/ConceptDrawer";
+import { conceptDrawer as S } from "../lib/chromeStrings";
 
 beforeEach(() => {
   Object.defineProperty(document, "cookie", { value: "csrf=zzz", configurable: true, writable: true });
@@ -24,7 +25,7 @@ test("backdrop click closes the concept drawer", () => {
 
 test("close button is auto-focused on mount", () => {
   render(<ConceptDrawer concept="closures" onClose={() => {}} />);
-  const closeBtn = screen.getByLabelText("Close concept drawer");
+  const closeBtn = screen.getByLabelText(S.closeAriaLabel);
   expect(document.activeElement).toBe(closeBtn);
 });
 

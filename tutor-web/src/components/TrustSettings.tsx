@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { jarvisFetch } from "../lib/api";
 import { useInFlight } from "../lib/inFlight";
+import { trustSettings as S } from "../lib/chromeStrings";
 
 interface GrantView {
   id: string;
@@ -91,18 +92,16 @@ export function TrustSettings() {
 
   return (
     <div data-testid="trust-settings" className="p-4 font-mono">
-      <h1 className="text-lg font-bold tracking-widest mb-3">TRUST GRANTS</h1>
+      <h1 className="text-lg font-bold tracking-widest mb-3">{S.pageHeading}</h1>
       <p className="text-xs text-page-fg/80 mb-4">
-        Each grant gives the daemon permission to write to one or more
-        paths for a limited time + call count. Default 1h / 10 calls.
-        Cap 8h. Revoke any time.
+        {S.pageDescription}
       </p>
 
       <form data-testid="trust-create-form"
             onSubmit={e => { e.preventDefault(); createGrant(); }}
             className="border-2 border-border-strong p-3 mb-6">
-        <div className="text-xs font-bold tracking-widest mb-2">NEW GRANT</div>
-        <label htmlFor="trust-scope-id" className="block text-xs mb-1">Scope (file:// glob)</label>
+        <div className="text-xs font-bold tracking-widest mb-2">{S.sectionNewGrant}</div>
+        <label htmlFor="trust-scope-id" className="block text-xs mb-1">{S.scopeLabel}</label>
         <input
           id="trust-scope-id"
           data-testid="trust-scope-input"
@@ -112,7 +111,7 @@ export function TrustSettings() {
         />
         <div className="flex gap-2 mb-2">
           <div className="flex-1">
-            <label htmlFor="trust-ttl-id" className="block text-xs mb-1">TTL minutes (max 480 = 8h)</label>
+            <label htmlFor="trust-ttl-id" className="block text-xs mb-1">{S.ttlLabel}</label>
             <input
               id="trust-ttl-id"
               data-testid="trust-ttl-input"
@@ -123,7 +122,7 @@ export function TrustSettings() {
             />
           </div>
           <div className="flex-1">
-            <label htmlFor="trust-max-calls-id" className="block text-xs mb-1">Max calls</label>
+            <label htmlFor="trust-max-calls-id" className="block text-xs mb-1">{S.maxCallsLabel}</label>
             <input
               id="trust-max-calls-id"
               data-testid="trust-max-calls-input"
@@ -140,18 +139,18 @@ export function TrustSettings() {
           disabled={grant.inFlight}
           className="text-xs font-bold tracking-widest bg-panel-dark-bg text-panel-dark-fg px-3 py-2 sm:py-1 disabled:opacity-50"
         >
-          GRANT
+          {S.grantButton}
         </button>
         {grant.showSpinner && (
-          <span data-testid="trust-create-spinner" aria-live="polite" className="ml-2 text-xs text-page-fg/80">granting…</span>
+          <span data-testid="trust-create-spinner" aria-live="polite" className="ml-2 text-xs text-page-fg/80">{S.granting}</span>
         )}
       </form>
 
-      <div className="text-xs font-bold tracking-widest mb-2">ACTIVE ({grants.filter(g => !g.revokedAt).length})</div>
+      <div className="text-xs font-bold tracking-widest mb-2">{S.activeSection(grants.filter(g => !g.revokedAt).length)}</div>
       {loading ? (
-        <div className="text-sm">loading…</div>
+        <div className="text-sm">{S.loading}</div>
       ) : grants.length === 0 ? (
-        <div role="status" data-testid="trust-grants-empty" className="text-sm text-page-fg/80">no grants yet — fill the NEW GRANT form above to add one</div>
+        <div role="status" data-testid="trust-grants-empty" className="text-sm text-page-fg/80">{S.empty}</div>
       ) : (
         <ul className="space-y-2" data-testid="trust-grants-list">
           {grants.map(g => (
@@ -161,7 +160,7 @@ export function TrustSettings() {
               <div className="text-xs font-bold tracking-widest">
                 {g.ops.join("+")} · expires {g.expiresAt.slice(0, 19)} ·
                 {" "}{g.callsUsed}/{g.maxCalls} calls
-                {g.revokedAt ? <span className="ml-2 text-danger-text">REVOKED</span> : null}
+                {g.revokedAt ? <span className="ml-2 text-danger-text">{S.revokedBadge}</span> : null}
               </div>
               <div className="text-xs mt-1 break-all">{g.scope.join(", ")}</div>
               {!g.revokedAt && (
@@ -170,7 +169,7 @@ export function TrustSettings() {
                   onClick={() => revokeGrant(g.id)}
                   className="mt-2 text-xs font-bold tracking-widest bg-page-bg text-page-fg border border-border-strong px-2 py-2 sm:py-1"
                 >
-                  REVOKE
+                  {S.revokeButton}
                 </button>
               )}
             </li>

@@ -4,6 +4,7 @@ import type { Citation } from "../lib/sidekickContext";
 import type { SidekickEnvelope } from "../lib/inlineAsk";
 import { CitationPill } from "./CitationPill";
 import { MathText } from "./MathText";
+import { sidekick as S } from "../lib/chromeStrings";
 
 interface SidekickProps {
   envelope?: SidekickEnvelope;
@@ -52,9 +53,9 @@ export function Sidekick({ envelope, onCitationClick }: SidekickProps) {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", borderBottom: expanded ? "2px solid var(--color-border-strong, #0a0a0a)" : "none" }}>
-        <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.1em" }}>SIDEKICK</span>
+        <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.1em" }}>{S.heading}</span>
         <button
-          aria-label={expanded ? "Collapse sidekick" : "Expand sidekick"}
+          aria-label={expanded ? S.collapseAriaLabel : S.expandAriaLabel}
           onClick={() => setExpanded((v) => !v)}
           style={{ background: "none", border: "none", color: "inherit", fontFamily: "monospace", fontSize: "12px", cursor: "pointer", padding: "0 4px" }}
         >
@@ -63,9 +64,9 @@ export function Sidekick({ envelope, onCitationClick }: SidekickProps) {
       </div>
       <div style={{ overflow: "hidden", maxHeight: expanded ? "600px" : "0", transition: "max-height 200ms ease-out" }}>
         <div style={{ padding: "10px 12px", fontSize: "13px", lineHeight: 1.6 }}>
-          {fetchState.status === "idle" && <span style={{ opacity: 0.8 }}>Highlight any text in the workspace — a small <kbd style={{ display: "inline-block", padding: "0 4px", border: "1px solid currentColor", borderRadius: 2, fontFamily: "monospace", fontWeight: 700 }}>?</kbd> button appears next to your selection; click it to ask the sidekick about that passage.</span>}
-          {fetchState.status === "loading" && <span style={{ opacity: 0.7 }}>thinking…</span>}
-          {fetchState.status === "error" && <span style={{ color: "var(--color-accent, #ffcc00)", opacity: 0.9 }}>(LLM unavailable; rate-limited?)</span>}
+          {fetchState.status === "idle" && <span style={{ opacity: 0.8 }}>{S.idleHint}</span>}
+          {fetchState.status === "loading" && <span style={{ opacity: 0.7 }}>{S.loading}</span>}
+          {fetchState.status === "error" && <span style={{ color: "var(--color-accent, #ffcc00)", opacity: 0.9 }}>{S.error}</span>}
           {fetchState.status === "ok" && (
             <>
               {fetchState.quotedContext && (
@@ -74,7 +75,7 @@ export function Sidekick({ envelope, onCitationClick }: SidekickProps) {
                   className="sidekick-quote-pop-in"
                   style={{ borderLeft: "3px solid var(--color-accent, #ffcc00)", paddingLeft: "10px", marginBottom: "10px", fontSize: "12px", opacity: 0.85, fontStyle: "italic" }}
                 >
-                  {`> quoted: "${fetchState.quotedContext}"`}
+                  {`${S.quotedPrefix}"${fetchState.quotedContext}"`}
                 </div>
               )}
               <div data-testid="sidekick-reply">
