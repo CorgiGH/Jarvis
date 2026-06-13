@@ -60,7 +60,7 @@ solution:
     Ștergem s și t, înlocuim u' cu u → ciclu hamiltonian prin u în G.
     Reducerea este O(|V|+|E|). ✓
 
-exam_language: null
+exam_language: "alk"
 
 rubric_items:
   - id: pa-prob-001-g1
