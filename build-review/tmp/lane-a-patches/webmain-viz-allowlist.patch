@@ -1,0 +1,16 @@
+diff --git a/src/main/kotlin/jarvis/web/WebMain.kt b/src/main/kotlin/jarvis/web/WebMain.kt
+index 53b58d6..af4b4d4 100644
+--- a/src/main/kotlin/jarvis/web/WebMain.kt
++++ b/src/main/kotlin/jarvis/web/WebMain.kt
+@@ -111,6 +111,11 @@ internal suspend fun runWeb() {
+                 // inside the routes; found by the INV-4.3 real-backend run-through (2026-06-12):
+                 // the prefix was missing here, so browser sessions got the outer token-401.
+                 path.startsWith("/api/v1/lesson/") ||
++                // Plan-4b viz instance serve route (§NEW-V; GET /api/v1/viz/{id}) — session-authed
++                // via the route's own cookie check; same outer-allowlist gap CP-1 left open (the
++                // mounted-but-unreachable companion to tutor-routes-viz-mount.patch, found by Task 9's
++                // real-backend run-through 2026-06-13). FigureReveal needs it to fetch instance data.
++                path.startsWith("/api/v1/viz/") ||
+                 // Gate 3: curator routes — self-authenticate via jarvis_session + requireOwner
+                 path.startsWith("/api/v1/curator/")) return@intercept
+ 
