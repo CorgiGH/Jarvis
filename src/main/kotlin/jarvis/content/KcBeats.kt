@@ -87,6 +87,14 @@ data class BeatAttempt(
     val trace_steps: List<TraceStep> = emptyList(),
     /** Free-input schema for the numerical variant (JSON-schema-ish string); null for choice variant. */
     val input_schema: String? = null,
+    /**
+     * Numeric-variant expected answer + tolerance for the free-input ATTEMPT grade path
+     * (mirrors BeatCheck:numeric_answer/numeric_tolerance). When present, the ATTEMPT grade
+     * compares free_input numerically via NumericOracleGrader.matches; absent ⇒ the legacy
+     * exact-string-vs-trace-final fallback (still dead on served choice-variant KCs).
+     */
+    val numeric_answer: String? = null,
+    val numeric_tolerance: Double? = null,
     val feedback_correct: String,
 )
 

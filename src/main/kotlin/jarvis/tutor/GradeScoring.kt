@@ -36,6 +36,7 @@ object GradeScoring {
         if (c == a) return true
         val cn = c.toDoubleOrNull()
         val an = a.toDoubleOrNull()
-        return cn != null && an != null && kotlin.math.abs(cn - an) < 1e-9
+        // Numeric path delegates to THE single-source comparator (§0.9-B); effective 1e-9 default preserved.
+        return cn != null && an != null && jarvis.tutor.grader.NumericOracleGrader.matches(cn, an, null)
     }
 }
