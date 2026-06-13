@@ -16,7 +16,15 @@ object ContentCli {
         val manifest = repo.loadManifest()
         val subjects = manifest.subjects.map { repo.loadSubject(it.id) }
         val vizIds = repo.loadVizIds()
-        return ContentValidator.validate(subjects, vizIds) { doc ->
+        // Build (instance_id → family_id) map per subject for INV-5.5 checkFigureBindings.
+        // The map is built eagerly per call to knownInstances — acceptable for CLI/reconcile paths.
+        return ContentValidator.validate(
+            subjects,
+            vizIds,
+            knownInstances = { subject ->
+                repo.loadVizInstances(subject).associate { it.id to it.family_id }
+            },
+        ) { doc ->
             // doc ids are unique across subjects in practice; search each subject's _sources.
             manifest.subjects.firstNotNullOfOrNull { repo.sourceText(it.id, doc) }
         }

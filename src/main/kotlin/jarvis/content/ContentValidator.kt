@@ -146,11 +146,16 @@ object ContentValidator {
     /**
      * Runs every structural check across all [subjects]. [sourceText] resolves a
      * doc id to its extracted source text (see checkVerbatimSources).
+     * [knownInstances] resolves a subject name to its (instance_id → family_id) map
+     * (pass `ContentRepo.loadVizInstances(subject).associate { it.id to it.family_id }`).
+     * No silent default — every caller must thread the real resolver so INV-5.5 is
+     * never vacuous by a missing-parameter default.
      * ok = true iff there are no "error"-severity issues; warnings do not fail.
      */
     fun validate(
         subjects: List<LoadedSubject>,
         validVizIds: Set<String> = emptySet(),
+        knownInstances: (subject: String) -> Map<String, String> = { emptyMap() },
         sourceText: (doc: String) -> String?,
     ): ValidationReport {
         val issues = mutableListOf<ValidationIssue>()
@@ -166,6 +171,7 @@ object ContentValidator {
             issues += checkConceptTypeEnum(sub)
             issues += checkTautologicalInvariants(sub)
             issues += checkExtractionLegibility(sub, sourceText)
+            issues += checkFigureBindings(sub, knownInstances)
         }
         val ok = issues.none { it.severity == "error" }
         return ValidationReport(ok = ok, disclaimer = DISCLAIMER, issues = issues)
@@ -280,31 +286,54 @@ object ContentValidator {
     }
 
     /**
-     * Plan-3 Task 7 (spec §5.5 / INV-5.5) — every FigureBinding in a beat reveal must resolve to a
-     * known viz instance id. ADDITIVE author/audit check; vacuous-true when no beat binds a figure
-     * (the 4 Task-7 faithful KCs). [knownInstanceIds] returns the set of loaded viz instance ids for
-     * the subject (caller passes ContentRepo.loadVizInstances). The family-REGISTRY half (family_id
-     * registered in the frontend familyRegistry) is checked at the frontend layer (Task 8) — this is
-     * the content-side instance-existence leg. ZERO serve/sync/hash ripple (beats don't feed claimsFor).
+     * Plan 4b Task 5 (spec §5.5 / INV-5.5) — every FigureBinding in a beat reveal must:
+     *   (a) resolve to a known viz instance id (instance-existence leg), AND
+     *   (b) have `binding.family_id == instance.family_id` (family-REGISTRY match leg at admission).
+     *
+     * Both halves are required: without (b), a family_id-mismatched/typo'd binding passes admission,
+     * hits the frontend registry-miss fallback, and ships a silent text-only ghost figure with every
+     * gate green (the ghost-component class — §0.9A). The frontend dispatches on the BINDING's
+     * family_id; the harness keys off the INSTANCE's family_id — a mismatch is structurally invisible
+     * to both unless this check catches it at admission.
+     *
+     * ADDITIVE author/audit check; vacuous-true when no beat binds a figure.
+     * [knownInstances] returns a (instance_id → family_id) map for the subject
+     * (caller passes ContentRepo.loadVizInstances id→family_id). No compile-forcing default —
+     * every caller must thread the real map; a default that silently passes would defeat INV-5.5.
+     * ZERO serve/sync/hash ripple (beats don't feed claimsFor — pinned by FigureBindingHashNoRippleTest).
      */
     fun checkFigureBindings(
         sub: LoadedSubject,
-        knownInstanceIds: (String) -> Set<String>,
+        knownInstances: (String) -> Map<String, String>,
     ): List<ValidationIssue> {
         val issues = mutableListOf<ValidationIssue>()
-        val known = knownInstanceIds(sub.subject)
+        val known = knownInstances(sub.subject) // instance_id → family_id
         for (kc in sub.kcs) {
             for ((lang, beats) in kc.beats) {
                 val fb = beats.reveal?.figure ?: continue
-                if (fb.instance_id !in known) {
-                    issues += ValidationIssue(
-                        severity = "error",
-                        rule = "figure_binding",
-                        subject = sub.subject,
-                        detail = "KC '${kc.id}' (beats[$lang]) binds figure family='${fb.family_id}' " +
-                            "instance_id='${fb.instance_id}', which is not a known viz instance " +
-                            "(known: ${known.sorted().joinToString(", ").ifEmpty { "<none>" }})",
-                    )
+                val instanceFamilyId = known[fb.instance_id]
+                when {
+                    instanceFamilyId == null -> {
+                        issues += ValidationIssue(
+                            severity = "error",
+                            rule = "figure_binding",
+                            subject = sub.subject,
+                            detail = "KC '${kc.id}' (beats[$lang]) binds figure family='${fb.family_id}' " +
+                                "instance_id='${fb.instance_id}', which is not a known viz instance " +
+                                "(known: ${known.keys.sorted().joinToString(", ").ifEmpty { "<none>" }})",
+                        )
+                    }
+                    instanceFamilyId != fb.family_id -> {
+                        issues += ValidationIssue(
+                            severity = "error",
+                            rule = "figure_binding",
+                            subject = sub.subject,
+                            detail = "KC '${kc.id}' (beats[$lang]) binds family_id='${fb.family_id}' " +
+                                "but instance '${fb.instance_id}' has family_id='$instanceFamilyId' — " +
+                                "family mismatch: FigureReveal dispatches on the binding's family_id and " +
+                                "would hit the registry-miss fallback, silently degrading to text (§0.9A)",
+                        )
+                    }
                 }
             }
         }

@@ -83,7 +83,7 @@ beats:
           callout: "«An algorithm must solve a problem given by a pair (input,output)»."
         - text: "Intrarea se reprezintă în configurația de start, iar ieșirea în configurația finală."
           callout: "«the input is represented in the start configuration and the output in the final configuration»."
-      figure: null
+      figure: { family_id: graph-tree, instance_id: viz-pa-mergesort-001 }
     name:
       definition: "O problemă (pentru un algoritm) este dată de perechea (intrare, ieșire), unde intrarea se reprezintă în configurația de start a modelului de calcul, iar ieșirea în configurația finală."
       invariant_statement: "Intrarea trăiește în configurația de start; ieșirea în configurația finală — niciodată invers."
