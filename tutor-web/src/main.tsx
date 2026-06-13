@@ -14,6 +14,11 @@ import { MockExamShell } from "./components/MockExamShell";
 import { DayOfShell } from "./components/DayOfShell";
 import { OnboardingShell } from "./components/OnboardingShell";
 import { PlacementShell } from "./components/PlacementShell";
+import { ProofDrill } from "./components/practice/ProofDrill";
+import { StepTraceDrill } from "./components/practice/StepTraceDrill";
+import { listPracticeProblems } from "./lib/practiceApi";
+import type { PracticeProblem } from "./lib/practiceApi";
+import { practiceStrings } from "./lib/practiceStrings";
 
 /**
  * Plan-3 Task 6 — the lesson route now mounts the BeatOrchestrator. It loads the beats payload
@@ -63,6 +68,63 @@ function ExamRoute() {
   );
 }
 
+/**
+ * Plan-6 Task 9 — Practice routes: ProofDrill + StepTraceDrill.
+ * Loads the first available problem for the given subject+surface from
+ * GET /api/v1/practice/problems and hands it to the surface component.
+ */
+function ProofDrillRoute() {
+  const { subject } = useParams<{ subject: string }>();
+  const [problem, setProblem] = useState<PracticeProblem | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    setProblem(undefined);
+    listPracticeProblems(subject ?? "", "proof")
+      .then((r) => {
+        if (!cancelled) setProblem(r.problems[0] ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setProblem(null);
+      });
+    return () => { cancelled = true; };
+  }, [subject]);
+
+  if (problem === undefined) {
+    return <div className="p-6 text-page-fg/50">{practiceStrings.loading}</div>;
+  }
+  if (problem === null) {
+    return <div className="p-6 text-page-fg/50">{practiceStrings.noProblems}</div>;
+  }
+  return <ProofDrill problem={problem} />;
+}
+
+function StepTraceDrillRoute() {
+  const { subject } = useParams<{ subject: string }>();
+  const [problem, setProblem] = useState<PracticeProblem | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    setProblem(undefined);
+    listPracticeProblems(subject ?? "", "trace")
+      .then((r) => {
+        if (!cancelled) setProblem(r.problems[0] ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setProblem(null);
+      });
+    return () => { cancelled = true; };
+  }, [subject]);
+
+  if (problem === undefined) {
+    return <div className="p-6 text-page-fg/50">{practiceStrings.loading}</div>;
+  }
+  if (problem === null) {
+    return <div className="p-6 text-page-fg/50">{practiceStrings.noProblems}</div>;
+  }
+  return <StepTraceDrill problem={problem} />;
+}
+
 // App is the shell — it renders the header/nav for every route and switches
 // the <main> body by pathname. Routing each path to a bare standalone screen
 // (the prior setup) dropped the nav, trapping the user with no in-app way back.
@@ -87,6 +149,9 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/day-of" element={<DayOfShell />} />
           <Route path="/welcome" element={<OnboardingShell onComplete={() => { window.location.href = '/tutor/'; }} />} />
           <Route path="/placement" element={<PlacementShell onComplete={() => { window.location.href = '/tutor/'; }} />} />
+          {/* Plan-6 Task 9 — Practice surfaces I: ProofDrill + StepTraceDrill */}
+          <Route path="/practice/proof/:subject" element={<ProofDrillRoute />} />
+          <Route path="/practice/trace/:subject" element={<StepTraceDrillRoute />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
