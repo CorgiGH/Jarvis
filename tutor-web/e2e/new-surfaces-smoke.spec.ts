@@ -143,6 +143,15 @@ test("Phase-6 /exam/:subject: mock-exam-shell paints with zero errors", async ({
     if (r.status() >= 400) bad.push(`${r.status()} ${r.url()}`);
   });
 
+  // Plan 6 (Task 13) wired ExamRoute to POST /api/v1/mock-exam/start on paint.
+  // Stub it for this stubbed smoke (the real-backend path is covered by
+  // e2e/practice/mock-exam.spec.ts). Empty questions = the smoke's expected state.
+  await page.route("**/api/v1/mock-exam/start", (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      exam_id: "smoke-exam-pa", questions: [],
+    }) }),
+  );
+
   await page.goto("/tutor/exam/PA");
 
   // (1) Primary testid paints
