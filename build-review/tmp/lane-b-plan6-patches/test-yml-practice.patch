@@ -1,0 +1,66 @@
+--- a/.github/workflows/test.yml
++++ b/.github/workflows/test.yml
+@@ -25,6 +25,11 @@
+       - uses: gradle/actions/setup-gradle@v4
+         with:
+           gradle-version: "8.10"
++      # Plan-6 Task 13: R toolchain for INV-6.2 + Alk fetch (pinned, git-ignored)
++      - name: Install R and fetch Alk (Plan-6 INV-6.2 toolchain)
++        run: |
++          sudo apt-get update && sudo apt-get install -y r-base-core
++          node tools/fetch-alk.mjs
+       - name: Gradle check (root project only; includes validateContent + INV-3.5 SignatureLockPinTest)
+         run: gradle --no-daemon :check --stacktrace --info
+       - name: Print failing test XML on failure
+@@ -94,6 +99,51 @@
+       - name: cargo test
+         run: cargo test --locked
+ 
++  practice-e2e:
++    name: practice e2e (real Kotlin backend + seeded corpus)
++    runs-on: ubuntu-latest
++    timeout-minutes: 30
++    defaults:
++      run:
++        working-directory: tutor-web
++    env:
++      # ENV-GATE: set here (and ONLY here) so the five practice specs boot the backend.
++      # The existing frontend job's Playwright run NEVER sets this — practice specs self-skip there.
++      JARVIS_PRACTICE_E2E: "1"
++      JARVIS_AUTH_TOKEN: practice-e2e-token
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-java@v4
++        with:
++          distribution: temurin
++          java-version: 21
++      - uses: gradle/actions/setup-gradle@v4
++        with:
++          gradle-version: "8.10"
++      - uses: actions/setup-node@v4
++        with:
++          node-version: 20
++          cache: npm
++          cache-dependency-path: tutor-web/package-lock.json
++      - name: Install R
++        run: sudo apt-get update && sudo apt-get install -y r-base-core
++      - name: Fetch Alk interpreter
++        run: node ../tools/fetch-alk.mjs
++      - name: npm ci
++        run: npm ci
++      - name: npm run build (frontend for Ktor serve during e2e)
++        run: npm run build
++      - name: Install Playwright browsers (chromium only)
++        run: npx playwright install --with-deps chromium
++      - name: Practice e2e (5 surfaces + phase5-core-loop)
++        run: npx playwright test e2e/practice e2e/phase5-core-loop.spec.ts --config playwright.config.ts
++      - name: Upload practice e2e reports on failure
++        if: failure()
++        uses: actions/upload-artifact@v4
++        with:
++          name: practice-e2e-reports
++          path: tutor-web/playwright-report/
++
+   backup-tooling:
+     name: backup tooling (db-backup.py unittest)
+     runs-on: ubuntu-latest
