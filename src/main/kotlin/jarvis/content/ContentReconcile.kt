@@ -1,6 +1,7 @@
 package jarvis.content
 
 import jarvis.tutor.KcVerificationStatusTable
+import jarvis.tutor.LanguageCheckTable
 import jarvis.tutor.VerificationStatus
 import jarvis.tutor.verify.ClaimKind
 import jarvis.tutor.verify.EquationSyntax
@@ -9,6 +10,7 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.upsert
 import org.jetbrains.exposed.sql.update
 import java.security.MessageDigest
 import java.time.Instant
@@ -410,6 +412,8 @@ object ContentReconcile {
      *  - any other status (`pending`/`faithful`/`uncertain`/`failed`) ⇒ LEFT UNTOUCHED. A faithful KC
      *    is NEVER regressed to pending; an already-pending KC stays pending (idempotent).
      *
+     * Also writes [LanguageCheckTable] records for every checked RO field (R-4b-Q6 / INV-8.1 shape).
+     *
      * @param clock injected wall-clock seam for the `updated_at` write (hermetic in tests).
      */
     fun reconcile(
@@ -421,12 +425,166 @@ object ContentReconcile {
         val promoted = LinkedHashSet<String>()
 
         for (sub in subjects) {
+            try {
+                recordLanguageChecks(db, sub, clock)
+            } catch (e: Exception) {
+                // language_check table may not exist yet in DBs that haven't had the
+                // migration-language-check.patch applied (CP-3). Fail gracefully rather than
+                // breaking the whole reconcile — the INV-8.1 guarantee only holds AFTER CP-3.
+                if (e.message?.contains("no such table") == true ||
+                    e.cause?.message?.contains("no such table") == true) {
+                    System.err.println(
+                        "[ContentReconcile] language_check table not present — skipping language records " +
+                            "(apply migration-language-check.patch at CP-3 to activate INV-8.1)",
+                    )
+                } else {
+                    throw e
+                }
+            }
             for (kc in sub.kcs) {
                 allClaims += claimsFor(kc)
                 if (setPending(db, kc.id, clock())) promoted += kc.id
             }
         }
         return ReconcileReport(claims = allClaims, pendingSet = promoted)
+    }
+
+    /**
+     * Plan 4b Task 6 (R-4b-Q6 / INV-8.1) — write one [LanguageCheckTable] row per checked RO field
+     * for every KC in [sub]. Called inside [reconcile] for each subject (admission/sync time, never
+     * serve time). Uses UPSERT so re-running [reconcile] is idempotent (the PK is (kc_id, field, lang)).
+     *
+     * Errors from [LanguageGate.checkRomanianFields] become rows with `status="fail"`;
+     * fields that pass produce rows with `status="pass"`. A pass row is written only for fields that
+     * are actually checked (non-blank), so blank optional fields don't clutter the table.
+     *
+     * INV-8.1 query invariant: every served RO field of every admitted KC must have a record here
+     * (a record gap → 0 rows from the query). Because admission must pass [ContentValidator.validate]
+     * (which now calls [LanguageGate.checkRomanianFields]) before reaching [reconcile], every served
+     * field passes the language gate → every served field gets a "pass" record.
+     */
+    fun recordLanguageChecks(
+        db: Database,
+        sub: LoadedSubject,
+        clock: () -> Instant = Instant::now,
+    ) {
+        val now = clock()
+        // Run the gate over the subject to discover WHICH fields are checked and their results.
+        val issues = LanguageGate.checkRomanianFields(sub)
+        // Build a map of (kcId, field) → fail detail (only fields with errors)
+        val failMap: Map<Pair<String, String>, String> = issues
+            .filter { it.severity == "error" }
+            .associate { issue ->
+                // Extract kcId and field from the detail string.
+                // Detail format: "KC '<kcId>' field '<field>': ..."
+                val kcId = extractKcId(issue.detail) ?: return@associate (sub.subject to "") to issue.detail
+                val field = extractField(issue.detail) ?: return@associate (kcId to "") to issue.detail
+                (kcId to field) to issue.detail
+            }
+
+        // Enumerate all checked fields (same enumeration as LanguageGate.checkRomanianFields)
+        transaction(db) {
+            for (kc in sub.kcs) {
+                fun upsertRecord(text: String?, fieldName: String, id: String = kc.id) {
+                    if (text.isNullOrBlank()) return
+                    val failDetail = failMap[id to fieldName]
+                    val status = if (failDetail != null) "fail" else "pass"
+                    LanguageCheckTable.upsert(LanguageCheckTable.kcId, LanguageCheckTable.field, LanguageCheckTable.lang) {
+                        it[kcId] = id
+                        it[field] = fieldName
+                        it[lang] = "ro"
+                        it[LanguageCheckTable.status] = status
+                        it[detail] = failDetail
+                        it[validatorVersion] = LanguageGate.VERSION
+                        it[checkedAt] = now
+                    }
+                }
+
+                upsertRecord(kc.name_ro, "name_ro")
+                upsertRecord(kc.explanation_ro, "explanation_ro")
+                upsertRecord(kc.worked_example_ro, "worked_example_ro")
+
+                val roBeats = kc.beats["ro"]
+                if (roBeats != null) {
+                    roBeats.predict?.let { p ->
+                        upsertRecord(p.prompt, "beats.ro.predict.prompt")
+                        for ((i, opt) in p.options.withIndex()) {
+                            upsertRecord(opt.text, "beats.ro.predict.options[$i].text")
+                            upsertRecord(opt.callback, "beats.ro.predict.options[$i].callback")
+                        }
+                    }
+                    roBeats.attempt?.let { a ->
+                        upsertRecord(a.statement, "beats.ro.attempt.statement")
+                        upsertRecord(a.feedback_correct, "beats.ro.attempt.feedback_correct")
+                        for ((i, choice) in a.choices.withIndex()) {
+                            upsertRecord(choice.text, "beats.ro.attempt.choices[$i].text")
+                            upsertRecord(choice.feedback, "beats.ro.attempt.choices[$i].feedback")
+                        }
+                        for ((i, row) in a.skeleton_rows.withIndex()) {
+                            upsertRecord(row.label, "beats.ro.attempt.skeleton_rows[$i].label")
+                        }
+                        for ((i, step) in a.trace_steps.withIndex()) {
+                            upsertRecord(step.callout, "beats.ro.attempt.trace_steps[$i].callout")
+                        }
+                    }
+                    roBeats.reveal?.let { r ->
+                        for ((i, step) in r.steps.withIndex()) {
+                            upsertRecord(step.text, "beats.ro.reveal.steps[$i].text")
+                            upsertRecord(step.callout, "beats.ro.reveal.steps[$i].callout")
+                        }
+                    }
+                    roBeats.name?.let { n ->
+                        upsertRecord(n.definition, "beats.ro.name.definition")
+                        upsertRecord(n.invariant_statement, "beats.ro.name.invariant_statement")
+                        upsertRecord(n.why_matters, "beats.ro.name.why_matters")
+                    }
+                    roBeats.check?.let { c ->
+                        upsertRecord(c.item_stem, "beats.ro.check.item_stem")
+                        for ((i, choice) in c.choices.withIndex()) {
+                            upsertRecord(choice.text, "beats.ro.check.choices[$i].text")
+                            upsertRecord(choice.feedback, "beats.ro.check.choices[$i].feedback")
+                        }
+                    }
+                }
+            }
+
+            // Misconception label_ro fields
+            for (m in sub.misconceptions) {
+                if (m.label_ro.isNotBlank()) {
+                    val failDetail = failMap[m.id to "misconception.label_ro"]
+                    val status = if (failDetail != null) "fail" else "pass"
+                    LanguageCheckTable.upsert(LanguageCheckTable.kcId, LanguageCheckTable.field, LanguageCheckTable.lang) {
+                        it[kcId] = m.id
+                        it[field] = "misconception.label_ro"
+                        it[lang] = "ro"
+                        it[LanguageCheckTable.status] = status
+                        it[detail] = failDetail
+                        it[validatorVersion] = LanguageGate.VERSION
+                        it[checkedAt] = now
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Private helpers for extracting kcId and field from LanguageGate detail strings ─────────
+
+    /**
+     * Extract the KC id from a [LanguageGate] detail string of the form:
+     * "KC 'pa-kc-001' field 'name_ro': ..."
+     */
+    private fun extractKcId(detail: String): String? {
+        val match = Regex("KC '([^']+)'").find(detail) ?: return null
+        return match.groupValues[1]
+    }
+
+    /**
+     * Extract the field name from a [LanguageGate] detail string of the form:
+     * "KC 'pa-kc-001' field 'name_ro': ..."
+     */
+    private fun extractField(detail: String): String? {
+        val match = Regex("field '([^']+)'").find(detail) ?: return null
+        return match.groupValues[1]
     }
 
     /**

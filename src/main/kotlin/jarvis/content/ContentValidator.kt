@@ -172,6 +172,7 @@ object ContentValidator {
             issues += checkTautologicalInvariants(sub)
             issues += checkExtractionLegibility(sub, sourceText)
             issues += checkFigureBindings(sub, knownInstances)
+            issues += LanguageGate.checkRomanianFields(sub)
         }
         val ok = issues.none { it.severity == "error" }
         return ValidationReport(ok = ok, disclaimer = DISCLAIMER, issues = issues)
