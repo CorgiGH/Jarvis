@@ -16,6 +16,8 @@ import { OnboardingShell } from "./components/OnboardingShell";
 import { PlacementShell } from "./components/PlacementShell";
 import { ProofDrill } from "./components/practice/ProofDrill";
 import { StepTraceDrill } from "./components/practice/StepTraceDrill";
+import { CodePractice } from "./components/practice/CodePractice";
+import { DeliverableTracker } from "./components/practice/DeliverableTracker";
 import { listPracticeProblems } from "./lib/practiceApi";
 import type { PracticeProblem } from "./lib/practiceApi";
 import { practiceStrings } from "./lib/practiceStrings";
@@ -125,6 +127,36 @@ function StepTraceDrillRoute() {
   return <StepTraceDrill problem={problem} />;
 }
 
+/**
+ * Plan-6 Task 10 — CodePractice route: loads the first code-surface problem for the subject
+ * and renders CodePractice.
+ */
+function CodePracticeRoute() {
+  const { subject } = useParams<{ subject: string }>();
+  const [problem, setProblem] = useState<PracticeProblem | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    setProblem(undefined);
+    listPracticeProblems(subject ?? "", "code")
+      .then((r) => {
+        if (!cancelled) setProblem(r.problems[0] ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setProblem(null);
+      });
+    return () => { cancelled = true; };
+  }, [subject]);
+
+  if (problem === undefined) {
+    return <div className="p-6 text-page-fg/50">{practiceStrings.loading}</div>;
+  }
+  if (problem === null) {
+    return <div className="p-6 text-page-fg/50">{practiceStrings.noProblems}</div>;
+  }
+  return <CodePractice problem={problem} />;
+}
+
 // App is the shell — it renders the header/nav for every route and switches
 // the <main> body by pathname. Routing each path to a bare standalone screen
 // (the prior setup) dropped the nav, trapping the user with no in-app way back.
@@ -152,6 +184,9 @@ createRoot(document.getElementById("root")!).render(
           {/* Plan-6 Task 9 — Practice surfaces I: ProofDrill + StepTraceDrill */}
           <Route path="/practice/proof/:subject" element={<ProofDrillRoute />} />
           <Route path="/practice/trace/:subject" element={<StepTraceDrillRoute />} />
+          {/* Plan-6 Task 10 — Practice surfaces II: CodePractice + DeliverableTracker */}
+          <Route path="/practice/code/:subject" element={<CodePracticeRoute />} />
+          <Route path="/practice/deliverables" element={<DeliverableTracker />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

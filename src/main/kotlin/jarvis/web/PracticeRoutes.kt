@@ -14,6 +14,7 @@ import jarvis.tutor.BankProblem
 import jarvis.tutor.ProblemSolutionYaml
 import jarvis.tutor.ProblemsRepo
 import jarvis.tutor.RubricItem
+import jarvis.tutor.TasksTable
 import jarvis.tutor.TutorContextKey
 import jarvis.tutor.csrfProtect
 import jarvis.tutor.grader.ArchetypeClass
@@ -26,6 +27,15 @@ import jarvis.tutor.grader.NumericOracleGrader
 import jarvis.tutor.grader.RubricInput
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNotNull
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 
 /**
  * Plan-6 Task 8 — practice surfaces endpoint groups (§0.9-G). All additive, all NEW routes — no
@@ -510,16 +520,33 @@ fun Application.installPracticeRoutes() {
         }
 
         // ── GET /api/v1/practice/deliverables ─────────────────────────────────────────────────────
-        // Task-8 HONEST-EMPTY STUB. TasksTable.deliverable_json does NOT exist until Task 10
-        // (Tasks.kt is not in this task's Files list). Task 10 rewires this handler to read it.
+        // Plan-6 Task 10: rewired from the honest-empty stub to read TasksTable.deliverable_json.
+        // Returns all tasks for the current user where deliverable_json IS NOT NULL.
+        // Honest null deadline → "necunoscut" on the UI (DeliverableTracker).
+        // POO lab deliverables are absent (honest empty state — Task-2 execution-time finding:
+        // no POO lab spec files located on disk after exhaustive search).
         get("/api/v1/practice/deliverables") {
-            call.application.attributes.getOrNull(TutorContextKey)
+            val ctx = call.application.attributes.getOrNull(TutorContextKey)
                 ?: return@get call.respond(HttpStatusCode.InternalServerError, "no ctx")
-            requireUser {
+            requireUser { userId ->
+                val rows = transaction(ctx.db) {
+                    TasksTable.selectAll()
+                        .where { (TasksTable.userId eq userId) and TasksTable.deliverableJson.isNotNull() }
+                        .map { row ->
+                            val djRaw = row[TasksTable.deliverableJson]!!
+                            parseDeliverableJson(
+                                id         = row[TasksTable.id],
+                                subject    = row[TasksTable.subject],
+                                titleRo    = row[TasksTable.title],
+                                deadlineTs = null,   // deadline column exists but deliverable seeds leave it far-future placeholder; honest null → "necunoscut"
+                                djRaw      = djRaw,
+                            )
+                        }
+                }
                 call.respondText(
                     practiceJson.encodeToString(
                         ApiDeliverablesReply.serializer(),
-                        ApiDeliverablesReply(deliverables = emptyList()),
+                        ApiDeliverablesReply(deliverables = rows),
                     ),
                     ContentType.Application.Json,
                 )
@@ -634,3 +661,43 @@ private fun RubricItem.toRubricInput(): RubricInput = RubricInput(
     matcherJson = null,        // bank G-items carry no structural matcher → the leg defers them
     penaltyJson = penaltyRulesJson,
 )
+
+/**
+ * Parse a [TasksTable.deliverable_json] raw string + associated task fields into [ApiDeliverable].
+ * JSON contract (§0.9-I): { sub_problems:[{label_ro,points}], prep_drill_ids:[String],
+ *                           source_doc:String, source_quote:String }.
+ * [deadlineTs] is the ISO-8601 deadline string, or null → UI "necunoscut" (§0.9-I).
+ */
+private fun parseDeliverableJson(
+    id: String,
+    subject: String,
+    titleRo: String,
+    deadlineTs: String?,
+    djRaw: String,
+): ApiDeliverable {
+    return try {
+        val obj = practiceJson.parseToJsonElement(djRaw).jsonObject
+        val subProblems = obj["sub_problems"]?.jsonArray?.map { sp ->
+            val spObj = sp.jsonObject
+            ApiDeliverableSubProblem(
+                label_ro = spObj["label_ro"]?.jsonPrimitive?.content ?: "",
+                points   = spObj["points"]?.jsonPrimitive?.double ?: 0.0,
+            )
+        } ?: emptyList()
+        val prepDrillIds = obj["prep_drill_ids"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
+        val sourceDoc = obj["source_doc"]?.jsonPrimitive?.content
+        ApiDeliverable(
+            id             = id,
+            subject        = subject,
+            title_ro       = titleRo,
+            deadline       = deadlineTs,
+            sub_problems   = subProblems,
+            prep_drill_ids = prepDrillIds,
+            source_doc     = sourceDoc,
+            synthetic      = false,   // seeds are from verified course-meta, not synthetic
+        )
+    } catch (_: Exception) {
+        // Malformed deliverable_json — return an honest minimal entry rather than crashing.
+        ApiDeliverable(id = id, subject = subject, title_ro = titleRo, deadline = deadlineTs)
+    }
+}

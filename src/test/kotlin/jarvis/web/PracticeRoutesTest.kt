@@ -15,6 +15,7 @@ import jarvis.tutor.ProblemSeed
 import jarvis.tutor.ProblemsTable
 import jarvis.tutor.SessionRepo
 import jarvis.tutor.SessionsTable
+import jarvis.tutor.TasksTable
 import jarvis.tutor.TutorContextKey
 import jarvis.tutor.TutorDb
 import jarvis.tutor.TutorTypes
@@ -54,7 +55,7 @@ class PracticeRoutesTest {
         transaction(db) {
             SchemaUtils.create(UsersTable, SessionsTable)
             SchemaUtils.createMissingTablesAndColumns(
-                ProblemsTable, ProblemRubricItemsTable, ProblemKcLinksTable,
+                ProblemsTable, ProblemRubricItemsTable, ProblemKcLinksTable, TasksTable,
             )
         }
         // Seed the real-corpus problems (PA proof / ALO trace / PS code).
@@ -62,11 +63,15 @@ class PracticeRoutesTest {
         return db to dbDir
     }
 
-    private fun makeUser(db: Database): String {
+    /** Returns (sessionToken, userId) */
+    private fun makeUserWithId(db: Database): Pair<String, String> {
         val uid = TutorTypes.ulid()
         UserRepo(db).insert(User(uid, "u", UserScope.FRIEND, Instant.now(), Instant.now()))
-        return SessionRepo(db).create(uid, 3600)
+        val sid = SessionRepo(db).create(uid, 3600)
+        return sid to uid
     }
+
+    private fun makeUser(db: Database): String = makeUserWithId(db).first
 
     // ── auth ───────────────────────────────────────────────────────────────────────────
 
@@ -264,10 +269,31 @@ class PracticeRoutesTest {
         assertTrue(body.contains("decided_by"), "expected decided_by audit field; body: $body")
     }
 
-    // ── deliverables — Task-8 honest empty stub ───────────────────────────────────────────
+    // ── schema test: TasksTable.deliverable_json column auto-created (Task 10 Step 2) ───────
 
     @Test
-    fun `deliverables endpoint returns the honest empty list`() = testApplication {
+    fun `TasksTable deliverable_json column auto-created by createMissingTablesAndColumns`() {
+        val dbDir = Files.createTempDirectory("practice-schema-test")
+        val db = TutorDb.connect(dbDir.resolve("s.db").toString())
+        transaction(db) {
+            SchemaUtils.create(UsersTable, SessionsTable)
+            SchemaUtils.createMissingTablesAndColumns(TasksTable)
+        }
+        // Verify the column exists in the scratch DB.
+        val colExists = transaction(db) {
+            // Query sqlite_master for the column name
+            val result = exec(
+                "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name='deliverable_json'",
+            ) { rs -> if (rs.next()) rs.getInt(1) else 0 }
+            result == 1
+        }
+        assertTrue(colExists, "TasksTable.deliverable_json must exist after createMissingTablesAndColumns")
+    }
+
+    // ── deliverables — Task-8 stub (no seeds seeded for this user) ────────────────────────
+
+    @Test
+    fun `deliverables endpoint returns empty list when no deliverables seeded for user`() = testApplication {
         val (db, dbDir) = makeDb()
         val sid = makeUser(db)
         application {
@@ -278,7 +304,60 @@ class PracticeRoutesTest {
             header("Cookie", "jarvis_session=$sid")
         }
         assertEquals(HttpStatusCode.OK, r.status)
-        assertTrue(r.bodyAsText().contains(""""deliverables":[]"""), "Task-8 stub returns empty; body: ${r.bodyAsText()}")
+        assertTrue(r.bodyAsText().contains(""""deliverables":[]"""), "no seeds for user → empty; body: ${r.bodyAsText()}")
+    }
+
+    // ── deliverables — Task-10: re-assert with seeds (§0.9-I ALO T1-T5 + PS A-D) ──────────
+
+    @Test
+    fun `deliverables endpoint returns ALO and PS deliverables after seedDeliverables`() = testApplication {
+        val (db, dbDir) = makeDb()
+        val (sid, uid) = makeUserWithId(db)
+        // Seed course-meta deliverables for this user (ALO T1–T5 + PS A–D)
+        ProblemSeed.seedDeliverables(db, uid)
+        application {
+            attributes.put(TutorContextKey, testTutorContext(db, dbDir, mailer = FakeMailer()))
+            installPracticeRoutes()
+        }
+        val r = client.get("/api/v1/practice/deliverables") {
+            header("Cookie", "jarvis_session=$sid")
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        // Should have 9 deliverables: ALO T1–T5 (5) + PS A–D (4)
+        assertTrue(body.contains("Temă ALO T1"), "ALO T1 deliverable present; body: $body")
+        assertTrue(body.contains("Temă ALO T5"), "ALO T5 deliverable present; body: $body")
+        assertTrue(body.contains("Temă PS A"),   "PS A deliverable present; body: $body")
+        assertTrue(body.contains("Temă PS D"),   "PS D deliverable present; body: $body")
+        // Points present
+        assertTrue(body.contains("\"points\":50"), "ALO T1 50-pt sub-problem; body: $body")
+        assertTrue(body.contains("\"points\":70"), "ALO T5 70-pt sub-problem; body: $body")
+        assertTrue(body.contains("\"points\":20"), "PS 20-pt sub-problem; body: $body")
+        // Source docs present (provenance)
+        assertTrue(body.contains("edu.info.uaic.ro/algebra-liniara"), "ALO provenance link; body: $body")
+        assertTrue(body.contains("edu.info.uaic.ro/probabilitati-si-statistica"), "PS provenance link; body: $body")
+        // synthetic=false (course-meta, not synthetic)
+        assertTrue(body.contains(""""synthetic":false"""), "course-meta deliverables are not synthetic; body: $body")
+    }
+
+    @Test
+    fun `seedDeliverables is idempotent — double seed does not duplicate rows`() = testApplication {
+        val (db, dbDir) = makeDb()
+        val (sid, uid) = makeUserWithId(db)
+        ProblemSeed.seedDeliverables(db, uid)
+        ProblemSeed.seedDeliverables(db, uid) // second call — must be a no-op
+        application {
+            attributes.put(TutorContextKey, testTutorContext(db, dbDir, mailer = FakeMailer()))
+            installPracticeRoutes()
+        }
+        val r = client.get("/api/v1/practice/deliverables") {
+            header("Cookie", "jarvis_session=$sid")
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        val body = r.bodyAsText()
+        // Count occurrences of "Temă ALO T1" — must be exactly 1
+        val count = body.split("Temă ALO T1").size - 1
+        assertEquals(1, count, "ALO T1 must appear exactly once (idempotent seed); body: $body")
     }
 
     // ── csrf on a write endpoint ──────────────────────────────────────────────────────────

@@ -4,9 +4,14 @@ import com.charleskorn.kaml.Yaml
 import com.charleskorn.kaml.YamlConfiguration
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.time.Instant
 import kotlin.io.path.exists
 import kotlin.io.path.extension
 import kotlin.io.path.isDirectory
@@ -223,6 +228,109 @@ object ProblemSeed {
      */
     fun seed(db: Database): SeedResult =
         seed(db, Paths.get("content"))
+
+    // ─── Deliverable seeds (§0.9-I) ──────────────────────────────────────────────────────────────
+
+    /**
+     * Idempotent seed of course-meta deliverables (ALO T1–T5, PS A–D) into [TasksTable] for
+     * [userId].  Rows with the same (userId, subject, title) are skipped (uniqueIndex guard).
+     *
+     * The `deliverable_json` column carries: sub_problems, prep_drill_ids, source_doc, source_quote.
+     * The base deadline is null (honest: deadlines unknown → UI shows "necunoscut", §0.9-I).
+     * Provenance: ALO points from the verified Plan-2 grade-model registry (gc-alo-lab component,
+     * temas field); PS from the live-page contract (Teme A–D, 20-pt bucket).
+     *
+     * POO lab deliverables are ABSENT — Task-2 Step-3 execution-time search found no POO lab spec
+     * files on disk (content/POO/problems/ is empty). This is an honest empty state per §0.9-I.
+     */
+    fun seedDeliverables(db: Database, userId: String) {
+        val deliverables = buildDeliverableRows()
+        val now = Instant.now()
+        // Placeholder JSON for required non-nullable TasksTable columns that don't apply
+        // to deliverable-only rows (the DB schema pre-dates the deliverable concept).
+        val emptyRef  = """{"repo":"","path":"","sha":""}"""
+        val emptyRefs = "[]"
+
+        transaction(db) {
+            for (d in deliverables) {
+                // Skip if already seeded (uniqueIndex on userId + subject + title).
+                val exists = TasksTable.selectAll()
+                    .where { (TasksTable.userId eq userId) and (TasksTable.subject eq d.subject) and (TasksTable.title eq d.title) }
+                    .count() > 0
+                if (exists) continue
+
+                TasksTable.insert {
+                    it[TasksTable.id]            = TutorTypes.ulid()
+                    it[TasksTable.userId]        = userId
+                    it[TasksTable.subject]       = d.subject
+                    it[TasksTable.title]         = d.title
+                    it[TasksTable.deadline]      = now.plusSeconds(60L * 60 * 24 * 365) // far-future placeholder
+                    it[TasksTable.problemRefJson]   = emptyRef
+                    it[TasksTable.conceptRefsJson]  = emptyRefs
+                    it[TasksTable.rubricRefJson]    = emptyRef
+                    it[TasksTable.cardRefsJson]     = emptyRefs
+                    it[TasksTable.status]        = TaskStatus.TODO.name
+                    it[TasksTable.createdAt]     = now
+                    it[TasksTable.updatedAt]     = now
+                    it[TasksTable.deliverableJson] = d.deliverableJson
+                }
+            }
+        }
+    }
+
+    /**
+     * Internal deliverable row DTO (not serialized to disk — constructed from verified course-meta).
+     */
+    private data class DeliverableRow(
+        val subject: String,
+        val title: String,
+        val deliverableJson: String,
+    )
+
+    /** Build the canonical deliverable rows from verified course-meta (§0.9-I). */
+    private fun buildDeliverableRows(): List<DeliverableRow> {
+        val rows = mutableListOf<DeliverableRow>()
+
+        // ── ALO Teme T1–T5 (§0.9-I: points 50/60/60/60/70 — from Plan-2 registry gc-alo-lab
+        //    temas field verified at Plan-2 seed time; source = ALO official site) ───────────────
+        data class AloTema(val n: Int, val points: Int)
+        val aloTeme = listOf(
+            AloTema(1, 50),
+            AloTema(2, 60),
+            AloTema(3, 60),
+            AloTema(4, 60),
+            AloTema(5, 70),
+        )
+        for (t in aloTeme) {
+            rows += DeliverableRow(
+                subject = "ALO",
+                title   = "Temă ALO T${t.n}",
+                deliverableJson = buildString {
+                    append("""{"sub_problems":[{"label_ro":"Temă T${t.n}","points":${t.points}}],""")
+                    append(""""prep_drill_ids":[],""")
+                    append(""""source_doc":"https://edu.info.uaic.ro/algebra-liniara/",""")
+                    append(""""source_quote":"temas:[50,60,60,60,70]"}""")
+                },
+            )
+        }
+
+        // ── PS Teme A–D (§0.9-I: 20-pt bucket — live-page contract,
+        //    from Plan-2 registry gc-ps-live-labs "Teme A–D 20") ────────────────────────────────
+        for (label in listOf("A", "B", "C", "D")) {
+            rows += DeliverableRow(
+                subject = "PS",
+                title   = "Temă PS $label",
+                deliverableJson = buildString {
+                    append("""{"sub_problems":[{"label_ro":"Temă $label","points":20.0}],""")
+                    append(""""prep_drill_ids":[],""")
+                    append(""""source_doc":"https://edu.info.uaic.ro/probabilitati-si-statistica/",""")
+                    append(""""source_quote":"Teme A-D 20"}""")
+                },
+            )
+        }
+
+        return rows
+    }
 
     /** Encode [s] as a JSON string literal (double-quoted, all control chars escaped). */
     private fun jsonStringLiteral(s: String): String = buildString {
