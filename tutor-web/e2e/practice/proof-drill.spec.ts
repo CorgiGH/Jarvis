@@ -26,6 +26,7 @@ let srv: PracticeServerHandle;
 
 test.beforeAll(async () => {
   if (!isEnabled) return;
+  test.setTimeout(180_000); // backend boot (Gradle + JVM) needs up to ~2min
   srv = await startPracticeServer();
 });
 
@@ -103,9 +104,10 @@ test("proof-drill — smoke: no pending state for PA proof (coverage confirmed)"
   expect(body.problems, "PA should have ≥1 proof problem seeded (INV-6.5)").not.toHaveLength(0);
 
   // REF solution must NOT appear in the problems-list response (INV-6.6 server half).
+  // Use a string that is ONLY in reference_solution, never in statement_ro.
+  // "Ghicim o permutare" appears in the reference solution body, not in the problem statement.
   const bodyText = await resp.text();
-  // The reference solution contains "HAM-PATH ∈ NP" — check it is not in the problems-list response.
-  expect(bodyText, "problems list must not contain reference solution text (INV-6.6)").not.toContain("HAM-PATH ∈ NP");
+  expect(bodyText, "problems list must not contain reference solution text (INV-6.6)").not.toContain("Ghicim o permutare");
 
   await ctx.close();
 });

@@ -29,6 +29,7 @@ let srv: PracticeServerHandle;
 
 test.beforeAll(async () => {
   if (!isEnabled) return;
+  test.setTimeout(180_000); // backend boot (Gradle + JVM) needs up to ~2min
   srv = await startPracticeServer();
 });
 

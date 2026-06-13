@@ -25,6 +25,7 @@ let srv: PracticeServerHandle;
 
 test.beforeAll(async () => {
   if (!isEnabled) return;
+  test.setTimeout(180_000); // backend boot (Gradle + JVM) needs up to ~2min
   srv = await startPracticeServer();
 });
 
@@ -107,11 +108,7 @@ test("deliverable-tracker — API: GET /api/v1/practice/deliverables returns ALO
 
   // Expect at least ALO T1..T5 (5) + PS A..D (4) = 9 deliverables.
   // Some may be more if POO was seeded; the floor is 9.
-  expect(
-    body.deliverables,
-    "should have ≥9 seeded deliverables (ALO T1-T5 + PS A-D)",
-  ).toHaveLength(expect.any(Number));
-  expect(body.deliverables.length, "≥9 deliverables expected").toBeGreaterThanOrEqual(9);
+  expect(body.deliverables.length, "≥9 deliverables expected (ALO T1-T5 + PS A-D)").toBeGreaterThanOrEqual(9);
 
   // Every deliverable must have a title_ro and subject
   for (const d of body.deliverables) {

@@ -25,6 +25,11 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as http from "http";
+import { fileURLToPath } from "url";
+
+// ESM-compatible __dirname replacement
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface PracticeServerHandle {
   baseUrl: string;
@@ -96,30 +101,41 @@ export async function startPracticeServer(): Promise<PracticeServerHandle> {
   };
 
   let proc: ChildProcess;
-  // On Windows use `gradlew.bat`, on POSIX use `./gradlew`
   const isWin = process.platform === "win32";
-  const gradlew = isWin ? "gradlew.bat" : "./gradlew";
+  // On Windows, .bat files require shell:true; use cmd /c + absolute path to avoid PATH issues.
+  // On POSIX, spawn the script directly with shell:false.
   const gradleArgs = ["--no-daemon", ":run", "--args=web"];
 
-  proc = spawn(gradlew, gradleArgs, {
-    cwd: worktreeRoot,
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsVerbatimArguments: isWin,
-    shell: isWin,
-  });
+  if (isWin) {
+    const gradlew = path.join(worktreeRoot, "gradlew.bat");
+    proc = spawn("cmd", ["/c", gradlew, ...gradleArgs], {
+      cwd: worktreeRoot,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } else {
+    const gradlew = path.join(worktreeRoot, "gradlew");
+    proc = spawn(gradlew, gradleArgs, {
+      cwd: worktreeRoot,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  }
 
   let sessionToken = "";
+  let stdoutBuf = "";
 
   // Capture stdout to find PRACTICE_E2E_SESSION= line.
   proc.stdout?.setEncoding("utf8");
   proc.stdout?.on("data", (chunk: string) => {
-    const lines = chunk.split("\n");
-    for (const line of lines) {
-      const match = line.match(/^PRACTICE_E2E_SESSION=(.+)$/);
-      if (match) sessionToken = match[1].trim();
-      // Forward to debug output (only in verbose mode)
-      if (process.env.JARVIS_PRACTICE_E2E_VERBOSE === "1") {
+    stdoutBuf += chunk;
+    // Scan the full buffer each time (handles partial lines + CRLF robustly)
+    const m = stdoutBuf.match(/PRACTICE_E2E_SESSION=([0-9a-f]+)/);
+    if (m && !sessionToken) sessionToken = m[1];
+    // Forward to debug output (only in verbose mode)
+    if (process.env.JARVIS_PRACTICE_E2E_VERBOSE === "1") {
+      const lines = chunk.split("\n");
+      for (const line of lines) {
         process.stdout.write("[backend] " + line + "\n");
       }
     }
@@ -143,10 +159,12 @@ export async function startPracticeServer(): Promise<PracticeServerHandle> {
     throw new Error(`Practice backend failed to start on port ${port}: ${err}`);
   }
 
-  // The server is up. sessionToken should be populated by now (printed before health is ready).
-  if (!sessionToken) {
-    // Fallback: wait a short moment for the stdout buffer to flush
-    await new Promise((r) => setTimeout(r, 500));
+  // The server is up. Wait for PRACTICE_E2E_SESSION= to be printed on stdout.
+  // The seeding + session print happens just after the server starts accepting requests,
+  // so poll for up to 15 seconds after the health check passes.
+  const sessionDeadline = Date.now() + 15_000;
+  while (!sessionToken && Date.now() < sessionDeadline) {
+    await new Promise((r) => setTimeout(r, 200));
   }
   if (!sessionToken) {
     proc.kill("SIGTERM");
