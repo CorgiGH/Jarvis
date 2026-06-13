@@ -28,11 +28,17 @@ import {
   parseChartData,
   framesFromChartData,
 } from "../ChartDistributionFamily";
+import {
+  parseSeqArrayData,
+  framesFromSeqArrayData,
+} from "../SequenceArrayFamily";
 import { familyRegistry } from "../familyRegistry";
 import { mergesortReference } from "./mergesortTrace";
 import { chartDistributionReference } from "./chartTrace";
+import { selectionSortReference } from "./selectionSortTrace";
 import { GRAPH_TREE_INVARIANTS } from "../graphTreeInvariants";
 import { CHART_DIST_INVARIANTS } from "../chartDistributionInvariants";
+import { SEQ_ARRAY_INVARIANTS } from "../sequenceArrayInvariants";
 
 // ─── HARNESS REGISTRY ────────────────────────────────────────────────────────
 // Keyed by family_id. Each entry owns the FULL per-instance assertion (parse → frames → trace →
@@ -129,6 +135,54 @@ const HARNESS_REGISTRY: Record<string, HarnessEntry> = {
       const stepFwdBtn = container.querySelector('[data-testid="chart-dist-step-fwd"]');
       for (let i = 0; i < frames.length; i++) {
         for (const invariant of CHART_DIST_INVARIANTS) {
+          const result = invariant(container, frames[i], i, frames);
+          if (!result.ok) throw new Error(`${instanceId}: ${result.message}`);
+        }
+        if (i < frames.length - 1 && stepFwdBtn) fireEvent.click(stepFwdBtn);
+      }
+    },
+  },
+
+  "seq-array": {
+    runAssertion: (dataJson, instanceId) => {
+      // ── TRACE-MATCH (INV-5.1) — per-step state (array contents + pointers + sortedCount + phase)
+      //    vs the independent selection-sort oracle, which re-runs REAL selection sort from the
+      //    instance's SEED (`values`), so the family cannot animate a step the algorithm never does
+      //    nor end on an unsorted array. ──
+      const parsed = parseSeqArrayData(dataJson, instanceId);
+      const frames = framesFromSeqArrayData(parsed);
+      const ref = selectionSortReference(parsed.values);
+
+      if (frames.length !== ref.length) {
+        throw new Error(
+          `${instanceId}: step count mismatch — rendered ${frames.length} steps, reference has ${ref.length}`,
+        );
+      }
+      for (let i = 0; i < ref.length; i++) {
+        const r = ref[i];
+        const s = frames[i].state;
+        if (JSON.stringify(s.array) !== JSON.stringify(r.array)) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} (array) — rendered [${s.array.join(",")}] ≠ reference [${r.array.join(",")}]`,
+          );
+        }
+        if (s.sortedCount !== r.sortedCount || s.i !== r.i || s.j !== r.j || s.min !== r.min || s.phase !== r.phase) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} (pointers/phase) — rendered ` +
+              `{i:${s.i},j:${s.j},min:${s.min},sortedCount:${s.sortedCount},phase:${s.phase}} ≠ reference ` +
+              `{i:${r.i},j:${r.j},min:${r.min},sortedCount:${r.sortedCount},phase:${r.phase}}`,
+          );
+        }
+      }
+
+      // ── SEMANTIC INVARIANTS (INV-5.2) — rendered DOM ──
+      const Renderer = familyRegistry["seq-array"];
+      const { container } = render(
+        <Renderer instanceId={instanceId} dataJson={dataJson} language="ro" />,
+      );
+      const stepFwdBtn = container.querySelector('[data-testid="seq-array-step-fwd"]');
+      for (let i = 0; i < frames.length; i++) {
+        for (const invariant of SEQ_ARRAY_INVARIANTS) {
           const result = invariant(container, frames[i], i, frames);
           if (!result.ok) throw new Error(`${instanceId}: ${result.message}`);
         }

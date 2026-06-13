@@ -12,6 +12,7 @@ import { CppVTable } from "./CppVTable";
 import { MatrixTransform } from "./MatrixTransform";
 import { GraphTreeFamily } from "./families/GraphTreeFamily";
 import { ChartDistributionFamily } from "./families/ChartDistributionFamily";
+import { SequenceArrayFamily } from "./families/SequenceArrayFamily";
 import { NumLineDirect } from "./NumLineDirect";
 import { OsiEncap } from "./OsiEncap";
 import { ProcessFSM } from "./ProcessFSM";
@@ -53,6 +54,11 @@ const MERGESORT_DATA_JSON =
 const NORMAL_AREA_DATA_JSON =
   '{"points":[{"x":-4,"y":0.0001},{"x":-3.8841,"y":0.0002},{"x":-3.7681,"y":0.0003},{"x":-3.6522,"y":0.0005},{"x":-3.5362,"y":0.0008},{"x":-3.4203,"y":0.0011},{"x":-3.3043,"y":0.0017},{"x":-3.1884,"y":0.0025},{"x":-3.0725,"y":0.0036},{"x":-2.9565,"y":0.005},{"x":-2.8406,"y":0.0071},{"x":-2.7246,"y":0.0097},{"x":-2.6087,"y":0.0133},{"x":-2.4928,"y":0.0178},{"x":-2.3768,"y":0.0237},{"x":-2.2609,"y":0.031},{"x":-2.1449,"y":0.04},{"x":-2.029,"y":0.0509},{"x":-1.913,"y":0.064},{"x":-1.7971,"y":0.0794},{"x":-1.6812,"y":0.0971},{"x":-1.5652,"y":0.1172},{"x":-1.4493,"y":0.1396},{"x":-1.3333,"y":0.164},{"x":-1.2174,"y":0.1901},{"x":-1.1014,"y":0.2175},{"x":-0.9855,"y":0.2455},{"x":-0.8696,"y":0.2733},{"x":-0.7536,"y":0.3003},{"x":-0.6377,"y":0.3255},{"x":-0.5217,"y":0.3482},{"x":-0.4058,"y":0.3674},{"x":-0.2899,"y":0.3825},{"x":-0.1739,"y":0.393},{"x":-0.058,"y":0.3983},{"x":0.058,"y":0.3983},{"x":0.1739,"y":0.393},{"x":0.2899,"y":0.3825},{"x":0.4058,"y":0.3674},{"x":0.5217,"y":0.3482},{"x":0.6377,"y":0.3255},{"x":0.7536,"y":0.3003},{"x":0.8696,"y":0.2733},{"x":0.9855,"y":0.2455},{"x":1.1014,"y":0.2175},{"x":1.2174,"y":0.1901},{"x":1.3333,"y":0.164},{"x":1.4493,"y":0.1396},{"x":1.5652,"y":0.1172},{"x":1.6812,"y":0.0971},{"x":1.7971,"y":0.0794},{"x":1.913,"y":0.064},{"x":2.029,"y":0.0509},{"x":2.1449,"y":0.04},{"x":2.2609,"y":0.031},{"x":2.3768,"y":0.0237},{"x":2.4928,"y":0.0178},{"x":2.6087,"y":0.0133},{"x":2.7246,"y":0.0097},{"x":2.8406,"y":0.0071},{"x":2.9565,"y":0.005},{"x":3.0725,"y":0.0036},{"x":3.1884,"y":0.0025},{"x":3.3043,"y":0.0017},{"x":3.4203,"y":0.0011},{"x":3.5362,"y":0.0008},{"x":3.6522,"y":0.0005},{"x":3.7681,"y":0.0003},{"x":3.8841,"y":0.0002},{"x":4,"y":0.0001}],"interval":{"a":-1,"b":1},"probability":0.68,"xLabel":"X","steps":[{"reveal":1,"callout":"densitatea de probabilitate — aria totală de sub curbă = 1"},{"reveal":2,"callout":"marcăm intervalul [a, b] = [-1, 1] pe axa X"},{"reveal":3,"callout":"aria de sub curbă între a și b = P(a ≤ X ≤ b)"},{"reveal":4,"callout":"P(-1 ≤ X ≤ 1) = 0.68 — aproximativ 68% din masă"}]}';
 
+// The viz-pa-selectsort-001 instance data_json (verbatim from content/PA/viz/viz-pa-selectsort-001.yaml).
+// Keep byte-identical to the shipped YAML — the family-no-clip e2e drives THIS mount.
+const SELECTSORT_DATA_JSON =
+  '{"values":[5,3,8,1,6],"steps":[{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":0,"min":0,"phase":"scan","callout":"Runda i=0: presupunem că minimul este a[0]=5."},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":1,"min":1,"phase":"scan","callout":"Scanăm j=1: a[1]=3 este mai mic — noul minim este la indicele 1."},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":2,"min":1,"phase":"scan","callout":"Scanăm j=2: a[2]=8 ≥ minimul curent a[1]=3 — minimul rămâne la 1."},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":3,"min":3,"phase":"scan","callout":"Scanăm j=3: a[3]=1 este mai mic — noul minim este la indicele 3."},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":4,"min":3,"phase":"scan","callout":"Scanăm j=4: a[4]=6 ≥ minimul curent a[3]=1 — minimul rămâne la 3."},{"array":[1,3,8,5,6],"sortedCount":1,"i":0,"j":4,"min":3,"phase":"swap","callout":"Schimbăm a[0] cu a[3]: minimul 1 ajunge la poziția 0. Stânga lui 0 este sortată."},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":1,"min":1,"phase":"scan","callout":"Runda i=1: presupunem că minimul este a[1]=3."},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":2,"min":1,"phase":"scan","callout":"Scanăm j=2: a[2]=8 ≥ minimul curent a[1]=3 — minimul rămâne la 1."},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":3,"min":1,"phase":"scan","callout":"Scanăm j=3: a[3]=5 ≥ minimul curent a[1]=3 — minimul rămâne la 1."},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":4,"min":1,"phase":"scan","callout":"Scanăm j=4: a[4]=6 ≥ minimul curent a[1]=3 — minimul rămâne la 1."},{"array":[1,3,8,5,6],"sortedCount":2,"i":1,"j":4,"min":1,"phase":"swap","callout":"Minimul a[1]=3 este deja la poziția 1 — poziția 1 este fixată."},{"array":[1,3,8,5,6],"sortedCount":2,"i":2,"j":2,"min":2,"phase":"scan","callout":"Runda i=2: presupunem că minimul este a[2]=8."},{"array":[1,3,8,5,6],"sortedCount":2,"i":2,"j":3,"min":3,"phase":"scan","callout":"Scanăm j=3: a[3]=5 este mai mic — noul minim este la indicele 3."},{"array":[1,3,8,5,6],"sortedCount":2,"i":2,"j":4,"min":3,"phase":"scan","callout":"Scanăm j=4: a[4]=6 ≥ minimul curent a[3]=5 — minimul rămâne la 3."},{"array":[1,3,5,8,6],"sortedCount":3,"i":2,"j":4,"min":3,"phase":"swap","callout":"Schimbăm a[2] cu a[3]: minimul 5 ajunge la poziția 2. Stânga lui 2 este sortată."},{"array":[1,3,5,8,6],"sortedCount":3,"i":3,"j":3,"min":3,"phase":"scan","callout":"Runda i=3: presupunem că minimul este a[3]=8."},{"array":[1,3,5,8,6],"sortedCount":3,"i":3,"j":4,"min":4,"phase":"scan","callout":"Scanăm j=4: a[4]=6 este mai mic — noul minim este la indicele 4."},{"array":[1,3,5,6,8],"sortedCount":4,"i":3,"j":4,"min":4,"phase":"swap","callout":"Schimbăm a[3] cu a[4]: minimul 6 ajunge la poziția 3. Stânga lui 3 este sortată."}]}';
+
 export function VizDemoPage() {
   const [numLineMu, setNumLineMu] = useState(5);
   return (
@@ -89,6 +95,14 @@ export function VizDemoPage() {
           Family verification vehicle (NOT lesson content). Measured-label no-clip layout · 4-beat reveal (curbă → interval → arie → P) · paints data-testid="chart-dist-root".
         </p>
         <ChartDistributionFamily instanceId="viz-ps-normal-area-001" dataJson={NORMAL_AREA_DATA_JSON} language="ro" />
+      </section>
+
+      <section data-testid="viz-demo-seq-array" style={tileStyle}>
+        <h2 style={headingStyle}>PA · Selection-sort seq-array family (viz-pa-selectsort-001)</h2>
+        <p style={subheadingStyle}>
+          Family verification vehicle (NOT lesson content). Selection sort on [5,3,8,1,6] · pointers i/j/min · sorted-prefix recolor · 18 steps · element-anchored callouts · paints data-testid="seq-array-root".
+        </p>
+        <SequenceArrayFamily instanceId="viz-pa-selectsort-001" dataJson={SELECTSORT_DATA_JSON} language="ro" />
       </section>
 
       <section data-testid="viz-demo-matrix" style={tileStyle}>

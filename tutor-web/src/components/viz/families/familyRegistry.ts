@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { GraphTreeFamily } from "./GraphTreeFamily";
 import { ChartDistributionFamily } from "./ChartDistributionFamily";
+import { SequenceArrayFamily } from "./SequenceArrayFamily";
 
 /**
  * Plan-3 §5.1/§5.3 — a family renders (family_id, instance_data) and NOTHING else. It receives the
@@ -30,4 +31,5 @@ export type FamilyRenderer = (props: FamilyRendererProps) => ReactNode;
 export const familyRegistry: Record<string, FamilyRenderer> = {
   "graph-tree": GraphTreeFamily,
   "chart-dist": ChartDistributionFamily,
+  "seq-array": SequenceArrayFamily,
 };

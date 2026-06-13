@@ -21,9 +21,9 @@ const MERGESORT_DATA_JSON: string = (() => {
 })();
 
 describe("familyRegistry", () => {
-  it("registers graph-tree (Plan 3) and chart-dist (Plan-V family 4)", () => {
+  it("registers graph-tree (Plan 3), chart-dist + seq-array (Plan-V families 4 + 2)", () => {
     // order-insensitive: the registry is a Record, key order is not a contract.
-    expect(Object.keys(familyRegistry).sort()).toEqual(["chart-dist", "graph-tree"]);
+    expect(Object.keys(familyRegistry).sort()).toEqual(["chart-dist", "graph-tree", "seq-array"]);
   });
 });
 

@@ -1,0 +1,17 @@
+# INV-9.4 gate-3 seed: seeded wrong-trace fixture for the seq-array family.
+# NEVER placed under content/ — ContentRepo.loadVizInstances globs content/{subject}/viz/ only,
+# and the trace-match harness globs content/*/viz/*.yaml — keeping this here makes it invisible to
+# both, so it is exercised ONLY by seededWrongSeqArray.test.tsx.
+#
+# Mutation: step 5 (the first swap) claims the array became [1,3,8,5,7] — but selection sort on the
+# seed [5,3,8,1,6] swaps the minimum 1 into place giving [1,3,8,5,6]. The "7" is NOT in the seed, so
+# the step's array is no longer a permutation of [5,3,8,1,6]: the LIE that a swap edited a value
+# instead of permuting. The selectionSortReference oracle re-runs the real algorithm and the harness
+# trace-match trips at step 5 (array mismatch) — naming the offending step.
+id: viz-pa-selectsort-001-WRONG
+subject: PA
+family_id: seq-array
+language: ro
+instance:
+  method_kc_id: pa-kc-fixture-sorting
+  data_json: '{"values":[5,3,8,1,6],"steps":[{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":0,"min":0,"phase":"scan","callout":"Runda i=0"},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":1,"min":1,"phase":"scan","callout":"j=1 nou minim"},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":2,"min":1,"phase":"scan","callout":"j=2 minim ramane"},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":3,"min":3,"phase":"scan","callout":"j=3 nou minim"},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":4,"min":3,"phase":"scan","callout":"j=4 minim ramane"},{"array":[1,3,8,5,7],"sortedCount":1,"i":0,"j":4,"min":3,"phase":"swap","callout":"MINCIUNA: valoarea 6 a devenit 7 — nu mai e o permutare a [5,3,8,1,6]"},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":1,"min":1,"phase":"scan","callout":"Runda i=1"},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":2,"min":1,"phase":"scan","callout":"j=2 minim ramane"},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":3,"min":1,"phase":"scan","callout":"j=3 minim ramane"},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":4,"min":1,"phase":"scan","callout":"j=4 minim ramane"},{"array":[1,3,8,5,6],"sortedCount":2,"i":1,"j":4,"min":1,"phase":"swap","callout":"swap la pozitia 1"},{"array":[1,3,8,5,6],"sortedCount":2,"i":2,"j":2,"min":2,"phase":"scan","callout":"Runda i=2"},{"array":[1,3,8,5,6],"sortedCount":2,"i":2,"j":3,"min":3,"phase":"scan","callout":"j=3 nou minim"},{"array":[1,3,8,5,6],"sortedCount":2,"i":2,"j":4,"min":3,"phase":"scan","callout":"j=4 minim ramane"},{"array":[1,3,5,8,6],"sortedCount":3,"i":2,"j":4,"min":3,"phase":"swap","callout":"swap la pozitia 2"},{"array":[1,3,5,8,6],"sortedCount":3,"i":3,"j":3,"min":3,"phase":"scan","callout":"Runda i=3"},{"array":[1,3,5,8,6],"sortedCount":3,"i":3,"j":4,"min":4,"phase":"scan","callout":"j=4 nou minim"},{"array":[1,3,5,6,8],"sortedCount":4,"i":3,"j":4,"min":4,"phase":"swap","callout":"swap la pozitia 3"}]}'
