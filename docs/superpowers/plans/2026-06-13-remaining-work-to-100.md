@@ -1,6 +1,6 @@
 # Remaining Work to 100% Spec — jarvis tutor
 
-> **This is the single handoff ledger.** A fresh session reads `BRIDGE-HEAD.md` first, then this doc, to get the WHOLE remaining picture in one place — no thread lost across sessions. Authored 2026-06-13 (SESSION-68) at `main @ 09f5add`. **Updated 2026-06-14 (SESSION-70):** added the GOVERNING PRINCIPLES + the honest "100%" definition + the `council-1781435843` compliance-harness reshape (§B governance group). Binding spec = `docs/superpowers/specs/2026-06-11-one-pass-digestion-teaching-engine-design.md`; roadmap = `docs/superpowers/plans/2026-06-11-one-pass-plan-index.md`.
+> **This is the single handoff ledger.** A fresh session reads `BRIDGE-HEAD.md` first, then this doc, to get the WHOLE remaining picture in one place — no thread lost across sessions. Authored 2026-06-13 (SESSION-68) at `main @ 09f5add`. **Updated 2026-06-14 (SESSION-70):** added the GOVERNING PRINCIPLES + the honest "100%" definition + the `council-1781435843` compliance-harness reshape (§B governance group). **Updated 2026-06-14 (SESSION-72):** added **§F experience-completeness additions (EC1–EC5)** — written into the binding spec as **§15** (live-help · cold-start gate · recovery-session · goal layer · provider setup+health), each Alex-ratified, each with INVs. Binding spec = `docs/superpowers/specs/2026-06-11-one-pass-digestion-teaching-engine-design.md`; roadmap = `docs/superpowers/plans/2026-06-11-one-pass-plan-index.md`.
 
 ## What "100%" means (spec §10.2)
 A real user **drops a file/URL → it digests into faithful content → teaches (lesson) → practices → tracks**, across the real corpus, with every gate alive. The proof is the §10.2 **11-artifact proof run** + bulk-upload of the 140 inventoried sources.
@@ -37,7 +37,8 @@ Plan 1 (trust-net ON) · Plan 2 (knowledge schema) · Plan 3 (lesson engine + vi
 
 **Compliance-harness governance (`council-1781435843` — the "gate the gates" layer; build the matrix early, do the 3 foundation defects FIRST within/before Plan V):**
 - **Per-gate MATRIX rollup (NET-NEW; NOT a single bit).** A cheap CI/CLI aggregator over the existing gates that prints a per-gate named board with PROOF/ESTIMATOR tags; SKIP / fail-open / cross-platform-unverified each render RED. Aligns with spec §1.5 `checkpoint-gate-summary` (which Plan 5 builds as the user-facing screen). Cheap; build early so every later plan reports into it. A single collapsed GREEN/RED is FORBIDDEN (it launders false-green with higher trust — the reshaped finding).
-- **Gate-COVERAGE invariant (NET-NEW).** A CI check that every binding spec clause / INV-* maps to ≥1 live gate; an un-gated clause is RED. Machine enforcement of P1 (NO-SPEC-CUT) + the defense against the *missing-requirement* class. Needs a spec-clause→gate registry.
+- **Gate-COVERAGE invariant (NET-NEW).** A CI check that every binding spec clause / INV-* maps to ≥1 live gate; an un-gated clause is RED. Machine enforcement of P1 (NO-SPEC-CUT) + the defense against the *missing-requirement* class. Needs a spec-clause→gate registry. **The §15 EC1–EC5 INVs are now clauses this registry must cover.**
+- **Cold-start completeness gate (NET-NEW; spec §15.2 / EC2).** KC-graph reachability (INV-EC2.1 — every servable KC has a prereq path to an entry KC, else a flagged `neverificat` assumed-knowledge stub) + figure-coverage (INV-EC2.2 — no concept that needs a figure ships figureless). The teaching-ladder machine form of P1; sits beside the gate-coverage invariant, emitted by Plan 5 digestion. See §F.
 - **Adversarial red-team round (NET-NEW, recurring process).** Each build cycle, one adversarial pass whose sole job is to find ONE spec-true defect the current gate set passes; the defect becomes a new gate ("same defect-CLASS escapes twice = pipeline design bug" tripwire). Partly overlaps the existing whole-build-council review — make it a STANDING step, not ad-hoc.
 - **Gate-self-test (extend existing).** The seeded-red pattern already exists (4a's 12 grader goldens + each viz family's `seededWrongTrace`); extend so EVERY gate is fed a known-bad fixture and asserted RED — a gate that can't prove it ever says RED is not a gate.
 
@@ -85,6 +86,21 @@ Two councils ran this session; both bind future viz/lesson work.
   - **Fix the foundation BEFORE the matrix carries authority** — the **3 foundation defects: impeccable fail-open→fail-closed · regenerate visual baselines in CI's container (env-parity) · quarantine the StateCache flake**; + a **gate-self-test** (feed each gate a known-bad fixture, assert RED). All §B; do within/before Plan V.
   - **Build the 2 new gates INLINE, not as a meta-layer up-front** — visual/overlap = **bbox-geometry assertions** in Plan V (decidable → PROOF); depth = a `neverificat` **ESTIMATOR + human-checkpoint lane** in Plan 5/7 that rides trust-net for grounding and NEVER fakes a machine pass (the no-third-regen rule would otherwise *brick* artifacts).
   - **Honest "100%"** = every clause gated · all PROOF green · every ESTIMATOR green-or-flagged · §10 user checkpoint passed — not "no human ever sees a defect." Confidence 8; full transcript `.claude/council-cache/council-1781435843.md`.
+
+---
+
+## F. Experience-completeness additions (SESSION-72, 2026-06-14 — Alex-ratified; spec §15 EC1–EC5)
+Surfaced in the SESSION-72 experience review (the zero→learning path stress-test). Written into the binding spec as **§15** (EC1–EC5, each with INVs). Each EXTENDS a named section; none reopens a frozen signature or the trust-net. Slotted into the plan that owns the area — built under the same per-gate matrix + P1/P2. The "site guides the student" core already EXISTS (`/oggi` Azi queue = single system-ranked next-action; readiness dashboard = where-am-I/points-at-stake; auto-interventions = forgetting→re-lesson, misconception→remediation, break prompts, placement) — these additions close the named gaps on top of it.
+
+| ID | Addition | Builds with | Spec |
+|---|---|---|---|
+| **EC1** | **Live-help layer** — ask-in-lesson (KC/beat-anchored grounded ask; reuses `sidekick/ask` + drill-self-paste guard + starter-question suggestions) + prereq-peek (on-demand compressed-reveal of a prereq KC, read-only, no mastery write). Client mounts on `BeatOrchestrator`; needs prereq edges + beat content. Rendered demo proven SESSION-72 (`/tutor/lectie-selectsort-help`). | **Plan 5** (content/prereqs) + lesson-surface wiring | §15.1 |
+| **EC2** | **Cold-start completeness gate** — every servable KC has a prereq path to an entry KC, else digestion emits a flagged `neverificat` assumed-knowledge stub + gap-record; figure-coverage sibling. Machine form of P1 for the teaching ladder. | **§B coverage gate** + **Plan 5** (stub emission) | §15.2 |
+| **EC3** | **Recovery-session mode** — broad-decay trigger → suppress NEW KCs, serve only RE-LESSONs over the decayed prereq cluster, lighter load, "azi recapitulăm". Session-level sibling of §7.3 per-KC forgetting. | **Plan 7** (§7.5 session shape) | §15.3 |
+| **EC4** | **Goal/intent layer** — learner sets a target (past paper · topic · deliverable · date) → decompose to KCs → re-weight queue + per-goal readiness, WITHOUT silencing exam-proximity safety. | **Plan 7** (§7.4 queue) after Plan-5 item→KC links | §15.4 |
+| **EC5** | **Provider setup + health surface** — admin settings panel over the existing `GraderProviderSetting`/`user_provider_config` plumbing: pick provider, store key (encrypted), set `FREELLMAPI_BASE_URL`, connection health-check. Learner path stays zero-setup (default `free`). | **settings surface** (low-dep; can ride Plan 5 upload-door area) | §15.5 |
+
+EC1's visual affordances ride the §E `council-1781391707` visual gate. Every EC INV enters the §B gate-coverage registry.
 
 ---
 

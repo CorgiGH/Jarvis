@@ -606,6 +606,69 @@ All new endpoints, tables, columns, and payload fields introduced by this design
 
 ---
 
+## 15. Amendment — 2026-06-14 · experience-completeness additions (EC1–EC5)
+
+Surfaced in the SESSION-72 experience review (Alex), each verified against this spec before adoption. They EXTEND named sections; none reopens a frozen signature (`interface-signatures-lock.md`) or the trust-net. Governed by the to-100 ledger's **P1 (NO-SPEC-CUT)** + **P2 (EASY ⇒ GATED)**: where a requirement is machine-decidable it ships an INV; where it is not, it ships an ESTIMATOR + the §1.5 checkpoint flag `neverificat / verifică sursa`, never a faked pass.
+
+### 15.1 EC1 — Live-help layer (extends §4)
+
+A learner lost mid-lesson must get help WITHOUT leaving the beat. Two affordances, both `(kc_id, beat)`-anchored:
+
+- **Ask-in-lesson.** A low-profile entry inside the BeatOrchestrator surface opens a grounded ask panel anchored to the current KC + beat. Reuses the built sidekick path (`POST /api/v1/sidekick/ask`, `SidekickEnvelope` with `card_id`/`anchor`/`selection`, `inlineAsk.ts`). Answer is citation-backed; the **drill-self-paste guard** refuses to hand over a gated drill's solution. RO framing per §8.1. A "suggestions" affordance offers 2–3 KC-scoped starter questions so a stuck learner who cannot phrase the question still has an entry.
+- **Prereq-peek.** Any term the KC declares as a prerequisite (R-PREREQ edge) carries an on-demand recap affordance → a compact card serving the prereq KC's **compressed reveal** (③ + NAME-level) from its stored beat fields (§3.2), with provenance. It does NOT advance the lesson and does NOT mutate the host KC's mastery (a peek is not a graded interaction).
+
+No new generation on the request path — server reuses the sidekick endpoint + the prereq KC's stored beats.
+
+- **INV-EC1.1 (anchoring):** every ask issued from a lesson carries the live `kc_id` + `beat_type`; a request with neither fails validation.
+- **INV-EC1.2 (no-spoiler):** a test pastes the active drill statement and asserts the `drill_statement` Jaccard ≥ 0.7 short-circuit fires — the LLM call is NOT made.
+- **INV-EC1.3 (peek is read-only):** a prereq-peek interaction writes zero rows to the host KC's mastery/FSRS state (DB assertion).
+- **Visual:** both affordances ride the §9.2 gate-4 visual gate (no clip/overlap at the learner viewport, viewport-not-fullPage, nothing under fixed chrome).
+
+### 15.2 EC2 — Cold-start completeness gate (extends §2.4 / §7.4; ledger §B)
+
+No advanced KC may be reachable without a prerequisite path down to a foundational/entry KC — or the missing rung is made explicit, never silently taught-on-top-of. This is the machine form of P1 for the teaching ladder.
+
+- At digestion, each servable KC's prerequisite chain is walked. A KC whose chain references a concept with no KC in the corpus gets an **assumed-knowledge stub**: a flagged placeholder carrying `neverificat / verifică sursa` + a gap-record (§2.6) requesting the foundational material.
+- An **entry KC** = a KC with no unmet prerequisites (reachable from zero per §7.5 placement / `entry_phase`).
+
+- **INV-EC2.1 (reachability):** CI graph check over the production KC graph — every `servable` KC has a directed prerequisite path to ≥1 entry KC; any failure is either flagged `neverificat` or carries a linked assumed-knowledge stub. Silent-orphan count = 0, against the real DB.
+- **INV-EC2.2 (figure coverage):** every served REVEAL whose `concept_type` maps to a viz family (§5.2) has a bound figure instance OR a logged `figure-deferred` flag; silent-figureless count = 0 (the sparse-figure coverage check).
+
+### 15.3 EC3 — Recovery-session mode (extends §7.5)
+
+Per-KC re-lessons (§7.3) do not protect a learner who returns broadly decayed. A session-level response sits beside the §7.5 caps:
+
+- The selector detects **broad decay** — the session's due/decayed set exceeds a configured threshold (count or fraction of planned KCs), OR N consecutive in-session CHECK failures.
+- On trigger the session enters **recovery mode**: NEW first-encounter KCs are suppressed; the queue serves only RE-LESSONs (§4.5) over the decayed prerequisite cluster, prereq-ordered, lighter load; the surface states plainly "azi recapitulăm" (data, no guilt-trip, per §7.5). New material resumes the next session once the cluster recovers above threshold.
+
+- **INV-EC3.1 (suppression):** a recovery-triggered session on a copy of the real DB serves zero first-encounter (FULL/STANDARD) beat-plans — only RE-LESSON / MASTERED-REVISIT (property test).
+- **INV-EC3.2 (trigger purity):** the trigger is a pure function of (due-set size, planned-set size, in-session check failures), property-tested monotone (more decay ⇒ recovery no later).
+
+### 15.4 EC4 — Goal/intent layer (extends §7.4)
+
+The queue is curriculum-driven (exam dates × weights). A learner must also set an explicit target and have the system orient to it.
+
+- A **goal** = a learner-declared target: a specific past paper, a topic/KC-cluster, a deliverable, or a date. Stored per user.
+- On set, the system **decomposes** it into KCs (a past paper → the KCs its items exercise; a topic → its cluster), computes **readiness for that target** (the §7.4 readiness-gap arithmetic restricted to the target's KCs), and **re-weights queue priority** toward closing that gap — WITHOUT silencing exam-proximity safety (a near official exam still floors priority; the goal re-weights within, never overrides a real deadline). The readiness dashboard gains a per-goal view ("ești X% pregătit pentru «lucrarea 2023»").
+
+- **INV-EC4.1 (decomposition):** setting a past-paper goal yields a non-empty KC set from that paper's item→KC links; a goal with zero resolvable KCs is rejected at set-time with a gap-record, never silently accepted.
+- **INV-EC4.2 (priority safety):** property test — an official exam within its proximity window still out-prioritizes a goal KC with a later horizon (a goal cannot starve a real deadline).
+- **INV-EC4.3 (readiness honesty):** per-goal readiness counts only VERIFIED-servable KCs (INV-1.1); unverified KCs in the target surface as `neverificat`, never as a silent 0 or a silent pass.
+
+### 15.5 EC5 — Provider setup + health surface (new settings surface)
+
+Switching the LLM provider (esp. FreeLLMAPI) is today an env-var + deploy step with no in-app guidance and no reachability signal. The learner path stays zero-setup (default `free`); this is an ADMIN surface.
+
+- A settings panel exposes the existing plumbing: `GraderProviderSetting` (enum `free / claude / freellmapi`) + `user_provider_config` (encrypted `api_key_encrypted_ref`). Pick provider, store key (encrypted, never logged/committed), set `FREELLMAPI_BASE_URL`.
+- A **connection health-check**: a non-generating probe per provider returning `reachable ✓ / rate-limited / down`, so a stalled digestion (§11.3 free-LLM-pause) has a legible cause.
+- The learner-facing path mounts NONE of this. The §12 no-paid-APIs floor is unchanged — `free` / claude-max-relay only; `freellmapi` is localhost-additive.
+
+- **INV-EC5.1 (default zero-config):** a fresh user with no `user_provider_config` row resolves to `free` and reaches a served lesson with no provider step (the `GraderProviderSetting` default, asserted).
+- **INV-EC5.2 (secret hygiene):** the provider key is never written to logs or the repo; CI greps build output + tracked files for the key pattern → 0.
+- **INV-EC5.3 (health honesty):** the health-check reflects a real probe; a `down` provider never renders `✓` (test with a bad base-url asserts `down`).
+
+---
+
 ## Appendix A. Coverage map
 
 This appendix maps the audit finding clusters and the artifact-taxonomy requirements to the spec sections that address them. Sources: `build-review/2026-06-10-final-audit-report.md` (135 deduplicated flaws: 23 blocker / 53 high / 46 medium / 13 low, from 200 adversarially-verified raw findings, 0 refuted), `build-review/2026-06-10-rendered-ux-audit.md` (23 findings: 0 blocker / 9 high / 10 medium / 4 low, 104 screenshots), and `docs/superpowers/findings/2026-06-11-artifact-type-taxonomy.md` §3 (19 R-* requirements).
