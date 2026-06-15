@@ -84,3 +84,22 @@ Council: 1 REJECT, 4 CONDITIONAL. B2's mechanism (golden-file codegen from the i
 
 ### D-B — #5 visual baselines = keep documented fail-open (self-decided, not council)
 Zero-risk; Linux pixel-enforce = low ROI tonight (needs Linux host + dual-baseline upkeep). INV-9.5 path-scope gate still runs. Flagged for Alex; reopen if he wants CI pixel enforcement.
+
+---
+
+## PHASE-A A0 — fully diagnosed (recon wev8auw00), NOT executed (awaiting Alex). Plan = `… recon output`; key findings:
+
+**Reskin ⇄ family separate cleanly at FILE level** (family skins use literal hex, ZERO `var(--color)` → reverting the theme can't break them):
+- **REVERT (pure rejected reskin):** `index.css` (:root dark flip) + 5 beats (Predict/Attempt/Name/BeatOrchestrator/RevealBeat). **CheckBeat** = revert size-bumps but KEEP 1 real bugfix (`bg-panel-dark`→`bg-panel-dark-bg`, the old class rendered transparent).
+- **COMMIT (legit, additive, default skin untouched, vitest 14/14 green):** MatrixGridFamily, SortMergeFamily, the 2 oracle/trace + 2 invariant helpers, 2 tests, 1 fixture, 4 content `viz/*.yaml`, + modified seams familyRegistry / traceMatchHarness.test / SequenceArray(+925, default `white`) / GraphTree / ChartDist / GraphTreeFamily.test / AlgoStepperShell (viewBoxH + reading-paced autoplay).
+- **Double-mount root cause = the rejected reskin:** VizDemoPage's `viz-demo-dark-figures` section re-mounts families with colliding `mg`/`mgg` prefixes → strict-mode fail. Removing that section (= the reskin revert) fixes it. No family/spec change.
+
+**Why I did NOT auto-execute (despite recon marking steps 1–6 "safe"):** every step is either hand-surgery on Alex's rejected work OR commits substantial NEW VISUAL work (bars/dark skins, the SequenceArray refactor, dark figure stage) that a visual learner should review by eye first ([[feedback_render_before_claim_done]], [[feedback_design_by_proliferation]]). Quality over volume.
+
+### D-A LEG-2 — verified NOT-INDEPENDENT (the council's 8/10 worry, confirmed). Fix QUEUED, needs Alex's Phase-A go.
+The seed-recompute independence lives ENTIRELY in **leg 1** (trace-match vs `arrayMergeReference(seed)` / `matrixGridReference`). **Leg 2 (semantic invariants) is a tautology in isolation:** `INV-1 finalState` sorts the rendered frame against ITSELF (`[...rendered].sort()`), never `sort(seed)` — a frame showing `[1,2,3]` passes even if seed was `[5,2,8,1,9,3]`; `INV-2` anchors multiset on authored `frame[0]`; `INV-3/INV-4` slice authored `frame.state`. **System is sound TODAY only because leg 1 runs first** (seededWrongTrace proves leg 1 catches the wrong trace). Fix (thread the raw seed into leg 2): INV-1 vs `[...seed].sort()`, INV-2 vs `multiset(seed)`, INV-3 from independent replay, matrixGrid INV-4 vs `matrixGridReference`. **Flagged as a spec-gate change → Alex sign-off before Phase-A build.**
+
+## ⏳ MORNING DECISION QUEUE FOR ALEX (3 forks — your call, not council's)
+1. **Dark aesthetic disposition:** revert the dark *page theme* (clearly rejected) — but KEEP the dark *floating figure* stage (`LessonFigureShell`/`FigureReveal`; literal-hex, theme-independent; the v2 plan puts it in Phase D)? Or drop both? The `/lectie-*` demo routes violate branching-scope (→ feature branch, not main) regardless.
+2. **A0 family-WIP commit:** OK to commit the green family/oracle cluster (incl. the bars + dark family skins + the +925 SequenceArray refactor) after you eyeball the renders? It's at-risk untracked WIP (one `git clean` from gone).
+3. **D-A leg-2 fix** (thread seed into invariants) + **`alo-kc-gauss-elim.yaml`** (A0 or a separate content commit?) — both need your go.
