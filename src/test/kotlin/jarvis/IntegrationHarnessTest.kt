@@ -1,6 +1,7 @@
 package jarvis
 
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -25,6 +26,12 @@ import kotlin.test.assertTrue
  * concurrent refresh.
  */
 class IntegrationHarnessTest {
+
+    // Phase-0 (2026-06-15): this class drives the StateCache process-global singleton (it ensureLoads
+    // a @TempDir file that is deleted when the test ends). Reset after each test so it leaves no stale
+    // cell/diskLoadAttempted for the next test class — the other half of the ~1-in-2 flake fix.
+    @AfterEach
+    fun resetStateCache() = StateCache.resetForTests()
 
     /**
      * Three writer pools simulate ProactiveLoop / BlockReminder /

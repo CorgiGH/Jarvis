@@ -14,11 +14,14 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.io.path.exists
 import kotlin.io.path.readText
@@ -66,16 +69,55 @@ object StateCache {
     }
 
     internal fun persist(state: UserState, file: Path = Config.stateCacheFile) {
+        // Atomic write. A bare `writeString(... TRUNCATE_EXISTING ...)` is NOT
+        // atomic: when K threads persist the same file concurrently, one
+        // thread's truncate can interleave with another's write, leaving a
+        // half-written/empty file that a subsequent ensureLoaded → decode
+        // observes as torn JSON (swallowed → cell stays null → current()==null).
+        //
+        // Fix: serialize off-target into a temp file UNIQUE per call (UUID — a
+        // shared temp name would just move the race one filename over, since
+        // persist is called WITHOUT a lock unlike JsonlRotate), flush to disk,
+        // then atomically rename it onto the target. A reader therefore only
+        // ever sees the old complete file or the new complete file, never a
+        // torn one. Temp lives in the target's own directory so the rename
+        // stays on one filesystem. Temp is always cleaned up on failure (the
+        // success path consumes it via the move). persist still never throws.
         runCatching {
             Files.createDirectories(file.parent)
-            Files.writeString(
-                file,
-                json.encodeToString(state),
-                Charsets.UTF_8,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE,
+            val tmp = file.resolveSibling(
+                "${file.fileName}.${UUID.randomUUID()}.tmp",
             )
+            try {
+                Files.write(
+                    tmp,
+                    json.encodeToString(state).toByteArray(Charsets.UTF_8),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.SYNC,
+                )
+                try {
+                    Files.move(
+                        tmp,
+                        file,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING,
+                    )
+                } catch (_: AtomicMoveNotSupportedException) {
+                    // Some filesystems reject ATOMIC_MOVE. A plain move is
+                    // still a single rename on the common cases and is far
+                    // safer than truncate-then-write into the live target.
+                    Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING)
+                }
+            } finally {
+                // No orphan .tmp litter on any failure path (the happy path
+                // already moved tmp away, so this is a no-op there).
+                try {
+                    Files.deleteIfExists(tmp)
+                } catch (_: Exception) {
+                }
+            }
         }
     }
 

@@ -1,6 +1,8 @@
 package jarvis
 
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -18,6 +20,17 @@ class StateCacheTest {
         override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> =
             replyText to "fake-llm"
     }
+
+    // Phase-0 (2026-06-15): StateCache is a process-global `object` singleton; without per-test reset
+    // its `cell`/`diskLoadAttempted` leak across methods AND across IntegrationHarnessTest (which
+    // shares the same singleton), producing the ~1-in-2 order-dependent flake. resetForTests() clears
+    // both; running it before AND after each test makes every method start clean and leaves nothing
+    // for the next test class to inherit.
+    @BeforeEach
+    fun resetBefore() = StateCache.resetForTests()
+
+    @AfterEach
+    fun resetAfter() = StateCache.resetForTests()
 
     @Test
     fun refreshSyncStoresAndReturns() = runBlocking {
