@@ -168,9 +168,14 @@ object VerifyAdmin {
     ): jarvis.tutor.verify.VerificationRunner =
         jarvis.tutor.verify.VerificationRunner(
             db = db,
-            legA = jarvis.tutor.verify.TwoFamilyDeriver.Leg(jarvis.tutor.verify.LegFamily.RELAY, jarvis.RelayLlm()),
+            // Phase-0 (2026-06-15): both legs are NETWORK; wrap each in RetryingLlm (bounded exp-backoff,
+            // retries ONLY on IOException) so a transient relay/OpenRouter blip no longer flips a KC to a
+            // permanent `failed` (the pa-kc-006 false-negative class). Mirrors the request path.
+            legA = jarvis.tutor.verify.TwoFamilyDeriver.Leg(
+                jarvis.tutor.verify.LegFamily.RELAY, jarvis.RetryingLlm(jarvis.RelayLlm()),
+            ),
             legB = jarvis.tutor.verify.TwoFamilyDeriver.Leg(
-                jarvis.tutor.verify.LegFamily.OPENROUTER, jarvis.OpenRouterChatLlm(),
+                jarvis.tutor.verify.LegFamily.OPENROUTER, jarvis.RetryingLlm(jarvis.OpenRouterChatLlm()),
             ),
             nonLlmLegFor = { subject -> jarvis.tutor.verify.nonLlmLegFor(subject) },
             rawSourceFor = { claim ->

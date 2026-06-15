@@ -130,7 +130,12 @@ object VerifyContentCli {
     private fun liveRunner(db: org.jetbrains.exposed.sql.Database, repo: ContentRepo): VerificationRunner =
         VerificationRunner(
             db = db,
-            legA = TwoFamilyDeriver.Leg(LegFamily.RELAY, jarvis.RelayLlm()),
+            // Phase-0 (2026-06-15): wrap the RELAY leg in RetryingLlm (bounded exp-backoff, retries
+            // ONLY on IOException) so a transient relay timeout/connect-blip no longer flips the KC to
+            // a permanent `failed` — the pa-kc-006 false-negative class. Mirrors the already-wrapped
+            // request path (TutorRoutes RetryingLlm(FreeLlmApiLlm()) / RetryingLlm(RelayLlm())). legB
+            // (NLI) is a LOCAL in-process model, not network, so it needs no retry.
+            legA = TwoFamilyDeriver.Leg(LegFamily.RELAY, jarvis.RetryingLlm(jarvis.RelayLlm())),
             legB = TwoFamilyDeriver.Leg(LegFamily.NLI, jarvis.NliEntailmentLlm()),
             nonLlmLegFor = { subject -> nonLlmLegFor(subject) },
             rawSourceFor = { claim ->
