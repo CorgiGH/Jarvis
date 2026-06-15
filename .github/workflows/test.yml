@@ -289,3 +289,22 @@ jobs:
           path: |
             build/e2e/server.log
             tutor-web/playwright-report/
+
+  gate-registry:
+    # Phase-0 deliverable (2026-06-15): the gate-coverage registry is the named board mapping every
+    # spec INV-*/clause to a status (LIVE-GREEN / PLANNED / RED-UNMAPPED) + LAYER + PROOF/ESTIMATOR tag.
+    # This check REDS if any clause is UNMAPPED, a PROOF clause is backed only by an estimator, a
+    # RED-UNMAPPED id is not in the printed accepted-debt allow-list, duplicate ids, or counts drift.
+    # The self-test feeds the checker known-bad fixtures and asserts it reds (INV-9.4 liveness, this gate).
+    name: gate-registry (coverage + self-test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Gate-coverage registry consistency (zero UNMAPPED, no estimator laundered green)
+        run: node tools/gate-registry-check.mjs
+      - name: Registry checker self-test (seeded-bad reds)
+        run: node --test tools/gate-registry-check.test.mjs
