@@ -36,6 +36,19 @@ I started **hand-editing** the 3 trivial fixes myself (fail-open flip, relay-ret
 | D3 | **#1 impeccable blocking-flip REVERTED** — premature | gate evidence | local `detect`=EXIT 1, filter kept **25 of 37** real findings in committed prod components (ChatPane/DrillStack/Sidekick/beat comps). Flip would red CI. Becomes a **calibration work-item** (triage 25 → fix or de-scope antipattern), not a one-liner. | test.yml back to fail-open |
 | D4 | **recon MISDIAGNOSED the StateCache flake** | my own re-run | recon called it a test-isolation leak; the REAL ~1-in-2 red is `IntegrationHarnessTest.stateCacheConcurrentPersistNeverTearsJson:160` — `StateCache.persist` does a **non-atomic** `Files.writeString(TRUNCATE_EXISTING)`, so K concurrent writers interleave → corrupt/empty file → `assertNotNull` fails. My loop: **2/3 red** (agent falsely claimed 4/4 — inadmissible-green lesson, live again). Fix = **atomic temp+rename** (production change to StateCache.kt). The test-isolation edit is kept as hygiene but is NOT the flake fix. | fix delegated |
 
+### COMMITTED (local main, NOT pushed — now 10 ahead of origin)
+- `e527386` fix(statecache): atomic persist + per-test isolation (#4) — self-verified 10/10
+- `208669a` fix(verify): wrap relay legs in RetryingLlm (#3)
+- `c066bef` test(backup): schema-hash parity golden-vector (#2)
+- `7e6def7` test(viz): seeded-bad self-tests for assertNoClip legs 1+3 (#7)
+- `85638dc` docs(overnight): decision log
+All by explicit path; working-tree dirt (door/demo/tutor-dist) untouched.
+
+### Remaining Phase-0
+- **#6 gate matrix/coverage registry** = the Phase-0 DELIVERABLE → building now (workflow). Registers #8 auth as RED-unmapped security-debt + impeccable as fail-open-debt.
+- **#1 impeccable calibration** = DEFERRED work-item: triage the 25 findings (real design defects vs over-broad antipattern) → then fix-or-narrow → then flip. Needs a triage agent + likely a decision.
+- **D-B #5 baselines** = self-decided: keep documented fail-open tonight (zero-risk; Linux pixel-enforce = low ROI, needs Linux host + dual-baseline upkeep). Flagged for Alex; reopen if he wants CI pixel enforcement.
+
 ### Gate status (Phase-0 fixes, this run)
 - **#2 schema-parity** (SchemaHashParityTest.kt + test_schema_hash_parity.py): GREEN both runtimes (pending my final consolidated re-gate).
 - **#3 relay-retry** (VerifyContentCli + TrustRoutes): GREEN (TrustRoutesTest + verify.* pass in every run; only the concurrent-persist test reds).
@@ -43,7 +56,31 @@ I started **hand-editing** the 3 trivial fixes myself (fail-open flip, relay-ret
 - **#7 no-clip leg seeds** (seeded-clip-legs.spec.ts): GREEN (leg1+leg3 RED+clean, 4/4).
 - **Deferred (NOT Phase-0 fixes / not mine):** matrix-grid `mg-root`/`mgg-root` strict-mode double-mount on /tutor/viz-demo (uncommitted viz WIP → A0/Phase-A scope); drill-4b legibility self-test resolved-instead-of-rejected locally (pre-existing, committed, ?env/chromium-contrast — re-check in CI).
 
-## Pending decisions (queued for council-lite)
+## Phase-0 deliverable #6 — gate-coverage registry: DONE + self-verified + CI-wired
+- Files: `docs/superpowers/plans/2026-06-15-gate-coverage-registry.{json,md}` + `tools/gate-registry-check.mjs` + `tools/gate-registry-check.test.mjs`; wired into CI as a new `gate-registry` job in `.github/workflows/test.yml`.
+- **86 clauses** registered (every spec INV-* + plan net-news + named non-INV gates): **18 LIVE-GREEN / 62 PLANNED / 6 RED-UNMAPPED**. The 6 accepted-debt ids (printed every run, never laundered green): auth-surface-security-debt, Phase0-Impeccable-blocking, Phase0-LinuxVisualBaselines, INV-9.5, Phase0-StandingRedTeam, a11y-keyboard-aria-live-gate.
+- **Self-verified by me:** `node tools/gate-registry-check.mjs` → EXIT 0 ("zero UNMAPPED"); `node --test ...test.mjs` → EXIT 0. Adversarial audit verdict = **PRISTINE** (56 spec INVs all present, zero estimators laundered green, impeccable not falsely green, auth registered-not-absorbed).
+- Checker reds on: UNMAPPED (missing status/tag), PROOF-clause-backed-only-by-estimator, RED-UNMAPPED-not-in-allow-list, duplicate id, counts drift, orphan debt.
 
-- **D-A — figure generate-from-algorithm serialization contract** (Phase A; the "net-new design" the plan names): shape of the Kotlin→React typed state/event stream → keyframes. Council-lite with full context before any build.
-- **D-B — defect #5 visual baselines:** enforce on Linux CI (regen + {platform} suffix + wire e2e:visual) vs keep documented fail-open (current posture, plan4a:1504). Council-lite.
+### D-CENSUS — committed-KC count CORRECTED: 6, not 7 (verified by me)
+`git ls-files content/ALO/**` → only `.gitkeep` tracked; `alo-kc-gauss-elim.yaml` exists on disk but is **UNTRACKED WIP**. So committed HEAD = **6 real KCs (PA pa-kc-001..006 only)**; the plan/MEMORY "7 incl. ALO gauss" overcounts the COMMITTED state by 1. Impact: Phase-B EARLY depth-authoring scope (the ALO KC isn't a committed input) + the content census. **Left untracked** — committing unverified content is gated Phase-B/F work, not tonight's scope.
+
+### Phase-0 status
+Fixes #2/#3/#4/#7 committed+verified; #6 registry done+wired+verified. **Remaining Phase-0 = #1 impeccable calibration only** (deferred work-item: triage the 25 findings → fix-or-narrow → flip). Phase-0 substrate is otherwise complete.
+
+## Resolved decisions
+
+### D-A — Phase-A figure engine = **B2 (TS-oracle-as-generator), gate REDESIGNED to 3 field-scoped legs** (council-1781489738, verdict FLAWED→fixed, 8/10)
+Council: 1 REJECT, 4 CONDITIONAL. B2's mechanism (golden-file codegen from the instrumented TS oracle, frozen §NEW-V `data_json=keyframes` unchanged, families+scrubber unchanged) is industry-standard (VisuAlgo/Galles/Manim) and chosen over A (Kotlin backend — two-impl drift, zero code) and C (hybrid — frozen-sig churn). **My naive "data_json===oracle(seed)" gate was FLAWED on two counts the council killed:**
+1. **Tautology (CRITICAL):** same oracle generating AND checking proves only that codegen ran, NOT that the algorithm is correct — mergesort-never-sorts would pass; `final==sorted` alone is necessary-not-sufficient (wrong method, right result).
+2. **Callout/prose (HIGH):** byte-equality can't cover the generated NL `callout` field → certifies only half; snapshot-rot reds CI on first pedagogy edit.
+
+**LOCKED contract (D-A) — the Phase-A figure gate = THREE field-scoped legs, never one equality:**
+- **Leg 1 STATE re-derivation (PROOF, L1):** served data_json algorithm-state fields === oracle(seed)-regenerated state.
+- **Leg 2 INDEPENDENT INVARIANTS (PROOF, L1):** per-frame structural invariants + postcondition vs a TRUSTED INDEPENDENT reference (NOT the oracle): final==knownCorrectSort(input), multiset conserved every frame, every-frame-advances over the state vector, monotone-progress, + the algorithm's defining per-frame invariant. **This leg kills the tautology + the never-sorts class.**
+- **Leg 3 CALLOUT/PROSE (ESTIMATOR, L2):** callout excluded from legs 1/2; gated separately by the language (RO) gate + the Phase-C pedagogy estimator; never byte-pinned. (Matches the plan's A1 note + two-layer model.)
+- Oracle + seed-normalization live in ONE shared module imported by both the codegen AND the invariant harness (no drift). A0 (commit WIP families/oracles) first. Mergesort re-bind rides leg 2.
+- **OPEN A1 VERIFICATION ITEM (judge, why 8/10 not higher):** confirm the existing `arrayMergeTrace` harness authors its per-frame invariants INDEPENDENTLY of the oracle's step generator. If invariants are derived from the SAME step list, leg 2 needs a genuinely separate trusted reference (e.g. property-based / stdlib cross-check). Phase-A build must verify this before trusting leg 2.
+
+### D-B — #5 visual baselines = keep documented fail-open (self-decided, not council)
+Zero-risk; Linux pixel-enforce = low ROI tonight (needs Linux host + dual-baseline upkeep). INV-9.5 path-scope gate still runs. Flagged for Alex; reopen if he wants CI pixel enforcement.
