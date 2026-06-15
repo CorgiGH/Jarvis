@@ -13,6 +13,8 @@ import { MatrixTransform } from "./MatrixTransform";
 import { GraphTreeFamily } from "./families/GraphTreeFamily";
 import { ChartDistributionFamily } from "./families/ChartDistributionFamily";
 import { SequenceArrayFamily } from "./families/SequenceArrayFamily";
+import { MatrixGridFamily } from "./families/MatrixGridFamily";
+import { LessonFigureShell } from "../lesson/LessonFigureShell";
 import { NumLineDirect } from "./NumLineDirect";
 import { OsiEncap } from "./OsiEncap";
 import { ProcessFSM } from "./ProcessFSM";
@@ -59,6 +61,17 @@ const NORMAL_AREA_DATA_JSON =
 const SELECTSORT_DATA_JSON =
   '{"values":[5,3,8,1,6],"steps":[{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":0,"min":0,"phase":"scan","callout":"Runda i=0: presupunem că minimul este a[0]=5."},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":1,"min":1,"phase":"scan","callout":"Scanăm j=1: a[1]=3 este mai mic — noul minim este la indicele 1."},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":2,"min":1,"phase":"scan","callout":"Scanăm j=2: a[2]=8 ≥ minimul curent a[1]=3 — minimul rămâne la 1."},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":3,"min":3,"phase":"scan","callout":"Scanăm j=3: a[3]=1 este mai mic — noul minim este la indicele 3."},{"array":[5,3,8,1,6],"sortedCount":0,"i":0,"j":4,"min":3,"phase":"scan","callout":"Scanăm j=4: a[4]=6 ≥ minimul curent a[3]=1 — minimul rămâne la 3."},{"array":[1,3,8,5,6],"sortedCount":1,"i":0,"j":4,"min":3,"phase":"swap","callout":"Schimbăm a[0] cu a[3]: minimul 1 ajunge la poziția 0. Stânga lui 0 este sortată."},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":1,"min":1,"phase":"scan","callout":"Runda i=1: presupunem că minimul este a[1]=3."},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":2,"min":1,"phase":"scan","callout":"Scanăm j=2: a[2]=8 ≥ minimul curent a[1]=3 — minimul rămâne la 1."},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":3,"min":1,"phase":"scan","callout":"Scanăm j=3: a[3]=5 ≥ minimul curent a[1]=3 — minimul rămâne la 1."},{"array":[1,3,8,5,6],"sortedCount":1,"i":1,"j":4,"min":1,"phase":"scan","callout":"Scanăm j=4: a[4]=6 ≥ minimul curent a[1]=3 — minimul rămâne la 1."},{"array":[1,3,8,5,6],"sortedCount":2,"i":1,"j":4,"min":1,"phase":"swap","callout":"Minimul a[1]=3 este deja la poziția 1 — poziția 1 este fixată."},{"array":[1,3,8,5,6],"sortedCount":2,"i":2,"j":2,"min":2,"phase":"scan","callout":"Runda i=2: presupunem că minimul este a[2]=8."},{"array":[1,3,8,5,6],"sortedCount":2,"i":2,"j":3,"min":3,"phase":"scan","callout":"Scanăm j=3: a[3]=5 este mai mic — noul minim este la indicele 3."},{"array":[1,3,8,5,6],"sortedCount":2,"i":2,"j":4,"min":3,"phase":"scan","callout":"Scanăm j=4: a[4]=6 ≥ minimul curent a[3]=5 — minimul rămâne la 3."},{"array":[1,3,5,8,6],"sortedCount":3,"i":2,"j":4,"min":3,"phase":"swap","callout":"Schimbăm a[2] cu a[3]: minimul 5 ajunge la poziția 2. Stânga lui 2 este sortată."},{"array":[1,3,5,8,6],"sortedCount":3,"i":3,"j":3,"min":3,"phase":"scan","callout":"Runda i=3: presupunem că minimul este a[3]=8."},{"array":[1,3,5,8,6],"sortedCount":3,"i":3,"j":4,"min":4,"phase":"scan","callout":"Scanăm j=4: a[4]=6 este mai mic — noul minim este la indicele 4."},{"array":[1,3,5,6,8],"sortedCount":4,"i":3,"j":4,"min":4,"phase":"swap","callout":"Schimbăm a[3] cu a[4]: minimul 6 ajunge la poziția 3. Stânga lui 3 este sortată."}]}';
 
+// The viz-pa-dpfib-001 instance data_json (verbatim from content/PA/viz/viz-pa-dpfib-001.yaml).
+// Keep byte-identical to the shipped YAML — the matrix-grid no-clip e2e drives THIS mount.
+const DPFIB_DATA_JSON =
+  '{"rows":1,"cols":6,"kind":"dp-fill","seed":{"n":5},"colHeaders":["dp[0]","dp[1]","dp[2]","dp[3]","dp[4]","dp[5]"],"steps":[{"writes":[{"row":0,"col":0,"value":"0"}],"fills":[{"row":0,"col":0}],"pivot":{"row":0,"col":0},"callout":"dp[0] = 0 (caz de bază)"},{"writes":[{"row":0,"col":1,"value":"1"}],"fills":[{"row":0,"col":1}],"pivot":{"row":0,"col":1},"callout":"dp[1] = 1 (caz de bază)"},{"writes":[{"row":0,"col":2,"value":"1"}],"fills":[{"row":0,"col":2}],"pivot":{"row":0,"col":2},"rowOp":"dp[2]=dp[1]+dp[0]","callout":"dp[2] = dp[1]+dp[0] = 1"},{"writes":[{"row":0,"col":3,"value":"2"}],"fills":[{"row":0,"col":3}],"pivot":{"row":0,"col":3},"rowOp":"dp[3]=dp[2]+dp[1]","callout":"dp[3] = dp[2]+dp[1] = 2"},{"writes":[{"row":0,"col":4,"value":"3"}],"fills":[{"row":0,"col":4}],"pivot":{"row":0,"col":4},"rowOp":"dp[4]=dp[3]+dp[2]","callout":"dp[4] = dp[3]+dp[2] = 3"},{"writes":[{"row":0,"col":5,"value":"5"}],"fills":[{"row":0,"col":5}],"pivot":{"row":0,"col":5},"rowOp":"dp[5]=dp[4]+dp[3]","callout":"dp[5] = dp[4]+dp[3] = 5 ✓ — fiecare celulă calculată o singură dată (O(n))"}]}';
+
+// The viz-alo-gauss-001 instance data_json (verbatim from content/ALO/viz/viz-alo-gauss-001.yaml).
+// Keep byte-identical to the shipped YAML — the matrix-grid (gauss) no-clip e2e drives THIS mount.
+// The flagship matrix instance: 3×4 augmented matrix, partial-pivoting row-swap, rowOp rail + long callouts.
+const GAUSS_DATA_JSON =
+  '{"rows":3,"cols":4,"kind":"gauss-elim","seed":{"matrix":[[1,-1,3,2],[3,-3,1,-1],[1,1,0,3]]},"colHeaders":["x1","x2","x3","| b"],"rowHeaders":["E1","E2","E3"],"steps":[{"writes":[{"row":0,"col":0,"value":"1"},{"row":0,"col":1,"value":"-1"},{"row":0,"col":2,"value":"3"},{"row":0,"col":3,"value":"2"},{"row":1,"col":0,"value":"3"},{"row":1,"col":1,"value":"-3"},{"row":1,"col":2,"value":"1"},{"row":1,"col":3,"value":"-1"},{"row":2,"col":0,"value":"1"},{"row":2,"col":1,"value":"1"},{"row":2,"col":2,"value":"0"},{"row":2,"col":3,"value":"3"}],"fills":[{"row":0,"col":0},{"row":0,"col":1},{"row":0,"col":2},{"row":0,"col":3},{"row":1,"col":0},{"row":1,"col":1},{"row":1,"col":2},{"row":1,"col":3},{"row":2,"col":0},{"row":2,"col":1},{"row":2,"col":2},{"row":2,"col":3}],"pivot":null,"callout":"Matricea extinsă a sistemului. Scopul: o aducem la formă superior triunghiulară."},{"writes":[],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"pivot a11 = 1","callout":"Pasul 1: pivotul este a11 = 1. Eliminăm x1 din liniile de sub el."},{"writes":[{"row":1,"col":0,"value":"0"},{"row":1,"col":1,"value":"0"},{"row":1,"col":2,"value":"-8"},{"row":1,"col":3,"value":"-7"}],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"E2 ← E2 + (-3)·E1","callout":"f21 = -3/1 = -3. E2 ← E2 + (-3)·E1 ⇒ (0  0  -8 | -7)."},{"writes":[{"row":2,"col":0,"value":"0"},{"row":2,"col":1,"value":"2"},{"row":2,"col":2,"value":"-3"},{"row":2,"col":3,"value":"1"}],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"E3 ← E3 + (-1)·E1","callout":"f31 = -1/1 = -1. E3 ← E3 + (-1)·E1 ⇒ (0  2  -3 | 1)."},{"writes":[{"row":1,"col":1,"value":"2"},{"row":1,"col":2,"value":"-3"},{"row":1,"col":3,"value":"1"},{"row":2,"col":1,"value":"0"},{"row":2,"col":2,"value":"-8"},{"row":2,"col":3,"value":"-7"}],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"schimbă E2 ↔ E3","callout":"Pasul 2: pivotul a22 = 0! Pivotare parțială: interschimbăm E2 cu E3."},{"writes":[],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"pivot a22 = 2","callout":"După schimb, noul pivot este a22 = 2 (nenul). Eliminăm x2 din liniile de sub el."},{"writes":[],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"E3 ← E3 + 0·E2","callout":"f32 = -0/2 = 0: E3 e deja zero pe coloana x2. Sistem superior triunghiular ✓."}]}';
+
 export function VizDemoPage() {
   const [numLineMu, setNumLineMu] = useState(5);
   return (
@@ -80,6 +93,61 @@ export function VizDemoPage() {
           Brutalist mono · viz-foundation-demo branch · NOT a production drill flow
         </p>
       </header>
+
+      {/* ── DARK LESSON-SURFACE VERIFICATION (Plan: premium-dark figures) ──
+          Mounts the lesson families with variant="dark" + the float layout inside the lectie dark
+          stage, exactly as a lesson reveal beat does (via LessonFigureShell). This is the eyeball
+          surface for "figure floats DARK, no white box" — graph-tree (mergesort), matrix-grid (dp +
+          gauss), chart-dist (normal area), seq-array (selection sort). NOT lesson content. */}
+      <section
+        data-testid="viz-demo-dark-figures"
+        style={{ marginBottom: 56, background: "#0e0e0e", border: "3px solid #fde047", padding: 24 }}
+      >
+        <h2 style={{ ...headingStyle, color: "#fde047" }}>★ DARK LESSON-SURFACE FIGURES (variant="dark", floating)</h2>
+        <p style={{ ...subheadingStyle, color: "#9a9a9a" }}>
+          The four lesson families rendered DARK + FLOATING on the lectie stage (no white box). Same geometry,
+          same data-* stamps, same trace — only paint + chrome change. This is what a reveal beat shows.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 28 }}>
+          <div data-testid="dark-fig-graph-tree" style={{ background: "#0e0e0e" }}>
+            <div style={{ color: "#fde047", fontSize: 11, letterSpacing: "0.1em", marginBottom: 8, fontWeight: 700 }}>
+              graph-tree · mergesort
+            </div>
+            <LessonFigureShell familyId="graph-tree" instanceId="viz-pa-mergesort-001" dataJson={MERGESORT_DATA_JSON} language="ro" />
+          </div>
+          <div data-testid="dark-fig-seq-array" style={{ background: "#0e0e0e" }}>
+            <div style={{ color: "#fde047", fontSize: 11, letterSpacing: "0.1em", marginBottom: 8, fontWeight: 700 }}>
+              seq-array · selection sort
+            </div>
+            <LessonFigureShell familyId="seq-array" instanceId="viz-pa-selectsort-001" dataJson={SELECTSORT_DATA_JSON} language="ro" />
+          </div>
+          <div data-testid="dark-fig-matrix-grid" style={{ background: "#0e0e0e" }}>
+            <div style={{ color: "#fde047", fontSize: 11, letterSpacing: "0.1em", marginBottom: 8, fontWeight: 700 }}>
+              matrix-grid · dp fib (mg-root)
+            </div>
+            <LessonFigureShell familyId="matrix-grid" instanceId="viz-pa-dpfib-001" dataJson={DPFIB_DATA_JSON} language="ro" />
+          </div>
+          <div data-testid="dark-fig-matrix-grid-gauss" className="lesson-figure-dark" style={{ background: "#0e0e0e", width: "100%" }}>
+            <div style={{ color: "#fde047", fontSize: 11, letterSpacing: "0.1em", marginBottom: 8, fontWeight: 700 }}>
+              matrix-grid · gauss (mgg-root)
+            </div>
+            <MatrixGridFamily
+              instanceId="viz-alo-gauss-001"
+              dataJson={GAUSS_DATA_JSON}
+              language="ro"
+              testIdPrefix="mgg"
+              variant="dark"
+              layout={{ canvasBg: "#0e0e0e", controls: "bottom", maxWidth: 760 }}
+            />
+          </div>
+          <div data-testid="dark-fig-chart-dist" style={{ background: "#0e0e0e" }}>
+            <div style={{ color: "#fde047", fontSize: 11, letterSpacing: "0.1em", marginBottom: 8, fontWeight: 700 }}>
+              chart-dist · normal area
+            </div>
+            <LessonFigureShell familyId="chart-dist" instanceId="viz-ps-normal-area-001" dataJson={NORMAL_AREA_DATA_JSON} language="ro" />
+          </div>
+        </div>
+      </section>
 
       <section data-testid="viz-demo-graph-tree" style={tileStyle}>
         <h2 style={headingStyle}>PA · MergeSort graph-tree family (viz-pa-mergesort-001)</h2>
@@ -103,6 +171,22 @@ export function VizDemoPage() {
           Family verification vehicle (NOT lesson content). Selection sort on [5,3,8,1,6] · pointers i/j/min · sorted-prefix recolor · 18 steps · element-anchored callouts · paints data-testid="seq-array-root".
         </p>
         <SequenceArrayFamily instanceId="viz-pa-selectsort-001" dataJson={SELECTSORT_DATA_JSON} language="ro" />
+      </section>
+
+      <section data-testid="viz-demo-matrix-grid" style={tileStyle}>
+        <h2 style={headingStyle}>PA · DP fill-table matrix-grid family (viz-pa-dpfib-001)</h2>
+        <p style={subheadingStyle}>
+          Family verification vehicle (NOT lesson content). DP fib(5) table · left→right fill · pivot-anchored callouts · per-cell trace-match · paints data-testid="mg-root".
+        </p>
+        <MatrixGridFamily instanceId="viz-pa-dpfib-001" dataJson={DPFIB_DATA_JSON} language="ro" />
+      </section>
+
+      <section data-testid="viz-demo-matrix-grid-gauss" style={tileStyle}>
+        <h2 style={headingStyle}>ALO · Gaussian-elimination matrix-grid family (viz-alo-gauss-001)</h2>
+        <p style={subheadingStyle}>
+          Family verification vehicle (NOT lesson content). 3×4 augmented matrix · forward elimination + partial-pivoting row-swap (a22=0 ⇒ E2↔E3) · rowOp rail · pivot-anchored callouts · per-cell trace-match vs the Gauss oracle · paints data-testid="mgg-root".
+        </p>
+        <MatrixGridFamily instanceId="viz-alo-gauss-001" dataJson={GAUSS_DATA_JSON} language="ro" testIdPrefix="mgg" />
       </section>
 
       <section data-testid="viz-demo-matrix" style={tileStyle}>

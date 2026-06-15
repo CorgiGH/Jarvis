@@ -5,6 +5,11 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from "react-router-dom";
 import { App } from "./App";
 import { VizDemoPage } from "./components/viz/VizDemoPage";
+import { LectieSelectSortDemo } from "./components/viz/families/LectieSelectSortDemo";
+import { LectieSelectSortBarsDemo } from "./components/viz/families/LectieSelectSortBarsDemo";
+import { LectieSelectSortHelpDemo } from "./components/viz/families/LectieSelectSortHelpDemo";
+import { LectieMergeSortDemo } from "./components/viz/families/LectieMergeSortDemo";
+import { MergeCompareDemo } from "./components/viz/families/MergeCompareDemo";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { BeatOrchestrator } from "./components/lesson/BeatOrchestrator";
 import { getLesson } from "./lib/lesson";
@@ -255,6 +260,11 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/login" element={<App />} />
           <Route path="/welcome/ai-literacy" element={<App />} />
           <Route path="/viz-demo" element={<VizDemoPage />} />
+          <Route path="/lectie-selectsort" element={<LectieSelectSortDemo />} />
+          <Route path="/lectie-selectsort-bars" element={<LectieSelectSortBarsDemo />} />
+          <Route path="/lectie-selectsort-help" element={<LectieSelectSortHelpDemo />} />
+          <Route path="/lectie-mergesort" element={<LectieMergeSortDemo />} />
+          <Route path="/merge-compare" element={<MergeCompareDemo />} />
           <Route path="/oggi" element={<App />} />
           <Route path="/subjects" element={<App />} />
           <Route path="/lesson/:kcId" element={<BeatOrchestratorRoute />} />

@@ -25,6 +25,7 @@ import { jarvisFetch } from "../../lib/api";
 import { lessonStrings } from "../../lib/lessonStrings";
 import { shellLabels, figureFallback } from "../../lib/chromeStrings";
 import { familyRegistry } from "../viz/families/familyRegistry";
+import { LessonFigureShell } from "./LessonFigureShell";
 import type { ApiFigureBinding, ApiRevealStep } from "../../lib/lesson";
 
 /** §0.9B ApiVizInstanceReply shape — snake_case on the wire (backend casing wins). */
@@ -207,10 +208,11 @@ export function FigureReveal({ figure, steps, predictedOption, onGateClear }: Fi
     );
   }
 
-  // "ready" — mount the family
+  // "ready" — mount the family DARK + FLOATING via LessonFigureShell (the lesson surface is the dark
+  // lectie skin; the family's white box would be a glaring white island on it). The family_id was
+  // validated against familyRegistry in load() above; LessonFigureShell dispatches the same four
+  // families with variant="dark" + the float layout.
   const { reply } = figureState;
-  const FamilyRenderer = familyRegistry[reply.family_id];
-  // FamilyRenderer is guaranteed to be defined: we checked in load() above.
 
   return (
     <div data-testid="beat-figure-scrubber" className="flex flex-col gap-3">
@@ -221,7 +223,8 @@ export function FigureReveal({ figure, steps, predictedOption, onGateClear }: Fi
       >
         {lessonStrings.step} {stepDisplay.idx + 1}/{stepDisplay.lastIdx + 1}
       </span>
-      <FamilyRenderer
+      <LessonFigureShell
+        familyId={reply.family_id}
         instanceId={reply.id}
         dataJson={reply.data_json}
         language={reply.language}

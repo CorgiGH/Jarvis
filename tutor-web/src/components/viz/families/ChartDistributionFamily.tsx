@@ -1,7 +1,28 @@
 import { useCallback, useMemo, type ReactNode } from "react";
-import { AlgoStepperShell, type Frame } from "../AlgoStepperShell";
+import { AlgoStepperShell, type Frame, type ShellLayout } from "../AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "../theme";
 import type { FamilyRendererProps } from "./familyRegistry";
+
+// ── Render skins ──────────────────────────────────────────────────────────
+// ONE geometry + ONE set of data-* stamps, TWO paint skins (mirrors SequenceArrayFamily). Colours are
+// baked as LITERAL hex into the SVG presentation attributes (NOT var() — unreliable in SVG attributes),
+// so the colour-blind invariants (data-cd / data-cd-xtick / -ytick) stay green across skins.
+//   • "light" — original brutalist-on-paper (gallery + e2e + trace harness, UNCHANGED).
+//   • "dark"  — lectie lesson surface: the plot floats on the dark stage, light axes/curve, accent shade.
+export type CdVariant = "light" | "dark";
+
+const DARK = {
+  bg: "#0e0e0e",       // panel-dark-bg (DESIGN.md DARK surface)
+  axis: "#8a8a8a",     // axes + ticks (mid-grey, present but quiet on dark)
+  curve: "#f4f4f4",    // the density curve stroke (off-white — the hero line)
+  tickInk: "#9a9a9a",  // tick labels
+  labelInk: "#f4f4f4", // axis label + a/b badges
+  mark: "#cfcfcf",     // interval drop lines
+  accent: "#fde047",   // shade fill + the probability box border
+  annotBg: "#161616",  // annotation box bg (card on dark, replaces white)
+  annotInk: "#fde047", // annotation text (yellow)
+  callout: "#fde047",  // callout text (yellow)
+} as const;
 
 // ── Typed slots (mirrors GraphTreeFamily §0.9G) ────────────────────────────
 // A CHART/DISTRIBUTION instance is a sampled PDF curve plus a marked interval [a,b].
@@ -338,10 +359,22 @@ function computeLayout(data: ChartDistributionData): Layout {
   };
 }
 
-function renderFrame(data: ChartDistributionData, layout: Layout) {
+function renderFrame(data: ChartDistributionData, layout: Layout, variant: CdVariant = "light") {
   const { a, b } = data.interval;
   const aPx = layout.xToPx(a);
   const bPx = layout.xToPx(b);
+  const dark = variant === "dark";
+  // Per-skin paint (literal hex, never var()).
+  const axisInk = dark ? DARK.axis : INK;
+  const curveInk = dark ? DARK.curve : INK;
+  const tickInk = dark ? DARK.tickInk : INK;
+  const labelInk = dark ? DARK.labelInk : INK;
+  const markInk = dark ? DARK.mark : INK;
+  const shadeFill = dark ? DARK.accent : ACCENT;
+  const annotBg = dark ? DARK.annotBg : "#fff";
+  const annotInk = dark ? DARK.annotInk : INK;
+  const annotStroke = dark ? DARK.accent : INK;
+  const calloutInk = dark ? DARK.callout : INK;
 
   return (frame: Frame<ChartDistributionState>): ReactNode => {
     const reveal = frame.state.reveal;
@@ -361,7 +394,7 @@ function renderFrame(data: ChartDistributionData, layout: Layout) {
           y1={PLOT_Y0}
           x2={PLOT_X1}
           y2={PLOT_Y0}
-          stroke={INK}
+          stroke={axisInk}
           strokeWidth={1.5}
         />
         <line
@@ -370,21 +403,21 @@ function renderFrame(data: ChartDistributionData, layout: Layout) {
           y1={PLOT_Y0}
           x2={PLOT_X0}
           y2={PLOT_Y1}
-          stroke={INK}
+          stroke={axisInk}
           strokeWidth={1.5}
         />
 
         {/* x ticks + measured/thinned labels (no overlap by construction) */}
         {layout.xTicks.map((t) => (
           <g key={`xt-${t.value}`} data-cd-xtick={t.value}>
-            <line x1={t.px} y1={PLOT_Y0} x2={t.px} y2={PLOT_Y0 + TICK_LEN} stroke={INK} strokeWidth={1} />
+            <line x1={t.px} y1={PLOT_Y0} x2={t.px} y2={PLOT_Y0 + TICK_LEN} stroke={axisInk} strokeWidth={1} />
             <text
               x={t.px}
               y={PLOT_Y0 + TICK_LEN + TICK_FONT + 2}
               textAnchor="middle"
               fontFamily={FONT_FAMILY}
               fontSize={TICK_FONT}
-              fill={INK}
+              fill={tickInk}
             >
               {t.text}
             </text>
@@ -394,14 +427,14 @@ function renderFrame(data: ChartDistributionData, layout: Layout) {
         {/* y ticks + labels (0 and yMax only) */}
         {layout.yTicks.map((t) => (
           <g key={`yt-${t.value}`} data-cd-ytick={t.value}>
-            <line x1={PLOT_X0 - TICK_LEN} y1={t.px} x2={PLOT_X0} y2={t.px} stroke={INK} strokeWidth={1} />
+            <line x1={PLOT_X0 - TICK_LEN} y1={t.px} x2={PLOT_X0} y2={t.px} stroke={axisInk} strokeWidth={1} />
             <text
               x={PLOT_X0 - TICK_LEN - 2}
               y={t.px + TICK_FONT / 2 - 1}
               textAnchor="end"
               fontFamily={FONT_FAMILY}
               fontSize={TICK_FONT}
-              fill={INK}
+              fill={tickInk}
             >
               {t.text}
             </text>
@@ -416,28 +449,28 @@ function renderFrame(data: ChartDistributionData, layout: Layout) {
           fontFamily={FONT_FAMILY}
           fontSize={AXIS_LABEL_FONT}
           fontWeight={700}
-          fill={INK}
+          fill={labelInk}
         >
           {data.xLabel}
         </text>
 
         {/* ── SHADE (reveal ≥ 3) — drawn under the curve so the curve stroke stays crisp on top ── */}
         {showShade && (
-          <path data-cd="shade" d={layout.shadePath} fill={ACCENT} stroke="none" fillOpacity={0.55} />
+          <path data-cd="shade" d={layout.shadePath} fill={shadeFill} stroke="none" fillOpacity={dark ? 0.32 : 0.55} />
         )}
 
         {/* ── CURVE (always) ── */}
-        <path data-cd="curve" d={layout.curvePath} fill="none" stroke={INK} strokeWidth={2} />
+        <path data-cd="curve" d={layout.curvePath} fill="none" stroke={curveInk} strokeWidth={2} />
 
         {/* ── INTERVAL marks (reveal ≥ 2): vertical drops at a and b + value labels on the axis ── */}
         {showInterval && (
           <>
-            <line data-cd="mark-a" x1={aPx} y1={PLOT_Y0} x2={aPx} y2={layout.yToPx(yAtClamp(data, a))} stroke={INK} strokeWidth={1.5} strokeDasharray="4 3" />
-            <line data-cd="mark-b" x1={bPx} y1={PLOT_Y0} x2={bPx} y2={layout.yToPx(yAtClamp(data, b))} stroke={INK} strokeWidth={1.5} strokeDasharray="4 3" />
+            <line data-cd="mark-a" x1={aPx} y1={PLOT_Y0} x2={aPx} y2={layout.yToPx(yAtClamp(data, a))} stroke={markInk} strokeWidth={1.5} strokeDasharray="4 3" />
+            <line data-cd="mark-b" x1={bPx} y1={PLOT_Y0} x2={bPx} y2={layout.yToPx(yAtClamp(data, b))} stroke={markInk} strokeWidth={1.5} strokeDasharray="4 3" />
             {/* a / b badges sit just above the baseline, anchored to the drop; small + measured so
                 they cannot collide with the tick labels below the axis. */}
-            <text x={aPx} y={PLOT_Y0 - 4} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={TICK_FONT + 1} fontWeight={700} fill={INK}>a</text>
-            <text x={bPx} y={PLOT_Y0 - 4} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={TICK_FONT + 1} fontWeight={700} fill={INK}>b</text>
+            <text x={aPx} y={PLOT_Y0 - 4} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={TICK_FONT + 1} fontWeight={700} fill={labelInk}>a</text>
+            <text x={bPx} y={PLOT_Y0 - 4} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={TICK_FONT + 1} fontWeight={700} fill={labelInk}>b</text>
           </>
         )}
 
@@ -457,8 +490,8 @@ function renderFrame(data: ChartDistributionData, layout: Layout) {
           const rectTop = Math.max(PLOT_Y1 + 2, Math.min(PLOT_Y0 - boxH - 2, wantTop));
           return (
             <g data-cd="annot">
-              <rect x={cx - half - 4} y={rectTop} width={w + 8} height={boxH} fill="#fff" stroke={INK} strokeWidth={1} />
-              <text x={cx} y={rectTop + font + 1} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={font} fontWeight={700} fill={INK}>
+              <rect x={cx - half - 4} y={rectTop} width={w + 8} height={boxH} fill={annotBg} stroke={annotStroke} strokeWidth={1} />
+              <text x={cx} y={rectTop + font + 1} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={font} fontWeight={700} fill={annotInk}>
                 {probText}
               </text>
             </g>
@@ -480,7 +513,7 @@ function renderFrame(data: ChartDistributionData, layout: Layout) {
           const firstWant = 14;
           const top = Math.min(firstWant, CALLOUT_BAND_H - 2 - blockH);
           return (
-            <text x={cx} y={top} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={font} fill={INK}>
+            <text x={cx} y={top} textAnchor="middle" fontFamily={FONT_FAMILY} fontSize={font} fill={calloutInk}>
               {lines.map((ln, i) => (
                 <tspan key={i} x={cx} dy={i === 0 ? 0 : CALLOUT_LINE_H}>
                   {ln}
@@ -508,7 +541,15 @@ function yAtClamp(data: ChartDistributionData, x: number): number {
   return pts[pts.length - 1].y;
 }
 
-export function ChartDistributionFamily({ instanceId, dataJson, language, labels, onStep }: FamilyRendererProps): ReactNode {
+/** ADDITIVE props — `variant` selects the render skin (default "light", the demo/e2e/harness baseline)
+ *  and `layout` lets the lesson surface drop the white box + side controls so the figure floats on the
+ *  dark page. Both omitted by the gallery + harness, unchanged. */
+export type ChartDistributionFamilyProps = FamilyRendererProps & {
+  variant?: CdVariant;
+  layout?: ShellLayout;
+};
+
+export function ChartDistributionFamily({ instanceId, dataJson, language, labels, onStep, variant = "light", layout: shellLayout }: ChartDistributionFamilyProps): ReactNode {
   const data = useMemo(() => parseChartData(dataJson, instanceId), [dataJson, instanceId]);
   const frames = useMemo(() => framesFromChartData(data), [data]);
   const layout = useMemo(() => computeLayout(data), [data]);
@@ -528,10 +569,11 @@ export function ChartDistributionFamily({ instanceId, dataJson, language, labels
           : "Probability density; area under the curve, step by step."
       }
       frames={frames}
-      renderFrame={renderFrame(data, layout)}
+      renderFrame={renderFrame(data, layout, variant)}
       testIdPrefix="chart-dist"
       labels={labels}
       onStep={onStep ? shellOnStep : undefined}
+      layout={shellLayout}
     />
   );
 }

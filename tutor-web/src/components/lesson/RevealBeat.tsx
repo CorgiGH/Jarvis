@@ -48,13 +48,15 @@ export function RevealBeat({ reveal, predictedOption, onGateClear }: RevealBeatP
   const fwd = useCallback(() => setIdx((i) => Math.min(n - 1, i + 1)), [n]);
 
   // --- Predict echo banner (§4.1): renders above BOTH figure and stepped-text paths ---
+  // Lectie-grade "TU AI PREZIS" card: a bordered accent-soft chip with a left accent rail, so the
+  // learner's committed prediction reads as a callback card (not a thin footnote).
   const echoBanner = predictedOption && (
-    <p data-testid="reveal-echo" className="border-l-4 border-accent pl-3 text-xs text-page-fg/70 leading-relaxed">
-      <span className="font-bold tracking-widest uppercase text-[10px] text-accent block mb-1">
+    <div data-testid="reveal-echo" className="border-2 border-accent bg-accent-soft pl-4 pr-4 py-3 leading-relaxed">
+      <span className="font-bold tracking-widest uppercase text-[10px] text-accent block mb-1.5">
         {lessonStrings.echoPrefix}
       </span>
-      {predictedOption.callback}
-    </p>
+      <span className="text-sm text-page-fg">{predictedOption.callback}</span>
+    </div>
   );
 
   // --- Figure path (Plan-4b Task 4): FigureReveal when reveal.figure is set ---
@@ -80,9 +82,9 @@ export function RevealBeat({ reveal, predictedOption, onGateClear }: RevealBeatP
     <div className="flex flex-col gap-3 font-mono">
       {echoBanner}
 
-      <div className="border-2 border-border-strong p-4 flex flex-col gap-2 shadow-hard">
-        <p className="text-sm text-page-fg leading-relaxed">{step.text}</p>
-        <p className="border-l-4 border-accent pl-3 text-xs text-page-fg/80 leading-relaxed">{step.callout}</p>
+      <div className="border-2 border-border-strong p-4 flex flex-col gap-3 shadow-hard">
+        <p className="text-base text-page-fg leading-relaxed">{step.text}</p>
+        <p className="border-l-4 border-accent pl-3 text-sm text-page-fg/80 leading-relaxed">{step.callout}</p>
       </div>
 
       <div data-testid="beat-figure-scrubber" className="flex items-center gap-3">
@@ -90,7 +92,7 @@ export function RevealBeat({ reveal, predictedOption, onGateClear }: RevealBeatP
           data-step-back
           onClick={back}
           disabled={idx === 0}
-          className="border-2 border-page-fg px-3 py-1 text-xs tracking-wide text-page-fg disabled:opacity-30 hover:border-accent hover:text-accent"
+          className="border-2 border-border-strong px-3 py-1.5 text-xs tracking-wide text-page-fg disabled:opacity-30 hover:border-accent hover:text-accent"
         >
           {lessonStrings.back}
         </button>
@@ -101,7 +103,7 @@ export function RevealBeat({ reveal, predictedOption, onGateClear }: RevealBeatP
           data-step-fwd
           onClick={fwd}
           disabled={idx === n - 1}
-          className="border-2 border-page-fg px-3 py-1 text-xs tracking-wide text-page-fg disabled:opacity-30 hover:border-accent hover:text-accent"
+          className="border-2 border-border-strong px-3 py-1.5 text-xs tracking-wide text-page-fg disabled:opacity-30 hover:border-accent hover:text-accent"
         >
           {lessonStrings.next}
         </button>

@@ -14,11 +14,11 @@ interface AttemptBeatProps {
 export function AttemptBeat({ attempt, committedIndex, onCommitChoice }: AttemptBeatProps) {
   const numerical = attempt.skeleton_rows.length > 0;
   return (
-    <div className="flex flex-col gap-3 font-mono">
-      <p className="text-sm font-bold tracking-wide text-page-fg leading-relaxed">{attempt.statement}</p>
+    <div className="flex flex-col gap-5 font-mono">
+      <p className="text-lg sm:text-xl font-bold tracking-tight text-page-fg leading-snug">{attempt.statement}</p>
 
       {numerical ? (
-        <table data-testid="attempt-skeleton" className="border-2 border-border-strong text-xs text-page-fg">
+        <table data-testid="attempt-skeleton" className="border-2 border-border-strong text-sm text-page-fg">
           <tbody>
             {attempt.skeleton_rows.map((row, i) => (
               <tr key={i} className={row.is_decision_row ? "border-2 border-accent" : "border-b border-border-strong"}>
@@ -29,7 +29,7 @@ export function AttemptBeat({ attempt, committedIndex, onCommitChoice }: Attempt
           </tbody>
         </table>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5">
           {attempt.choices.map((c, i) => {
             const committed = committedIndex === i;
             return (
@@ -40,10 +40,10 @@ export function AttemptBeat({ attempt, committedIndex, onCommitChoice }: Attempt
                 disabled={committedIndex !== null}
                 onClick={() => onCommitChoice(i)}
                 className={
-                  "border-2 px-4 py-3 text-left text-xs tracking-wide transition-colors " +
+                  "border-2 px-4 py-3.5 text-left text-sm tracking-wide transition-colors " +
                   (committed
                     ? "border-accent bg-accent text-black font-bold shadow-hard"
-                    : "border-page-fg text-page-fg hover:border-accent hover:text-accent disabled:opacity-40")
+                    : "border-border-strong text-page-fg hover:border-accent hover:text-accent hover:bg-accent-soft disabled:opacity-40")
                 }
               >
                 {c.text}
@@ -55,7 +55,7 @@ export function AttemptBeat({ attempt, committedIndex, onCommitChoice }: Attempt
 
       {/* Both-path feedback shown after commit (choice variant). */}
       {!numerical && committedIndex !== null && (
-        <p data-testid="attempt-feedback" className="border-l-4 border-accent pl-3 text-xs text-page-fg/80 leading-relaxed">
+        <p data-testid="attempt-feedback" className="border-l-4 border-accent pl-3 text-sm text-page-fg/80 leading-relaxed">
           {attempt.choices[committedIndex].feedback}
         </p>
       )}

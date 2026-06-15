@@ -1,0 +1,7 @@
+id: viz-pa-dpfib-001
+subject: PA
+family_id: matrix-grid
+language: ro
+instance:
+  method_kc_id: pa-kc-fixture-recursion
+  data_json: '{"rows":1,"cols":6,"kind":"dp-fill","seed":{"n":5},"colHeaders":["dp[0]","dp[1]","dp[2]","dp[3]","dp[4]","dp[5]"],"steps":[{"writes":[{"row":0,"col":0,"value":"0"}],"fills":[{"row":0,"col":0}],"pivot":{"row":0,"col":0},"callout":"dp[0] = 0 (caz de bază)"},{"writes":[{"row":0,"col":1,"value":"1"}],"fills":[{"row":0,"col":1}],"pivot":{"row":0,"col":1},"callout":"dp[1] = 1 (caz de bază)"},{"writes":[{"row":0,"col":2,"value":"1"}],"fills":[{"row":0,"col":2}],"pivot":{"row":0,"col":2},"rowOp":"dp[2]=dp[1]+dp[0]","callout":"dp[2] = dp[1]+dp[0] = 1"},{"writes":[{"row":0,"col":3,"value":"2"}],"fills":[{"row":0,"col":3}],"pivot":{"row":0,"col":3},"rowOp":"dp[3]=dp[2]+dp[1]","callout":"dp[3] = dp[2]+dp[1] = 2"},{"writes":[{"row":0,"col":4,"value":"3"}],"fills":[{"row":0,"col":4}],"pivot":{"row":0,"col":4},"rowOp":"dp[4]=dp[3]+dp[2]","callout":"dp[4] = dp[3]+dp[2] = 3"},{"writes":[{"row":0,"col":5,"value":"5"}],"fills":[{"row":0,"col":5}],"pivot":{"row":0,"col":5},"rowOp":"dp[5]=dp[4]+dp[3]","callout":"dp[5] = dp[4]+dp[3] = 5 ✓ — fiecare celulă calculată o singură dată (O(n))"}]}'

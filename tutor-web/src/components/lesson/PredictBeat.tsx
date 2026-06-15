@@ -11,9 +11,9 @@ interface PredictBeatProps {
 /** PREDICT beat — classify-an-example-first. Options data-testid="beat-predict-options". */
 export function PredictBeat({ predict, committedIndex, onCommit }: PredictBeatProps) {
   return (
-    <div className="flex flex-col gap-3 font-mono">
-      <p className="text-sm font-bold tracking-wide text-page-fg leading-relaxed">{predict.prompt}</p>
-      <div data-testid="beat-predict-options" className="flex flex-col gap-2">
+    <div className="flex flex-col gap-5 font-mono">
+      <p className="text-lg sm:text-xl font-bold tracking-tight text-page-fg leading-snug">{predict.prompt}</p>
+      <div data-testid="beat-predict-options" className="flex flex-col gap-2.5">
         {predict.options.map((opt, i) => {
           const committed = committedIndex === i;
           return (
@@ -23,10 +23,10 @@ export function PredictBeat({ predict, committedIndex, onCommit }: PredictBeatPr
               disabled={committedIndex !== null}
               onClick={() => onCommit(i)}
               className={
-                "border-2 px-4 py-3 text-left text-xs tracking-wide transition-colors " +
+                "border-2 px-4 py-3.5 text-left text-sm tracking-wide transition-colors " +
                 (committed
                   ? "border-accent bg-accent text-black font-bold shadow-hard"
-                  : "border-page-fg text-page-fg hover:border-accent hover:text-accent disabled:opacity-40")
+                  : "border-border-strong text-page-fg hover:border-accent hover:text-accent hover:bg-accent-soft disabled:opacity-40")
               }
             >
               {opt.text}

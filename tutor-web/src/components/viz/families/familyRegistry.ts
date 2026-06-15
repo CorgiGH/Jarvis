@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { GraphTreeFamily } from "./GraphTreeFamily";
 import { ChartDistributionFamily } from "./ChartDistributionFamily";
 import { SequenceArrayFamily } from "./SequenceArrayFamily";
+import { MatrixGridFamily } from "./MatrixGridFamily";
+import { SortMergeFamily } from "./SortMergeFamily";
 
 /**
  * Plan-3 §5.1/§5.3 — a family renders (family_id, instance_data) and NOTHING else. It receives the
@@ -32,4 +34,6 @@ export const familyRegistry: Record<string, FamilyRenderer> = {
   "graph-tree": GraphTreeFamily,
   "chart-dist": ChartDistributionFamily,
   "seq-array": SequenceArrayFamily,
+  "matrix-grid": MatrixGridFamily,
+  "sort-merge": SortMergeFamily,
 };

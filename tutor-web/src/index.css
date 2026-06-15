@@ -21,33 +21,37 @@ html[data-reduce-motion] *::after {
    Tailwind v4 picks up @theme `--color-<name>` as `bg-<name>`,
    `text-<name>`, `border-<name>` etc. */
 :root {
+  /* DARK lectie reskin (first pass, 2026-06-14) — surface flipped to the lectie
+     brutalist-dark palette (bg #0e0e0e / ink #fff / accent #fde047). Per the design
+     note above: "swap the :root block; components don't churn." Status/derived tokens
+     re-tuned for a dark surface (the old light-only values inverted to readable-on-dark). */
   /* Surface */
-  --color-page-bg: #ffffff;
-  --color-page-fg: #000000;
-  --color-panel-dark-bg: #000000;
-  --color-panel-dark-fg: #fde047;          /* yellow-300 */
+  --color-page-bg: #0e0e0e;                 /* lectie bg */
+  --color-page-fg: #f4f4f4;                 /* lectie ink (off-white, less glare than pure #fff) */
+  --color-panel-dark-bg: #161616;           /* lectie card */
+  --color-panel-dark-fg: #fde047;           /* yellow-300 */
 
   /* Accent */
   --color-accent: #fde047;                  /* yellow-300 */
   --color-accent-hover: #facc15;            /* yellow-400 */
-  --color-accent-soft: #fefce8;             /* yellow-50 */
+  --color-accent-soft: #2a2510;             /* dark yellow tint (was light yellow-50) */
   --color-accent-rule: #eab308;             /* yellow-500 — left-rule on cards */
 
   /* Border */
-  --color-border-strong: #000000;
-  --color-border-thin: rgba(0, 0, 0, 0.2);
+  --color-border-strong: #5a5a5a;           /* visible-on-dark brutalist line (lectie #555 family) */
+  --color-border-thin: rgba(255, 255, 255, 0.18);
 
   /* Focus */
   --color-ring-focus: #facc15;              /* yellow-400 */
 
-  /* Status — semantic, used by inline cards/badges */
+  /* Status — semantic, used by inline cards/badges (re-tuned for dark) */
   --color-danger-bg: #dc2626;               /* red-600 */
   --color-danger-fg: #ffffff;
-  --color-danger-text: #991b1b;             /* red-800 — 7.66:1 on white, passes AAA */
-  --color-info-bg: #bfdbfe;                 /* blue-200 — sensor / info bubble */
-  --color-disabled-bg: #d1d5db;             /* gray-300 */
-  --color-disabled-fg: #6b7280;             /* gray-500 */
-  --color-surface-muted: #fafafa;           /* zinc-50 — pdf canvas backdrop */
+  --color-danger-text: #f87171;             /* red-400 — readable on dark (was red-800 on white) */
+  --color-info-bg: #1e3a5f;                 /* dark blue (was light blue-200) */
+  --color-disabled-bg: #2a2a2a;             /* dark disabled fill (was gray-300) */
+  --color-disabled-fg: #8a8a8a;             /* gray — readable on dark */
+  --color-surface-muted: #161616;           /* dark muted backdrop (was near-white) */
   --color-overlay-fg: #ffffff;              /* white text on dark overlay badges */
 
   /* Typography */
@@ -195,6 +199,10 @@ html[data-reduce-motion] *::after {
 html, body {
   font-size: var(--type-body);
   line-height: 1.5;
+  /* Token-driven surface so the page behind the app shell honors the active theme
+     (the dark reskin needs the body itself dark, not just the bg-page containers). */
+  background: var(--color-page-bg);
+  color: var(--color-page-fg);
 }
 
 code, pre, kbd, samp {

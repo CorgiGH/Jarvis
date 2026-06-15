@@ -20,18 +20,18 @@ export function NameBeat({ name, onGateClear }: NameBeatProps) {
   }, [reduced, name, onGateClear]);
 
   return (
-    <div className="flex flex-col gap-3 font-mono">
+    <div className="flex flex-col gap-4 font-mono">
       <div className="border-2 border-accent bg-accent text-black p-4 shadow-hard">
-        <span className="font-bold uppercase tracking-widest text-[10px] block mb-1">{lessonStrings.definitionLabel}</span>
-        <p className="text-sm leading-relaxed">{name.definition}</p>
+        <span className="font-bold uppercase tracking-widest text-[10px] block mb-1.5">{lessonStrings.definitionLabel}</span>
+        <p className="text-base leading-relaxed font-bold">{name.definition}</p>
       </div>
-      <div className="border-2 border-border-strong p-3">
-        <span className="font-bold uppercase tracking-widest text-[10px] text-accent block mb-1">{lessonStrings.invariantLabel}</span>
-        <p className="text-xs text-page-fg leading-relaxed">{name.invariant_statement}</p>
+      <div className="border-2 border-border-strong p-4">
+        <span className="font-bold uppercase tracking-widest text-[10px] text-accent block mb-1.5">{lessonStrings.invariantLabel}</span>
+        <p className="text-sm text-page-fg leading-relaxed">{name.invariant_statement}</p>
       </div>
       <div className="border-l-4 border-accent pl-3">
-        <span className="font-bold uppercase tracking-widest text-[10px] text-page-fg/50 block mb-1">{lessonStrings.whyLabel}</span>
-        <p className="text-xs text-page-fg/80 leading-relaxed">{name.why_matters}</p>
+        <span className="font-bold uppercase tracking-widest text-[10px] text-page-fg/50 block mb-1.5">{lessonStrings.whyLabel}</span>
+        <p className="text-sm text-page-fg/80 leading-relaxed">{name.why_matters}</p>
       </div>
     </div>
   );

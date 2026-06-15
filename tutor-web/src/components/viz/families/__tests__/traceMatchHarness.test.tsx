@@ -32,13 +32,25 @@ import {
   parseSeqArrayData,
   framesFromSeqArrayData,
 } from "../SequenceArrayFamily";
+import {
+  parseMatrixGridData,
+  framesFromMatrixGridData,
+} from "../MatrixGridFamily";
+import {
+  parseMergeData,
+  framesFromMergeData,
+} from "../SortMergeFamily";
 import { familyRegistry } from "../familyRegistry";
 import { mergesortReference } from "./mergesortTrace";
 import { chartDistributionReference } from "./chartTrace";
 import { selectionSortReference } from "./selectionSortTrace";
+import { matrixGridReference } from "./matrixGridTrace";
+import { arrayMergeReference } from "./arrayMergeTrace";
 import { GRAPH_TREE_INVARIANTS } from "../graphTreeInvariants";
 import { CHART_DIST_INVARIANTS } from "../chartDistributionInvariants";
 import { SEQ_ARRAY_INVARIANTS } from "../sequenceArrayInvariants";
+import { MATRIX_GRID_INVARIANTS } from "../matrixGridInvariants";
+import { MERGE_INVARIANTS } from "../mergeInvariants";
 
 // ─── HARNESS REGISTRY ────────────────────────────────────────────────────────
 // Keyed by family_id. Each entry owns the FULL per-instance assertion (parse → frames → trace →
@@ -183,6 +195,111 @@ const HARNESS_REGISTRY: Record<string, HarnessEntry> = {
       const stepFwdBtn = container.querySelector('[data-testid="seq-array-step-fwd"]');
       for (let i = 0; i < frames.length; i++) {
         for (const invariant of SEQ_ARRAY_INVARIANTS) {
+          const result = invariant(container, frames[i], i, frames);
+          if (!result.ok) throw new Error(`${instanceId}: ${result.message}`);
+        }
+        if (i < frames.length - 1 && stepFwdBtn) fireEvent.click(stepFwdBtn);
+      }
+    },
+  },
+
+  "matrix-grid": {
+    runAssertion: (dataJson, instanceId) => {
+      // ── TRACE-MATCH (INV-5.1) — per-step materialized table + cumulative filled set + pivot vs the
+      //    independent matrix-grid oracle, which re-derives the reference table from the instance's
+      //    SEED (kind-specific: fib recurrence / Gaussian elimination), so the family cannot paint a
+      //    table the algorithm never produces. ──
+      const parsed = parseMatrixGridData(dataJson, instanceId);
+      const frames = framesFromMatrixGridData(parsed);
+      const ref = matrixGridReference(parsed);
+      if (frames.length !== ref.length) {
+        throw new Error(`${instanceId}: step count mismatch — rendered ${frames.length} steps, reference has ${ref.length}`);
+      }
+      for (let i = 0; i < ref.length; i++) {
+        const s = frames[i].state, r = ref[i];
+        if (JSON.stringify(s.grid) !== JSON.stringify(r.table))
+          throw new Error(`${instanceId}: trace mismatch at step ${i} (table) — rendered ${JSON.stringify(s.grid)} ≠ reference ${JSON.stringify(r.table)}`);
+        if (JSON.stringify(s.filled) !== JSON.stringify(r.filled))
+          throw new Error(`${instanceId}: trace mismatch at step ${i} (filled) — rendered ${JSON.stringify(s.filled)} ≠ reference ${JSON.stringify(r.filled)}`);
+        if (JSON.stringify(s.pivot) !== JSON.stringify(r.pivot))
+          throw new Error(`${instanceId}: trace mismatch at step ${i} (pivot) — rendered ${JSON.stringify(s.pivot)} ≠ reference ${JSON.stringify(r.pivot)}`);
+      }
+
+      // ── SEMANTIC INVARIANTS (INV-5.2) — rendered DOM ──
+      // The shell seeds its initial frame from window.location.hash (#mg-idx-N). Two matrix-grid
+      // content instances share the "mg" prefix, so without clearing the hash the SECOND render would
+      // inherit the FIRST's stale index and start past frame 0 (the harness walks from frame 0). Reset
+      // it so every instance mounts at frame 0.
+      if (typeof window !== "undefined") window.location.hash = "";
+      const Renderer = familyRegistry["matrix-grid"];
+      const { container } = render(<Renderer instanceId={instanceId} dataJson={dataJson} language="ro" />);
+      const stepFwdBtn = container.querySelector('[data-testid="mg-step-fwd"]');
+      for (let i = 0; i < frames.length; i++) {
+        for (const invariant of MATRIX_GRID_INVARIANTS) {
+          const result = invariant(container, frames[i], i, frames);
+          if (!result.ok) throw new Error(`${instanceId}: ${result.message}`);
+        }
+        if (i < frames.length - 1 && stepFwdBtn) fireEvent.click(stepFwdBtn);
+      }
+    },
+  },
+
+  "sort-merge": {
+    runAssertion: (dataJson, instanceId) => {
+      // ── TRACE-MATCH (INV-5.1) — per-step array-STATE (full array + run spans + front pointers +
+      //    outFilled + sortedSpan + phase) vs the independent merge-sort oracle, which re-runs REAL
+      //    top-down merge sort from the instance's SEED (`values`). So the family cannot animate a
+      //    merge step the algorithm never does, and cannot end on an unsorted array. ──
+      const parsed = parseMergeData(dataJson, instanceId);
+      const frames = framesFromMergeData(parsed);
+      const ref = arrayMergeReference(parsed.values);
+
+      if (frames.length !== ref.length) {
+        throw new Error(
+          `${instanceId}: step count mismatch — rendered ${frames.length} steps, reference has ${ref.length}`,
+        );
+      }
+      for (let i = 0; i < ref.length; i++) {
+        const r = ref[i];
+        const s = frames[i].state;
+        if (JSON.stringify(s.array) !== JSON.stringify(r.array)) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} (array) — rendered [${s.array.join(",")}] ≠ reference [${r.array.join(",")}]`,
+          );
+        }
+        if (JSON.stringify(s.runs) !== JSON.stringify(r.runs)) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} (runs) — rendered ${JSON.stringify(s.runs)} ≠ reference ${JSON.stringify(r.runs)}`,
+          );
+        }
+        if (JSON.stringify(s.frontOf) !== JSON.stringify(r.frontOf)) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} (frontOf) — rendered ${JSON.stringify(s.frontOf)} ≠ reference ${JSON.stringify(r.frontOf)}`,
+          );
+        }
+        if (s.outFilled !== r.outFilled || s.tookFrom !== r.tookFrom || s.phase !== r.phase) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} (scalars) — rendered ` +
+              `{outFilled:${s.outFilled},tookFrom:${s.tookFrom},phase:${s.phase}} ≠ reference ` +
+              `{outFilled:${r.outFilled},tookFrom:${r.tookFrom},phase:${r.phase}}`,
+          );
+        }
+        if (JSON.stringify(s.sortedSpan) !== JSON.stringify(r.sortedSpan)) {
+          throw new Error(
+            `${instanceId}: trace mismatch at step ${i} (sortedSpan) — rendered ${JSON.stringify(s.sortedSpan)} ≠ reference ${JSON.stringify(r.sortedSpan)}`,
+          );
+        }
+      }
+
+      // ── SEMANTIC INVARIANTS (INV-5.2) — rendered DOM ──
+      if (typeof window !== "undefined") window.location.hash = "";
+      const Renderer = familyRegistry["sort-merge"];
+      const { container } = render(
+        <Renderer instanceId={instanceId} dataJson={dataJson} language="ro" />,
+      );
+      const stepFwdBtn = container.querySelector('[data-testid="sort-merge-step-fwd"]');
+      for (let i = 0; i < frames.length; i++) {
+        for (const invariant of MERGE_INVARIANTS) {
           const result = invariant(container, frames[i], i, frames);
           if (!result.ok) throw new Error(`${instanceId}: ${result.message}`);
         }

@@ -39,6 +39,11 @@ export interface ShellLayout {
   controls?: "side" | "bottom" | "none";
   /** canvas background (default white); set transparent to sit on a themed page */
   canvasBg?: string;
+  /** SVG viewBox HEIGHT (default 360). The width stays 480. A shorter box lets a wide-short figure
+   *  (a single array row + callout + rail) fill the frame with NO internal void — the dark lesson
+   *  surface passes ~250 so the figure reads tight, not floating in a 4:3 void. Omitted → 360
+   *  (the demo gallery + e2e baselines are unchanged). The renderer must pack content into [0, viewBoxH]. */
+  viewBoxH?: number;
 }
 
 /** Plan-3 §8.2 — chrome labels, ADDITIVE. Omitted fields fall back to the current EN literals so
@@ -53,6 +58,8 @@ export interface ShellLabels {
   predict?: string;  // "⚡ Predict"
   /** Plan-4b Task 4 — autoplay toggle label (RO: "▶ redă"). EN default: "▶ play". */
   play?: string;
+  /** Shown on the play button WHILE playing, so it reads as a pause control (RO: "⏸ pauză"). */
+  pause?: string;
 }
 
 export interface AlgoStepperShellProps<S> {
@@ -106,6 +113,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     predict: props.labels?.predict ?? "⚡ Predict",
     /** Plan-4b Task 4 additive. EN default so demo gallery is unchanged. */
     play: props.labels?.play ?? "▶ play",
+    pause: props.labels?.pause ?? "⏸ pause",
   };
 
   const materializedFrames = useMemo<Frame<S>[]>(() => {
@@ -133,7 +141,10 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const [voiceOn, setVoiceOn] = useState(false);
   /** Plan-4b Task 4 — autoplay state. Bounded: stops at lastIdx. */
   const [isPlaying, setIsPlaying] = useState(false);
-  const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Reading-paced autoplay: a per-frame setTimeout chain (NOT a flat interval). The dwell on each
+  // frame is computed from the CURRENT frame's on-screen text length, so a long Romanian callout
+  // lingers and a short one moves on — 600ms flat was unreadable for a 50-90 char sentence.
+  const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const maxReachable = useMemo(() => {
     if (!props.predictionGates) return lastIdx;
@@ -217,34 +228,36 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
     };
   }, [voiceOn]);
 
-  /** Plan-4b Task 4 — autoplay: bounded interval stepping to lastIdx then auto-stops.
-   *  Honors reduced motion: steps still advance (MotionConfig already suppresses animation);
-   *  the gate logic is identical whether animated or not. */
+  /** Plan-4b Task 4 (reading-paced rewrite) — autoplay: a per-frame setTimeout chain bounded to
+   *  maxReachable, then auto-stops. The dwell on the CURRENT frame scales with how much text the
+   *  learner has to read on it (the aria/callout sentence), so long Romanian callouts linger and
+   *  short ones move on. Recomputed each step because the effect re-runs on every idx change.
+   *  Honors reduced motion: steps still advance (MotionConfig already suppresses the figure
+   *  animation); the gate logic is identical whether animated or not. */
   useEffect(() => {
     if (!isPlaying) {
-      if (playIntervalRef.current) {
-        clearInterval(playIntervalRef.current);
-        playIntervalRef.current = null;
+      if (playTimeoutRef.current) {
+        clearTimeout(playTimeoutRef.current);
+        playTimeoutRef.current = null;
       }
       return;
     }
-    playIntervalRef.current = setInterval(() => {
-      setIdx((prev) => {
-        if (prev >= maxReachable) {
-          // Auto-stop at the final reachable frame
-          setIsPlaying(false);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 600);
+    if (idx >= maxReachable) {
+      // Already at the last reachable frame — stop (covered again by the effect below, belt+braces).
+      setIsPlaying(false);
+      return;
+    }
+    const dwell = frameDwellMs(materializedFrames[idx]?.aria ?? "");
+    playTimeoutRef.current = setTimeout(() => {
+      setIdx((prev) => Math.min(maxReachable, prev + 1));
+    }, dwell);
     return () => {
-      if (playIntervalRef.current) {
-        clearInterval(playIntervalRef.current);
-        playIntervalRef.current = null;
+      if (playTimeoutRef.current) {
+        clearTimeout(playTimeoutRef.current);
+        playTimeoutRef.current = null;
       }
     };
-  }, [isPlaying, maxReachable]);
+  }, [isPlaying, idx, maxReachable, materializedFrames]);
 
   // Stop play when idx reaches maxReachable
   useEffect(() => {
@@ -293,7 +306,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const descId = `${testIdPrefix}-desc`;
 
   // --- injectable chrome/geometry (defaults = original boxed look) ---
-  const { fullBleed = false, maxWidth = 1100, controls = "side", canvasBg = "#fff" } =
+  const { fullBleed = false, maxWidth = 1100, controls = "side", canvasBg = "#fff", viewBoxH = 360 } =
     props.layout ?? {};
   const sideControls = controls === "side";
   const wrapperStyle: CSSProperties = {
@@ -340,7 +353,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
       >
         <MotionConfig reducedMotion="user">
           <svg
-            viewBox="0 0 480 360"
+            viewBox={`0 0 480 ${viewBoxH}`}
             preserveAspectRatio="xMidYMid meet"
             role="img"
             aria-labelledby={`${titleId} ${descId}`}
@@ -459,7 +472,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
             aria-label={isPlaying ? "Pause autoplay" : "Start autoplay"}
             style={brutalistBtn(isPlaying, false)}
           >
-            {L.play}
+            {isPlaying ? L.pause : L.play}
           </button>
         </div>
         {gateLocked && activeGate && (
@@ -527,6 +540,20 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
       </div>
     </Fragment>
   );
+}
+
+/** Reading-paced autoplay dwell (ms) for the frame whose on-screen text is `text`. The old flat
+ *  600ms was unreadable for a 50-90 char Romanian callout. We give the reader ~72ms/char (a relaxed
+ *  ~14 chars/sec, well under a fluent reader's rate so it never feels rushed mid-sentence), with a
+ *  floor so even an empty/tiny frame holds long enough to register the figure change, and a ceiling
+ *  so the longest sentence never stalls the playthrough. Shared across families — reading-paced is
+ *  universally correct (a flat interval can't know how much there is to read). */
+export const PLAY_DWELL_MIN_MS = 2800;
+export const PLAY_DWELL_MAX_MS = 9000;
+export const PLAY_DWELL_PER_CHAR_MS = 95;
+export function frameDwellMs(text: string): number {
+  const perChar = (text?.length ?? 0) * PLAY_DWELL_PER_CHAR_MS;
+  return Math.max(PLAY_DWELL_MIN_MS, Math.min(PLAY_DWELL_MAX_MS, perChar));
 }
 
 function brutalistBtn(active: boolean, disabled: boolean): CSSProperties {

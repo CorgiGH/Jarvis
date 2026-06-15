@@ -127,14 +127,14 @@ export function BeatOrchestrator({ kcId, lesson, onComplete }: BeatOrchestratorP
   return (
     <div data-testid="lesson-screen" className="flex flex-col h-full overflow-y-auto font-mono">
       {/* Pips */}
-      <div data-testid="lesson-beat-pips" className="flex items-center gap-2 p-4 border-b border-border-strong">
+      <div data-testid="lesson-beat-pips" className="flex items-center justify-center gap-2.5 p-4 border-b-2 border-accent">
         {plan.map((k, i) => (
           <span
             key={i}
             data-pip
             aria-label={beatKindLabel(k)}
             className={
-              "w-7 h-7 flex items-center justify-center border-2 text-xs " +
+              "w-8 h-8 flex items-center justify-center border-2 text-sm transition-colors " +
               (i === activeIdx
                 ? "border-accent bg-accent text-black font-bold shadow-hard"
                 : i < activeIdx
@@ -152,8 +152,8 @@ export function BeatOrchestrator({ kcId, lesson, onComplete }: BeatOrchestratorP
           The boundary wraps ONLY the beat body; pips + gate controls stay outside so they
           remain mounted even when a beat component throws. A crashed beat must not open the gate
           (cleared[activeIdx] stays false while the fallback shows). */}
-      <div data-testid="lesson-beat-active" className="flex flex-col gap-4 p-4 flex-1">
-        <span className="font-bold uppercase tracking-widest text-[10px] text-page-fg/50">
+      <div data-testid="lesson-beat-active" className="flex flex-col gap-5 px-5 py-5 flex-1 max-w-3xl w-full mx-auto">
+        <span className="font-bold uppercase tracking-widest text-[11px] text-accent">
           {BEAT_GLYPHS[activeIdx]} {beatKindLabel(kind)}
         </span>
 
@@ -183,15 +183,15 @@ export function BeatOrchestrator({ kcId, lesson, onComplete }: BeatOrchestratorP
       </div>
 
       {/* Gate controls */}
-      <div className="flex items-center justify-between gap-4 p-4 border-t border-border-strong">
+      <div className="flex items-center justify-between gap-4 px-5 py-4 border-t-2 border-accent">
         <button
           onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
           disabled={activeIdx === 0}
-          className="border-2 border-page-fg px-4 py-2 text-xs tracking-wide text-page-fg disabled:opacity-30 hover:border-accent hover:text-accent"
+          className="border-2 border-border-strong px-4 py-2 text-xs tracking-wide text-page-fg disabled:opacity-30 hover:border-accent hover:text-accent transition-colors"
         >
           {lessonStrings.back}
         </button>
-        <span className="text-xs text-page-fg/50 tracking-wide">
+        <span className="text-xs text-accent-rule tracking-wide">
           {gateOpen ? "" : (kind === "reveal" ? lessonStrings.gateWatch : lessonStrings.gateAnswer)}
         </span>
         <button

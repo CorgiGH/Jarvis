@@ -1,8 +1,27 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { hierarchy, tree as d3tree } from "d3-hierarchy";
-import { AlgoStepperShell, type Frame, type ShellLabels } from "../AlgoStepperShell";
+import { AlgoStepperShell, type Frame, type ShellLabels, type ShellLayout } from "../AlgoStepperShell";
 import { ACCENT, FONT_FAMILY, INK } from "../theme";
 import type { FamilyRendererProps } from "./familyRegistry";
+
+// ── Render skins ──────────────────────────────────────────────────────────
+// ONE geometry + ONE set of data-* stamps, TWO paint skins (mirrors SequenceArrayFamily). Colours are
+// baked as LITERAL hex into the SVG presentation attributes at render time (NOT var() — var() in an SVG
+// fill/stroke attribute is unreliable across engines), so a skin swap is pure paint and the colour-blind
+// invariants (data-node-id + <text> label) stay green.
+//   • "light" — the original brutalist-on-paper look (demo gallery + e2e + the trace harness, UNCHANGED).
+//   • "dark"  — the lectie lesson surface: nodes float on the dark stage, light ink, accent-yellow frontier.
+export type GtVariant = "light" | "dark";
+
+const DARK = {
+  bg: "#0e0e0e",       // panel-dark-bg (DESIGN.md DARK surface)
+  paper: "#161616",    // unhighlighted node fill — a card on the dark stage, not stark white
+  ink: "#f4f4f4",      // node label on an unhighlighted node (off-white)
+  accent: "#fde047",   // yellow-300 — THE accent (highlighted frontier node)
+  accentInk: "#000000",// label on an accent node
+  rule: "#3a3a3a",     // hairline on an unhighlighted node
+  callout: "#fde047",  // callout text (yellow, like the lectie callout chip)
+} as const;
 
 // ── Typed slots (plan core §0.9G) ─────────────────────────────────────────
 export type GtNode = { id: string; label: string; parent?: string };
@@ -193,7 +212,13 @@ function layoutGraphTree(data: GraphTreeData): Map<string, Laid> {
   return out;
 }
 
-function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>) {
+function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>, variant: GtVariant = "light") {
+  const dark = variant === "dark";
+  // Per-skin paint. Literal hex (never var()) so the SVG attributes resolve in every engine.
+  const nodeFill = (isHi: boolean) => (dark ? (isHi ? DARK.accent : DARK.paper) : isHi ? ACCENT : "#fff");
+  const nodeStroke = (isHi: boolean) => (dark ? (isHi ? DARK.accent : DARK.rule) : INK);
+  const nodeInk = (isHi: boolean) => (dark ? (isHi ? DARK.accentInk : DARK.ink) : INK);
+  const calloutInk = dark ? DARK.callout : INK;
   return (frame: Frame<GraphTreeState>): ReactNode => {
     const hi = new Set(frame.state.highlightIds);
     const firstHi = frame.state.highlightIds[0];
@@ -212,8 +237,9 @@ function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>) {
                 y={-BOX_H / 2}
                 width={w}
                 height={BOX_H}
-                fill={isHi ? ACCENT : "#fff"}
-                stroke={INK}
+                rx={dark ? 3 : 0}
+                fill={nodeFill(isHi)}
+                stroke={nodeStroke(isHi)}
                 strokeWidth={isHi ? 2 : 1}
               />
               <text
@@ -223,7 +249,7 @@ function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>) {
                 fontFamily={FONT_FAMILY}
                 fontSize={LABEL_FONT}
                 fontWeight={700}
-                fill={INK}
+                fill={nodeInk(isHi)}
               >
                 {labelOf.get(n.id) ?? n.label}
               </text>
@@ -252,7 +278,7 @@ function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>) {
               textAnchor="middle"
               fontFamily={FONT_FAMILY}
               fontSize={font}
-              fill={INK}
+              fill={calloutInk}
             >
               {lines.map((ln, i) => (
                 <tspan key={i} x={cx} dy={i === 0 ? 0 : CALLOUT_LINE_H}>
@@ -271,7 +297,15 @@ function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>) {
   };
 }
 
-export function GraphTreeFamily({ instanceId, dataJson, language, labels, onStep }: FamilyRendererProps): ReactNode {
+/** ADDITIVE props over the family contract — `variant` selects the render skin (default "light", the
+ *  demo/e2e/harness baseline) and `layout` lets the lesson surface drop the white box + side controls
+ *  so the figure floats on a themed dark page. Both are omitted by the gallery + harness, unchanged. */
+export type GraphTreeFamilyProps = FamilyRendererProps & {
+  variant?: GtVariant;
+  layout?: ShellLayout;
+};
+
+export function GraphTreeFamily({ instanceId, dataJson, language, labels, onStep, variant = "light", layout: shellLayout }: GraphTreeFamilyProps): ReactNode {
   const data = useMemo(() => parseGraphTreeData(dataJson, instanceId), [dataJson, instanceId]);
   const frames = useMemo(() => framesFromGraphTree(data), [data]);
   const layout = useMemo(() => layoutGraphTree(data), [data]);
@@ -294,10 +328,11 @@ export function GraphTreeFamily({ instanceId, dataJson, language, labels, onStep
       title={`Graph/tree · ${instanceId}`}
       desc={language === "ro" ? "Arbore de descompunere; pas cu pas." : "Decomposition tree; step by step."}
       frames={frames}
-      renderFrame={renderFrame(layout, labelOf)}
+      renderFrame={renderFrame(layout, labelOf, variant)}
       testIdPrefix="graph-tree"
       labels={labels}
       onStep={onStep ? shellOnStep : undefined}
+      layout={shellLayout}
     />
   );
 }

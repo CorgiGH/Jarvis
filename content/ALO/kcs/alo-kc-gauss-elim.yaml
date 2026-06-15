@@ -1,0 +1,21 @@
+id: alo-kc-gauss-elim
+subject: ALO
+name_ro: "Eliminare Gauss cu pivotare parțială"
+name_en: "Gaussian elimination with partial pivoting"
+cluster: "Algebră liniară — sisteme"
+bloom_level: apply
+difficulty: 3
+time_minutes: 15
+# Sole curated ALO KC → carries the full subject exam_weight (checkExamWeights sum=1.0 ±0.02).
+exam_weight: 1.0
+# tier:1 root — ALO has no edges.yaml / prerequisite KCs curated yet, so this is a root, not an orphan.
+tier: 1
+concept_type: code-trace
+# The figure binds via the NEW matrix-grid family (familyRegistry), NOT the retiring legacy viz_id /
+# content/viz-ids.yaml mechanism (checkVizReferences dies with the V6 retirement). requires_visual=false
+# keeps the KC clean under the legacy viz-reference rule while the gauss instance renders via family_id.
+requires_visual: false
+source:
+  - doc: alo-study-guide-gauss
+    quote: "Transforma Ax = b intr-un sistem echivalent Ux = b', unde U este superior triunghiulara"
+version: 1
