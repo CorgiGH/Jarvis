@@ -1,0 +1,41 @@
+#!/bin/sh
+# Advisory pre-push hook — frame-gate fast self-test (council-1781571467, option B).
+#
+# Runs the ~4s deterministic frame-conjunction self-test before a push to `main`.
+# SCOPE (read this): it checks the gate MACHINERY only — decode / perceptual-diff /
+# classify / seed-sync over committed fixtures. It does NOT boot vite and does NOT
+# render THIS commit's figures. The CI `frame-gate` job (which rasterizes the real
+# renderer) is the AUTHORITATIVE gate. This hook is a fast local early-warning so an
+# obvious self-inflicted core/seed regression is caught at push instead of in CI.
+#
+# Bypass with `git push --no-verify` when you know better. Only fires for pushes to main.
+# Enable (per clone, one-time): git config core.hooksPath tools/githooks
+
+pushing_main=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main) pushing_main=1 ;;
+  esac
+done
+
+[ "$pushing_main" -eq 0 ] && exit 0
+
+root=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$root" ] || [ ! -d "$root/tutor-web" ]; then
+  echo "[pre-push] (advisory hook could not locate tutor-web — skipping; CI frame-gate still authoritative)"
+  exit 0
+fi
+
+echo "[pre-push] main -> fast frame-gate self-test (advisory; CI frame-gate is authoritative)..."
+cd "$root/tutor-web" || exit 0
+
+if npx vitest run src/components/viz/__tests__/frameConjunction.self.test.ts; then
+  echo "[pre-push] OK self-test green (gate machinery alive). NOTE: this commit's figures are verified only by the CI frame-gate."
+  exit 0
+else
+  echo ""
+  echo "[pre-push] FAIL frame-conjunction self-test failed — push aborted."
+  echo "[pre-push]   This is the fast MACHINERY check (decode/diff/classify/seed-sync), not a figure render."
+  echo "[pre-push]   Fix it, or bypass with: git push --no-verify"
+  exit 1
+fi

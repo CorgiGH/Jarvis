@@ -107,6 +107,11 @@ EC1's visual affordances ride the §E `council-1781391707` visual gate. Every EC
 ## Recommended sequence (one line)
 **Plan V** (+ the §B compliance-harness governance — matrix rollup · gate-coverage invariant · adversarial red-team round · gate-self-test · the 3 foundation fixes incl. impeccable→blocking) → deploy → **Plan 5** (digestion + the per-gate checkpoint screen §1.5 + the depth ESTIMATOR lane) → **Plan 7** (incl. the proof run + content) → **Plan W** after V whenever. Two-lane contract applies if two non-intersecting plans run parallel.
 
+## Phase-J deploy-gate coupling (frame-gate enforcement — council-1781571467, 2026-06-16)
+The frame-conjunction figure gate is CI-wired + hard-blocking IN the workflow (UNIT 1, commit `01763c6`), and an advisory pre-push hook (`tools/githooks/pre-push`, enable via `git config core.hooksPath tools/githooks`) runs the fast self-test locally. But enforcement at the user boundary is NOT yet wired. Two MUST-DO Phase-J tasks (verified gaps, do NOT leave implicit):
+- **PJ-1 — gate-couple `tools/deploy.sh`:** today it ships the local tree (`gradle :test :installDist` + scp + `/healthz`/`/login` curl) and NEVER runs `frame-conjunction-gate.mjs` / vitest / Playwright, nor checks HEAD passed CI. Add a HARD precondition before the scp: assert HEAD's `frame-gate` CI check is green (`gh` query) OR run the gate locally pre-ship. Without this, a frozen-figure regression deploys silently.
+- **PJ-2 — note the live-probe gap:** the master-plan Phase-J EXIT GATE (data-testid paint + zero 4xx/5xx) does NOT catch frozen-render-over-live-state figures (they paint + return 200). The frame-gate must be its OWN pre-deploy precondition. Optionally add GitHub branch protection requiring `frame-gate` at the deploy cutover (premature before then — it forces PR-and-wait on direct-to-main).
+
 ## How a new session uses this
 1. Read `BRIDGE-HEAD.md` (current state + the V→5→7 pointer).
 2. Read this ledger (the full remaining map).
