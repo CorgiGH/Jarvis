@@ -21,7 +21,7 @@ class TwoFamilyDeriverTest {
     /** Canned-reply fake Llm; records the model id it reports so we can prove family tags
      *  (not model strings) drive collapse detection. */
     private class FakeLlm(private val reply: String, private val model: String) : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?) =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) =
             reply to model
     }
 

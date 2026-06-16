@@ -32,6 +32,7 @@ class NliEntailmentLlm : Llm {
         messages: List<ChatMessage>,
         maxTokens: Int,
         responseFormat: String?,
+        imagePath: String?,
     ): Pair<String, String> {
         val parsed = parseNliInput(messages)
         // No SOURCE QUOTE ⇒ nothing to entail against ⇒ a genuine low-confidence (UNCLEAR) verdict.

@@ -110,10 +110,10 @@ class GenerateDrillsRouteTest {
         drillKcLookup = { _, _ -> KnowledgeConcept("pa-kc-001", "PA", "a", "a", "c", "understand", 1, 1, 0.0, 1, viz_id = "recursion-tree") }
         val gen = object : Llm {
             var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = (if (n++ == 0) goodDrill else "42") to "g"
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) = (if (n++ == 0) goodDrill else "42") to "g"
         }
         drillGeneratorLlmFactory = { gen }
-        drillCriticLlmFactory = { object : Llm { override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = goodCritic to "claude" } }
+        drillCriticLlmFactory = { object : Llm { override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) = goodCritic to "claude" } }
 
         val csrf = "test-csrf-generate-drills"
         val client = createClient {
@@ -153,7 +153,7 @@ class GenerateDrillsRouteTest {
      *  self-solve prompt ("Solve and reply") → "42". One instance serves BOTH generate() and
      *  farTransfer() calls the route makes for one KC. */
     private fun contentAwareGen() = object : Llm {
-        override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?): Pair<String, String> {
+        override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?): Pair<String, String> {
             val isSelfSolve = m.any { it.content.contains("Solve and reply") }
             return (if (isSelfSolve) "42" else goodDrill) to "g"
         }
@@ -179,7 +179,7 @@ class GenerateDrillsRouteTest {
             far_transfer_stem = "A bakery doubles its recipe each hour; model the growth.",
         ) }
         drillGeneratorLlmFactory = { contentAwareGen() }
-        drillCriticLlmFactory = { object : Llm { override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = goodCritic to "claude" } }
+        drillCriticLlmFactory = { object : Llm { override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) = goodCritic to "claude" } }
 
         val csrf = "test-csrf-ft"
         val client = createClient {
@@ -235,7 +235,7 @@ class GenerateDrillsRouteTest {
         // KC has NO far_transfer_stem ⇒ zero far-transfer Problems, no throw.
         drillKcLookup = { _, _ -> KnowledgeConcept("pa-kc-noft", "PA", "a", "a", "c", "understand", 1, 1, 0.0, 1, viz_id = "recursion-tree") }
         drillGeneratorLlmFactory = { contentAwareGen() }
-        drillCriticLlmFactory = { object : Llm { override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = goodCritic to "claude" } }
+        drillCriticLlmFactory = { object : Llm { override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) = goodCritic to "claude" } }
 
         val csrf = "test-csrf-noft"
         val client = createClient {

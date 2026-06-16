@@ -26,11 +26,22 @@ class ClaudeMaxLlm(
         messages: List<ChatMessage>,
         maxTokens: Int,
         responseFormat: String?,
+        imagePath: String?,
     ): Pair<String, String> {
         // responseFormat is an OpenAI/OpenRouter hint; claude --print has no
         // equivalent flag, so we silently ignore it. Callers (DrillGrader)
         // pass it unconditionally; non-OR providers just no-op.
-        val prompt = serialize(messages)
+        //
+        // imagePath: the claude CLI has no --image flag; it views a local
+        // image when the file's ABSOLUTE PATH appears in the prompt text (the
+        // agentic CLI opens it with its Read tool). Proven free (no
+        // ANTHROPIC_API_KEY) with this exact append format. Other providers
+        // ignore imagePath.
+        val prompt = serialize(messages) + if (imagePath != null) {
+            "\n\n[Image attached for analysis — open and view this file: $imagePath]"
+        } else {
+            ""
+        }
 
         val cmd = mutableListOf(binary, "--print", "--output-format", "text")
         if (model != null) {

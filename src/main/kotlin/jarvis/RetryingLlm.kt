@@ -41,13 +41,14 @@ class RetryingLlm(
         messages: List<ChatMessage>,
         maxTokens: Int,
         responseFormat: String?,
+        imagePath: String?,
     ): Pair<String, String> {
         var lastException: IOException? = null
         var backoffMs = initialBackoffMs
 
         for (attempt in 0..maxRetries) {
             try {
-                return inner.complete(messages, maxTokens, responseFormat)
+                return inner.complete(messages, maxTokens, responseFormat, imagePath)
             } catch (e: IOException) {
                 lastException = e
                 if (attempt < maxRetries) {

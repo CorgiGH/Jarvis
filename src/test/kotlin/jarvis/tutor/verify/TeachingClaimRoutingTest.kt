@@ -38,7 +38,7 @@ class TeachingClaimRoutingTest {
     // --- fakes -----------------------------------------------------------------------------------
 
     private class FakeLlm(private val reply: String, private val model: String = "fake-model") : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?) =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) =
             reply to model
     }
 

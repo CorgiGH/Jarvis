@@ -89,6 +89,7 @@ class MockExamRoutesTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> = throw RuntimeException("boom-llm-down")
     }
 
@@ -98,6 +99,7 @@ class MockExamRoutesTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> = "not json at all, just chatter" to "fake-ambiguous-model"
     }
 
@@ -107,6 +109,7 @@ class MockExamRoutesTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> =
             """{"correct":true,"rubric":{"numeric":true,"mechanism":true},""" +
                 """"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake-coherent-model"

@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 
 class DrillGeneratorTest {
     private class Fake(private val reply: String) : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?) = reply to "fake"
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) = reply to "fake"
     }
     private val kc = KnowledgeConcept("pa-kc-x", "PA", "a", "a", "c", "understand", 1, 1, 0.0, 1)
     private val goodDrill = """{"statement":"Compute 6*7.","canonical_answer":"42","rubric_items":["ok"],"worked":"42","definition":"mult","check":"7*8?","expected_answer_hint":"42"}"""
@@ -22,7 +22,7 @@ class DrillGeneratorTest {
         // generator: 1st call = drill, 2nd call = self-solve answer "42"
         val gen = object : Llm {
             var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) =
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) =
                 (if (n++ == 0) goodDrill else "42") to "fake-gen"
         }
         val res = DrillGenerator.generate(kc, listOf("mult quote"), "computational", 1, gen, Fake(goodCritic))
@@ -36,7 +36,7 @@ class DrillGeneratorTest {
     @Test fun `rejects when self-solve disagrees with canonical answer`() = runBlocking {
         val gen = object : Llm {
             var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) =
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) =
                 (if (n++ == 0) goodDrill else "99") to "fake-gen"  // self-solve says 99 != 42
         }
         val res = DrillGenerator.generate(kc, listOf("q"), "computational", 1, gen, Fake(goodCritic))
@@ -46,7 +46,7 @@ class DrillGeneratorTest {
 
     @Test fun `rejects when critic is not confident`() = runBlocking {
         val gen = object : Llm { var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
         val lowCritic = """{"confidence":0.2,"grounded":true,"leak":false,"solvable":true}"""
         val res = DrillGenerator.generate(kc, listOf("q"), "computational", 1, gen, Fake(lowCritic))
         assertEquals(0, res.bundles.size)
@@ -55,7 +55,7 @@ class DrillGeneratorTest {
 
     @Test fun `rejects when critic reports a leak`() = runBlocking {
         val gen = object : Llm { var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
         val leakCritic = """{"confidence":0.9,"grounded":true,"leak":true,"solvable":true}"""
         val res = DrillGenerator.generate(kc, listOf("q"), "computational", 1, gen, Fake(leakCritic))
         assertEquals(0, res.bundles.size)
@@ -65,7 +65,7 @@ class DrillGeneratorTest {
     @Test fun `rejects when the stem leaks its own answer`() = runBlocking {
         val leaky = """{"statement":"Compute 6*7. The answer is 42.","canonical_answer":"42","rubric_items":["ok"],"worked":"42","definition":"m","check":"c","expected_answer_hint":"42"}"""
         val gen = object : Llm { var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = (if (n++ == 0) leaky else "42") to "g" }
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) = (if (n++ == 0) leaky else "42") to "g" }
         val res = DrillGenerator.generate(kc, listOf("q"), "computational", 1, gen, Fake(goodCritic))
         assertEquals(0, res.bundles.size)
         assertTrue(res.rejectReasons.any { it.contains("leak") })
@@ -73,7 +73,7 @@ class DrillGeneratorTest {
 
     @Test fun `rejects when critic says not grounded`() = runBlocking {
         val gen = object : Llm { var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
         val notGrounded = """{"confidence":0.9,"grounded":false,"leak":false,"solvable":true}"""
         val res = DrillGenerator.generate(kc, listOf("q"), "computational", 1, gen, Fake(notGrounded))
         assertEquals(0, res.bundles.size)
@@ -82,7 +82,7 @@ class DrillGeneratorTest {
 
     @Test fun `rejects when critic says not solvable`() = runBlocking {
         val gen = object : Llm { var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) = (if (n++ == 0) goodDrill else "42") to "g" }
         val notSolvable = """{"confidence":0.9,"grounded":true,"leak":false,"solvable":false}"""
         val res = DrillGenerator.generate(kc, listOf("q"), "computational", 1, gen, Fake(notSolvable))
         assertEquals(0, res.bundles.size)
@@ -118,7 +118,7 @@ class DrillGeneratorTest {
         val relayModelId = "anthropic/claude-sonnet-4-5"   // the model string the (fake) relay/generator returns
         val gen = object : Llm {
             var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) =
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) =
                 (if (n++ == 0) goodDrill else "42") to relayModelId
         }
         val res = DrillGenerator.generate(kc, listOf("mult quote"), "computational", 1, gen, Fake(goodCritic))

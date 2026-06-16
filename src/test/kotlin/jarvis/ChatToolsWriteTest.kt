@@ -16,6 +16,7 @@ class ChatToolsWriteTest {
                 messages: List<ChatMessage>,
                 maxTokens: Int,
                 responseFormat: String?,
+                imagePath: String?,
             ): Pair<String, String> = q.removeFirst() to "test"
         }
     }

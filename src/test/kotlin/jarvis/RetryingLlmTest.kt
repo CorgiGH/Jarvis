@@ -34,6 +34,7 @@ class RetryingLlmTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> {
             callCount++
             if (callCount <= failCount) throw IOException("transport failure #$callCount")
@@ -50,6 +51,7 @@ class RetryingLlmTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> {
             callCount++
             throw IOException("permanent failure #$callCount")
@@ -63,6 +65,7 @@ class RetryingLlmTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> {
             callCount++
             return "this is definitely not json ¯\\_(ツ)_/¯" to "bad-model"

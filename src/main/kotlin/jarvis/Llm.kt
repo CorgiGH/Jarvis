@@ -24,6 +24,7 @@ interface Llm : AutoCloseable {
         messages: List<ChatMessage>,
         maxTokens: Int = Config.MAX_TOKENS,
         responseFormat: String? = null,
+        imagePath: String? = null,
     ): Pair<String, String>
 
     override fun close() {}

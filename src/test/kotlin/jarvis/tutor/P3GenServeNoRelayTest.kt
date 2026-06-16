@@ -119,7 +119,7 @@ class P3GenServeNoRelayTest {
         val genCalls = AtomicInteger(0)
         val gen = object : Llm {
             var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?): Pair<String, String> {
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?): Pair<String, String> {
                 genCalls.incrementAndGet()
                 return (if (n++ == 0) goodDrill else "42") to relayModelId
             }
@@ -128,7 +128,7 @@ class P3GenServeNoRelayTest {
         drillGeneratorLlmFactory = { gen }
         drillCriticLlmFactory = {
             object : Llm {
-                override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?): Pair<String, String> {
+                override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?): Pair<String, String> {
                     criticCalls.incrementAndGet(); return goodCritic to "fake-critic"
                 }
             }

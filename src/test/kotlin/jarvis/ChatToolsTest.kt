@@ -14,6 +14,7 @@ class ChatToolsTest {
                 messages: List<ChatMessage>,
                 maxTokens: Int,
                 responseFormat: String?,
+                imagePath: String?,
             ): Pair<String, String> {
                 require(q.isNotEmpty()) { "LLM called more times than scripted (got ${messages.size} messages)" }
                 return q.removeFirst() to model
@@ -105,6 +106,7 @@ class ChatToolsTest {
                     messages: List<ChatMessage>,
                     maxTokens: Int,
                     responseFormat: String?,
+                    imagePath: String?,
                 ): Pair<String, String> {
                     calls++
                     return "[[search: q$calls]] still searching" to "m"

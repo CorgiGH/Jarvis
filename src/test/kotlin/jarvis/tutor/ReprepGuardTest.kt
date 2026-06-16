@@ -117,7 +117,7 @@ class ReprepGuardTest {
         val freshProblems = listOf(Problem("fresh-1", 1, "Compute fib(5).", kcIds = emptyList()))
         reprepExtractorFn = { _, _ -> freshProblems }
         reprepExtractorLlmFactory = { object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?) =
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) =
                 "[]" to "fake"
             override fun close() {}
         } }
@@ -170,7 +170,7 @@ class ReprepGuardTest {
         val freshProblems = listOf(Problem("fresh-a", 1, "State the sorting theorem.", kcIds = emptyList()))
         reprepExtractorFn = { _, _ -> freshProblems }
         reprepExtractorLlmFactory = { object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?) =
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) =
                 "[]" to "fake"
             override fun close() {}
         } }

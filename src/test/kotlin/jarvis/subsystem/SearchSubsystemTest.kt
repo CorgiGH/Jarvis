@@ -105,5 +105,6 @@ private fun Llm(block: suspend (List<jarvis.ChatMessage>, Int) -> Pair<String, S
             messages: List<jarvis.ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> = block(messages, maxTokens)
     }

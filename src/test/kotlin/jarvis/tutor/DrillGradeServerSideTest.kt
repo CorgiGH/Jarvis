@@ -45,7 +45,7 @@ import kotlin.test.assertTrue
  */
 class DrillGradeServerSideTest {
     private class FakeGraderLlm(private val json: String) : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?) =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) =
             json to "fake-grader-model"
     }
 
@@ -53,7 +53,7 @@ class DrillGradeServerSideTest {
      *  short-circuit path never touches the LLM (Plan-6 Task 7 Step 2 (a)). AssertionError (not Exception)
      *  so the handler's `catch (Exception)` degraded path can NEVER mask it as UNGRADED. */
     private class ThrowingLlm : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> =
             throw AssertionError("LLM must NOT be constructed/called on the oracle short-circuit path")
         override fun close() {}
     }
@@ -61,7 +61,7 @@ class DrillGradeServerSideTest {
     /** A fake LLM that fails like a transient transport error (a normal Exception) — drives the handler's
      *  graceful UNGRADED degraded path (Plan-6 Task 7 Step 2 (b)). */
     private class FailingLlm : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> =
             throw java.io.IOException("simulated transient LLM failure")
         override fun close() {}
     }

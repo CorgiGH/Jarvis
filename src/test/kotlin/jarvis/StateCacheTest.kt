@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 class StateCacheTest {
 
     private class FakeLlm(val replyText: String) : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> =
             replyText to "fake-llm"
     }
 

@@ -61,7 +61,7 @@ class DrillGradeServeWiringTest {
     }
 
     private class FakeGraderLlm(private val json: String) : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?) =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) =
             json to "fake-grader-model"
     }
 

@@ -39,6 +39,7 @@ class CopilotLlm(
         messages: List<ChatMessage>,
         maxTokens: Int,
         responseFormat: String?,
+        imagePath: String?,
     ): Pair<String, String> {
         // responseFormat is an OpenAI/OpenRouter hint; copilot CLI has no
         // equivalent, so we silently ignore it (subprocess providers just

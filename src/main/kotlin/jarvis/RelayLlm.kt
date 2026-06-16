@@ -64,6 +64,7 @@ class RelayLlm(
         messages: List<ChatMessage>,
         maxTokens: Int,
         responseFormat: String?,
+        imagePath: String?,
     ): Pair<String, String> {
         // responseFormat hints OpenAI/OpenRouter to emit JSON-only output;
         // the PC relay wraps `claude --print` which has no equivalent flag,

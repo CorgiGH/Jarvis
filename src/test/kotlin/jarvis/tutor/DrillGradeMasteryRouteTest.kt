@@ -77,6 +77,7 @@ class DrillGradeMasteryRouteTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> = json to "fake-grader-model"
     }
 

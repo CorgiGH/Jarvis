@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 class ReflectionLoopTest {
 
     private class FakeLlm(val replyText: String = "Pattern: long focus blocks on jarvis-kotlin.") : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> =
             replyText to "fake-llm"
     }
 

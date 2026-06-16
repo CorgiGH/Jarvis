@@ -276,7 +276,7 @@ class E3RealRelayProofTest {
         //    docs/superpowers/findings.)
         drillGraderLlmFactory = {
             object : jarvis.Llm {
-                override suspend fun complete(m: List<jarvis.ChatMessage>, t: Int, r: String?) =
+                override suspend fun complete(m: List<jarvis.ChatMessage>, t: Int, r: String?, imagePath: String?) =
                     """{"correct":true,"rubric":{"ok":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake-grader"
             }
         }

@@ -675,7 +675,7 @@ class TrustRoutesTest {
 
     /** Fake LLM that always returns the given verdict word. */
     private class FixedLlm(private val word: String) : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?) =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) =
             word to "fake-model"
     }
 

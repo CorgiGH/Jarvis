@@ -67,6 +67,7 @@ class FreeLlmApiLlm(
         messages: List<ChatMessage>,
         maxTokens: Int,
         responseFormat: String?,
+        imagePath: String?,
     ): Pair<String, String> {
         val payload = buildPayload(messages, maxTokens, responseFormat)
         val resp = client.post("${baseUrl.trimEnd('/')}/chat/completions") {

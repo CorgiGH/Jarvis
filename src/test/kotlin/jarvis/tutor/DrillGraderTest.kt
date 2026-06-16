@@ -88,7 +88,7 @@ class DrillGraderTest {
     @Test
     fun `grade returns GradeAttempt carrying raw output on success`() = kotlinx.coroutines.runBlocking {
         val fakeLlm = object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> {
                 return """{"correct":true,"rubric":{"numeric":true,"mechanism":true,"justification":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
             }
         }
@@ -104,7 +104,7 @@ class DrillGraderTest {
     @Test
     fun `grade returns GradeAttempt carrying raw output even on parse fail`() = kotlinx.coroutines.runBlocking {
         val fakeLlm = object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> {
                 return "Sure here is your grade I think it is good" to "fake/model"
             }
         }
@@ -195,6 +195,7 @@ class DrillGraderTest {
                 messages: List<jarvis.ChatMessage>,
                 maxTokens: Int,
                 responseFormat: String?,
+                imagePath: String?,
             ): Pair<String, String> {
                 observedMaxTokens = maxTokens
                 return """{"correct":true,"rubric":{"foo":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
@@ -215,6 +216,7 @@ class DrillGraderTest {
                 messages: List<jarvis.ChatMessage>,
                 maxTokens: Int,
                 responseFormat: String?,
+                imagePath: String?,
             ): Pair<String, String> {
                 observedMaxTokens = maxTokens
                 return """{"correct":true,"rubric":{"numeric":true,"mechanism":true,"justification":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
@@ -271,7 +273,7 @@ Hope that helps!"""
     fun `grade with giveUp=true substitutes sentinel out of prompt`() = kotlinx.coroutines.runBlocking {
         var seenUserMessage = ""
         val capturingLlm = object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> {
                 seenUserMessage = messages.firstOrNull { it.role == "user" }?.content.orEmpty()
                 return """{"correct":false,"rubric":{"numeric":false,"mechanism":false,"justification":false},"score":0.0,"misconception":"OTHER","elaborated_feedback":"the student gave up"}""" to "fake/model"
             }
@@ -290,7 +292,7 @@ Hope that helps!"""
     fun `grade auto-detects sentinel and treats as giveUp without explicit flag`() = kotlinx.coroutines.runBlocking {
         var seenUserMessage = ""
         val capturingLlm = object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> {
                 seenUserMessage = messages.firstOrNull { it.role == "user" }?.content.orEmpty()
                 return """{"correct":false,"rubric":{"numeric":false},"score":0.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
             }
@@ -306,7 +308,7 @@ Hope that helps!"""
     @Test
     fun `grade sanitizes residual ATTEMPTED_NOT_SOLVED from elaboratedFeedback`() = kotlinx.coroutines.runBlocking {
         val leakyLlm = object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> {
                 return """{"correct":false,"rubric":{"numeric":false},"score":0.0,"misconception":"OTHER",
                     "elaborated_feedback":"Since ATTEMPTED_NOT_SOLVED, here is the breakdown..."}""" to "fake/model"
             }
@@ -324,7 +326,7 @@ Hope that helps!"""
     fun `grade preserves userAttempt verbatim in normal non-giveUp path`() = kotlinx.coroutines.runBlocking {
         var seenUserMessage = ""
         val capturingLlm = object : jarvis.Llm {
-            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+            override suspend fun complete(messages: List<jarvis.ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> {
                 seenUserMessage = messages.firstOrNull { it.role == "user" }?.content.orEmpty()
                 return """{"correct":true,"rubric":{"numeric":true,"mechanism":true,"justification":true},"score":1.0,"misconception":null,"elaborated_feedback":"ok"}""" to "fake/model"
             }

@@ -89,6 +89,7 @@ class OpenRouterChatLlm(
         messages: List<ChatMessage>,
         maxTokens: Int,
         responseFormat: String?,
+        imagePath: String?,
     ): Pair<String, String> {
         val payload = buildCompletePayload(
             messages = messages,

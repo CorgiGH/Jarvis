@@ -15,13 +15,13 @@ class ProactiveLoopTest {
 
     /** Stub Llm whose ctx-model output we control inline. */
     private class FakeLlm(private val replyText: String = "ENERGY: mid\nSTRESS: low\nLIFE_SEASON: maintenance") : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> =
             replyText to "fake-llm"
     }
 
     /** Llm that throws so we can test the error path. */
     private class FailingLlm : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> {
             error("simulated provider failure")
         }
     }

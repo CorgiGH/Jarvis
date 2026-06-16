@@ -78,6 +78,7 @@ class MockExamAdditiveRouteTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> =
             """{"correct":true,"rubric":{"numeric":true},"score":1.0,"misconception":null,""" +
                 """"elaborated_feedback":"ok"}""" to "fake-coherent-model"
@@ -88,6 +89,7 @@ class MockExamAdditiveRouteTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> = throw RuntimeException("boom-llm-down")
     }
 

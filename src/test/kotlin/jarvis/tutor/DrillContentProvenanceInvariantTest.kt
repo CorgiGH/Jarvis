@@ -60,7 +60,7 @@ class DrillContentProvenanceInvariantTest {
     // test goes red — not merely the shape test above.
 
     private class Fake(private val reply: String) : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?) = reply to "fake"
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) = reply to "fake"
     }
 
     private val kc = KnowledgeConcept("pa-kc-x", "PA", "a", "a", "c", "understand", 1, 1, 0.0, 1)
@@ -70,7 +70,7 @@ class DrillContentProvenanceInvariantTest {
     @Test fun `DrillGenerator_generate stamps every accepted bundle with provenance=generated+false`() = runBlocking {
         val gen = object : Llm {
             var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) =
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) =
                 (if (n++ == 0) goodDrill else "42") to "fake-gen"
         }
         val res = DrillGenerator.generate(kc, listOf("mult quote"), "computational", 1, gen, Fake(goodCritic))

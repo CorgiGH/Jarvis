@@ -141,7 +141,7 @@ class E3GenerateGradeSmokeTest {
         }
         val gen = object : Llm {
             var n = 0
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) =
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) =
                 (if (n++ == 0)
                     """{"statement":"Compute 6*7.","canonical_answer":"42","rubric_items":["ok"],"worked":"42","definition":"d","check":"c","expected_answer_hint":"42"}"""
                 else
@@ -149,7 +149,7 @@ class E3GenerateGradeSmokeTest {
         }
         drillGeneratorLlmFactory = { gen }
         drillCriticLlmFactory = { object : Llm {
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) =
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) =
                 """{"confidence":0.9,"grounded":true,"leak":false,"solvable":true}""" to "claude"
         } }
 
@@ -189,7 +189,7 @@ class E3GenerateGradeSmokeTest {
 
         // 3. Wire the grader fake — client sends NO kcIds / NO canonicalAnswer
         drillGraderLlmFactory = { object : Llm {
-            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?) =
+            override suspend fun complete(m: List<ChatMessage>, t: Int, r: String?, imagePath: String?) =
                 """{"correct":true,"rubric":{"ok":true},"score":1.0,"misconception":null,"elaborated_feedback":"good"}""" to "fake-grader"
         } }
 

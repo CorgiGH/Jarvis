@@ -157,6 +157,7 @@ class P3HonestyGraderSpotCheckTest {
         var calls = 0
         override suspend fun complete(
             messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?,
+        imagePath: String?,
         ): Pair<String, String> {
             calls++
             // Always "correct" with an all-pass rubric — the credulous direction the honesty leg must veto.

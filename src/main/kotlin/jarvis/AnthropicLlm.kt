@@ -24,6 +24,7 @@ class AnthropicLlm(
         messages: List<ChatMessage>,
         maxTokens: Int,
         responseFormat: String?,
+        imagePath: String?,
     ): Pair<String, String> {
         TODO(
             "AnthropicLlm not yet implemented. Set JARVIS_LLM=claude-max " +

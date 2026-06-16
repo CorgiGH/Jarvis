@@ -36,13 +36,15 @@ class FallbackLlm(
         messages: List<ChatMessage>,
         maxTokens: Int,
         responseFormat: String?,
+        imagePath: String?,
     ): Pair<String, String> {
         // responseFormat is passed through to BOTH providers — if primary
         // honors it (OpenRouter) we keep the json_object lever; if fallback
         // doesn't (claude/copilot CLI) it silently no-ops. Either way the
-        // caller's contract is preserved.
+        // caller's contract is preserved. imagePath forwards the same way so
+        // vision is not silently dropped at the wrapper.
         val primaryError: Throwable = try {
-            return primary.complete(messages, maxTokens, responseFormat)
+            return primary.complete(messages, maxTokens, responseFormat, imagePath)
         } catch (ce: CancellationException) {
             throw ce
         } catch (t: Throwable) {
@@ -50,7 +52,7 @@ class FallbackLlm(
         }
 
         try {
-            return fallback.complete(messages, maxTokens, responseFormat)
+            return fallback.complete(messages, maxTokens, responseFormat, imagePath)
         } catch (ce: CancellationException) {
             throw ce
         } catch (fallbackError: Throwable) {

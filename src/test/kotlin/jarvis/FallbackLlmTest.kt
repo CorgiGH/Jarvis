@@ -23,6 +23,7 @@ class FallbackLlmTest {
             messages: List<ChatMessage>,
             maxTokens: Int,
             responseFormat: String?,
+            imagePath: String?,
         ): Pair<String, String> {
             callCount++
             throwOn?.let { throw it() }

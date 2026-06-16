@@ -43,13 +43,13 @@ class VerificationRunnerTest {
 
     /** Canned-reply fake Llm. */
     private class FakeLlm(private val reply: String, private val model: String = "fake-model") : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?) =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?) =
             reply to model
     }
 
     /** A fake Llm that throws on the request path — proves a thrown LLM leg never crashes the batch. */
     private class ThrowingLlm : Llm {
-        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> =
+        override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> =
             throw RuntimeException("relay down (simulated)")
     }
 
@@ -648,7 +648,7 @@ class VerificationRunnerTest {
             db = db,
             legA = TwoFamilyDeriver.Leg(LegFamily.RELAY, FakeLlm("SUPPORTED")),
             legB = TwoFamilyDeriver.Leg(LegFamily.OPENROUTER, object : Llm {
-                override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?): Pair<String, String> {
+                override suspend fun complete(messages: List<ChatMessage>, maxTokens: Int, responseFormat: String?, imagePath: String?): Pair<String, String> {
                     // Refute ONLY the equational invariant claim; support everything else.
                     val refute = messages.any { it.content.contains("x + x = 2*x") }
                     return (if (refute) "REFUTED" else "SUPPORTED") to "fake-model"
