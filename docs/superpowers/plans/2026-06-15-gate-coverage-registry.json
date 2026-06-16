@@ -65,8 +65,8 @@
     }
   ],
   "counts": {
-    "LIVE-GREEN": 18,
-    "PLANNED": 62,
+    "LIVE-GREEN": 19,
+    "PLANNED": 61,
     "RED-UNMAPPED": 6,
     "total": 86
   },
@@ -746,10 +746,11 @@
       "dimension": "5 / Phase-A (every-frame-advances over typed STATE delta)",
       "layer": "L1",
       "tag": "PROOF",
-      "status": "PLANNED",
-      "plannedPhase": "A",
-      "backingGate": "NONE — net-new semantic frame gate (NOT a perceptual hash); closes the divide-frames-frozen leak (spec §6 mergesort). Unbuilt at HEAD",
-      "evidence": "plan Phase A 'every-frame-advances over the typed algorithm-STATE delta' (line 139); §2 dim-5 'semantic-state-delta frame gates (F6/F13)' (line 73)"
+      "status": "LIVE-GREEN",
+      "plannedPhase": "",
+      "backingGate": "BOTH halves of the semantic frame gate are now wired (NOT a perceptual hash): (a) frontend vitest job → tutor-web/src/components/viz/__tests__/frameConjunction.self.test.ts — deterministic verdict/decode/diff liveness (classifyPair/decodePng/diffPng over the frame-conjunction-core; frozen=FAIL, moved=live, hold=exempt legs); (b) the .github/workflows/test.yml frame-gate job (lines 293-347) → node tutor-web/tools/frame-conjunction-gate.mjs, the route-walking arm against the real renderer (HARD-BLOCKING). Closes the divide-frames-frozen leak (spec §6 mergesort)",
+      "coverageNote": "NAMED ACCEPTED-DEBT (per council): the screenshot + callout-crop + scrubber-stepping (captureFigure) half of the route-walking arm is NOT unit-covered — it is exercised ONLY by the live test.yml frame-gate job against the real renderer, never by a deterministic in-process vitest assertion. The vitest self-test (a) proves the verdict/decode/diff core stays live; the route-walk + figure-capture (b) carries the residual.",
+      "evidence": "plan Phase A 'every-frame-advances over the typed algorithm-STATE delta' (line 139); §2 dim-5 'semantic-state-delta frame gates (F6/F13)' (line 73); HEAD: frameConjunction.self.test.ts present + test.yml frame-gate job lines 293-347"
     },
     {
       "id": "semantic-frame-gate-final-eq-endstate",
