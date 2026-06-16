@@ -457,13 +457,9 @@ function computePlacement(values: number[], st: MergeState, idOfValue: Map<numbe
     // groups (disjoint half-open spans the parse guard already validated); a position's group = the
     // index of the run that contains it. This is what makes the four divide frames differ: as `runs`
     // subdivides 1→2→4→6, the group count rises and the renderer opens a gap at each group boundary.
-    // ⚠️ DEMO DEFECT (frame-gate RED→GREEN demo, branch demo/frame-gate-red) — DO NOT MERGE.
-    // Reintroduces the historical merge-divide bug: place tokens by ARRAY POSITION and ignore
-    // st.runs, so the divide frames (0→1,1→2,2→3) no longer fan apart and the figure is BYTE-frozen
-    // while the typed state advances. The frame-conjunction gate MUST go RED on this.
-    const divideRuns: MergeRun[] = [];
+    const divideRuns: MergeRun[] = sortedRow ? [] : st.runs.map((r) => ({ ...r }));
     const divideGroupOf: number[] = new Array(values.length).fill(0);
-    if (false) {
+    if (!sortedRow) {
       for (let pos = 0; pos < values.length; pos++) {
         let g = divideRuns.findIndex((r) => pos >= r.lo && pos < r.hi);
         if (g < 0) g = 0; // defensive — runs always cover [0,n) on a divide frame
