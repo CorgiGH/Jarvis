@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import {
   decodePng,
@@ -110,13 +111,17 @@ describe('frame-conjunction self-test (permanent liveness)', () => {
     expect(stateDelta(MERGE_STEPS[0], MERGE_STEPS[0]).changed).toBe(false);
   });
 
-  it('SEED-SYNC smoke — MERGE_STEPS matches the renderer demo step count (anti ghost-green)', () => {
+  it('SEED-SYNC smoke — MERGE_STEPS matches the renderer demo step count + content (anti ghost-green)', () => {
     // The viz-pa-mergesort-runs-001 data_json is defined INLINE (not exported) in
     // src/components/viz/families/MergeCompareDemo.tsx + LectieMergeSortDemo.tsx (and
     // mirrored in the shipped content YAML + traceMatchHarness). It is byte-identical to
     // the seed's MERGESORT_DATA_JSON. Since the renderer source is not cleanly importable
-    // here, we pin the known length (30) so any future desync between the seed oracle and
-    // the demo data_json the renderer actually drives is caught loud.
+    // here, we pin the seed oracle by COUNT and by a CONTENT HASH. The length-only pin was
+    // blind to a same-length content edit (council-1781570142 hardening); the hash reds loud
+    // on ANY change to MERGE_STEPS. To regenerate after a deliberate seed change:
+    //   node -e "import('./tutor-web/tools/frame-conjunction-seed.mjs').then(m=>console.log(require('crypto').createHash('sha256').update(JSON.stringify(m.MERGE_STEPS)).digest('hex')))"
     expect(MERGE_STEPS.length).toBe(30);
+    const seedHash = createHash('sha256').update(JSON.stringify(MERGE_STEPS)).digest('hex');
+    expect(seedHash).toBe('874f1329ab02564d5b3f564ff6f4f25e902f3184aacf08997a2aab0d6880eb03');
   });
 });

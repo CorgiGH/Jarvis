@@ -13,6 +13,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // The frame-conjunction figure gate (tutor-web/tools/frame-conjunction-gate.mjs) hardcodes
+    // BASE_URL=http://localhost:5173. strictPort makes a port collision FAIL LOUD instead of
+    // silently rolling to 5174 (which would leave the gate probing a stale/dead server).
+    strictPort: true,
     proxy: {
       // Backend default port is 8080 (WebMain.kt DEFAULT_PORT). Override with JARVIS_PORT env on backend side.
       "/api": "http://localhost:8080",
