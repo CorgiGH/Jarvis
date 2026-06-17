@@ -318,6 +318,7 @@ Interaction smoke: complete all beats by clicking; zero 4xx/5xx during the whole
 4. **chart/distribution** — distributions, histograms, function curves, convergence plots.
 5. **timeline/protocol** — process/thread timelines, network protocol exchanges, scheduling Gantt strips.
 6. **state-machine/code-trace** — automata, code execution state (variables table + highlighted line), Markov chains.
+7. **static-structure/class-diagram** — UML-style class boxes (name / fields / methods compartments) + typed edges (inheritance, composition, aggregation, association, dependency) with direction and multiplicity. Models **static type structure** (OOP/POO), NOT an algorithm run: no step-delta, no end-state, one canonical frame. *(Added 2026-06-17 — AMENDMENT, see `build-review/2026-06-17-family7-oop-class-diagram-amendment.md`.)* **Its verification is NOT §5.4 trace-match** (nothing executes) but a deterministic **structure-isomorphism gate** (parse the class model → assert the rendered SVG is isomorphic: every class/field/method/edge present with correct edge type+direction, zero dropped/extra), shipped with a seeded-wrong RED→GREEN self-test. The `frame-conjunction` MOTION gate is structurally N/A (one frame); its absence must not read as "ungated" — the isomorphism gate is this family's hard floor. Barred from VERIFIED until that self-test is demonstrated.
 
 A family may gain sub-layouts; a *new family* is a design-level event requiring its own verification harness before first use.
 
@@ -600,7 +601,7 @@ All new endpoints, tables, columns, and payload fields introduced by this design
 
 **The beat vocabulary (fixed):** ① PREDICT — commit to an expectation before seeing; ② ATTEMPT — do a scaffolded sub-task; ③ REVEAL — stepped, scrubber-equipped disclosure fused with explanation; ④ NAME — formal definition + invariant + why-callout; ⑤ CHECK — a different-instance graded item. (§4.2)
 
-**The 6 viz families:** graph/tree · sequence/array · matrix/grid · chart/distribution · timeline/protocol · state-machine/code-trace. (§5.2)
+**The 7 viz families:** graph/tree · sequence/array · matrix/grid · chart/distribution · timeline/protocol · state-machine/code-trace · static-structure/class-diagram. (§5.2; the 7th added 2026-06-17 by amendment — structure-isomorphism gate, not trace-match.)
 
 **Other terms:** *gap-record* — a parked artifact's user-visible request for files (§2.6). *pedagogical_instance* — generated example content verified by method-consistency + trace-match instead of verbatim grounding (§3.3). *checkpoint* — the per-artifact user experience-approval step (§1.4). *grade-model registry* — verified per-subject grading formulas with source URLs (§3.5). *synthetic-tagged* — practice content honestly labeled as not derived from a real past paper (§6.2.4).
 
