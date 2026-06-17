@@ -4,6 +4,7 @@ import { ChartDistributionFamily } from "./ChartDistributionFamily";
 import { SequenceArrayFamily } from "./SequenceArrayFamily";
 import { MatrixGridFamily } from "./MatrixGridFamily";
 import { SortMergeFamily } from "./SortMergeFamily";
+import { ClassDiagramFamily } from "./ClassDiagramFamily";
 
 /**
  * Plan-3 §5.1/§5.3 — a family renders (family_id, instance_data) and NOTHING else. It receives the
@@ -36,4 +37,8 @@ export const familyRegistry: Record<string, FamilyRenderer> = {
   "seq-array": SequenceArrayFamily,
   "matrix-grid": MatrixGridFamily,
   "sort-merge": SortMergeFamily,
+  // Plan-V family 7 (AMENDMENT 2026-06-17) — static-structure / UML class diagram. NOT trace-based:
+  // it has no harness entry in the §5.4 trace-match harness (nothing executes); its hard floor is the
+  // standalone structure-isomorphism gate (classDiagramStructure.ts + structureIsomorphismClassDiagram.test).
+  "class-diagram": ClassDiagramFamily,
 };

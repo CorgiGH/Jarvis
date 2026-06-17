@@ -1,0 +1,16 @@
+# First-instance fixture for the class-diagram family (Plan-V family 7, AMENDMENT 2026-06-17).
+# A real, correct OOP inheritance model: abstract Animal with two subclasses (Dog, Cat) and an Owner
+# that holds an association to Animal (1..*). Class/method names are LANGUAGE-NEUTRAL code identifiers
+# (structure, not teaching prose — no Romanian callouts here, per the build contract).
+#
+# Lives under __tests__/fixtures/ — NOT under content/. The trace-match harness globs content/*/viz/*.yaml
+# and asserts every instance has a (trace) HARNESS_REGISTRY entry; class-diagram is NOT trace-based (no
+# steps, no oracle), so placing it under content/ would RED that totality harness. Its gate is the
+# STANDALONE structure-isomorphism gate exercised by structureIsomorphismClassDiagram.test.tsx.
+id: viz-poo-animals-001
+subject: POO
+family_id: class-diagram
+language: ro
+instance:
+  method_kc_id: poo-kc-fixture-inheritance
+  data_json: '{"classes":[{"id":"animal","name":"Animal","stereotype":"abstract","fields":[{"name":"name","type":"String","vis":"#"}],"methods":[{"name":"makeSound","ret":"void","vis":"+"}]},{"id":"dog","name":"Dog","fields":[],"methods":[{"name":"makeSound","ret":"void","vis":"+"},{"name":"fetch","ret":"void","vis":"+"}]},{"id":"cat","name":"Cat","fields":[],"methods":[{"name":"makeSound","ret":"void","vis":"+"}]},{"id":"owner","name":"Owner","fields":[{"name":"name","type":"String","vis":"+"}],"methods":[]}],"edges":[{"from":"dog","to":"animal","kind":"inheritance"},{"from":"cat","to":"animal","kind":"inheritance"},{"from":"owner","to":"animal","kind":"association","toMult":"1..*"}]}'
