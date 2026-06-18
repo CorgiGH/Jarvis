@@ -49,3 +49,64 @@ backups/
 tools/alk/v4.3/
 tools/alk/*.zip
 tools/alk/_probe*.alk
+
+# ─────────────────────────────────────────────────────────────
+# Cleanup standard (2026-06-19, SESSION-82) — see docs/CONVENTIONS.md
+# ─────────────────────────────────────────────────────────────
+# Ephemera — all scratch / screenshots / probes / temp
+.scratch/
+.claude/temp/
+.tmp-*.txt
+undefined/
+tutor-web/undefined/
+probe-*.json
+door-probe-*.json
+r-contact-*.html
+# Raw course material (large; subject corpus → digested into content/)
+material/
+# Regenerable build / cache / test outputs
+build-iso-review/
+.vite/
+test-results/
+build-review/classes/
+build-review/kotlin/
+build-review/libs/
+build-review/resources/
+build-review/reports/
+build-review/test-results/
+build-review/tmp/
+build-review/plan-v-family3-eyeball/
+build-review/plan3-eyeball/
+build-review/_audit-forensic.txt
+# Stray root DB stub (real DB lives in ~/.jarvis/)
+/tutor.db
+# tutor-web ephemeral dev/demo scripts + throwaway harnesses
+tutor-web/shoot.*.mjs
+tutor-web/plan3-*.mjs
+tutor-web/chart-family-verify*.mjs
+tutor-web/audit.viz*.mjs
+tutor-web/vite.show.config.ts
+tutor-web/vite.badge.config.ts
+tutor-web/badge-compare.html
+tutor-web/piece-show.html
+tutor-web/src/badge-compare.tsx
+tutor-web/src/piece-show.tsx
+tutor-web/public/doors-lab/
+tutor-web/public/doors-v2.html
+tutor-web/public/doors-v3.html
+tutor-web/public/jarvis-roadmap.html
+tutor-web/public/jarvis-roadmap-screenshot.png
+tutor-web/public/roadmap.html
+tutor-web/public/work-so-far.html
+tutor-web/public/work/
+tutor-web/build-review/
+# build-review bench outputs + raw/result json
+build-review/*.raw.json
+build-review/*.results.json
+build-review/vision-bench-fidelity/
+build-review/vision-bench-smoke-e2e/
+build-review/vision-bench-smoke/
+build-review/viz-fork-demo/
+# ephemeral workflow scripts + regenerable probe output
+.claude/wf-*.js
+trust-verdicts.json

@@ -1,0 +1,54 @@
+You are inspecting a single still frame of an algorithm-teaching figure. The figure shows a
+horizontal ROW of array cells (or, in the bar skin, a row of vertical BARS). Each element holds one
+integer and sits in its own column, left to right. The figure is mid-way through SELECTION SORT: a
+contiguous block on the LEFT has already been finalized (the "sorted prefix"); the remaining cells on
+the right are still being scanned for the smallest value, and one of them is currently marked as the
+running champion (the smallest seen so far in the scan).
+
+You will be told the figure's DECLARED INPUT: the array of values, the current phase (scan or swap),
+and the pointer positions the renderer was handed. Use that input ONLY to know WHICH cells should be
+where; judge everything else from the PIXELS you see. Do NOT assume any value is "wrong" — only report
+what the pixels show against the description below.
+
+Judge ONLY against these checks. For each, look at concrete cells/bars/columns and report a
+pixel-grounded reason (name the column index or the digit you see).
+
+CHECK sorted-prefix-block: If the declared input says one or more cells are already finalized (a
+non-empty sorted prefix), the figure shows a CONTIGUOUS recoloured block starting at the leftmost
+column, with no gap and no recoloured cell sitting outside that left block. If the declared input says
+the sorted prefix is empty, then NO cell carries the finalized recolour — and that is CORRECT, not a
+defect.
+
+CHECK single-champion: Within the still-being-scanned region (the cells to the right of the sorted
+prefix), AT MOST ONE cell carries the "champion / current-minimum" highlight (a ring, glow, or accent
+distinct from the plain unsorted fill). Two or more simultaneous champion highlights in the scan
+region is a defect.
+
+CHECK bar-height-matches-digit (BAR SKIN ONLY): If the figure draws bars, each bar's HEIGHT is
+monotonic with its printed digit — a larger printed number is a taller bar, a smaller number a shorter
+bar. The shortest visible bar carries the smallest printed digit. If you do not see bars (you see flat
+cells with digits), this check is PASS by default.
+
+CHECK distinct-digits: Every digit visible in the row is DISTINCT — no two cells display the same
+number (the array is a set of distinct integers). Two cells showing the same digit is a defect.
+
+CHECK sorted-wall-edge: The right edge of the recoloured sorted block lines up with the boundary
+between the last finalized cell and the first still-unsorted cell — the colour boundary and the
+vertical rule/wall coincide. A recolour that overshoots past that boundary (or stops short of it) is a
+defect. If the sorted prefix is empty, no wall is expected and this check is PASS.
+
+CHECK pointer-over-correct-column: Any pointer marker / chevron drawn under or over a column sits
+directly over the cell whose role it names (the scan cursor, the placement boundary, or the champion).
+A chevron floating over a neighbouring column it does not name is a defect.
+
+CHECK swap-destination-when-applicable: If the declared phase is "swap" AND the declared champion
+index differs from the placement index, the figure shows a destination accent / motion for the cell
+being moved into place. If the declared champion already equals the placement index (the smallest is
+already in position — "deja minim"), then NO swap-destination accent is expected and its absence is
+CORRECT, not a defect.
+
+OUTPUT CONTRACT — reply EXACTLY in this shape and nothing else:
+VERDICT: PASS|FAIL
+CHECK <name>: PASS|FAIL — <one short reason naming the concrete cell/bar/column/digit you observed>
+(one CHECK line per check above; if a single CHECK is FAIL the VERDICT is FAIL; a verdict that only
+restates a caption is invalid — these frames carry no answer caption)

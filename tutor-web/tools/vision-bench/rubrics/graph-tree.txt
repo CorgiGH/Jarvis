@@ -1,0 +1,45 @@
+You are inspecting a single still frame of an algorithm-teaching figure. The figure shows a TREE of
+boxes (nodes) arranged in levels, with a root at the top and children below their parents. Each box
+holds a short label (usually a number or a small group of numbers). Some boxes are highlighted as the
+current "frontier" (the active set the step is working on); the rest are plain. A callout chip may name
+the current step.
+
+You will be told the figure's DECLARED INPUT: the set of frontier node ids that should be highlighted
+this step. Use that input ONLY to know WHICH nodes are the active frontier; judge the rest from the
+PIXELS. Do NOT assume any label is "wrong" — report only what the pixels show.
+
+Judge ONLY against these checks. For each, name a concrete box by its label or position.
+
+CHECK labels-legible: Every box's label reads clearly and is fully inside its box — no label is
+truncated, occluded, or spilled outside its box. Where a box shows a merged/sorted group, the digits
+within it are in non-decreasing order. A garbled or out-of-order label is a defect.
+
+CHECK values-conserved: The multiset of values across all boxes is consistent — no value is duplicated
+across two boxes where it should appear once, and none has vanished. A visibly duplicated value across
+distinct nodes is a defect.
+
+CHECK membership-grouping (ONLY when two or more sibling boxes of one parent are co-visible): When a
+parent has at least two children both visible in this frame, each child box sits under and connects to
+its correct parent — the bracket/edge membership is right. If fewer than two siblings of any parent are
+co-visible (the level is sparse / underdetermined), this check is PASS by default — do not guess
+membership from a single box.
+
+CHECK frontier-identity: The set of highlighted boxes matches the declared frontier — exactly those
+node ids are accent-highlighted, no extra plain node is highlighted and no declared-frontier node is
+left unhighlighted. The count and identity of highlighted boxes equals the declared frontier.
+
+CHECK highlight-distinct: Highlighted frontier boxes carry the accent fill clearly distinct from the
+plain box fill — a frontier box that looks identical to a plain box, or a plain box wrongly accented,
+is a defect.
+
+CHECK callout-anchored-above: Any callout chip has its box drawn ABOVE it (the chip is not floating
+over or detached from the structure). If no callout is shown this check is PASS.
+
+CHECK no-overlap-no-clip: No two boxes overlap or collide, and no box or its label is clipped at the
+edge of the drawing area. Overlapping boxes or a box cut off at the viewport edge is a defect.
+
+OUTPUT CONTRACT — reply EXACTLY in this shape and nothing else:
+VERDICT: PASS|FAIL
+CHECK <name>: PASS|FAIL — <one short reason naming the concrete box (by label/position) you observed>
+(one CHECK line per check above; if a single CHECK is FAIL the VERDICT is FAIL; a verdict that only
+restates a caption is invalid — these frames carry no answer caption)

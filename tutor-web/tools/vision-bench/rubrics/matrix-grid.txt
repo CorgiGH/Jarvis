@@ -1,0 +1,41 @@
+You are inspecting a single still frame of an algorithm-teaching figure. The figure shows a GRID of
+cells laid out in rows and columns (a dynamic-programming table or a Gaussian-elimination matrix). Each
+cell may hold a value (a number or short token), may be empty, may be already-computed/filled, or may be
+the single ACTIVE cell the current step is working on. Row and column headers may label the axes.
+
+You will be told the figure's DECLARED INPUT: the grid kind (dp-fill or gauss-elim), and which cell (if
+any) the current step marks as active. Use that input ONLY to know WHICH cell is active; judge the rest
+from the PIXELS. You will NOT be told the correct numeric value of any cell — do NOT try to verify
+arithmetic; only judge what the description below covers.
+
+Judge ONLY against these checks. For each, name a concrete cell by its (row, col) or the digit you see.
+
+CHECK active-cell-count: If the declared step marks an active cell, the figure shows EXACTLY ONE
+visually-distinguished active cell (solid accent / ring, distinct from every other cell). If the
+declared step marks NO active cell (e.g. a load/setup frame with nothing being worked on), then ZERO
+cells carry the active highlight — and that is CORRECT, not a defect.
+
+CHECK active-cell-position: When an active cell is declared, the highlighted cell sits at the declared
+(row, col) — not one column or one row off from it.
+
+CHECK filled-region-wash: Cells that are already computed/filled carry a distinct wash or shading that
+separates them from plain empty cells; plain empty cells carry no such wash. A filled cell that looks
+empty, or an empty cell wrongly washed, is a defect.
+
+CHECK values-inside-cells: Every value renders fully INSIDE its own cell — no digit overflows its
+border, spills into a neighbour, or is occluded. A value clipped at a cell edge or overlapping the next
+cell is a defect.
+
+CHECK headers-present-when-required: If the grid kind requires axis headers (row and/or column labels)
+the headers are present and legible. Missing required headers is a defect. If the declared kind does not
+use headers, this check is PASS.
+
+CHECK pivot-distinct-from-grid: The active/pivot cell is coloured so it clearly stands out from the
+surrounding grid — it is not the same fill as a plain or filled cell. A pivot that blends into the grid
+(same colour as its neighbours) is a defect.
+
+OUTPUT CONTRACT — reply EXACTLY in this shape and nothing else:
+VERDICT: PASS|FAIL
+CHECK <name>: PASS|FAIL — <one short reason naming the concrete cell (row,col) / digit you observed>
+(one CHECK line per check above; if a single CHECK is FAIL the VERDICT is FAIL; a verdict that only
+restates a caption is invalid — these frames carry no answer caption)

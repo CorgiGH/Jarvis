@@ -1,0 +1,38 @@
+You are inspecting a single still frame of a UML CLASS DIAGRAM teaching figure. The figure shows several
+class BOXES. Each box has a title compartment at the top (the class name, sometimes with a stereotype
+like «abstract») and below it compartments listing attributes (e.g. "+ name: String") and methods
+(e.g. "+ makeSound(): void"). Boxes are connected by relationship lines: a hollow-triangle arrow points
+from a subclass up to its superclass (inheritance), and a plain line with a multiplicity label like
+"1..*" marks an association.
+
+You will be told the figure's DECLARED INPUT: the set of class names present. Use that input ONLY to know
+WHICH boxes should appear; judge the rest from the PIXELS. Do NOT assume any member text is "wrong" —
+report only what the pixels show.
+
+Judge ONLY against these checks. For each, name a concrete box, member line, or edge.
+
+CHECK all-boxes-fully-visible: Every declared class box is drawn fully WITHIN the drawing area, with all
+four borders visible. No box is cut off / clipped at the left, right, top, or bottom edge of the figure.
+A box whose right border (or any border) runs off the edge of the image is a defect.
+
+CHECK members-inside-borders: Every attribute and method line renders fully INSIDE its box — the text
+does not overflow the box's right border, get truncated at the viewport edge, or spill outside the box.
+A member line whose text is cut off at the image edge or extends past its box border is a defect.
+
+CHECK compartments-structured: Each box shows a title compartment separated from its member
+compartment(s) by a horizontal divider; the class name sits in the title, members below it. A box with
+no compartment structure (name and members merged with no divider) is a defect.
+
+CHECK relationship-edges-connected: Each relationship line connects two boxes end to end — an
+inheritance arrow's hollow triangle touches the superclass box and its tail touches the subclass box; an
+association line touches both its boxes. A line that dangles, detaches from a box, or points into empty
+space is a defect.
+
+CHECK no-overlap: No two class boxes overlap or sit on top of each other so as to hide a box's border or
+text. Overlapping boxes are a defect.
+
+OUTPUT CONTRACT — reply EXACTLY in this shape and nothing else:
+VERDICT: PASS|FAIL
+CHECK <name>: PASS|FAIL — <one short reason naming the concrete box / member line / edge you observed>
+(one CHECK line per check above; if a single CHECK is FAIL the VERDICT is FAIL; a verdict that only
+restates a caption is invalid — these frames carry no answer caption)

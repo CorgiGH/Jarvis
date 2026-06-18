@@ -1,0 +1,47 @@
+You are inspecting a single still frame of an algorithm-teaching figure. The figure shows MERGE SORT
+combining two already-sorted runs into one sorted output. The layout has vertically-stacked BANDS: the
+two input runs sit as separate clusters (in the bar skin they are two groups of bars; in the box skin
+two groups of cells), and a growing OUTPUT row collects elements one at a time into final sorted order.
+Each element holds one integer and keeps its identity as it moves from a run into the output.
+
+You will be told the figure's DECLARED INPUT: the full array contents this frame, which run-bands exist,
+and which positions the front-pointers occupy. Use that input ONLY to know WHICH tokens are where; judge
+the rest from the PIXELS. Do NOT assume any value is "wrong" — report only what the pixels show.
+
+Judge ONLY against these checks. For each, name a concrete cell/bar/cluster/column.
+
+CHECK two-clusters-separated: The two input runs read as TWO distinct clusters with a clear gap or
+visual separation between them — they are not fused into one undifferentiated block.
+
+CHECK output-cells-accent: Cells already placed in the OUTPUT row are painted in the solid accent
+(the "placed / interclasat" colour) and are visually distinct from the plainer grey/tinted body of the
+still-unplaced run cells. Output cells that look identical to unplaced body cells is a defect.
+
+CHECK fronts-marked: The current FRONT of each input run (the next element to be compared) carries a
+distinct marker — a ring and/or a chevron/pointer — lifting it above the resting run cells. A run whose
+front looks identical to its other cells is a defect.
+
+CHECK values-conserved: The complete multiset of digits visible across all bands equals the declared
+input multiset — no digit is duplicated where it should appear once, and none is missing. A visibly
+duplicated or vanished digit is a defect.
+
+CHECK output-ascending-left-to-right: The OUTPUT row, read left to right, is in non-decreasing order
+(each placed value is >= the one to its left). The output growing right-to-left, or out of order, is a
+defect.
+
+CHECK final-row-sorted (FINAL FRAME ONLY): If the declared input indicates this is the final frame,
+the whole output row is solid accent and fully ascending under the completion rule. On non-final frames
+this check is PASS by default.
+
+CHECK brackets-contiguous: Any grouping bracket / boundary drawn under a run spans exactly one
+contiguous run at its correct boundaries — it does not split a run or straddle two runs. If no brackets
+are drawn this check is PASS.
+
+CHECK chip-no-occlusion: Any label chip / callout text sits clear of the figure — it does not overlap
+or sit on top of a cell, bar, digit, or run label so as to hide it. A chip covering a glyph is a defect.
+
+OUTPUT CONTRACT — reply EXACTLY in this shape and nothing else:
+VERDICT: PASS|FAIL
+CHECK <name>: PASS|FAIL — <one short reason naming the concrete cell/bar/cluster/column you observed>
+(one CHECK line per check above; if a single CHECK is FAIL the VERDICT is FAIL; a verdict that only
+restates a caption is invalid — these frames carry no answer caption)

@@ -1,0 +1,47 @@
+You are inspecting a single still frame of an algorithm-teaching figure. The figure shows a probability
+DENSITY CURVE plotted over an x-axis, with a marked interval [a, b] on the x-axis and a shaded region
+under the curve between those two marks (the area = the probability the value falls in [a, b]). The
+figure reveals in cumulative beats: (1) axes + curve, (2) interval marks, (3) shaded area, (4) an
+annotation box. A callout chip may name the step.
+
+You will be told the figure's DECLARED INPUT: the current reveal beat (1, 2, 3, or 4). Use that input
+ONLY to know WHICH elements should be present this beat; judge the rest from the PIXELS. You will NOT be
+told the correct probability value, and any printed probability number is MASKED OUT of the image — do
+NOT try to read or verify a probability number; judge area only by the SHAPE of the shaded region.
+
+Judge ONLY against these checks. For each, name a concrete axis/curve/mark/region feature you observe.
+
+CHECK axes-present: Both an x-axis and a y-axis are drawn. The y-axis carries ticks including a tick at
+0 (the baseline) and one near the maximum. Missing an axis or the 0 / max y-tick is a defect.
+
+CHECK single-monotone-x-curve: There is exactly ONE density curve, drawn as a single stroke whose x
+increases left to right (no doubling-back, no duplicated/reversed segment, no second stray curve). A
+shuffled or duplicated curve is a defect.
+
+CHECK interval-marks (reveal beat 2 or higher): The interval is shown by TWO drop-lines at two
+DISTINCT x positions — one toward the left carrying the a-badge, one toward the right carrying the
+b-badge — with the a-badge on the left mark and the b-badge on the right mark. If the marks are not
+both present and correctly placed when the beat is >= 2, this check is a defect. On reveal beat 1 this
+check is PASS by default (marks not yet revealed).
+
+CHECK shade-warm-and-bounded (reveal beat 3 or higher): The shaded region is a warm accent fill that is
+clearly distinct from the curve stroke; its left and right edges align with the two interval drop-lines;
+and its BOTTOM rests on the x-axis baseline (it is not floating above the axis). A shade that blends
+into the curve colour, mis-aligned with the marks, or detached/floating above the baseline, is a defect.
+On reveal beats 1-2 this check is PASS by default (shade not yet revealed).
+
+CHECK annotation-present-unclipped (reveal beat 4 only): An annotation box is present and fully visible
+(not clipped). Judge ONLY its presence and that it is unclipped — its numeric contents are masked, so do
+NOT evaluate the number. On reveal beats 1-3 this check is PASS by default.
+
+CHECK shade-area-plausible (reveal beat 3 or higher): Estimate the shaded area as a FRACTION of the
+total area under the curve, purely from the shaded pixels (the number is masked). The shaded fraction is
+consistent with the visible width of the interval relative to the curve's spread — a sliver-thin shade
+under a wide interval, or a near-total shade under a narrow interval, is a defect. On reveal beats 1-2
+this check is PASS by default.
+
+OUTPUT CONTRACT — reply EXACTLY in this shape and nothing else:
+VERDICT: PASS|FAIL
+CHECK <name>: PASS|FAIL — <one short reason naming the concrete axis/curve/mark/shade feature observed>
+(one CHECK line per check above; if a single CHECK is FAIL the VERDICT is FAIL; a verdict that only
+restates a caption is invalid — these frames carry no answer caption)

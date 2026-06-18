@@ -1,0 +1,59 @@
+- ;
+    d.textContent = (d.textContent ? d.textContent + String.fromCharCode(10) :
+- + (e.message || e.type) +
+      (e.filename ?
+- );
+    const extResources = extResEl ? JSON.parse(extResEl.textContent) : [];
+    const resourceMap = {};
+    for (const entry of extResources) {
+      if (blobUrls[entry.uuid]) resourceMap[entry.id] = blobUrls[entry.uuid];
+    }
+
+    setStatus(
+- );
+      }
+      const p = s.src ? new Promise(function(r) { s.onload = s.onerror = r; }) : null;
+      old.replaceWith(s);
+      if (p) await p;
+    }
+    // Babel standalone auto-transforms type=text/babel on DOMContentLoaded,
+    // which fired before we swapped the document. Trigger manually if present.
+    if (window.Babel && typeof window.Babel.transformScriptTags ===
+- >Vrei să sortezi acest vector. Îl poți <em style=\
+- >sparge<\u002Fem> în bucăți mai mici și le rezolvi separat.<\u002Fh2>\n        <div style=\
+- >Dacă tai mereu vectorul în <em style=\
+- >jumătate<\u002Fem> până rămân elemente singure — de câte ori crezi că poți tăia, pentru 6 elemente?<\u002Fp>\n        <div style=\
+- >02 — Încearcă tu<\u002Fdiv>\n        <h2 style=\
+- >prima<\u002Fem> tăietură?<\u002Fh2>\n        <p style=\
+- >Apasă pe spațiul dintre două elemente ca să împarți vectorul în două.<\u002Fp>\n        <div style=\
+- >03 — Privește<\u002Fspan>\n          <span style=\
+- >‹ înapoi<\u002Fbutton>\n    <span style=\
+- Vectorul întreg — încă nesortat.
+- Taie la mijloc: două jumătăți.
+- Împarte fiecare jumătate din nou.
+- Elemente singure — un singur element e deja sortat (cazul de bază).
+- INTERCLASEAZĂ
+- a rămas doar
+- ; }\n      else { c.rect.style.stroke=(p.fill===CORAL?
+- Încearcă
+- Privește
+- Verifică
+- ,v) }));\n    const predictHint = s.predict==null ?
+- bun. acum hai să vezi ce face de fapt algoritmul →
+- apasă pe spațiul dintre două elemente
+- ai tăiat în [
+- ] — orice tăietură în două e validă; MergeSort taie fix la mijloc
+- ,at), onEnter:()=>this.setState({hoverGap:at}), onLeave:()=>this.setState({hoverGap:null}), barStyle:this.gapBar(s.split===at, s.hoverGap===at) }));\n    const predictCallback = s.predict==null ?
+- : (s.predict===3 ?
+- : (s.check===3 ?
+- nu chiar — taie 8→4→2→1: sunt 3 tăieturi. log₂8 = 3.
+- ;\n    if(!this.gateOK(s.cur)) gateMsg = s.cur===2 ?
+- răspunde ca să continui
+- alege un răspuns
+- ,\n      counterText,\n      playLabel: s.playing ?
+- : (s.si>=s.nSteps-1 ?
+- ),\n      onPlay:this.toggleFig, onFigBack:()=>this.stepFig(-1), onFigFwd:()=>this.stepFig(1), onRestart:this.restartFig,\n      figBackDisabled:s.si===0, figFwdDisabled:s.si>=s.nSteps-1,\n      figBackStyle:ctlBase+(s.si===0?
+- ),\n      figFwdStyle:ctlBase+(s.si>=s.nSteps-1?
+- ),\n      predictCallback,\n      checkOptions, checkFeedback, checkFeedbackColor,\n      onNavBack:this.goBack, onNavNext:this.goNext,\n      navBackDisabled, navNextDisabled, navNextLabel:(s.cur===4?
+- continuă ›
+- ),\n      navNextStyle:primaryBase+(navNextDisabled?
