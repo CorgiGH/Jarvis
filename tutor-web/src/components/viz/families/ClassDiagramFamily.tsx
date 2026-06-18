@@ -15,8 +15,13 @@ import type { FamilyRendererProps } from "./familyRegistry";
  * isomorphic to the model (every class/field/method/edge present with correct edge type+direction, zero
  * dropped, zero extra), shipped with a committed seeded-wrong RED→GREEN self-test.
  *
- * NO-CLIP BY CONSTRUCTION (§5.3): box widths are MEASURED from the longest member/name label and sized
- * to fit — never a post-hoc screenshot check. SVG-only (§5.6).
+ * NO-CLIP IS GATE-ASSERTED, NOT "by construction" (§5.3): box widths are MEASURED from the longest
+ * member/name label via an off-DOM canvas, then UPPER-BOUNDED by a measured safety margin (DRIFT_FACTOR
+ * + DRIFT_PAD_PX in measureLabelWidth) because the canvas advance under-measures the real SVG webfont
+ * advance — without that margin the longest member row clips its box border. Edge/multiplicity labels
+ * are PUSHED clear of every class box (placeLabelClear). The no-clip + no-label-in-box + skin-correct
+ * hollow-fill invariants are VERIFIED by the deterministic Playwright gate `tools/class-diagram-layout-
+ * gate.mjs` (D1/D2/D3, both skins, both viewports) — not an eyeballed screenshot. SVG-only (§5.6).
  *
  * The figure mounts inside AlgoStepperShell with a SINGLE frame (the scrubber is degenerate/optional
  * here, per the amendment), so it reuses the shell's a11y / chrome / dark-skin plumbing unchanged.
@@ -184,8 +189,24 @@ export function parseClassModel(dataJson: string, instanceId: string): ClassMode
   return { classes, edges };
 }
 
-// ── Label measurement (reserve space ⇒ no-clip by construction, §5.3) ──────────────────────────────
+// ── Label measurement (reserve space ⇒ no-clip is GATE-ASSERTED, not eyeballed, §5.3) ───────────────
 // Off-DOM 2D context ONLY for text extents (NOT a canvas figure; the figure is pure SVG, §5.6).
+//
+// CANVAS-vs-SVG METRIC DRIFT (the D1 root cause): an off-DOM canvas `ctx.measureText` does NOT return the
+// same advance the SVG text engine lays down for the SAME font/size. Empirically the SVG advance runs a
+// few % LONGER (kerning + sub-pixel hinting differ between the 2D canvas rasteriser and the SVG text
+// shaper), so a box sized to the bare canvas estimate UNDER-reserves and the longest row clips its right
+// border (the +2.4u overflow class-diagram-layout-gate.mjs catches RED). The fix makes the returned width
+// a TRUE UPPER BOUND on the SVG advance, derived from the worst observed drift with headroom — NOT a
+// per-fixture hand-tune:
+//   • DRIFT_FACTOR scales the canvas estimate to bound the proportional (per-glyph) drift. The gate
+//     measured ~2.4u of drift over a ~110u advance ≈ 2.2%; 6% (×1.06) is a generous multiplicative bound.
+//   • DRIFT_PAD_PX adds a small constant so even a SHORT label keeps a non-zero reserve (drift never
+//     goes negative). 1px at the member font.
+// Any residual drift beyond this bound is a HARD FAIL the layout gate trips — the safety margin is the
+// thing the gate verifies, not a number nudged until the screenshot looked fine.
+const DRIFT_FACTOR = 1.06;
+const DRIFT_PAD_PX = 1;
 let measureCanvas: { ctx: CanvasRenderingContext2D | null } | null = null;
 function measureLabelWidth(text: string, fontPx: number): number {
   if (typeof document !== "undefined") {
@@ -196,11 +217,13 @@ function measureLabelWidth(text: string, fontPx: number): number {
     const ctx = measureCanvas.ctx;
     if (ctx) {
       ctx.font = `${fontPx}px ${FONT_FAMILY}`;
-      return Math.ceil(ctx.measureText(text).width);
+      const raw = ctx.measureText(text).width;
+      // upper-bound the SVG advance: proportional drift bound + a constant floor.
+      return Math.ceil(raw * DRIFT_FACTOR + DRIFT_PAD_PX);
     }
   }
-  // SSR / no-canvas fallback: monospace ≈ 0.6em per glyph.
-  return Math.ceil(text.length * fontPx * 0.6);
+  // SSR / no-canvas fallback: monospace ≈ 0.6em per glyph (already generous vs JetBrains Mono ≈ 0.6em).
+  return Math.ceil(text.length * fontPx * 0.6 + DRIFT_PAD_PX);
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────────────────────────
@@ -219,7 +242,8 @@ const COL_GAP = 36; // horizontal gap between columns
 const ROW_GAP = 30; // vertical gap between layout rows
 const MARGIN = 10;
 
-// ── Compute box geometry — MEASURE every label, size the box to FIT (no-clip by construction) ──────
+// ── Compute box geometry — MEASURE every label, size the box to FIT with an upper-bound margin so the
+//    member rows never clip the border (no-clip is GATE-ASSERTED by class-diagram-layout-gate.mjs) ────
 type BoxGeom = {
   cls: ClassBox;
   x: number;
@@ -316,10 +340,11 @@ function computeLayout(model: ClassModel): { boxes: BoxGeom[]; viewW: number; vi
     cursorY += rowH + ROW_GAP;
   }
 
-  // NO-CLIP BY CONSTRUCTION (§5.3): the shell's SVG viewBox WIDTH is fixed at 480, so if the laid-out
-  // content is wider than 480 we uniformly SCALE every box's x + width (and the column gaps fold in)
-  // so the whole frame fits inside [MARGIN, SVG_W-MARGIN]. Height grows the viewBox via viewH, so the
-  // vertical never clips. Degrade (shrink), never clip.
+  // FRAME-FIT (§5.3): the shell's SVG viewBox WIDTH is fixed at 480, so if the laid-out content is wider
+  // than 480 we uniformly SCALE every box's x + width (and the column gaps fold in) so the whole frame
+  // fits inside [MARGIN, SVG_W-MARGIN]. Height grows the viewBox via viewH, so the vertical never clips.
+  // Degrade (shrink), never clip. (Per-MEMBER no-clip — text inside its own box — is the boxWidth upper
+  // bound above, GATE-ASSERTED by class-diagram-layout-gate.mjs, not assumed by construction.)
   const laidWidth = maxRight + MARGIN;
   if (laidWidth > SVG_W) {
     const scale = (SVG_W - MARGIN) / maxRight;
@@ -392,6 +417,12 @@ const DARK = {
   rule: "#3a3a3a",
   accent: "#fde047",
   edge: "#cfcfcf",
+  // The dark lesson canvas behind the figure (LessonFigureShell DARK_BG / VizDemoPage dark section).
+  // A "hollow" UML shape (inheritance triangle, aggregation diamond) must be filled with THIS so it reads
+  // as EMPTY against the dark canvas — never PAPER (#ffffff), which paints a glaring white blob on dark
+  // (the D3 defect). On the light skin the hollow fill is PAPER (matches the white paper) — so the fill is
+  // SKIN-AWARE, plumbed through renderEdge → renderArrowhead, not a blanket change.
+  canvasBg: "#0e0e0e",
 } as const;
 
 // ── State (single canonical frame; the model itself, plus dims so the renderer/extractor align) ────
@@ -418,6 +449,9 @@ function renderFrame(
   const nameFill = dark ? DARK.nameFill : ACCENT;
   const rule = dark ? DARK.rule : INK;
   const edgeInk = dark ? DARK.edge : INK;
+  // SKIN-AWARE hollow fill for the empty UML shapes (inheritance triangle, aggregation diamond):
+  // the dark canvas bg on dark, white paper on light. (D3 fix — was hardcoded PAPER.)
+  const hollowFill = dark ? DARK.canvasBg : PAPER;
   const byId = new Map(layout.boxes.map((b) => [b.cls.id, b]));
 
   return (): ReactNode => {
@@ -428,7 +462,7 @@ function renderFrame(
           const a = byId.get(e.from);
           const b = byId.get(e.to);
           if (!a || !b) return null; // defensive — parse already validated ids
-          return renderEdge(e, ei, a, b, edgeInk);
+          return renderEdge(e, ei, a, b, edgeInk, hollowFill, layout.boxes);
         })}
 
         {/* ── CLASS BOXES ── */}
@@ -513,8 +547,58 @@ function renderFrame(
   };
 }
 
+// ── Box-aware label placement (D2 fix) ──────────────────────────────────────────────────────────────
+// A multiplicity / edge label is anchored at a point ON or NEAR a box border, so a fixed offset (the old
+// behaviour) drops the text bbox straight inside a class box (the "1..*" inside Owner the layout gate
+// catches RED). placeLabelClear() reserves the label's MEASURED bbox and, if it intersects ANY class box,
+// PUSHES it directly away from that box's nearest edge until it clears every box (with a small gap). The
+// push axis is whichever (horizontal/vertical) separation is cheaper, so the label slides off the side it
+// is closest to escaping. Returns the text anchor (x,y baseline) clear of all boxes. textAnchor stays
+// "start", so the bbox is [x, x+w] × [y-asc, y+desc]; we approximate asc≈font, desc≈0 (baseline at y).
+const LABEL_BOX_GAP = 3; // SVG units kept between a label bbox and any box edge.
+function rectsIntersect(
+  ax: number, ay: number, aw: number, ah: number,
+  bx: number, by: number, bw: number, bh: number,
+): boolean {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+function placeLabelClear(
+  text: string, anchorX: number, anchorY: number, boxes: BoxGeom[],
+): { x: number; y: number } {
+  const w = measureLabelWidth(text, STEREO_FONT);
+  const ascent = STEREO_FONT; // bbox top ≈ baseline − fontSize for these short numeric/role labels
+  let x = anchorX;
+  let y = anchorY;
+  // iterate: the push may move the label INTO a different box, so re-check until clear (bounded).
+  for (let iter = 0; iter < 8; iter++) {
+    // current label bbox (top-left origin): [x, y-ascent] sized w × ascent.
+    const lx = x;
+    const ly = y - ascent;
+    let pushed = false;
+    for (const bb of boxes) {
+      if (!rectsIntersect(lx, ly, w, ascent, bb.x, bb.y, bb.w, bb.h)) continue;
+      // overlap on each side — choose the smallest-cost escape (left / right / up / down).
+      const escLeft = lx + w - bb.x + LABEL_BOX_GAP;      // move label so its right edge clears box left
+      const escRight = bb.x + bb.w - lx + LABEL_BOX_GAP;  // move label so its left edge clears box right
+      const escUp = ly + ascent - bb.y + LABEL_BOX_GAP;   // move label so its bottom clears box top
+      const escDown = bb.y + bb.h - ly + LABEL_BOX_GAP;   // move label so its top clears box bottom
+      const minEsc = Math.min(escLeft, escRight, escUp, escDown);
+      if (minEsc === escLeft) x -= escLeft;
+      else if (minEsc === escRight) x += escRight;
+      else if (minEsc === escUp) y -= escUp;
+      else y += escDown;
+      pushed = true;
+      break; // re-evaluate from the top with the new position
+    }
+    if (!pushed) break;
+  }
+  return { x, y };
+}
+
 // ── Edge rendering — correct arrowhead per kind, drawn AT the `to` endpoint (the arrow points at `to`) ─
-function renderEdge(e: ClassEdge, ei: number, a: BoxGeom, b: BoxGeom, edgeInk: string): ReactNode {
+function renderEdge(
+  e: ClassEdge, ei: number, a: BoxGeom, b: BoxGeom, edgeInk: string, hollowFill: string, boxes: BoxGeom[],
+): ReactNode {
   const ca = boxCenter(a);
   const cb = boxCenter(b);
   // endpoint on `from` box border (toward `to`) and on `to` box border (toward `from`).
@@ -534,6 +618,11 @@ function renderEdge(e: ClassEdge, ei: number, a: BoxGeom, b: BoxGeom, edgeInk: s
   const lineEndX = p2.x - ux * headLen;
   const lineEndY = p2.y - uy * headLen;
 
+  // initial anchors (the old fixed offsets) — then PUSHED clear of every box (D2 fix).
+  const fromAnchor = placeLabelClear(e.fromMult ?? "", p1.x + ux * 12 + 6, p1.y + uy * 12 - 4, boxes);
+  const toAnchor = placeLabelClear(e.toMult ?? "", p2.x - ux * 16 + 6, p2.y - uy * 16 - 4, boxes);
+  const labelAnchor = placeLabelClear(e.label ?? "", (p1.x + p2.x) / 2 + 4, (p1.y + p2.y) / 2 - 4, boxes);
+
   return (
     <g key={`edge-${ei}`} data-edge={`${e.from}->${e.to}:${e.kind}`}>
       <line
@@ -545,38 +634,20 @@ function renderEdge(e: ClassEdge, ei: number, a: BoxGeom, b: BoxGeom, edgeInk: s
         strokeWidth={STROKE_DEFAULT}
         strokeDasharray={dashed ? "4 3" : undefined}
       />
-      {renderArrowhead(e.kind, p2.x, p2.y, ux, uy, markerSize, edgeInk)}
-      {/* multiplicity labels: near `from` (fromMult) and near `to` (toMult) */}
+      {renderArrowhead(e.kind, p2.x, p2.y, ux, uy, markerSize, edgeInk, hollowFill)}
+      {/* multiplicity labels: near `from` (fromMult) and near `to` (toMult), box-collision-avoided */}
       {e.fromMult && (
-        <text
-          x={p1.x + ux * 12 + 6}
-          y={p1.y + uy * 12 - 4}
-          fontFamily={FONT_FAMILY}
-          fontSize={STEREO_FONT}
-          fill={edgeInk}
-        >
+        <text x={fromAnchor.x} y={fromAnchor.y} fontFamily={FONT_FAMILY} fontSize={STEREO_FONT} fill={edgeInk}>
           {e.fromMult}
         </text>
       )}
       {e.toMult && (
-        <text
-          x={p2.x - ux * 16 + 6}
-          y={p2.y - uy * 16 - 4}
-          fontFamily={FONT_FAMILY}
-          fontSize={STEREO_FONT}
-          fill={edgeInk}
-        >
+        <text x={toAnchor.x} y={toAnchor.y} fontFamily={FONT_FAMILY} fontSize={STEREO_FONT} fill={edgeInk}>
           {e.toMult}
         </text>
       )}
       {e.label && (
-        <text
-          x={(p1.x + p2.x) / 2 + 4}
-          y={(p1.y + p2.y) / 2 - 4}
-          fontFamily={FONT_FAMILY}
-          fontSize={STEREO_FONT}
-          fill={edgeInk}
-        >
+        <text x={labelAnchor.x} y={labelAnchor.y} fontFamily={FONT_FAMILY} fontSize={STEREO_FONT} fill={edgeInk}>
           {e.label}
         </text>
       )}
@@ -584,8 +655,13 @@ function renderEdge(e: ClassEdge, ei: number, a: BoxGeom, b: BoxGeom, edgeInk: s
   );
 }
 
-/** Draw the kind-specific arrowhead at the `to` endpoint (tip = (tx,ty), pointing along (ux,uy)). */
-function renderArrowhead(kind: EdgeKind, tx: number, ty: number, ux: number, uy: number, s: number, ink: string): ReactNode {
+/** Draw the kind-specific arrowhead at the `to` endpoint (tip = (tx,ty), pointing along (ux,uy)).
+ *  `hollowFill` is the SKIN-AWARE empty-shape fill (white paper on light, the dark canvas bg on dark) —
+ *  the inheritance triangle + aggregation diamond use it so a "hollow" UML shape reads as empty on BOTH
+ *  skins instead of painting a white blob on the dark canvas (D3 fix). */
+function renderArrowhead(
+  kind: EdgeKind, tx: number, ty: number, ux: number, uy: number, s: number, ink: string, hollowFill: string,
+): ReactNode {
   // perpendicular
   const px = -uy;
   const py = ux;
@@ -593,13 +669,13 @@ function renderArrowhead(kind: EdgeKind, tx: number, ty: number, ux: number, uy:
   const wing = s * 0.42;
   switch (kind) {
     case "inheritance": {
-      // hollow triangle pointing AT the parent (to)
+      // hollow triangle pointing AT the parent (to) — hollow = skin-aware background fill
       const l = { x: back.x + px * wing, y: back.y + py * wing };
       const r = { x: back.x - px * wing, y: back.y - py * wing };
       return (
         <polygon
           points={`${tx},${ty} ${l.x},${l.y} ${r.x},${r.y}`}
-          fill={PAPER}
+          fill={hollowFill}
           stroke={ink}
           strokeWidth={STROKE_DEFAULT}
         />
@@ -607,14 +683,14 @@ function renderArrowhead(kind: EdgeKind, tx: number, ty: number, ux: number, uy:
     }
     case "composition":
     case "aggregation": {
-      // diamond at the `to` (whole) end; filled = composition, hollow = aggregation
+      // diamond at the `to` (whole) end; filled = composition (ink), hollow = aggregation (skin bg)
       const mid = { x: tx - ux * (s / 2), y: ty - uy * (s / 2) };
       const l = { x: mid.x + px * wing, y: mid.y + py * wing };
       const r = { x: mid.x - px * wing, y: mid.y - py * wing };
       return (
         <polygon
           points={`${tx},${ty} ${l.x},${l.y} ${back.x},${back.y} ${r.x},${r.y}`}
-          fill={kind === "composition" ? ink : PAPER}
+          fill={kind === "composition" ? ink : hollowFill}
           stroke={ink}
           strokeWidth={STROKE_DEFAULT}
         />
@@ -663,7 +739,7 @@ export function ClassDiagramFamily({
     [onStep, lastIdx],
   );
   // The figure's intrinsic bounds may exceed 480×360; pass the laid-out viewBox height so the shell's
-  // SVG covers the full structure (no-clip by construction — the box is sized to the content).
+  // SVG covers the full structure (the box is sized to the content; no-clip gate-asserted, see top docblock).
   const mergedLayout: ShellLayout = { ...shellLayout, viewBoxH: layout.viewH };
   return (
     <AlgoStepperShell<ClassDiagramState>

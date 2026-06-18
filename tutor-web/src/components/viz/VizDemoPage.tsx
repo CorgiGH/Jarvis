@@ -14,6 +14,7 @@ import { GraphTreeFamily } from "./families/GraphTreeFamily";
 import { ChartDistributionFamily } from "./families/ChartDistributionFamily";
 import { SequenceArrayFamily } from "./families/SequenceArrayFamily";
 import { MatrixGridFamily } from "./families/MatrixGridFamily";
+import { ClassDiagramFamily } from "./families/ClassDiagramFamily";
 import { LessonFigureShell } from "../lesson/LessonFigureShell";
 import { NumLineDirect } from "./NumLineDirect";
 import { OsiEncap } from "./OsiEncap";
@@ -71,6 +72,13 @@ const DPFIB_DATA_JSON =
 // The flagship matrix instance: 3×4 augmented matrix, partial-pivoting row-swap, rowOp rail + long callouts.
 const GAUSS_DATA_JSON =
   '{"rows":3,"cols":4,"kind":"gauss-elim","seed":{"matrix":[[1,-1,3,2],[3,-3,1,-1],[1,1,0,3]]},"colHeaders":["x1","x2","x3","| b"],"rowHeaders":["E1","E2","E3"],"steps":[{"writes":[{"row":0,"col":0,"value":"1"},{"row":0,"col":1,"value":"-1"},{"row":0,"col":2,"value":"3"},{"row":0,"col":3,"value":"2"},{"row":1,"col":0,"value":"3"},{"row":1,"col":1,"value":"-3"},{"row":1,"col":2,"value":"1"},{"row":1,"col":3,"value":"-1"},{"row":2,"col":0,"value":"1"},{"row":2,"col":1,"value":"1"},{"row":2,"col":2,"value":"0"},{"row":2,"col":3,"value":"3"}],"fills":[{"row":0,"col":0},{"row":0,"col":1},{"row":0,"col":2},{"row":0,"col":3},{"row":1,"col":0},{"row":1,"col":1},{"row":1,"col":2},{"row":1,"col":3},{"row":2,"col":0},{"row":2,"col":1},{"row":2,"col":2},{"row":2,"col":3}],"pivot":null,"callout":"Matricea extinsă a sistemului. Scopul: o aducem la formă superior triunghiulară."},{"writes":[],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"pivot a11 = 1","callout":"Pasul 1: pivotul este a11 = 1. Eliminăm x1 din liniile de sub el."},{"writes":[{"row":1,"col":0,"value":"0"},{"row":1,"col":1,"value":"0"},{"row":1,"col":2,"value":"-8"},{"row":1,"col":3,"value":"-7"}],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"E2 ← E2 + (-3)·E1","callout":"f21 = -3/1 = -3. E2 ← E2 + (-3)·E1 ⇒ (0  0  -8 | -7)."},{"writes":[{"row":2,"col":0,"value":"0"},{"row":2,"col":1,"value":"2"},{"row":2,"col":2,"value":"-3"},{"row":2,"col":3,"value":"1"}],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"E3 ← E3 + (-1)·E1","callout":"f31 = -1/1 = -1. E3 ← E3 + (-1)·E1 ⇒ (0  2  -3 | 1)."},{"writes":[{"row":1,"col":1,"value":"2"},{"row":1,"col":2,"value":"-3"},{"row":1,"col":3,"value":"1"},{"row":2,"col":1,"value":"0"},{"row":2,"col":2,"value":"-8"},{"row":2,"col":3,"value":"-7"}],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"schimbă E2 ↔ E3","callout":"Pasul 2: pivotul a22 = 0! Pivotare parțială: interschimbăm E2 cu E3."},{"writes":[],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"pivot a22 = 2","callout":"După schimb, noul pivot este a22 = 2 (nenul). Eliminăm x2 din liniile de sub el."},{"writes":[],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"E3 ← E3 + 0·E2","callout":"f32 = -0/2 = 0: E3 e deja zero pe coloana x2. Sistem superior triunghiular ✓."}]}';
+
+// The viz-poo-animals-001 instance data_json (verbatim from
+// tutor-web/src/components/viz/families/__tests__/fixtures/class-diagram-animals.yaml).
+// Family 7 (class-diagram, AMENDMENT 2026-06-17). NOT trace-based — its floor is the structure-
+// isomorphism gate, not the trace-match harness. Keep byte-identical to the fixture YAML.
+const CLASS_DIAGRAM_DATA_JSON =
+  '{"classes":[{"id":"animal","name":"Animal","stereotype":"abstract","fields":[{"name":"name","type":"String","vis":"#"}],"methods":[{"name":"makeSound","ret":"void","vis":"+"}]},{"id":"dog","name":"Dog","fields":[],"methods":[{"name":"makeSound","ret":"void","vis":"+"},{"name":"fetch","ret":"void","vis":"+"}]},{"id":"cat","name":"Cat","fields":[],"methods":[{"name":"makeSound","ret":"void","vis":"+"}]},{"id":"owner","name":"Owner","fields":[{"name":"name","type":"String","vis":"+"}],"methods":[]}],"edges":[{"from":"dog","to":"animal","kind":"inheritance"},{"from":"cat","to":"animal","kind":"inheritance"},{"from":"owner","to":"animal","kind":"association","toMult":"1..*"}]}';
 
 export function VizDemoPage() {
   const [numLineMu, setNumLineMu] = useState(5);
@@ -146,6 +154,12 @@ export function VizDemoPage() {
             </div>
             <LessonFigureShell familyId="chart-dist" instanceId="viz-ps-normal-area-001" dataJson={NORMAL_AREA_DATA_JSON} language="ro" />
           </div>
+          <div data-testid="dark-fig-class-diagram" style={{ background: "#0e0e0e" }}>
+            <div style={{ color: "#fde047", fontSize: 11, letterSpacing: "0.1em", marginBottom: 8, fontWeight: 700 }}>
+              class-diagram · POO inheritance (family 7)
+            </div>
+            <LessonFigureShell familyId="class-diagram" instanceId="viz-poo-animals-001" dataJson={CLASS_DIAGRAM_DATA_JSON} language="ro" />
+          </div>
         </div>
       </section>
 
@@ -187,6 +201,14 @@ export function VizDemoPage() {
           Family verification vehicle (NOT lesson content). 3×4 augmented matrix · forward elimination + partial-pivoting row-swap (a22=0 ⇒ E2↔E3) · rowOp rail · pivot-anchored callouts · per-cell trace-match vs the Gauss oracle · paints data-testid="mgg-root".
         </p>
         <MatrixGridFamily instanceId="viz-alo-gauss-001" dataJson={GAUSS_DATA_JSON} language="ro" testIdPrefix="mgg" />
+      </section>
+
+      <section data-testid="viz-demo-class-diagram" style={tileStyle}>
+        <h2 style={headingStyle}>POO · Class-diagram family (viz-poo-animals-001) ⭐ family 7</h2>
+        <p style={subheadingStyle}>
+          Static-structure UML (NOT a trace, AMENDMENT 2026-06-17). Abstract Animal ← Dog, Cat (inheritance) · Owner → Animal (association 1..*) · no-clip by construction (measured labels) · structure-isomorphism gate, not trace-match · paints data-testid="cd-root".
+        </p>
+        <ClassDiagramFamily instanceId="viz-poo-animals-001" dataJson={CLASS_DIAGRAM_DATA_JSON} language="ro" />
       </section>
 
       <section data-testid="viz-demo-matrix" style={tileStyle}>

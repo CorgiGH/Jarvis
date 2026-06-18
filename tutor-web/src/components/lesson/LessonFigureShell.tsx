@@ -4,6 +4,7 @@ import { GraphTreeFamily } from "../viz/families/GraphTreeFamily";
 import { ChartDistributionFamily } from "../viz/families/ChartDistributionFamily";
 import { SequenceArrayFamily } from "../viz/families/SequenceArrayFamily";
 import { MatrixGridFamily } from "../viz/families/MatrixGridFamily";
+import { ClassDiagramFamily } from "../viz/families/ClassDiagramFamily";
 
 /**
  * LessonFigureShell — the dark, FLOATING figure surface for the lesson reveal beat.
@@ -66,6 +67,10 @@ function renderDarkFamily(props: LessonFigureShellProps): ReactNode {
       return <SequenceArrayFamily {...common} />;
     case "matrix-grid":
       return <MatrixGridFamily {...common} />;
+    case "class-diagram":
+      // Family 7 (AMENDMENT 2026-06-17) — static-structure UML. Single canonical frame; the dark skin
+      // bakes literal hex into the SVG like the others. Structure gated by classDiagramStructure.ts.
+      return <ClassDiagramFamily {...common} />;
     default:
       return null;
   }
