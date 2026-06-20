@@ -64,6 +64,8 @@ door-probe-*.json
 r-contact-*.html
 # Raw course material (large; subject corpus → digested into content/)
 material/
+# material-reorg dry-run outputs (manifest/move-map/report + hash cache)
+tools/material-reorg/out/
 # Regenerable build / cache / test outputs
 build-iso-review/
 .vite/
@@ -110,3 +112,19 @@ build-review/viz-fork-demo/
 # ephemeral workflow scripts + regenerable probe output
 .claude/wf-*.js
 trust-verdicts.json
+.aidesigner/*
+!.aidesigner/.gitkeep
+
+# ─────────────────────────────────────────────────────────────
+# Local tooling / plugin installs (2026-06-20, SESSION-88) — machine-local,
+# regenerable via the plugin/skill installer; never committed
+# ─────────────────────────────────────────────────────────────
+.agents/
+.impeccable/
+.mcp.json
+.claude/agents/
+.claude/commands/
+.claude/skills/aidesigner-frontend/
+.claude/skills/impeccable/
+.github/skills/
+tools/material-reorg/__pycache__/
