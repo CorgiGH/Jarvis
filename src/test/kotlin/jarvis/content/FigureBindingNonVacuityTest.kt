@@ -69,9 +69,12 @@ class FigureBindingNonVacuityTest {
         )
     }
 
-    @Test fun `pa-kc-002 has the mergesort figure binding (current corpus anchor)`() {
-        // This test pins the current state: pa-kc-002 binds viz-pa-mergesort-001 (graph-tree).
-        // If the binding is moved or renamed, this test reds and forces a conscious update.
+    @Test fun `pa-kc-002 binds the re-bound sort-merge sorting figure (anchor)`() {
+        // Phase-A re-bind: pa-kc-002 now binds viz-pa-mergesort-runs-001 (sort-merge), an animated
+        // sorting trace, not the static graph-tree divide-tree. This pins the new corpus anchor
+        // (reds if the binding moves or the family changes); the "final frame == sorted(input)"
+        // property of that figure is enforced for every sort-merge instance by the vitest
+        // trace-match totality harness (INV-5.1/5.2), not re-asserted here.
         val repo = ContentRepo(Path.of("content"))
         val sub = repo.loadSubject("PA")
         val kc002 = sub.kcs.single { it.id == "pa-kc-002" }
@@ -79,12 +82,12 @@ class FigureBindingNonVacuityTest {
 
         assertNotNull(figure, "pa-kc-002 must have a non-null reveal.figure binding on the 'ro' beats")
         assertTrue(
-            figure.instance_id == "viz-pa-mergesort-001",
-            "pa-kc-002 must bind viz-pa-mergesort-001 (got: '${figure.instance_id}')",
+            figure.instance_id == "viz-pa-mergesort-runs-001",
+            "pa-kc-002 must bind viz-pa-mergesort-runs-001 (got: '${figure.instance_id}')",
         )
         assertTrue(
-            figure.family_id == "graph-tree",
-            "pa-kc-002's binding must have family_id='graph-tree' (got: '${figure.family_id}')",
+            figure.family_id == "sort-merge",
+            "pa-kc-002's binding must have family_id='sort-merge' (got: '${figure.family_id}')",
         )
     }
 }
