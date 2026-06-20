@@ -346,6 +346,64 @@ jobs:
             build/frame-gate.log
             build/frame-gate-vite.log
 
+  figure-noclip-gate:
+    # SESSION-87 self-sizing figure housing (AlgoStepperShell content-driven viewBox). This gate steps
+    # every frame of the 5 content-sized families (graph-tree, seq-array, matrix-grid dp+gauss,
+    # class-diagram) + the depth-6 deep-tree fixture, at 1536×648 AND ×730, both skins, over the REAL
+    # renderer, and HARD-FAILS if any painted element crosses its hugged viewBox edge (the hug cropped
+    # content) or a cross-group occlusion appears. Pure-frontend: needs only a VITE dev server on :5173,
+    # NOT the Ktor backend. Teeth proven: a clamped viewBox reds 1436 clip failures; GREEN on revert.
+    # HARD-BLOCKING: no continue-on-error, no `|| true`.
+    name: figure-noclip-gate (self-sizing figure hug, real renderer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tutor-web/package-lock.json
+      - name: npm ci (tutor-web)
+        working-directory: tutor-web
+        run: npm ci
+      - name: Install Playwright browsers (chromium only)
+        working-directory: tutor-web
+        run: npx playwright install --with-deps chromium
+      - name: Ensure build/ dir exists (for vite + gate logs)
+        run: mkdir -p build
+      - name: Boot the vite dev server (background, port 5173 pinned in vite.config.ts)
+        working-directory: tutor-web
+        run: nohup npm run dev > ../build/figure-noclip-vite.log 2>&1 &
+      - name: Wait for vite readiness (60×2s; any HTTP status = up)
+        run: |
+          up=""
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5173/tutor/viz-demo || true)
+            if [ -n "$code" ] && [ "$code" != "000" ]; then
+              echo "vite up after ${i} tries — HTTP ${code}"
+              up=1
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$up" ]; then
+            echo "::error::vite never became ready"
+            cat build/figure-noclip-vite.log || true
+            exit 1
+          fi
+      - name: Run the figure no-clip + overlap gate (HARD-BLOCKING)
+        shell: bash
+        run: node tutor-web/tools/figure-noclip-gate.mjs 2>&1 | tee build/figure-noclip.log
+      - name: Upload gate + vite logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: figure-noclip-artifacts
+          path: |
+            build/figure-noclip.log
+            build/figure-noclip-vite.log
+
   gate-registry:
     # Phase-0 deliverable (2026-06-15): the gate-coverage registry is the named board mapping every
     # spec INV-*/clause to a status (LIVE-GREEN / PLANNED / RED-UNMAPPED) + LAYER + PROOF/ESTIMATOR tag.
