@@ -9,6 +9,7 @@ import { LectieSelectSortDemo } from "./components/viz/families/LectieSelectSort
 import { LectieSelectSortBarsDemo } from "./components/viz/families/LectieSelectSortBarsDemo";
 import { LectieSelectSortHelpDemo } from "./components/viz/families/LectieSelectSortHelpDemo";
 import { LectieMergeSortDemo } from "./components/viz/families/LectieMergeSortDemo";
+import { LectieGaussDemo } from "./components/viz/families/LectieGaussDemo";
 import { MergeCompareDemo } from "./components/viz/families/MergeCompareDemo";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import { BeatOrchestrator } from "./components/lesson/BeatOrchestrator";
@@ -264,6 +265,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/lectie-selectsort-bars" element={<LectieSelectSortBarsDemo />} />
           <Route path="/lectie-selectsort-help" element={<LectieSelectSortHelpDemo />} />
           <Route path="/lectie-mergesort" element={<LectieMergeSortDemo />} />
+          <Route path="/lectie-gauss" element={<LectieGaussDemo />} />
           <Route path="/merge-compare" element={<MergeCompareDemo />} />
           <Route path="/oggi" element={<App />} />
           <Route path="/subjects" element={<App />} />

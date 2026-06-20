@@ -94,6 +94,13 @@ const DPFIB_DATA_JSON =
 const GAUSS_DATA_JSON =
   '{"rows":3,"cols":4,"kind":"gauss-elim","seed":{"matrix":[[1,-1,3,2],[3,-3,1,-1],[1,1,0,3]]},"colHeaders":["x1","x2","x3","| b"],"rowHeaders":["E1","E2","E3"],"steps":[{"writes":[{"row":0,"col":0,"value":"1"},{"row":0,"col":1,"value":"-1"},{"row":0,"col":2,"value":"3"},{"row":0,"col":3,"value":"2"},{"row":1,"col":0,"value":"3"},{"row":1,"col":1,"value":"-3"},{"row":1,"col":2,"value":"1"},{"row":1,"col":3,"value":"-1"},{"row":2,"col":0,"value":"1"},{"row":2,"col":1,"value":"1"},{"row":2,"col":2,"value":"0"},{"row":2,"col":3,"value":"3"}],"fills":[{"row":0,"col":0},{"row":0,"col":1},{"row":0,"col":2},{"row":0,"col":3},{"row":1,"col":0},{"row":1,"col":1},{"row":1,"col":2},{"row":1,"col":3},{"row":2,"col":0},{"row":2,"col":1},{"row":2,"col":2},{"row":2,"col":3}],"pivot":null,"callout":"Matricea extinsă a sistemului. Scopul: o aducem la formă superior triunghiulară."},{"writes":[],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"pivot a11 = 1","callout":"Pasul 1: pivotul este a11 = 1. Eliminăm x1 din liniile de sub el."},{"writes":[{"row":1,"col":0,"value":"0"},{"row":1,"col":1,"value":"0"},{"row":1,"col":2,"value":"-8"},{"row":1,"col":3,"value":"-7"}],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"E2 ← E2 + (-3)·E1","callout":"f21 = -3/1 = -3. E2 ← E2 + (-3)·E1 ⇒ (0  0  -8 | -7)."},{"writes":[{"row":2,"col":0,"value":"0"},{"row":2,"col":1,"value":"2"},{"row":2,"col":2,"value":"-3"},{"row":2,"col":3,"value":"1"}],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"E3 ← E3 + (-1)·E1","callout":"f31 = -1/1 = -1. E3 ← E3 + (-1)·E1 ⇒ (0  2  -3 | 1)."},{"writes":[{"row":1,"col":1,"value":"2"},{"row":1,"col":2,"value":"-3"},{"row":1,"col":3,"value":"1"},{"row":2,"col":1,"value":"0"},{"row":2,"col":2,"value":"-8"},{"row":2,"col":3,"value":"-7"}],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"schimbă E2 ↔ E3","callout":"Pasul 2: pivotul a22 = 0! Pivotare parțială: interschimbăm E2 cu E3."},{"writes":[],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"pivot a22 = 2","callout":"După schimb, noul pivot este a22 = 2 (nenul). Eliminăm x2 din liniile de sub el."},{"writes":[],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"E3 ← E3 + 0·E2","callout":"f32 = -0/2 = 0: E3 e deja zero pe coloana x2. Sistem superior triunghiular ✓."}]}';
 
+// The viz-alo-gauss-002 instance data_json (verbatim from content/ALO/viz/viz-alo-gauss-002.yaml).
+// Fresh integer-clean 3×4 system [[1,2,2,3],[2,5,7,9],[1,3,6,7]] → upper-triangular, NO pivot swap
+// (the happy-path counterpart to gauss-001's partial-pivoting case). Authored correct-by-construction
+// from the gaussElimReference oracle; trace-match harness GREEN, seeded-defect drill RED.
+const GAUSS2_DATA_JSON =
+  '{"rows":3,"cols":4,"kind":"gauss-elim","seed":{"matrix":[[1,2,2,3],[2,5,7,9],[1,3,6,7]]},"colHeaders":["x1","x2","x3","| b"],"rowHeaders":["E1","E2","E3"],"steps":[{"writes":[{"row":0,"col":0,"value":"1"},{"row":0,"col":1,"value":"2"},{"row":0,"col":2,"value":"2"},{"row":0,"col":3,"value":"3"},{"row":1,"col":0,"value":"2"},{"row":1,"col":1,"value":"5"},{"row":1,"col":2,"value":"7"},{"row":1,"col":3,"value":"9"},{"row":2,"col":0,"value":"1"},{"row":2,"col":1,"value":"3"},{"row":2,"col":2,"value":"6"},{"row":2,"col":3,"value":"7"}],"fills":[{"row":0,"col":0},{"row":0,"col":1},{"row":0,"col":2},{"row":0,"col":3},{"row":1,"col":0},{"row":1,"col":1},{"row":1,"col":2},{"row":1,"col":3},{"row":2,"col":0},{"row":2,"col":1},{"row":2,"col":2},{"row":2,"col":3}],"pivot":null,"callout":"Matricea extinsă a sistemului. Scopul: o aducem la formă superior triunghiulară prin eliminare gaussiană."},{"writes":[],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"pivot a11 = 1","callout":"Pasul 1: pivotul este a11 = 1. Eliminăm x1 din liniile de sub el."},{"writes":[{"row":1,"col":0,"value":"0"},{"row":1,"col":1,"value":"1"},{"row":1,"col":2,"value":"3"},{"row":1,"col":3,"value":"3"}],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"E2 ← E2 + (-2)·E1","callout":"f21 = -2/1 = -2. E2 ← E2 + (-2)·E1 ⇒ (0  1  3 | 3)."},{"writes":[{"row":2,"col":0,"value":"0"},{"row":2,"col":1,"value":"1"},{"row":2,"col":2,"value":"4"},{"row":2,"col":3,"value":"4"}],"fills":[],"pivot":{"row":0,"col":0},"rowOp":"E3 ← E3 + (-1)·E1","callout":"f31 = -1/1 = -1. E3 ← E3 + (-1)·E1 ⇒ (0  1  4 | 4)."},{"writes":[],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"pivot a22 = 1","callout":"Pasul 2: pivotul a22 = 1 (nenul, fără pivotare). Eliminăm x2 din linia de sub el."},{"writes":[{"row":2,"col":1,"value":"0"},{"row":2,"col":2,"value":"1"},{"row":2,"col":3,"value":"1"}],"fills":[],"pivot":{"row":1,"col":1},"rowOp":"E3 ← E3 + (-1)·E2","callout":"f32 = -1/1 = -1. E3 ← E3 + (-1)·E2 ⇒ (0  0  1 | 1). Sistem superior triunghiular ✓."}]}';
+
 // The viz-poo-animals-001 instance data_json (verbatim from
 // tutor-web/src/components/viz/families/__tests__/fixtures/class-diagram-animals.yaml).
 // Family 7 (class-diagram, AMENDMENT 2026-06-17). NOT trace-based — its floor is the structure-
@@ -232,6 +239,35 @@ export function VizDemoPage() {
           Family verification vehicle (NOT lesson content). 3×4 augmented matrix · forward elimination + partial-pivoting row-swap (a22=0 ⇒ E2↔E3) · rowOp rail · pivot-anchored callouts · per-cell trace-match vs the Gauss oracle · paints data-testid="mgg-root".
         </p>
         <MatrixGridFamily instanceId="viz-alo-gauss-001" dataJson={GAUSS_DATA_JSON} language="ro" testIdPrefix="mgg" />
+      </section>
+
+      <section id="gauss2" data-testid="viz-demo-matrix-grid-gauss2" style={{ ...tileStyle, scrollMarginTop: 16 }}>
+        <h2 style={headingStyle}>ALO · Gaussian-elimination matrix-grid family (viz-alo-gauss-002) ⭐ NEW</h2>
+        <p style={subheadingStyle}>
+          Fresh 3×4 system [[1,2,2,3],[2,5,7,9],[1,3,6,7]] · integer-clean forward elimination · NO pivot swap (happy path) ·
+          authored correct-by-construction from the Gauss oracle · trace-match harness GREEN, seeded-defect drill RED · paints data-testid="mgg2-root".
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 28 }}>
+          <div className="lesson-figure-dark" style={{ background: "#0e0e0e", padding: 16, width: "100%" }}>
+            <div style={{ color: "#fde047", fontSize: 11, letterSpacing: "0.1em", marginBottom: 8, fontWeight: 700 }}>
+              dark lesson-surface (what a reveal beat shows)
+            </div>
+            <MatrixGridFamily
+              instanceId="viz-alo-gauss-002"
+              dataJson={GAUSS2_DATA_JSON}
+              language="ro"
+              testIdPrefix="mgg2"
+              variant="dark"
+              layout={{ canvasBg: "#0e0e0e", controls: "bottom", maxWidth: 760 }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: "0.1em", marginBottom: 8, fontWeight: 700, opacity: 0.7 }}>
+              light gallery skin (e2e / trace baseline)
+            </div>
+            <MatrixGridFamily instanceId="viz-alo-gauss-002" dataJson={GAUSS2_DATA_JSON} language="ro" testIdPrefix="mgg2light" />
+          </div>
+        </div>
       </section>
 
       <section data-testid="viz-demo-class-diagram" style={tileStyle}>

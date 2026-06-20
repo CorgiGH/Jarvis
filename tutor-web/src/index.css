@@ -111,6 +111,62 @@ html[data-reduce-motion] *::after {
   --tracking-mega: 0.3em;                  /* -> tracking-mega (kills tracking-[0.3em]) */
 }
 
+/* ---------- shadcn/ui compat layer (SESSION-86) ----------
+   shadcn components reference semantic utilities (bg-primary, bg-background,
+   border-input, ring, rounded-md, …). These map them onto the brutalist
+   DESIGN.md tokens so any generated component renders ON-BRAND: radius LOCKED
+   at 0, primary = the one yellow accent (BLACK ink on yellow per the contrast
+   lock), borders = border-strong, ring = ring-focus. The :root vars TRACK the
+   active theme via var(), so a theme swap re-skins shadcn for free.
+   NOTE: --color-accent is already declared above (= yellow). shadcn's `accent`
+   utilities reuse it intentionally — focus-yellow doubles as the hover highlight. */
+:root {
+  --background: var(--color-page-bg);
+  --foreground: var(--color-page-fg);
+  --card: var(--color-surface-muted);
+  --card-foreground: var(--color-page-fg);
+  --popover: var(--color-page-bg);
+  --popover-foreground: var(--color-page-fg);
+  --primary: var(--color-accent);
+  --primary-foreground: #000000;           /* black ink on yellow (contrast lock) */
+  --secondary: var(--color-surface-muted);
+  --secondary-foreground: var(--color-page-fg);
+  --muted: var(--color-surface-muted);
+  --muted-foreground: var(--color-disabled-fg);
+  --accent-foreground: #000000;            /* black ink on yellow */
+  --destructive: var(--color-danger-bg);
+  --destructive-foreground: var(--color-danger-fg);
+  --border: var(--color-border-strong);
+  --input: var(--color-border-strong);
+  --ring: var(--color-ring-focus);
+  --radius: 0px;                           /* DESIGN.md shape lock — square always */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+}
+
 /* ---------- Self-hosted fonts (Plan 4a §0.9A — replaces DoorWarm CDN injection) ----------
    woff2 committed under tutor-web/public/fonts/ (Vite base '/tutor/' ⇒ served at /tutor/fonts/).
    gwfh static instances (one woff2 per weight); font-display: swap so first paint never blocks.

@@ -6,6 +6,9 @@ import path from "node:path";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: "/tutor/",
+  resolve: {
+    alias: { "@": path.resolve(__dirname, "./src") },
+  },
   build: {
     outDir: path.resolve(__dirname, "../src/main/resources/tutor-dist"),
     emptyOutDir: true,
