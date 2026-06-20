@@ -19,7 +19,19 @@
             "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File tools/inject-constraints.ps1"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File tools/context-budget-hook.ps1",
+            "timeout": 10
+          }
+        ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "kotlin-lsp@claude-plugins-official": true
   }
 }
