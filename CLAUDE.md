@@ -18,7 +18,6 @@ Personal AI tutor (the "one-pass digestion teaching engine"). Kotlin/Ktor backen
 - `docs/superpowers/` — specs + the LOCKED master plan; `docs/CONVENTIONS.md` — file-org standard.
 
 ## Gotchas
-- **NEVER `git add -A` / `git clean` on main** — untracked door/demo + `tutor-dist/` bundle/png are NOT gitignored; a sweep deletes or commits the wrong thing. Stage explicit pathspecs.
 - Run test suites **foreground + streamed to a log**; never pipe a long run through `| tail` (buffers, blinds you).
 - Viz/figures gated at **1536×648 AND ×730** viewport, zero clip/overlap.
 - `~/.jarvis/tutor.db` = irreplaceable single-user SR history; off-box dump before any live-DB mutation.
