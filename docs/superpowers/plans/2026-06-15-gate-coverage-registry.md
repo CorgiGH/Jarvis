@@ -37,7 +37,7 @@ The deliberate counter-examples (LAYER ≠ default TAG): **dim-12 language = L2 
 | **RED-UNMAPPED** | **6** |
 | **TOTAL** | **86** |
 
-`#LIVE-GREEN / #PLANNED / #RED-UNMAPPED = 18 / 62 / 6` (total 86).
+`#LIVE-GREEN / #PLANNED / #RED-UNMAPPED = 21 / 59 / 6` (total 86). _(AMENDMENT 2026-06-20: +2 LIVE-GREEN — Phase0-RelayRetryBackoff + Phase0-StateCacheIsolation flipped PLANNED→LIVE-GREEN, both DONE in code with `gradle :check` backing.)_
 
 **Zero UNMAPPED** (every row carries a layer + tag + status) and **zero unaccounted RED** (every RED-UNMAPPED id is in the accepted-debt allow-list). Machine-verified by `node tools/gate-registry-check.mjs` (exit 0).
 
@@ -268,7 +268,7 @@ Exits **1** (printing the offending rows) if ANY of:
 
 Exits **0** only when the registry is internally consistent. The accepted-debt allow-list is **printed on every run** so debt is never silently absorbed. INV-9.4 self-test for this gate: `tools/gate-registry-check.test.mjs` (`node --test tools/gate-registry-check.test.mjs`) — feeds a seeded-bad registry (UNMAPPED + PROOF-by-estimator + duplicate + counts-drift + orphan-debt) and asserts the checker REDS, plus a clean fixture asserting exit 0.
 
-> **NOT YET wired into CI** — `test.yml` integration is a separate PM step (per the build brief). This board + JSON + checker + self-test are the Phase-0 artifact; the CI `gate-registry-check` job comes next.
+> **✅ NOW CI-WIRED — AMENDMENT 2026-06-20:** the `gate-registry` job in `test.yml` runs `gate-registry-check.mjs` + its seeded-bad self-test (hard-blocking). _(Historical: this note predates the wiring; the CI job now exists.)_
 
 ---
 

@@ -65,8 +65,8 @@
     }
   ],
   "counts": {
-    "LIVE-GREEN": 19,
-    "PLANNED": 61,
+    "LIVE-GREEN": 21,
+    "PLANNED": 59,
     "RED-UNMAPPED": 6,
     "total": 86
   },
@@ -706,9 +706,9 @@
       "dimension": "6 / Phase-0 (relay retry/backoff on VerificationRunner)",
       "layer": "L1",
       "tag": "PROOF",
-      "status": "PLANNED",
+      "status": "LIVE-GREEN",
       "plannedPhase": "0",
-      "backingGate": "PARTIAL — VerificationRunnerTest runs in `gradle :check`, but the relay retry/backoff path closing the pa-kc-006 false-negative class is a Phase-0 deliverable; not confirmed gated",
+      "backingGate": "RetryingLlmTest.kt runs in `gradle :check`; RetryingLlm (bounded exp-backoff) wraps the relay leg at the injection seam VerifyContentCli.kt:138 (commit 208669a; AMENDMENT 2026-06-20)",
       "evidence": "plan Phase 0 'Relay retry/backoff ... closes the pa-kc-006 false-negative class' (line 109); recon trust-net VerificationRunnerTest in `gradle :check`"
     },
     {
@@ -716,9 +716,9 @@
       "dimension": "SYS / Phase-0 (StateCache per-test isolation, kills concurrent flake)",
       "layer": "SYS",
       "tag": "PROOF",
-      "status": "PLANNED",
+      "status": "LIVE-GREEN",
       "plannedPhase": "0",
-      "backingGate": "NONE named — flake-fix deliverable; no specific CI gate proves the ~1-in-2 concurrent flake is killed",
+      "backingGate": "StateCacheTest.kt + IntegrationHarnessTest.kt install resetForTests() @BeforeEach/@AfterEach, run in `gradle :check` (commit e527386; AMENDMENT 2026-06-20)",
       "evidence": "plan Phase 0 'StateCache per-test isolation (kills the ~1-in-2 concurrent flake)' (line 110)"
     },
     {
