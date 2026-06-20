@@ -283,7 +283,6 @@ function measureLabelWidth(text: string, fontPx: number): number {
 
 // ── Constants ──────────────────────────────────────────────────────────────────────────────────
 const SVG_W = 480;
-const VIEWBOX_H = 360;                 // default; this family packs into [0,360]
 const CALLOUT_BAND_H = 40;             // top band (callout lives in [0,40])
 const CALLOUT_FONT = 11, CALLOUT_MIN_FONT = 8, CALLOUT_PAD = 8, CALLOUT_LINE_H = 13;
 const CALLOUT_MAX_W = SVG_W - CALLOUT_PAD * 2;   // 464
@@ -338,6 +337,13 @@ type MatrixGridLayout = {
   cols: number;
   cxOf: (col: number) => number;
   cyOf: (row: number) => number;
+  /** y baseline for the rowOp rail (just below the grid bottom). */
+  rowOpY: number;
+  /** content-driven viewBox height: grid bottom + rowOp band + bottom margin. HUGS the figure so the
+   *  shell's hard frame sits at the content edge (no 360 default floor — the grid was vertically
+   *  CENTERED in the 360 box, leaving void above AND below; now it top-packs and the box ends at the
+   *  rowOp rail). */
+  viewBoxH: number;
 };
 
 function computeLayout(data: MatrixGridData): MatrixGridLayout {
@@ -369,13 +375,21 @@ function computeLayout(data: MatrixGridData): MatrixGridLayout {
   // cap font down to FONT_SIZE_LABEL if cells got tight.
   const gridFont = cellW < CELL_MIN_W ? FONT_SIZE_LABEL : GRID_FONT;
 
-  // 4. vertical placement: grid (+ header band) centered in [GRID_TOP, VIEWBOX_H - ROWOP_BAND_H].
+  // 4. vertical placement: TOP-PACK the grid directly below the callout band (no centering). The old
+  //    code centered the grid in [GRID_TOP, 360 - ROWOP_BAND_H], which left a void ABOVE and BELOW it
+  //    inside the fixed 360 box. Top-packing + a content-driven viewBoxH (below) makes the hard frame
+  //    HUG the figure with zero void.
+  //    WHY THIS COORD-MOVE IS SAFE (corrected — the earlier "gates read only data-* so it's gate-safe"
+  //    claim was FALSE): the matrix TRACE-MATCH + STRUCTURE gates do read only data-* (data-cell-row/col/
+  //    value/fill, data-pivot), so they are blind to a y-move — TRUE for them. But the frame-conjunction
+  //    gate diffs PIXELS, so a y-move IS visible to a pixel gate; that gate simply never visits this family
+  //    (it is hard-scoped to the sort-merge corpus). So before this gate existed the property was safe only
+  //    by NON-COVERAGE, confirmed by a human eyeballing the render. It is NOW MACHINE-ENFORCED by
+  //    tools/figure-noclip-gate.mjs, which steps every frame of THIS family (both skins, 2 viewports) and
+  //    HARD-FAILS if any element crosses the hugged viewBox edge — so a bad originY/viewBoxH can no longer
+  //    ship a silent clip. (Per-frame the no-clip e2e also checks content stays inside the viewport.)
   const headerH = colHeaders ? HEADER_H : 0;
-  const gridH = headerH + rows * cellH;
-  const availTop = GRID_TOP;
-  const availBot = VIEWBOX_H - ROWOP_BAND_H;
-  const originYBase = availTop + Math.max(0, (availBot - availTop - gridH) / 2);
-  const originY = originYBase + headerH; // cells start below the header band
+  const originY = GRID_TOP + headerH; // cells start below the callout band + the col-header band
 
   // 5. horizontal: center the grid; clamp originX ≥ 4.
   const originX = Math.max(4, (SVG_W - gridW) / 2);
@@ -383,12 +397,21 @@ function computeLayout(data: MatrixGridData): MatrixGridLayout {
   const cxOf = (col: number) => originX + rowHdrW + col * cellW + cellW / 2;
   const cyOf = (row: number) => originY + row * cellH + cellH / 2;
 
-  return { cellW, cellH, originX, originY, rowHdrW, headerH, gridFont, rows, cols, cxOf, cyOf };
+  // 6. content-driven height: the grid bottom, then the rowOp rail (always reserved — a step may carry a
+  //    rowOp), then a small bottom margin. The rowOp label baseline sits in the reserved band; the box
+  //    ends just below it so the frame hugs the figure. ROWOP_BAND_H reserves the rail row regardless of
+  //    whether the CURRENT frame has a rowOp, so the box height is STABLE while stepping (never resizes
+  //    per-frame). 5px bottom margin ≈ the GRID_TOP→callout gutter on the other end.
+  const gridBottom = originY + rows * cellH;
+  const rowOpY = gridBottom + ROWOP_BAND_H - 5; // rowOp text baseline inside the reserved rail band
+  const viewBoxH = gridBottom + ROWOP_BAND_H;   // box ends at the rail bottom (rowOpY + 5 margin)
+
+  return { cellW, cellH, originX, originY, rowHdrW, headerH, gridFont, rows, cols, cxOf, cyOf, rowOpY, viewBoxH };
 }
 
 // ── renderFrame — geometry + measurement + data-* stamps (light/dark skins). ─────────────────────
 function renderFrame(layout: MatrixGridLayout, data: MatrixGridData, variant: MgVariant = "light") {
-  const { cellW, cellH, originX, originY, gridFont, rows, cols, cxOf, cyOf } = layout;
+  const { cellW, cellH, originX, originY, gridFont, rows, cols, cxOf, cyOf, rowOpY } = layout;
   const { colHeaders, rowHeaders } = data;
   const dark = variant === "dark";
   // Per-skin paint (literal hex, never var()).
@@ -508,7 +531,7 @@ function renderFrame(layout: MatrixGridLayout, data: MatrixGridData, variant: Mg
             return (
               <text
                 x={rx}
-                y={VIEWBOX_H - 5}
+                y={rowOpY}
                 textAnchor="middle"
                 fontFamily={FONT_FAMILY}
                 fontSize={f}
@@ -572,6 +595,10 @@ export function MatrixGridFamily({
     onStep ? (idx: number) => onStep(idx, lastIdx) : () => {},
     [onStep, lastIdx],
   );
+  // Force the content-driven viewBox height so the shell's hard frame HUGS the grid (light + dark both
+  // benefit: the dark lesson mounts previously floated the grid in the 360 box too). Spread keeps the
+  // family value last so the figure's own extent wins even if a caller passed a viewBoxH.
+  const effectiveLayout: ShellLayout = { ...shellLayout, viewBoxH: layout.viewBoxH };
   return (
     <AlgoStepperShell<MatrixGridState>
       title={`Matrix/grid · ${instanceId}`}
@@ -581,7 +608,7 @@ export function MatrixGridFamily({
       testIdPrefix={testIdPrefix}
       labels={labels}
       onStep={onStep ? shellOnStep : undefined}
-      layout={shellLayout}
+      layout={effectiveLayout}
     />
   );
 }

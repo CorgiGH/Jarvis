@@ -39,11 +39,19 @@ export interface ShellLayout {
   controls?: "side" | "bottom" | "none";
   /** canvas background (default white); set transparent to sit on a themed page */
   canvasBg?: string;
-  /** SVG viewBox HEIGHT (default 360). The width stays 480. A shorter box lets a wide-short figure
+  /** SVG viewBox HEIGHT (default 360). A shorter box lets a wide-short figure
    *  (a single array row + callout + rail) fill the frame with NO internal void — the dark lesson
    *  surface passes ~250 so the figure reads tight, not floating in a 4:3 void. Omitted → 360
    *  (the demo gallery + e2e baselines are unchanged). The renderer must pack content into [0, viewBoxH]. */
   viewBoxH?: number;
+  /** SVG viewBox WIDTH (default 480). Mirrors viewBoxH: the housing self-sizes in width so a NARROW
+   *  figure's hard black frame HUGS the content at its natural pixel size (centered in the column, zero
+   *  internal void) instead of being baked into a fixed 480-wide box and floating in dead space. A
+   *  family that computes its real content extent passes that extent (+ a small symmetric margin) here;
+   *  the svg then caps at `${viewBoxW}px` and centers. A WIDE figure (viewBoxW > column width) still
+   *  fills 100% and scales down via preserveAspectRatio. Omitted → 480 (exactly today's behavior; the
+   *  demo gallery + e2e baselines are unchanged). The renderer must pack content into [0, viewBoxW]. */
+  viewBoxW?: number;
 }
 
 /** Plan-3 §8.2 — chrome labels, ADDITIVE. Omitted fields fall back to the current EN literals so
@@ -306,7 +314,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
   const descId = `${testIdPrefix}-desc`;
 
   // --- injectable chrome/geometry (defaults = original boxed look) ---
-  const { fullBleed = false, maxWidth = 1100, controls = "side", canvasBg = "#fff", viewBoxH = 360 } =
+  const { fullBleed = false, maxWidth = 1100, controls = "side", canvasBg = "#fff", viewBoxH = 360, viewBoxW = 480 } =
     props.layout ?? {};
   const sideControls = controls === "side";
   const wrapperStyle: CSSProperties = {
@@ -353,7 +361,7 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
       >
         <MotionConfig reducedMotion="user">
           <svg
-            viewBox={`0 0 480 ${viewBoxH}`}
+            viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
             preserveAspectRatio="xMidYMid meet"
             role="img"
             aria-labelledby={`${titleId} ${descId}`}
@@ -365,6 +373,13 @@ export function AlgoStepperShell<S>(props: AlgoStepperShellProps<S>) {
               outline: `2px solid transparent`,
               outlineOffset: 2,
               width: "100%",
+              // Self-size in width (mirrors viewBoxH for height): cap at the figure's natural px so a
+              // narrow viewBox HUGS its content with the hard frame at the edge (no internal void),
+              // and center it in the column. A wide viewBox (> column width) still fills 100% and
+              // scales down via preserveAspectRatio. fullBleed keeps filling the parent.
+              maxWidth: fullBleed ? undefined : viewBoxW,
+              marginInline: fullBleed ? undefined : "auto",
+              display: fullBleed ? undefined : "block",
               height: fullBleed ? "100%" : "auto",
               minHeight: 0,
               border: fullBleed ? "none" : `1px solid ${INK}`,

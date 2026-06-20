@@ -228,7 +228,6 @@ function measureLabelWidth(text: string, fontPx: number): number {
 
 // ── Constants ────────────────────────────────────────────────────────────────────────────────────
 const SVG_W = 480;
-const VIEWBOX_H = 360;
 const NAME_FONT = 13;
 const MEMBER_FONT = 11;
 const STEREO_FONT = 9;
@@ -340,22 +339,31 @@ function computeLayout(model: ClassModel): { boxes: BoxGeom[]; viewW: number; vi
     cursorY += rowH + ROW_GAP;
   }
 
-  // FRAME-FIT (§5.3): the shell's SVG viewBox WIDTH is fixed at 480, so if the laid-out content is wider
-  // than 480 we uniformly SCALE every box's x + width (and the column gaps fold in) so the whole frame
-  // fits inside [MARGIN, SVG_W-MARGIN]. Height grows the viewBox via viewH, so the vertical never clips.
-  // Degrade (shrink), never clip. (Per-MEMBER no-clip — text inside its own box — is the boxWidth upper
-  // bound above, GATE-ASSERTED by class-diagram-layout-gate.mjs, not assumed by construction.)
+  // FRAME-FIT (§5.3): the shell's SVG viewBox WIDTH now SELF-SIZES (viewBoxW), so a diagram NARROWER than
+  // 480 keeps its natural x-extent and the shell hugs it (centered in the column, no internal void) instead
+  // of being crammed left in a fixed 480 box. A diagram WIDER than 480 is still uniformly SCALED so the
+  // whole frame fits inside [MARGIN, SVG_W-MARGIN] (cap = 480, the column then scales it down). Height grows
+  // the viewBox via viewH, so the vertical never clips. Degrade (shrink), never clip. (Per-MEMBER no-clip —
+  // text inside its own box — is the boxWidth upper bound above, GATE-ASSERTED by class-diagram-layout-gate.mjs.)
   const laidWidth = maxRight + MARGIN;
+  let viewW = laidWidth;
   if (laidWidth > SVG_W) {
     const scale = (SVG_W - MARGIN) / maxRight;
     for (const b of boxes) {
       b.x = MARGIN + (b.x - MARGIN) * scale;
       b.w = b.w * scale;
     }
+    viewW = SVG_W; // scaled to fit the 480 cap
   }
 
-  const viewH = Math.max(VIEWBOX_H, cursorY - ROW_GAP + MARGIN);
-  return { boxes, viewW: SVG_W, viewH };
+  // HEIGHT HUGS THE CONTENT (no 360 floor): after the loop `cursorY` = the bottom of the last row's
+  // tallest box + ROW_GAP, so `cursorY - ROW_GAP` is the lowest-painted box bottom and `+ MARGIN` adds a
+  // bottom margin matching the top `MARGIN` — the figure's TRUE vertical extent. Dropping the old
+  // Math.max(360,…) floor kills the vertical void a short diagram had (4 boxes in the top ~60%
+  // with a large empty band below). GATE-SAFE: no box x/y/w/h moves — only the viewBox bottom edge is
+  // pulled up to where content actually ends, so the structure-isomorphism + no-clip gates stay valid.
+  const viewH = cursorY - ROW_GAP + MARGIN;
+  return { boxes, viewW, viewH };
 }
 
 /** Order classes so inheritance parents come before children (parents on top), else input order. */
@@ -738,9 +746,23 @@ export function ClassDiagramFamily({
     onStep ? (idx: number) => onStep(idx, lastIdx) : () => {},
     [onStep, lastIdx],
   );
-  // The figure's intrinsic bounds may exceed 480×360; pass the laid-out viewBox height so the shell's
-  // SVG covers the full structure (the box is sized to the content; no-clip gate-asserted, see top docblock).
-  const mergedLayout: ShellLayout = { ...shellLayout, viewBoxH: layout.viewH };
+  // The figure's intrinsic bounds are content-sized; pass BOTH the laid-out viewBox width AND height so the
+  // shell's SVG hugs the real structure — a narrow diagram is centered in the column with no internal void
+  // (self-sizing width mirrors the existing self-sizing height), a wide one (capped at 480) scales to fit.
+  //
+  // CONTRACT — FAMILY-DERIVED EXTENT ALWAYS WINS (deliberate, NOT a bug): the spread puts the layout-derived
+  // viewBoxW/viewBoxH LAST, so they override any caller-supplied viewBoxW/viewBoxH. This is intentional and
+  // load-bearing, NOT an accidental clobber:
+  //   • no-clip is GATE-ASSERTED here (top docblock + tools/figure-noclip-gate.mjs) and layout.viewW/viewH
+  //     ARE the figure's exact measured bounds. A caller passing a SMALLER box would CLIP the diagram — the
+  //     one thing the gate forbids; a LARGER box would re-introduce the dead void self-sizing exists to kill.
+  //   • Math.max(caller, layout) was considered and REJECTED: it would let a caller grow the box back into a
+  //     void (defeating the hug) while still being unable to safely shrink it (a clip). Neither direction of
+  //     caller override is valid for a self-sizing figure, so the family extent wins unconditionally.
+  //   • this matches the sibling self-sizing families (GraphTreeFamily / MatrixGridFamily also spread their
+  //     computed viewBox value LAST), so the contract is uniform: a caller may set canvasBg / controls /
+  //     maxWidth / fullBleed, but the figure owns its own viewBox extent.
+  const mergedLayout: ShellLayout = { ...shellLayout, viewBoxW: layout.viewW, viewBoxH: layout.viewH };
   return (
     <AlgoStepperShell<ClassDiagramState>
       title={`Class diagram · ${instanceId}`}

@@ -345,6 +345,11 @@ type CellLayout = {
   cxOf: (index: number) => number; // cell-box center x (the translate cx)
   indexY: number; // baseline for the 0..n-1 index labels (below the row)
   pointerY: number; // baseline for the pointer markers (above the row)
+  /** WHITE-skin content-driven viewBox height. The lowest-painted-pixel y of the figure (the index-
+   *  label row baseline + a small bottom margin matching the top gutter), so the shell's hard frame
+   *  HUGS the figure instead of the 360 default floating it in a 4:3 void. Dark/bars force their own
+   *  short/tall viewBox; only the white skin reads this (the demo gallery + e2e drive the white skin). */
+  viewBoxH: number;
 };
 
 function computeLayout(data: SeqArrayData, variant: SeqVariant = "white"): CellLayout {
@@ -375,6 +380,14 @@ function computeLayout(data: SeqArrayData, variant: SeqVariant = "white"): CellL
   // y≈6 → SORTAT caption y≈200) in [0, DARK_VBH=218] so the SVG paints edge-to-edge with no void.
   const rowY = dark ? 108 : CALLOUT_BAND_H + 60;
   const cellCY = rowY + cellH / 2;
+  const indexY = rowY + cellH + (dark ? 22 : INDEX_FONT + 6);
+  // WHITE-skin content-driven viewBox height: the LOWEST-painted-pixel y is the index-label row
+  // (baseline `indexY`, an INDEX_FONT-tall digit). `indexY + 12` reserves the digit's descender + a
+  // bottom margin matching the top callout gutter, so the hard frame HUGS the figure (no 360 floor /
+  // ~50% bottom void). The pointer markers + callout live ABOVE the row, so the index row is the true
+  // bottom. Dark/bars ignore this (they force DARK_VBH/BARS_VBH on the shell).
+  const WHITE_BOTTOM_MARGIN = 12;
+  const viewBoxH = indexY + WHITE_BOTTOM_MARGIN;
   return {
     cellW,
     cellH,
@@ -383,8 +396,9 @@ function computeLayout(data: SeqArrayData, variant: SeqVariant = "white"): CellL
     cxOf,
     // DARK band order under the row (disjoint, no overlap): cells bottom → SORTAT rule (hugs cells,
     // +8) → index labels (+22, clears the 3px rule) → SORTAT caption (indexY+20). Each owns its band.
-    indexY: rowY + cellH + (dark ? 22 : INDEX_FONT + 6),
+    indexY,
     pointerY: dark ? rowY - 10 : rowY - POINTER_LABEL_GAP,
+    viewBoxH,
   };
 }
 
@@ -1232,14 +1246,17 @@ export function SequenceArrayFamily({
       : variant === "dark"
         ? renderDarkFrame(layout, identity)
         : renderWhiteFrame(layout);
-  // DARK + BARS skins pack their content into a short viewBox, so the family forces that viewBox
-  // height on the shell (the figure geometry + the viewBox MUST agree). White keeps the shell default.
+  // Every skin now forces a CONTENT-DRIVEN viewBox height so the shell's hard frame HUGS the figure
+  // (no 360 default void). DARK/BARS pack into their fixed short/tall boxes; WHITE uses its measured
+  // content height (index-row baseline + margin) from computeLayout — previously the white skin floated
+  // in the 360 4:3 box with a big bottom void. The spread keeps the family value last so it wins even
+  // if a caller passed a viewBoxH.
   const effectiveLayout =
     variant === "bars"
       ? { ...shellLayout, viewBoxH: BARS_VBH }
       : variant === "dark"
         ? { ...shellLayout, viewBoxH: DARK_VBH }
-        : shellLayout;
+        : { ...shellLayout, viewBoxH: layout.viewBoxH };
   return (
     <AlgoStepperShell<SeqArrayState>
       title={`Sequence/array · ${instanceId}`}

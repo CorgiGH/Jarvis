@@ -212,7 +212,48 @@ function layoutGraphTree(data: GraphTreeData): Map<string, Laid> {
   return out;
 }
 
-function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>, variant: GtVariant = "light") {
+/**
+ * Content-driven viewBox height: the LOWEST-painted-pixel y across EVERY frame (the deepest node box
+ * bottom, and the deepest frame's callout last-line baseline + descender), plus a small bottom margin
+ * mirroring the top gutter (y0 = 28 - BOX_H/2 ≈ 15). Taking the MAX across all frames keeps the box
+ * STABLE while stepping (it never resizes per-frame). The viewBox HUGS the real content height in BOTH
+ * directions — it SHRINKS to hug a short tree's void AND GROWS to fit a deep tree (depth ≥5 reaches y >
+ * 360). The previous Math.min(SVG_H,…) cap CLIPPED a deep tree's deepest rows off the bottom of the
+ * frame (the figure-noclip-gate caught the depth-6 fixture cropping +65u past a 360 viewBox); removing
+ * the cap is the fix — SVG_H is now only the DEFAULT/short-tree fallback, never a ceiling. GATE-SAFE: no
+ * node/callout x/y moves — only the viewBox bottom edge tracks where content actually ends; the callout
+ * vertical clamp uses this same height so its text can never land below the frame.
+ */
+function computeContentHeight(
+  layout: Map<string, Laid>,
+  frames: Frame<GraphTreeState>[],
+): number {
+  // deepest node box bottom (node center y + half box height).
+  let bottom = 0;
+  for (const laid of layout.values()) bottom = Math.max(bottom, laid.y + BOX_H / 2);
+  // deepest per-frame callout bottom. The callout anchors below the FIRST highlighted node and wraps to
+  // ≥1 line; replicate the renderer's wantTop + block height (worst case = no down-clamp). The exact
+  // wrap/font is recomputed by layoutCallout, matching the renderer one-for-one.
+  for (const f of frames) {
+    const firstHi = f.state.highlightIds[0];
+    if (!firstHi) continue;
+    const anchor = layout.get(firstHi);
+    if (!anchor) continue;
+    const { lines, font } = layoutCallout(f.state.callout);
+    const wantTop = anchor.y + BOX_H / 2 + 14; // first-line baseline
+    const blockH = (lines.length - 1) * CALLOUT_LINE_H;
+    // last-line baseline + descender (~font*0.25) ≈ the callout's lowest painted pixel.
+    bottom = Math.max(bottom, wantTop + blockH + font * 0.25);
+  }
+  const BOTTOM_MARGIN = 14; // mirrors the ~15px top gutter above the root node box
+  // HUG the real content height in BOTH directions — no Math.min(SVG_H,…) ceiling. The old cap clipped a
+  // deep tree (depth ≥5 reaches y > 360) to 360, cropping its deepest rows; a short tree already hugged to
+  // its own (sub-360) content via the old min, so dropping the cap only FIXES the deep case and leaves the
+  // short case unchanged. SVG_H remains the AlgoStepperShell default for non-self-sizing mounts, not a cap here.
+  return Math.ceil(bottom + BOTTOM_MARGIN);
+}
+
+function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>, variant: GtVariant = "light", contentH: number = SVG_H) {
   const dark = variant === "dark";
   // Per-skin paint. Literal hex (never var()) so the SVG attributes resolve in every engine.
   const nodeFill = (isHi: boolean) => (dark ? (isHi ? DARK.accent : DARK.paper) : isHi ? ACCENT : "#fff");
@@ -267,10 +308,12 @@ function renderFrame(layout: Map<string, Laid>, labelOf: Map<string, string>, va
           const loBound = CALLOUT_PAD + half;
           const hiBound = SVG_W - CALLOUT_PAD - half;
           const cx = Math.max(loBound, Math.min(hiBound, calloutAnchor.x));
-          // Vertical: start below the node box; clamp the LAST line within [, SVG_H - PAD].
+          // Vertical: start below the node box; clamp the LAST line within [, contentH - PAD]. The clamp
+          // bound is the CONTENT-DRIVEN height (not the fixed 360), so a hugged short-tree box still keeps
+          // the callout inside its own frame; on a tree whose content reaches 360 contentH === SVG_H.
           const wantTop = calloutAnchor.y + BOX_H / 2 + 14;
           const blockH = (lines.length - 1) * CALLOUT_LINE_H;
-          const top = Math.min(wantTop, SVG_H - CALLOUT_PAD - blockH);
+          const top = Math.min(wantTop, contentH - CALLOUT_PAD - blockH);
           return (
             <text
               x={cx}
@@ -309,6 +352,8 @@ export function GraphTreeFamily({ instanceId, dataJson, language, labels, onStep
   const data = useMemo(() => parseGraphTreeData(dataJson, instanceId), [dataJson, instanceId]);
   const frames = useMemo(() => framesFromGraphTree(data), [data]);
   const layout = useMemo(() => layoutGraphTree(data), [data]);
+  // Content-driven viewBox height (hugs a short tree; ===360 for a tree that already fills the box).
+  const contentH = useMemo(() => computeContentHeight(layout, frames), [layout, frames]);
   const lastIdx = Math.max(0, frames.length - 1);
   // labelOf evolves with deltas; recompute the final-per-node map so renderFrame shows live labels.
   const labelOf = useMemo(() => {
@@ -323,16 +368,19 @@ export function GraphTreeFamily({ instanceId, dataJson, language, labels, onStep
     onStep ? (idx: number) => onStep(idx, lastIdx) : () => {},
     [onStep, lastIdx],
   );
+  // Force the content-driven viewBox height so the shell's hard frame HUGS the tree (a shallow tree no
+  // longer floats in the 360 box). Spread keeps the family value last so it wins over a caller's pass.
+  const effectiveLayout: ShellLayout = { ...shellLayout, viewBoxH: contentH };
   return (
     <AlgoStepperShell<GraphTreeState>
       title={`Graph/tree · ${instanceId}`}
       desc={language === "ro" ? "Arbore de descompunere; pas cu pas." : "Decomposition tree; step by step."}
       frames={frames}
-      renderFrame={renderFrame(layout, labelOf, variant)}
+      renderFrame={renderFrame(layout, labelOf, variant, contentH)}
       testIdPrefix="graph-tree"
       labels={labels}
       onStep={onStep ? shellOnStep : undefined}
-      layout={shellLayout}
+      layout={effectiveLayout}
     />
   );
 }

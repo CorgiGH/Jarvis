@@ -52,6 +52,27 @@ const subheadingStyle: CSSProperties = {
 const MERGESORT_DATA_JSON =
   '{"nodes":[{"id":"n0","label":"5 2 8 1 9 3"},{"id":"n1","label":"5 2 8","parent":"n0"},{"id":"n2","label":"5","parent":"n1"},{"id":"n3","label":"2 8","parent":"n1"},{"id":"n4","label":"2","parent":"n3"},{"id":"n5","label":"8","parent":"n3"},{"id":"n6","label":"1 9 3","parent":"n0"},{"id":"n7","label":"1","parent":"n6"},{"id":"n8","label":"9 3","parent":"n6"},{"id":"n9","label":"9","parent":"n8"},{"id":"n10","label":"3","parent":"n8"}],"steps":[{"highlight":["n0"],"deltas":[],"callout":"vectorul întreg — încă nesortat"},{"highlight":["n1","n6"],"deltas":[],"callout":"↓ ÎMPARTE — fiecare rând nou taie în jumătate"},{"highlight":["n2","n3","n7","n8"],"deltas":[],"callout":"↓ ÎMPARTE — fiecare rând nou taie în jumătate"},{"highlight":["n2","n4","n5","n7","n9","n10"],"deltas":[],"callout":"↓ ÎMPARTE — fiecare rând nou taie în jumătate"},{"highlight":["n2","n4","n5","n7","n9","n10"],"deltas":[],"callout":"✋ numără nivelurile: 3 = log₂(6) — de-aici vine „log n\\""},{"highlight":["n2","n3","n7","n8"],"deltas":[{"node":"n3","label":"2 8"},{"node":"n8","label":"3 9"}],"callout":"↑ INTERCLASEAZĂ — atinge toate cele 6 elemente pe nivel → O(n)"},{"highlight":["n1","n6"],"deltas":[{"node":"n1","label":"2 5 8"},{"node":"n6","label":"1 3 9"}],"callout":"↑ INTERCLASEAZĂ — atinge toate cele 6 elemente pe nivel → O(n)"},{"highlight":["n0"],"deltas":[{"node":"n0","label":"1 2 3 5 8 9"}],"callout":"3 niveluri × O(n) = O(n log n) ✓ → [1 2 3 5 8 9]"}]}';
 
+// DEEP-TREE FIXTURE (gate-only, NOT lesson content) — a 7-level decomposition tree (deepest node at
+// DEPTH 6, ≥5) authored to EXERCISE the GraphTreeFamily SVG_H height-ceiling path. With LEVEL_GAP=64 the
+// deepest node sits at y ≈ 28 + 6·64 = 412, well past the old SVG_H=360 cap; before the height fix the
+// figure-noclip-gate catches the deepest rows clipping the bottom viewBox edge (the gate doing its job).
+// A right-leaning spine n0→n1→…→n6 with a sibling leaf at each level so it reads as a real tree, not a list.
+const DEEP_TREE_DATA_JSON =
+  '{"nodes":[' +
+  '{"id":"n0","label":"L0"},' +
+  '{"id":"n1","label":"L1","parent":"n0"},{"id":"s1","label":"a","parent":"n0"},' +
+  '{"id":"n2","label":"L2","parent":"n1"},{"id":"s2","label":"b","parent":"n1"},' +
+  '{"id":"n3","label":"L3","parent":"n2"},{"id":"s3","label":"c","parent":"n2"},' +
+  '{"id":"n4","label":"L4","parent":"n3"},{"id":"s4","label":"d","parent":"n3"},' +
+  '{"id":"n5","label":"L5","parent":"n4"},{"id":"s5","label":"e","parent":"n4"},' +
+  '{"id":"n6","label":"L6","parent":"n5"},{"id":"s6","label":"f","parent":"n5"}' +
+  '],"steps":[' +
+  '{"highlight":["n0"],"deltas":[],"callout":"rădăcina — nivel 0"},' +
+  '{"highlight":["n1","s1"],"deltas":[],"callout":"nivel 1"},' +
+  '{"highlight":["n3","s3"],"deltas":[],"callout":"nivel 3 — coboară pe spină"},' +
+  '{"highlight":["n6","s6"],"deltas":[],"callout":"nivel 6 — cel mai adânc nod (depth 6 ≥ 5)"}' +
+  ']}';
+
 // The viz-ps-normal-area-001 instance data_json (verbatim from content/PS/viz/viz-ps-normal-area-001.yaml).
 // Keep byte-identical to the shipped YAML — the family-no-clip e2e drives THIS mount.
 const NORMAL_AREA_DATA_JSON =
@@ -169,6 +190,16 @@ export function VizDemoPage() {
           Family verification vehicle (NOT lesson content, §0.6 #1). d3-hierarchy layout · 8 steps · no-clip by construction.
         </p>
         <GraphTreeFamily instanceId="viz-pa-mergesort-001" dataJson={MERGESORT_DATA_JSON} language="ro" />
+      </section>
+
+      <section data-testid="viz-demo-graph-tree-deep" style={tileStyle}>
+        <h2 style={headingStyle}>PA · DEEP graph-tree fixture (depth 6) ⭐ gate fixture</h2>
+        <p style={subheadingStyle}>
+          Gate-only fixture (NOT lesson content) — a 7-level tree whose deepest node is at DEPTH 6 (≥5), authored
+          to exercise the GraphTreeFamily height-ceiling path. The figure-noclip-gate steps every frame and asserts
+          the deepest rows stay inside the hugged viewBox. Paints data-testid="graph-tree-root".
+        </p>
+        <GraphTreeFamily instanceId="viz-pa-deeptree-fixture-001" dataJson={DEEP_TREE_DATA_JSON} language="ro" />
       </section>
 
       <section data-testid="viz-demo-chart-dist" style={tileStyle}>
